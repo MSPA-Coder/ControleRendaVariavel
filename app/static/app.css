@@ -1,0 +1,119 @@
+:root {
+  color-scheme: light;
+  --navy: #214f78;
+  --navy-dark: #173a59;
+  --ice: #edf4fa;
+  --line: #c6d4df;
+  --ink: #142536;
+  --muted: #66788a;
+  --positive: #167245;
+  --negative: #d82323;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: #f6f8fa; color: var(--ink); }
+a { color: var(--navy); }
+main { padding: 1.25rem; }
+.topbar {
+  align-items: center; background: var(--navy-dark); display: flex;
+  justify-content: space-between; padding: .85rem 1.25rem;
+}
+.brand { color: white; font-size: 1.2rem; font-weight: 750; text-decoration: none; }
+.topbar nav, .nav-group { display: flex; gap: .6rem; }
+.nav-secondary { margin-left: 1.5rem; }
+.button {
+  background: white; border: 1px solid var(--line); border-radius: .45rem; color: var(--ink);
+  cursor: pointer; display: inline-block; font: inherit; padding: .55rem .85rem; text-decoration: none;
+}
+.button-primary { background: var(--navy); border-color: var(--navy); color: white; }
+.button-danger { background: #fff2f2; border-color: #efb1b1; color: #9b1717; }
+.summary { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1rem; }
+.summary article { background: white; border: 1px solid var(--line); border-radius: .65rem; padding: 1rem; }
+.summary span { color: var(--muted); display: block; font-size: .82rem; margin-bottom: .25rem; }
+.summary strong { font-size: 1.45rem; }
+.portfolio-summary { gap: .6rem; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.portfolio-summary article { padding: .7rem .8rem; }
+.portfolio-summary span { font-size: .75rem; }
+.portfolio-summary strong { font-size: 1.05rem; }
+.filters {
+  align-items: end; background: white; border: 1px solid var(--line); border-radius: .65rem;
+  display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; padding: .85rem;
+}
+.filters label { min-width: 180px; }
+.filter-actions { display: flex; gap: .6rem; margin-left: auto; }
+.table-wrap { background: white; border: 1px solid var(--line); border-radius: .65rem; overflow: auto; }
+table { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; width: 100%; }
+.portfolio-table { min-width: 1500px; }
+th, td { border-bottom: 1px solid var(--line); padding: .58rem .6rem; white-space: nowrap; }
+thead th { background: var(--navy); color: white; font-size: .8rem; position: sticky; top: 0; z-index: 1; }
+thead .group-head th { background: var(--navy-dark); text-align: center; }
+tbody tr:nth-child(odd) { background: var(--ice); }
+tbody tr:hover { background: #dceaf5; }
+.broker-total th, .broker-total td {
+  background: #d7e5f0; border-bottom-color: #a8bfce; color: var(--navy-dark); font-weight: 750;
+}
+.number { text-align: right; }
+.positive { color: var(--positive); }
+.negative { color: var(--negative); font-weight: 650; }
+.missing, .empty { color: var(--muted); text-align: center; }
+.status { border-radius: 999px; font-size: .72rem; padding: .18rem .45rem; }
+.status-online { background: #dff5e9; color: #12623a; }
+.status-stale { background: #fff0c9; color: #765300; }
+.status-error, .status-missing { background: #ffe0e0; color: #8c1c1c; }
+.position-form {
+  background: white; border: 1px solid var(--line); border-radius: .65rem; display: grid;
+  gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0 auto; max-width: 850px; padding: 1.25rem;
+}
+.settings-form {
+  background: white; border: 1px solid var(--line); border-radius: .65rem; display: grid;
+  gap: 1rem; margin: 0 auto; max-width: 720px; padding: 1.25rem;
+}
+.settings-form h1 { margin: 0; }
+.settings-form fieldset { border: 1px solid var(--line); border-radius: .5rem; padding: 1rem; }
+.settings-form legend { color: var(--ink); font-weight: 700; padding: 0 .35rem; }
+.radio-option {
+  align-items: start; color: var(--ink); display: grid; gap: .75rem;
+  grid-template-columns: auto 1fr; padding: .6rem 0;
+}
+.radio-option input { margin-top: .2rem; }
+.radio-option small, .form-help { color: var(--muted); }
+.radio-option span { display: grid; gap: .2rem; }
+.form-help { font-size: .85rem; margin: 0; }
+.position-form h1, .form-actions { grid-column: 1 / -1; }
+label { color: var(--muted); display: grid; font-size: .82rem; gap: .3rem; }
+input, select { border: 1px solid var(--line); border-radius: .4rem; color: var(--ink); font: inherit; padding: .6rem; }
+.form-actions { display: flex; gap: .6rem; justify-content: flex-end; }
+.delete-form { margin: 1rem auto; max-width: 850px; text-align: right; }
+.catalog-grid { display: grid; gap: 1rem; }
+.catalog-card {
+  background: white; border: 1px solid var(--line); border-radius: .65rem; padding: 1rem;
+}
+.catalog-card h2 { margin-top: 0; }
+.catalog-create {
+  align-items: end; display: grid; gap: .75rem; grid-template-columns: minmax(180px, 1fr) auto;
+  margin-bottom: 1rem;
+}
+.ticker-fields { grid-template-columns: 1.4fr repeat(3, minmax(110px, .7fr)) auto; }
+.catalog-table th { background: var(--navy); color: white; text-align: left; }
+.catalog-table input, .catalog-table select { min-width: 100%; }
+.catalog-actions { display: flex; gap: .4rem; }
+.catalog-actions form { margin: 0; }
+.page-heading { align-items: center; display: flex; justify-content: space-between; margin-bottom: 1rem; }
+.page-heading h1 { margin: 0; }
+.expiration-fields { grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; }
+.contract-fields { grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; }
+.option-contracts, .expiration-summary, .option-catalog-start { margin-top: 1rem; }
+.expiration-summary { width: min(100%, 780px); }
+.options-table { min-width: 2600px; }
+.flash { border-radius: .4rem; margin: 0 0 1rem; padding: .75rem; }
+.flash-error { background: #ffe0e0; }
+.flash-success { background: #dff5e9; }
+@media (max-width: 700px) {
+  main { padding: .75rem; }
+  .summary, .position-form { grid-template-columns: 1fr; }
+  .topbar { align-items: stretch; flex-direction: column; gap: .75rem; }
+  .topbar nav { flex-wrap: wrap; }
+  .nav-secondary { margin-left: 0; }
+  .catalog-create, .ticker-fields, .expiration-fields, .contract-fields { grid-template-columns: 1fr; }
+}

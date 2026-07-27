@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Controle de Renda Variável{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('portfolio.index') }}">Carteira</a>
+    <nav aria-label="Navegação principal">
+      <span class="nav-group">
+        <a class="button" href="{{ url_for('portfolio.index') }}">Ações</a>
+        <a class="button" href="{{ url_for('options.index') }}">Opções</a>
+      </span>
+      <span class="nav-group nav-secondary">
+        <a class="button" href="{{ url_for('portfolio.tables') }}">Tabelas</a>
+        <a class="button" href="{{ url_for('portfolio.settings') }}">Configurações</a>
+      </span>
+    </nav>
+  </header>
+  <main>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="flash flash-{{ category }}" role="status">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

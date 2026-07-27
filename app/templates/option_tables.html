@@ -1,0 +1,100 @@
+<section class="catalog-card option-catalog-start" id="options">
+  <h2>Vencimentos de calls e puts</h2>
+  <form class="catalog-create expiration-fields" method="post" action="{{ url_for('options.create_expiration') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Call<input required maxlength="5" name="call_code" placeholder="2027A"></label>
+    <label>Put<input required maxlength="5" name="put_code" placeholder="2027M"></label>
+    <label>Exercício<input required type="date" name="exercise_date"></label>
+    <button class="button button-primary" type="submit">Adicionar</button>
+  </form>
+  <div class="table-wrap">
+    <table class="catalog-table">
+      <thead><tr><th>Call</th><th>Put</th><th>Exercício</th><th>Ações</th></tr></thead>
+      <tbody>
+      {% for expiration in expirations %}
+        <tr>
+          <td>
+            <form id="expiration-{{ expiration.id }}" method="post" action="{{ url_for('options.update_expiration', expiration_id=expiration.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input required maxlength="5" name="call_code" value="{{ expiration.call_code }}" aria-label="Código call {{ expiration.call_code }}">
+            </form>
+          </td>
+          <td><input required maxlength="5" name="put_code" value="{{ expiration.put_code }}" form="expiration-{{ expiration.id }}" aria-label="Código put {{ expiration.put_code }}"></td>
+          <td><input required type="date" name="exercise_date" value="{{ expiration.exercise_date.isoformat() }}" form="expiration-{{ expiration.id }}" aria-label="Exercício {{ expiration.call_code }}"></td>
+          <td class="catalog-actions">
+            <button class="button" type="submit" form="expiration-{{ expiration.id }}">Salvar</button>
+            <form method="post" action="{{ url_for('options.delete_expiration', expiration_id=expiration.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="button button-danger" type="submit">Excluir</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">Nenhum vencimento cadastrado.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="catalog-card option-contracts">
+  <h2>Contratos de opções</h2>
+  <form class="catalog-create contract-fields" method="post" action="{{ url_for('options.create_contract') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Ticker da opção<select required name="ticker_id">
+      <option value="">Selecione</option>
+      {% for ticker in tickers %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
+    </select></label>
+    <label>Ativo-objeto<select required name="underlying_ticker_id">
+      <option value="">Selecione</option>
+      {% for ticker in tickers %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
+    </select></label>
+    <label>Tipo<select name="option_type">
+      {% for option_type in option_types %}<option value="{{ option_type.value }}">{{ option_type.value|upper }}</option>{% endfor %}
+    </select></label>
+    <label>Vencimento<select required name="expiration_id">
+      <option value="">Selecione</option>
+      {% for expiration in expirations %}<option value="{{ expiration.id }}">{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
+    </select></label>
+    <label>Strike<input required type="number" min="0" step="any" name="strike"></label>
+    <button class="button button-primary" type="submit">Adicionar</button>
+  </form>
+  <div class="table-wrap">
+    <table class="catalog-table">
+      <thead><tr><th>Opção</th><th>Ativo</th><th>Tipo</th><th>Vencimento</th><th>Strike</th><th>Ações</th></tr></thead>
+      <tbody>
+      {% for contract in contracts %}
+        <tr>
+          <td>
+            <form id="contract-{{ contract.id }}" method="post" action="{{ url_for('options.update_contract', contract_id=contract.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select required name="ticker_id" aria-label="Ticker da opção {{ contract.ticker_ref.symbol }}">
+                {% for ticker in tickers %}<option value="{{ ticker.id }}" {{ 'selected' if ticker.id == contract.ticker_id }}>{{ ticker.symbol }}</option>{% endfor %}
+              </select>
+            </form>
+          </td>
+          <td><select required name="underlying_ticker_id" form="contract-{{ contract.id }}" aria-label="Ativo de {{ contract.ticker_ref.symbol }}">
+            {% for ticker in tickers %}<option value="{{ ticker.id }}" {{ 'selected' if ticker.id == contract.underlying_ticker_id }}>{{ ticker.symbol }}</option>{% endfor %}
+          </select></td>
+          <td><select name="option_type" form="contract-{{ contract.id }}" aria-label="Tipo de {{ contract.ticker_ref.symbol }}">
+            {% for option_type in option_types %}<option value="{{ option_type.value }}" {{ 'selected' if option_type == contract.option_type }}>{{ option_type.value|upper }}</option>{% endfor %}
+          </select></td>
+          <td><select required name="expiration_id" form="contract-{{ contract.id }}" aria-label="Vencimento de {{ contract.ticker_ref.symbol }}">
+            {% for expiration in expirations %}<option value="{{ expiration.id }}" {{ 'selected' if expiration.id == contract.expiration_id }}>{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
+          </select></td>
+          <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}"></td>
+          <td class="catalog-actions">
+            <button class="button" type="submit" form="contract-{{ contract.id }}">Salvar</button>
+            <form method="post" action="{{ url_for('options.delete_contract', contract_id=contract.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="button button-danger" type="submit">Excluir</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">Nenhum contrato cadastrado.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

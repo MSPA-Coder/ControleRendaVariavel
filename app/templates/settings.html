@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Configurações · Controle de Renda Variável{% endblock %}
+{% block content %}
+<form class="settings-form" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>Configurações</h1>
+
+  <fieldset>
+    <legend>Coletor de cotações</legend>
+    <label class="radio-option">
+      <input type="radio" name="collector_mode" value="excel"
+             {{ 'checked' if settings.collector_mode.value == 'excel' }}>
+      <span>
+        <strong>Excel</strong>
+        <small>Usa uma instância oculta e persistente do Excel como ponte RTD.</small>
+      </span>
+    </label>
+    <label class="radio-option">
+      <input type="radio" name="collector_mode" value="direct"
+             {{ 'checked' if settings.collector_mode.value == 'direct' }}>
+      <span>
+        <strong>RTD direto</strong>
+        <small>Conecta ao servidor COM do ProfitPro sem iniciar o Excel.</small>
+      </span>
+    </label>
+  </fieldset>
+
+  <label>Intervalo entre leituras (segundos)
+    <input type="number" name="poll_interval_seconds"
+           min="{{ min_interval }}" max="{{ max_interval }}" step="1"
+           value="{{ settings.poll_interval_seconds }}" required>
+  </label>
+  <p class="form-help">
+    A alteração será aplicada pelo coletor contínuo no próximo ciclo de leitura.
+  </p>
+
+  <div class="form-actions">
+    <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
+    <button class="button button-primary" type="submit">Salvar configurações</button>
+  </div>
+</form>
+{% endblock %}

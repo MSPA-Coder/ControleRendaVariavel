@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% set editing = position and position.id is defined %}
+{% block title %}{{ "Editar" if editing else "Nova" }} opção{% endblock %}
+{% block content %}
+<form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position.id) if editing else url_for('options.create_position') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>{{ "Editar" if editing else "Nova" }} posição de opção</h1>
+  {% set value = position %}
+  <label>Corretora<select required name="broker_id">
+    <option value="">Selecione</option>
+    {% for broker in brokers %}<option value="{{ broker.id }}" {{ 'selected' if value and value.broker_id|int == broker.id }}>{{ broker.name }}</option>{% endfor %}
+  </select></label>
+  <label>Contrato<select required name="contract_id">
+    <option value="">Selecione</option>
+    {% for contract in contracts %}
+      <option value="{{ contract.id }}" {{ 'selected' if value and value.contract_id|int == contract.id }}>{{ contract.ticker_ref.symbol }} · {{ contract.option_type.value|upper }} · {{ contract.expiration.exercise_date.strftime('%d/%m/%Y') }}</option>
+    {% endfor %}
+  </select></label>
+  <label>Operação<select name="side">
+    {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
+  </select></label>
+  <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ value.quantity if value else '' }}"></label>
+  <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}"></label>
+  <label>Target<input type="number" min="0" step="any" name="target_price" value="{{ value.target_price if value and value.target_price is not none else '' }}"></label>
+  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing else value.opened_on if value else '' }}"></label>
+  <label>Resultado<select name="result_mode">
+    {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}
+  </select></label>
+  <label>Posição<select name="position_kind">
+    {% for kind in position_kinds %}<option value="{{ kind.value }}" {{ 'selected' if value and value.position_kind|string == kind.value }}>{{ 'Real' if kind.value == 'real' else 'Hipotética' }}</option>{% endfor %}
+  </select></label>
+  <div class="form-actions">
+    <a class="button" href="{{ url_for('options.index') }}">Cancelar</a>
+    <button class="button button-primary" type="submit">Salvar</button>
+  </div>
+</form>
+{% if editing %}
+<form class="delete-form" method="post" action="{{ url_for('options.delete_position', position_id=position.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="button button-danger" type="submit">Excluir posição</button>
+</form>
+{% endif %}
+{% endblock %}

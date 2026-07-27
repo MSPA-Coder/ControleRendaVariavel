@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Tabelas · Controle de Renda Variável{% endblock %}
+{% block content %}
+<h1>Tabelas</h1>
+<div class="catalog-grid">
+  <section class="catalog-card" aria-labelledby="brokers-title">
+    <h2 id="brokers-title">Corretoras</h2>
+    <form class="catalog-create" method="post" action="{{ url_for('portfolio.create_broker') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Nome<input required maxlength="40" name="name"></label>
+      <button class="button button-primary" type="submit">Adicionar</button>
+    </form>
+    <div class="table-wrap">
+      <table class="catalog-table">
+        <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+        <tbody>
+        {% for broker in brokers %}
+          <tr>
+            <td>
+              <form id="broker-{{ broker.id }}" method="post" action="{{ url_for('portfolio.update_broker', broker_id=broker.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input required maxlength="40" name="name" value="{{ broker.name }}" aria-label="Nome da corretora {{ broker.name }}">
+              </form>
+            </td>
+            <td class="catalog-actions">
+              <button class="button" type="submit" form="broker-{{ broker.id }}">Salvar</button>
+              <form method="post" action="{{ url_for('portfolio.delete_broker', broker_id=broker.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="empty">Nenhuma corretora cadastrada.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="catalog-card catalog-card-wide" aria-labelledby="tickers-title">
+    <h2 id="tickers-title">Tickers</h2>
+    <form class="catalog-create ticker-fields" method="post" action="{{ url_for('portfolio.create_ticker') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Ticker<input required maxlength="24" name="symbol"></label>
+      <label>Mercado<select name="market">
+        {% for market in markets %}<option value="{{ market.value }}">{{ market.value }}</option>{% endfor %}
+      </select></label>
+      <label>Código RTD<select name="rtd_market_code">
+        {% for code in ['B', 'Y', 'N'] %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+      </select></label>
+      <label>Moeda<select name="currency">
+        {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}">{{ currency }}</option>{% endfor %}
+      </select></label>
+      <button class="button button-primary" type="submit">Adicionar</button>
+    </form>
+    <div class="table-wrap">
+      <table class="catalog-table ticker-table">
+        <thead><tr><th>Ticker</th><th>Mercado</th><th>Código RTD</th><th>Moeda</th><th>Ações</th></tr></thead>
+        <tbody>
+        {% for ticker in tickers %}
+          <tr>
+            <td>
+              <form id="ticker-{{ ticker.id }}" method="post" action="{{ url_for('portfolio.update_ticker', ticker_id=ticker.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input required maxlength="24" name="symbol" value="{{ ticker.symbol }}" aria-label="Ticker {{ ticker.symbol }}">
+              </form>
+            </td>
+            <td><select name="market" form="ticker-{{ ticker.id }}" aria-label="Mercado de {{ ticker.symbol }}">
+              {% for market in markets %}<option value="{{ market.value }}" {{ 'selected' if ticker.market == market }}>{{ market.value }}</option>{% endfor %}
+            </select></td>
+            <td><select name="rtd_market_code" form="ticker-{{ ticker.id }}" aria-label="Código RTD de {{ ticker.symbol }}">
+              {% for code in ['B', 'Y', 'N'] %}<option value="{{ code }}" {{ 'selected' if ticker.rtd_market_code == code }}>{{ code }}</option>{% endfor %}
+            </select></td>
+            <td><select name="currency" form="ticker-{{ ticker.id }}" aria-label="Moeda de {{ ticker.symbol }}">
+              {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if ticker.currency == currency }}>{{ currency }}</option>{% endfor %}
+            </select></td>
+            <td class="catalog-actions">
+              <button class="button" type="submit" form="ticker-{{ ticker.id }}">Salvar</button>
+              <form method="post" action="{{ url_for('portfolio.delete_ticker', ticker_id=ticker.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="empty">Nenhum ticker cadastrado.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% include "option_tables.html" %}
+{% endblock %}

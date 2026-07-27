@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<form class="filters" method="get" data-auto-submit>
+  <label>Posição
+    <select name="position_kind">
+      <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
+      <option value="real" {{ 'selected' if selected_kind == 'real' }}>Real</option>
+      <option value="hypothetical" {{ 'selected' if selected_kind == 'hypothetical' }}>Hipotética</option>
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="filter-actions">
+    <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
+    <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
+  </div>
+</form>
+
+<div class="table-wrap" data-refresh-seconds="{{ poll_interval_seconds }}" data-refresh-api="{{ url_for('portfolio.portfolio_api') }}">
+  <table class="portfolio-table">
+    <thead>
+      <tr class="group-head">
+        <th colspan="3">Posição</th>
+        <th colspan="3">Cotações</th>
+        <th colspan="3">Resultado</th>
+        <th colspan="3">Targets</th>
+        <th colspan="4">Carteira</th>
+        <th colspan="4">Controle</th>
+      </tr>
+      <tr>
+        <th>Corr.</th><th>Ticker</th><th>Qtde</th>
+        <th>Custo</th><th>Atual</th><th>Var. dia</th>
+        <th>Atualizado</th><th>%</th><th>365</th>
+        <th>Stop gain</th><th>%</th><th>Breakeven</th>
+        <th>Desmontar</th><th>%</th><th>Montar</th><th>%</th>
+        <th>Tipo</th><th>Dias</th><th>Início</th><th>ST</th>
+      </tr>
+    </thead>
+    {% for group in portfolio.broker_groups %}
+    <tbody>
+    {% for item in group.positions %}
+      {% set p = item.position %}
+      {% set m = item.metrics %}
+      <tr>
+        <td>{{ p.broker }}</td>
+        <td><a href="{{ url_for('portfolio.edit_position', position_id=p.id) }}">{{ p.ticker }}</a></td>
+        <td class="number">{{ p.quantity|quantity }}</td>
+        <td class="number">{{ p.average_cost|currency(p.currency) }}</td>
+        {% if m %}
+          <td class="number">{{ m.current_price|currency(p.currency) }}</td>
+          <td class="number {{ m.daily_variation|sign_class }}">{{ m.daily_variation|percent }}</td>
+          <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency, 0) }}</td>
+          <td class="number {{ m.return_pct|sign_class }}">{{ m.return_pct|percent }}</td>
+          <td class="number {{ m.annualized_return|sign_class }}">{{ m.annualized_return|percent }}</td>
+          <td class="number">{{ m.stop_gain|currency(p.currency) }}</td>
+          <td class="number {{ m.distance_to_target|sign_class }}">{{ m.distance_to_target|percent(2) }}</td>
+          <td class="number {{ m.breakeven|sign_class }}">{{ m.breakeven|percent }}</td>
+          <td class="number">{{ m.unwind_value|currency(p.currency) }}</td>
+          <td class="number">{{ item.current_weight|percent }}</td>
+          <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency, 0) }}</td>
+          <td class="number">{{ item.cost_weight|percent }}</td>
+          <td>{{ p.side.value }}</td><td class="number">{{ m.days }}</td>
+        {% else %}
+          <td colspan="14" class="missing">Aguardando primeira cotação RTD</td>
+          <td>{{ p.side.value }}</td><td class="number">-</td>
+        {% endif %}
+        <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
+        <td><span class="status status-{{ item.quote_status }}">{{ item.quote_status }}</span></td>
+      </tr>
+    {% endfor %}
+      <tr class="broker-total">
+        <th colspan="3">{{ group.broker }} · {{ group.positions|length }} posição(ões)</th>
+        <td class="number">{{ group.cost_total|currency(group.currency) }}</td>
+        <td class="number">{{ group.current_total|currency(group.currency) }}</td>
+        <td></td>
+        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency, 0) }}</td>
+        <td colspan="13"></td>
+      </tr>
+    </tbody>
+    {% else %}
+    <tbody><tr><td colspan="20" class="empty">Nenhuma posição encontrada para os filtros.</td></tr></tbody>
+    {% endfor %}
+  </table>
+</div>
+
+<section class="summary portfolio-summary" aria-label="Resumo da carteira">
+  {% for total in portfolio.currency_totals %}
+    <article>
+      <span>Valor atual · {{ total.currency }}</span>
+      <strong>{{ total.current_total|currency(total.currency) }}</strong>
+    </article>
+    <article>
+      <span>Custo · {{ total.currency }}</span>
+      <strong>{{ total.cost_total|currency(total.currency) }}</strong>
+    </article>
+    <article>
+      <span>Resultado · {{ total.currency }}</span>
+      <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</strong>
+    </article>
+  {% endfor %}
+</section>
+{% endblock %}
