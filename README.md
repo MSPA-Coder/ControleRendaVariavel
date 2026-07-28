@@ -71,6 +71,30 @@ financeiros não são escritos no terminal. Enquanto o protótipo não demonstra
 estabilidade equivalente em execução contínua, `poll-rtd --watch` continua
 usando a sessão persistente e oculta do Excel.
 
+Ao abrir a página **Ações** pela primeira vez em uma sessão do navegador, a
+aplicação inicia automaticamente o `poll-rtd --watch` se ele estiver desligado.
+O toggle **RTD**, ao lado de **Limpar**, mostra o estado do processo e permite
+ligá-lo ou desligá-lo. O processo é gerenciado pelo controlador local do
+Windows. Ao desligar, o controlador permanece ativo para receber um novo clique
+e encerra o coletor, o Excel oculto e o Profit em modo de automação que tenham
+sido criados por aquela execução.
+
+Na execução com Docker, o COM continua no Windows e a aplicação web comunica-se
+com um controlador local autenticado. Suba a pilha pelo PowerShell, na raiz do
+projeto:
+
+```powershell
+.\scripts\start.ps1
+```
+
+Esse script cria um token aleatório em `.docker-local`, inicia o controlador
+oculto no Windows e reconstrói a aplicação. Para desligar a pilha, o coletor RTD
+e o controlador:
+
+```powershell
+.\scripts\stop.ps1
+```
+
 ## Campos de cadastro
 
 - `Corretora`, `Ticker`, `Quantidade`, `Custo médio`, `Tipo` (`C`/`V`) e data

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from flask import Flask
 from flask_migrate import Migrate  # type: ignore[import-untyped]
@@ -41,6 +42,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
         RTD_EXCEL_VISIBLE=os.getenv("RTD_EXCEL_VISIBLE", "false").lower() == "true",
+        RTD_CONTROL_URL=os.getenv("RTD_CONTROL_URL", ""),
+        RTD_CONTROL_TOKEN=os.getenv("RTD_CONTROL_TOKEN", ""),
     )
     if config:
         app.config.update(config)
@@ -48,6 +51,15 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
+
+    from app.rtd_service import RemoteRtdService, RtdServiceManager
+
+    control_url = str(app.config["RTD_CONTROL_URL"])
+    control_token = str(app.config["RTD_CONTROL_TOKEN"])
+    if control_url and control_token:
+        app.extensions["rtd_service"] = RemoteRtdService(control_url, control_token)
+    else:
+        app.extensions["rtd_service"] = RtdServiceManager(Path(app.root_path).parent)
 
     from app.cli import register_commands
     from app.options_web import bp as options_bp

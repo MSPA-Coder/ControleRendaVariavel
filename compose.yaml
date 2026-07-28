@@ -18,11 +18,16 @@ services:
       retries: 10
 
   web:
-    build: .
+    build:
+      context: .
+      secrets:
+        - host_ca
     environment:
       DATABASE_URL: postgresql+psycopg://investimentos:investimentos@db:5432/investimentos
       SECRET_KEY: ${SECRET_KEY:-development-only-change-me}
       RTD_STALE_AFTER_SECONDS: ${RTD_STALE_AFTER_SECONDS:-30}
+      RTD_CONTROL_URL: http://host.docker.internal:8765
+      RTD_CONTROL_TOKEN: ${RTD_CONTROL_TOKEN:?Execute scripts/start.ps1 para definir o token}
     ports:
       - "8000:8000"
     depends_on:
@@ -38,3 +43,7 @@ services:
 volumes:
   postgres_data:
     name: controleinvestimentos_postgres_data
+
+secrets:
+  host_ca:
+    file: .docker-local/host-ca.crt

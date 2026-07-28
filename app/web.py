@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 from flask import (
     Blueprint,
@@ -42,6 +43,7 @@ from app.models import (
 )
 from app.portfolio import build_portfolio
 from app.reference_data import parse_broker_name, parse_ticker
+from app.rtd_service import RtdService
 
 bp = Blueprint("portfolio", __name__)
 
@@ -123,6 +125,10 @@ def _poll_interval_seconds() -> int:
     return settings.poll_interval_seconds
 
 
+def _rtd_service() -> RtdService:
+    return cast(RtdService, current_app.extensions["rtd_service"])
+
+
 def _selected_filters() -> tuple[PositionKind | None, str | None, str]:
     raw_kind = request.args.get("position_kind", PositionKind.REAL.value)
     try:
@@ -180,6 +186,13 @@ def index() -> str:
         _positions(position_kind, broker),
         stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
     )
+    service = _rtd_service()
+    try:
+        rtd_service_running = service.is_running
+        rtd_service_available = service.available
+    except RuntimeError:
+        rtd_service_running = False
+        rtd_service_available = False
     return render_template(
         "index.html",
         portfolio=portfolio,
@@ -187,7 +200,27 @@ def index() -> str:
         selected_broker=broker or "",
         selected_kind=raw_kind,
         poll_interval_seconds=_poll_interval_seconds(),
+        rtd_service_running=rtd_service_running,
+        rtd_service_available=rtd_service_available,
     )
+
+
+@bp.route("/api/rtd-service", methods=["GET", "POST"])
+def rtd_service_api() -> ResponseReturnValue:
+    service = _rtd_service()
+    if request.method == "POST":
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or not isinstance(payload.get("enabled"), bool):
+            return jsonify(error="Informe o estado booleano 'enabled'."), 400
+        try:
+            if payload["enabled"]:
+                service.start()
+            else:
+                service.stop()
+        except (OSError, RuntimeError) as exc:
+            current_app.logger.warning("Não foi possível alterar o coletor RTD: %s", exc)
+            return jsonify(error=str(exc), running=service.is_running), 503
+    return jsonify(running=service.is_running, available=service.available)
 
 
 @bp.get("/api/portfolio")

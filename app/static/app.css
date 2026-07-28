@@ -42,6 +42,24 @@ main { padding: 1.25rem; }
 }
 .filters label { min-width: 180px; }
 .filter-actions { display: flex; gap: .6rem; margin-left: auto; }
+.rtd-toggle {
+  align-items: center; background: white; border: 1px solid var(--line); border-radius: .45rem;
+  color: var(--ink); cursor: pointer; display: inline-flex; font-size: .82rem; gap: .45rem;
+  padding: .45rem .65rem;
+}
+.rtd-toggle input { height: 1px; opacity: 0; position: absolute; width: 1px; }
+.rtd-toggle-track {
+  background: #aebbc5; border-radius: 999px; height: 1.15rem; position: relative;
+  transition: background .15s ease; width: 2rem;
+}
+.rtd-toggle-track::after {
+  background: white; border-radius: 50%; content: ""; height: .85rem; left: .15rem;
+  position: absolute; top: .15rem; transition: transform .15s ease; width: .85rem;
+}
+.rtd-toggle input:checked + .rtd-toggle-track { background: var(--positive); }
+.rtd-toggle input:checked + .rtd-toggle-track::after { transform: translateX(.85rem); }
+.rtd-toggle input:focus-visible + .rtd-toggle-track { outline: 3px solid #79aee0; }
+.rtd-toggle:has(input:disabled) { cursor: wait; opacity: .65; }
 .table-wrap { background: white; border: 1px solid var(--line); border-radius: .65rem; overflow: auto; }
 table { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; width: 100%; }
 .portfolio-table { min-width: 1500px; }

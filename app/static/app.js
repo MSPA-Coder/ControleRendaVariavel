@@ -6,6 +6,48 @@
     });
   }
 
+  const rtdToggle = document.querySelector("[data-rtd-toggle]");
+  if (rtdToggle) {
+    const rtdLabel = document.querySelector("[data-rtd-label]");
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    const rtdApi = rtdToggle.dataset.rtdApi || "/api/rtd-service";
+
+    const setRtdState = (running) => {
+      rtdToggle.checked = running;
+      if (rtdLabel) rtdLabel.textContent = `RTD ${running ? "ligado" : "desligado"}`;
+    };
+
+    const changeRtdState = async (enabled) => {
+      rtdToggle.disabled = true;
+      try {
+        const response = await fetch(rtdApi, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken,
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({ enabled }),
+        });
+        const payload = await response.json();
+        setRtdState(Boolean(payload.running));
+        if (!response.ok) throw new Error(payload.error || "Falha ao alterar o RTD.");
+      } catch (error) {
+        setRtdState(!enabled);
+        window.alert(error.message);
+      } finally {
+        rtdToggle.disabled = false;
+      }
+    };
+
+    rtdToggle.addEventListener("change", () => changeRtdState(rtdToggle.checked));
+    if (!sessionStorage.getItem("rtd-auto-start-attempted")) {
+      sessionStorage.setItem("rtd-auto-start-attempted", "true");
+      if (!rtdToggle.checked && !rtdToggle.disabled) changeRtdState(true);
+    }
+  }
+
   const portfolio = document.querySelector("[data-refresh-seconds]");
   if (!portfolio) return;
   const refreshApi = portfolio.dataset.refreshApi || "/api/portfolio";

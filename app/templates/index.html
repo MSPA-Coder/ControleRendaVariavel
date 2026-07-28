@@ -18,6 +18,18 @@
   </label>
   <div class="filter-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
+    <label class="rtd-toggle" title="Ativar ou desligar o coletor de cotações RTD">
+      <input
+        type="checkbox"
+        role="switch"
+        data-rtd-toggle
+        data-rtd-api="{{ url_for('portfolio.rtd_service_api') }}"
+        {{ 'checked' if rtd_service_running }}
+        {{ 'disabled' if not rtd_service_available }}
+      >
+      <span class="rtd-toggle-track" aria-hidden="true"></span>
+      <span data-rtd-label>RTD {{ 'ligado' if rtd_service_running else 'desligado' }}</span>
+    </label>
     <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
   </div>
 </form>
