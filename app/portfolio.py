@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.domain import PositionMetrics, calculate_position
-from app.models import Position
+from app.domain import PositionMetrics, calculate_position, safe_div
+from app.models import Market, Position
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +23,18 @@ class PortfolioTotal:
     current_total: Decimal
     cost_total: Decimal
     result_total: Decimal
+    return_pct: Decimal | None
+    """Σ resultado / Σ custo desta moeda (item 4, Nível Carteira).
+
+    Deliberadamente calculado por moeda, nunca somando moedas diferentes:
+    o restante do módulo (pesos, totais) já segrega tudo por moeda porque
+    somar BRL e USD sem uma taxa de câmbio produziria um número sem
+    significado financeiro real.
+    """
+    hhi: Decimal | None
+    """Índice Herfindahl-Hirschman (Σ peso_i²) desta moeda: quanto menor,
+    mais diversificada a carteira nessa moeda. Usa o peso pelo valor atual
+    (current_weight) de cada posição cotada."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +45,25 @@ class BrokerGroup:
     current_total: Decimal
     cost_total: Decimal
     result_total: Decimal
+    current_weight: Decimal | None
+    """Participação desta corretora no valor atual total da mesma moeda."""
+    cost_weight: Decimal | None
+    """Participação desta corretora no custo total da mesma moeda."""
+
+
+@dataclass(frozen=True, slots=True)
+class MarketGroup:
+    market: Market
+    currency: str
+    positions: list[PositionView]
+    current_total: Decimal
+    cost_total: Decimal
+    result_total: Decimal
+    current_weight: Decimal | None
+    """Participação deste mercado (B3/NYSE/NASDAQ) no valor atual total da
+    mesma moeda."""
+    cost_weight: Decimal | None
+    """Participação deste mercado no custo total da mesma moeda."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +71,7 @@ class PortfolioView:
     positions: list[PositionView]
     currency_totals: list[PortfolioTotal]
     broker_groups: list[BrokerGroup]
+    market_groups: list[MarketGroup]
 
 
 def build_portfolio(
@@ -100,30 +132,52 @@ def build_portfolio(
         for position, metrics, status in calculated
     ]
     grouped: dict[tuple[str, str], list[PositionView]] = {}
+    market_grouped: dict[tuple[Market, str], list[PositionView]] = {}
     for view in views:
-        key = (view.position.broker, view.position.currency)
-        grouped.setdefault(key, []).append(view)
+        grouped.setdefault((view.position.broker, view.position.currency), []).append(view)
+        market_grouped.setdefault((view.position.market, view.position.currency), []).append(view)
 
-    broker_groups = []
-    for (broker, currency), group_views in grouped.items():
+    def _aggregate(
+        group_views: list[PositionView], currency: str
+    ) -> tuple[Decimal, Decimal, Decimal, Decimal | None, Decimal | None]:
         group_metrics = [view.metrics for view in group_views if view.metrics is not None]
-        broker_groups.append(
-            BrokerGroup(
-                broker=broker,
-                currency=currency,
-                positions=group_views,
-                current_total=sum(
-                    (abs(metric.unwind_value) for metric in group_metrics), Decimal("0")
-                ),
-                cost_total=sum(
-                    (abs(metric.build_value) for metric in group_metrics), Decimal("0")
-                ),
-                result_total=sum((metric.result for metric in group_metrics), Decimal("0")),
-            )
+        current_total = sum((abs(metric.unwind_value) for metric in group_metrics), Decimal("0"))
+        cost_total = sum((abs(metric.build_value) for metric in group_metrics), Decimal("0"))
+        result_total = sum((metric.result for metric in group_metrics), Decimal("0"))
+        currency_current_total, currency_cost_total, _ = totals_by_currency[currency]
+        return (
+            current_total,
+            cost_total,
+            result_total,
+            safe_div(current_total, currency_current_total),
+            safe_div(cost_total, currency_cost_total),
         )
 
-    currency_total_views = [
-        PortfolioTotal(currency, values[0], values[1], values[2])
-        for currency, values in totals_by_currency.items()
+    broker_groups = [
+        BrokerGroup(broker, currency, group_views, *_aggregate(group_views, currency))
+        for (broker, currency), group_views in grouped.items()
     ]
-    return PortfolioView(views, currency_total_views, broker_groups)
+    market_groups = [
+        MarketGroup(market, currency, group_views, *_aggregate(group_views, currency))
+        for (market, currency), group_views in market_grouped.items()
+    ]
+
+    currency_total_views = []
+    for currency, (current_total, cost_total, result_total) in totals_by_currency.items():
+        weights = [
+            view.current_weight
+            for view in views
+            if view.position.currency == currency and view.current_weight is not None
+        ]
+        hhi = sum((weight * weight for weight in weights), Decimal("0")) if weights else None
+        currency_total_views.append(
+            PortfolioTotal(
+                currency=currency,
+                current_total=current_total,
+                cost_total=cost_total,
+                result_total=result_total,
+                return_pct=safe_div(result_total, cost_total),
+                hhi=hhi,
+            )
+        )
+    return PortfolioView(views, currency_total_views, broker_groups, market_groups)

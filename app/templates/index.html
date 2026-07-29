@@ -114,6 +114,59 @@
       <span>Resultado · {{ total.currency }}</span>
       <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</strong>
     </article>
+    <article>
+      <span>Retorno · {{ total.currency }}</span>
+      <strong class="{{ total.return_pct|sign_class }}">{{ total.return_pct|percent(2) }}</strong>
+    </article>
+    <article title="Índice Herfindahl-Hirschman: quanto menor, mais diversificada a carteira nesta moeda.">
+      <span>Concentração (HHI) · {{ total.currency }}</span>
+      <strong>{{ total.hhi|number(3) }}</strong>
+    </article>
   {% endfor %}
 </section>
+
+{% if portfolio.broker_groups or portfolio.market_groups %}
+<section class="exposure" aria-label="Exposição da carteira">
+  {% if portfolio.broker_groups %}
+  <div class="exposure-table">
+    <h2>Exposição por corretora</h2>
+    <table>
+      <thead>
+        <tr><th>Corretora</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {% for group in portfolio.broker_groups %}
+        <tr>
+          <td>{{ group.broker }}</td>
+          <td>{{ group.currency }}</td>
+          <td class="number">{{ group.current_total|currency(group.currency) }}</td>
+          <td class="number">{{ group.current_weight|percent }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if portfolio.market_groups %}
+  <div class="exposure-table">
+    <h2>Exposição por mercado</h2>
+    <table>
+      <thead>
+        <tr><th>Mercado</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {% for group in portfolio.market_groups %}
+        <tr>
+          <td>{{ group.market.value }}</td>
+          <td>{{ group.currency }}</td>
+          <td class="number">{{ group.current_total|currency(group.currency) }}</td>
+          <td class="number">{{ group.current_weight|percent }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}

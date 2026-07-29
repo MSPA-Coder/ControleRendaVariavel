@@ -27,6 +27,10 @@ def register_filters(app: Flask) -> None:
         decimals = max(0, -exponent) if isinstance(exponent, int) else 0
         return _number(value, min(decimals, 8))
 
+    @app.template_filter("number")
+    def number(value: Decimal | None, decimals: int = 2) -> str:
+        return "-" if value is None else _number(value, decimals)
+
     @app.template_filter("percent")
     def percent(value: Decimal | None, decimals: int = 1) -> str:
         if value is None:

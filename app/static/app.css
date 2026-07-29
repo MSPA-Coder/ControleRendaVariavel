@@ -32,10 +32,17 @@ main { padding: 1.25rem; }
 .summary article { background: white; border: 1px solid var(--line); border-radius: .65rem; padding: 1rem; }
 .summary span { color: var(--muted); display: block; font-size: .82rem; margin-bottom: .25rem; }
 .summary strong { font-size: 1.45rem; }
-.portfolio-summary { gap: .6rem; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.portfolio-summary { gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .portfolio-summary article { padding: .7rem .8rem; }
 .portfolio-summary span { font-size: .75rem; }
 .portfolio-summary strong { font-size: 1.05rem; }
+
+.exposure { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 1rem; }
+.exposure-table { background: white; border: 1px solid var(--line); border-radius: .65rem; padding: 1rem; }
+.exposure-table h2 { font-size: .95rem; margin: 0 0 .6rem; }
+.exposure-table table { width: 100%; }
+.exposure-table th { color: var(--muted); font-size: .78rem; font-weight: 600; text-align: left; }
+.exposure-table td.number, .exposure-table th:last-child { text-align: right; }
 .filters {
   align-items: end; background: white; border: 1px solid var(--line); border-radius: .65rem;
   display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; padding: .85rem;

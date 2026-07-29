@@ -124,6 +124,10 @@ def _build_portfolio_payload(page: int, per_page: int) -> dict[str, Any]:
                 "current": str(total_row.current_total),
                 "cost": str(total_row.cost_total),
                 "result": str(total_row.result_total),
+                "return_pct": str(total_row.return_pct)
+                if total_row.return_pct is not None
+                else None,
+                "hhi": str(total_row.hhi) if total_row.hhi is not None else None,
             }
             for total_row in portfolio.currency_totals
         ],
@@ -134,8 +138,26 @@ def _build_portfolio_payload(page: int, per_page: int) -> dict[str, Any]:
                 "current": str(group.current_total),
                 "cost": str(group.cost_total),
                 "result": str(group.result_total),
+                "current_weight": str(group.current_weight)
+                if group.current_weight is not None
+                else None,
+                "cost_weight": str(group.cost_weight) if group.cost_weight is not None else None,
             }
             for group in portfolio.broker_groups
+        ],
+        "markets": [
+            {
+                "market": group.market.value,
+                "currency": group.currency,
+                "current": str(group.current_total),
+                "cost": str(group.cost_total),
+                "result": str(group.result_total),
+                "current_weight": str(group.current_weight)
+                if group.current_weight is not None
+                else None,
+                "cost_weight": str(group.cost_weight) if group.cost_weight is not None else None,
+            }
+            for group in portfolio.market_groups
         ],
         "poll_interval_seconds": poll_interval_seconds(),
     }
