@@ -36,7 +36,7 @@ As cotações são persistidas como snapshots. Se o coletor parar, a tela manté
    docker compose up --build -d
    ```
 
-3. Abra [http://localhost:8000](http://localhost:8000) e cadastre as posições.
+3. Abra [http://127.0.0.1:5003](http://127.0.0.1:5003) e cadastre as posições.
 4. No Windows, crie o ambiente do coletor e instale o extra RTD:
 
    ```powershell
@@ -44,7 +44,7 @@ As cotações são persistidas como snapshots. Se o coletor parar, a tela manté
    .\.venv\Scripts\python.exe -m pip install -e ".[rtd]"
    ```
 
-5. Com `DATABASE_URL` apontando para `localhost:5433`, inicie o coletor:
+5. Com `DATABASE_URL` apontando para `localhost:5435`, inicie o coletor:
 
    ```powershell
    .\.venv\Scripts\flask.exe --app app:create_app poll-rtd --watch

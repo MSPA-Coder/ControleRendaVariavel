@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block content %}
-<form class="filters" method="get" data-auto-submit>
+{% block header_controls %}
+<form class="filters header-controls" method="get" data-auto-submit>
   <label>Posição
     <select name="position_kind">
       <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
@@ -16,24 +16,23 @@
       {% endfor %}
     </select>
   </label>
-  <div class="filter-actions">
-    <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
-    <label class="rtd-toggle" title="Ativar ou desligar o coletor de cotações RTD">
-      <input
-        type="checkbox"
-        role="switch"
-        data-rtd-toggle
-        data-rtd-api="{{ url_for('portfolio.rtd_service_api') }}"
-        {{ 'checked' if rtd_service_running }}
-        {{ 'disabled' if not rtd_service_available }}
-      >
-      <span class="rtd-toggle-track" aria-hidden="true"></span>
-      <span data-rtd-label>RTD {{ 'ligado' if rtd_service_running else 'desligado' }}</span>
-    </label>
-    <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
-  </div>
+  <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
+  <label class="rtd-toggle" title="Ativar ou desligar o coletor de cotações RTD">
+    <input
+      type="checkbox"
+      role="switch"
+      data-rtd-toggle
+      data-rtd-api="{{ url_for('portfolio.rtd_service_api') }}"
+      {{ 'checked' if rtd_service_running }}
+      {{ 'disabled' if not rtd_service_available }}
+    >
+    <span class="rtd-toggle-track" aria-hidden="true"></span>
+    <span data-rtd-label>RTD {{ 'ligado' if rtd_service_running else 'desligado' }}</span>
+  </label>
+  <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
 </form>
-
+{% endblock %}
+{% block content %}
 <div class="table-wrap" data-refresh-seconds="{{ poll_interval_seconds }}" data-refresh-api="{{ url_for('portfolio.portfolio_api') }}">
   <table class="portfolio-table">
     <thead>

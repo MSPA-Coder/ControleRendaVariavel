@@ -1,16 +1,31 @@
 $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $PSScriptRoot
-$projectItem = Get-Item -LiteralPath $projectDir
-if ($projectItem.LinkType -eq "Junction" -and $projectItem.Target) {
-    $projectDir = $projectItem.Target[0]
-}
 $runtimeDir = Join-Path $projectDir ".docker-local"
 $tokenPath = Join-Path $runtimeDir "rtd-control-token"
 $pidPath = Join-Path $runtimeDir "rtd-control.pid"
 $pythonPath = Join-Path $projectDir ".venv\Scripts\python.exe"
 
-docker compose --project-directory $projectDir down
+function Resolve-DockerCli {
+    $command = Get-Command docker -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\DockerDesktop\resources\bin\docker.exe"),
+        (Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+    throw "Docker CLI não encontrado. Instale ou inicie o Docker Desktop."
+}
+
+$dockerPath = Resolve-DockerCli
+& $dockerPath compose --project-directory $projectDir down
 if ($LASTEXITCODE -ne 0) {
     throw "Falha ao desligar a pilha Docker."
 }

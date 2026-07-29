@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% block header_controls %}
+<span class="header-controls">
+  <a class="button button-primary" href="{{ url_for('options.new_position') }}">Nova posição</a>
+</span>
+{% endblock %}
 {% block title %}Opções · Controle de Renda Variável{% endblock %}
 {% block content %}
-<div class="page-heading">
-  <h1>Opções</h1>
-  <a class="button button-primary" href="{{ url_for('options.new_position') }}">Nova posição</a>
-</div>
 <div class="table-wrap" data-refresh-seconds="{{ poll_interval_seconds }}" data-refresh-api="{{ url_for('options.api') }}">
   <table class="portfolio-table options-table">
     <thead>

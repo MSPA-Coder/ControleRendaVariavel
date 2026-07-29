@@ -68,8 +68,6 @@ class RtdServiceManager:
                 ],
                 cwd=self.project_dir,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
                 creationflags=creationflags,
             )
             return True

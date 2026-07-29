@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: investimentos
       POSTGRES_PASSWORD: investimentos
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,24 +25,24 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://investimentos:investimentos@db:5432/investimentos
       SECRET_KEY: ${SECRET_KEY:-development-only-change-me}
+      RENDA_VARIAVEL_SESSION_COOKIE_NAME: ${RENDA_VARIAVEL_SESSION_COOKIE_NAME:-controle_renda_variavel_session}
       RTD_STALE_AFTER_SECONDS: ${RTD_STALE_AFTER_SECONDS:-30}
       RTD_CONTROL_URL: http://host.docker.internal:8765
       RTD_CONTROL_TOKEN: ${RTD_CONTROL_TOKEN:?Execute scripts/start.ps1 para definir o token}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:5003:5003"
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
       test:
-        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5003/health', timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 6
 
 volumes:
   postgres_data:
-    name: controleinvestimentos_postgres_data
 
 secrets:
   host_ca:

@@ -21,5 +21,5 @@ COPY app ./app
 COPY migrations ./migrations
 COPY pyproject.toml ./
 USER app
-EXPOSE 8000
-CMD ["sh", "-c", "flask --app app:create_app db upgrade && exec gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 30 'app:create_app()'"]
+EXPOSE 5003
+CMD ["sh", "-c", "flask --app app:create_app db upgrade && exec gunicorn --bind 0.0.0.0:5003 --workers 2 --timeout 30 'app:create_app()'"]

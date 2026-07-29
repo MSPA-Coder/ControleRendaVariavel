@@ -32,9 +32,16 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(
         SECRET_KEY=os.getenv("SECRET_KEY", "development-only-change-me"),
+        SESSION_COOKIE_NAME=(
+            os.getenv(
+                "RENDA_VARIAVEL_SESSION_COOKIE_NAME",
+                "controle_renda_variavel_session",
+            ).strip()
+            or "controle_renda_variavel_session"
+        ),
         SQLALCHEMY_DATABASE_URI=os.getenv(
             "DATABASE_URL",
-            "postgresql+psycopg://investimentos:investimentos@localhost:5433/investimentos",
+            "postgresql+psycopg://investimentos:investimentos@localhost:5435/investimentos",
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         RTD_PROG_ID=os.getenv("RTD_PROG_ID", "rtdtrading.rtdserver"),

@@ -71,6 +71,7 @@ class Broker(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(40), unique=True)
+    acronym: Mapped[str] = mapped_column(String(40), unique=True)
     positions: Mapped[list[Position]] = relationship(back_populates="broker_ref")
 
 
@@ -83,6 +84,7 @@ class Ticker(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     symbol: Mapped[str] = mapped_column(String(24), unique=True)
+    trading_name: Mapped[str] = mapped_column(String(80))
     market: Mapped[Market] = mapped_column(Enum(Market, name="market"))
     rtd_market_code: Mapped[str] = mapped_column(String(1))
     currency: Mapped[str] = mapped_column(String(3))

@@ -1,4 +1,5 @@
-<section class="catalog-card option-catalog-start" id="options">
+<details class="catalog-card option-catalog-start" id="options">
+  <summary>Vencimentos de calls e puts</summary>
   <h2>Vencimentos de calls e puts</h2>
   <form class="catalog-create expiration-fields" method="post" action="{{ url_for('options.create_expiration') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -35,9 +36,10 @@
       </tbody>
     </table>
   </div>
-</section>
+</details>
 
-<section class="catalog-card option-contracts">
+<details class="catalog-card option-contracts">
+  <summary>Contratos de opções</summary>
   <h2>Contratos de opções</h2>
   <form class="catalog-create contract-fields" method="post" action="{{ url_for('options.create_contract') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -97,4 +99,4 @@
       </tbody>
     </table>
   </div>
-</section>
+</details>

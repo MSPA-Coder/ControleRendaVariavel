@@ -42,7 +42,7 @@ from app.models import (
     Ticker,
 )
 from app.portfolio import build_portfolio
-from app.reference_data import parse_broker_name, parse_ticker
+from app.reference_data import parse_broker, parse_ticker
 from app.rtd_service import RtdService
 
 bp = Blueprint("portfolio", __name__)
@@ -208,19 +208,21 @@ def index() -> str:
 @bp.route("/api/rtd-service", methods=["GET", "POST"])
 def rtd_service_api() -> ResponseReturnValue:
     service = _rtd_service()
-    if request.method == "POST":
-        payload = request.get_json(silent=True)
-        if not isinstance(payload, dict) or not isinstance(payload.get("enabled"), bool):
-            return jsonify(error="Informe o estado booleano 'enabled'."), 400
-        try:
+    try:
+        if request.method == "POST":
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("enabled"), bool
+            ):
+                return jsonify(error="Informe o estado booleano 'enabled'."), 400
             if payload["enabled"]:
                 service.start()
             else:
                 service.stop()
-        except (OSError, RuntimeError) as exc:
-            current_app.logger.warning("Não foi possível alterar o coletor RTD: %s", exc)
-            return jsonify(error=str(exc), running=service.is_running), 503
-    return jsonify(running=service.is_running, available=service.available)
+        return jsonify(running=service.is_running, available=service.available)
+    except (OSError, RuntimeError) as exc:
+        current_app.logger.warning("Não foi possível acessar o coletor RTD: %s", exc)
+        return jsonify(error=str(exc), running=False, available=False), 503
 
 
 @bp.get("/api/portfolio")
@@ -343,13 +345,16 @@ def tables() -> str:
 @bp.post("/tables/brokers")
 def create_broker() -> ResponseReturnValue:
     try:
-        name = parse_broker_name(request.form)
+        data = parse_broker(request.form)
         duplicate = db.session.scalar(
-            select(Broker).where(func.lower(Broker.name) == name.lower())
+            select(Broker).where(
+                (func.lower(Broker.name) == data.name.lower())
+                | (func.lower(Broker.acronym) == data.acronym.lower())
+            )
         )
         if duplicate is not None:
-            raise ValueError("Essa corretora já está cadastrada.")
-        db.session.add(Broker(name=name))
+            raise ValueError("O nome ou a sigla da corretora já está cadastrado.")
+        db.session.add(Broker(**asdict(data)))
         db.session.commit()
         flash("Corretora adicionada.", "success")
     except ValueError as exc:
@@ -362,16 +367,18 @@ def create_broker() -> ResponseReturnValue:
 def update_broker(broker_id: int) -> ResponseReturnValue:
     broker = db.get_or_404(Broker, broker_id)
     try:
-        name = parse_broker_name(request.form)
+        data = parse_broker(request.form)
         duplicate = db.session.scalar(
             select(Broker).where(
-                func.lower(Broker.name) == name.lower(),
+                (func.lower(Broker.name) == data.name.lower())
+                | (func.lower(Broker.acronym) == data.acronym.lower()),
                 Broker.id != broker.id,
             )
         )
         if duplicate is not None:
-            raise ValueError("Essa corretora já está cadastrada.")
-        broker.name = name
+            raise ValueError("O nome ou a sigla da corretora já está cadastrado.")
+        broker.name = data.name
+        broker.acronym = data.acronym
         db.session.commit()
         flash("Corretora atualizada.", "success")
     except ValueError as exc:
