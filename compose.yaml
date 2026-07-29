@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: investimentos
       POSTGRES_USER: investimentos
-      POSTGRES_PASSWORD: investimentos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
     ports:
       - "127.0.0.1:5435:5432"
     volumes:
@@ -23,12 +23,15 @@ services:
       secrets:
         - host_ca
     environment:
-      DATABASE_URL: postgresql+psycopg://investimentos:investimentos@db:5432/investimentos
-      SECRET_KEY: ${SECRET_KEY:-development-only-change-me}
+      DATABASE_URL: postgresql+psycopg://investimentos:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}@db:5432/investimentos
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no .env}
       RENDA_VARIAVEL_SESSION_COOKIE_NAME: ${RENDA_VARIAVEL_SESSION_COOKIE_NAME:-controle_renda_variavel_session}
       RTD_STALE_AFTER_SECONDS: ${RTD_STALE_AFTER_SECONDS:-30}
       RTD_CONTROL_URL: http://host.docker.internal:8765
       RTD_CONTROL_TOKEN: ${RTD_CONTROL_TOKEN:?Execute scripts/start.ps1 para definir o token}
+      FORCE_HTTPS: ${FORCE_HTTPS:-false}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      RATELIMIT_STORAGE_URI: ${RATELIMIT_STORAGE_URI:-memory://}
     ports:
       - "127.0.0.1:5003:5003"
     depends_on:

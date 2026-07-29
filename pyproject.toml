@@ -10,19 +10,23 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "alembic==1.16.4",
-  "Flask==3.1.1",
+  "Flask==3.1.3",
+  "Flask-Limiter==3.12",
+  "Flask-Login==0.6.3",
   "Flask-Migrate==4.1.0",
   "Flask-SQLAlchemy==3.1.1",
+  "Flask-Talisman==1.1.0",
   "Flask-WTF==1.2.2",
   "gunicorn==23.0.0",
   "psycopg[binary]==3.2.13",
+  "pydantic==2.11.7",
 ]
 
 [project.optional-dependencies]
 dev = [
   "mypy==1.17.0",
   "pip-audit==2.9.0",
-  "pytest==8.4.1",
+  "pytest==9.0.3",
   "pytest-cov==6.2.1",
   "ruff==0.12.5",
   "types-pywin32==312.0.0.20260724",
@@ -37,7 +41,7 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers --strict-config"
+addopts = "-q --strict-markers --strict-config --cov=app --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100
@@ -50,3 +54,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 exclude = ["migrations"]
+
+[[tool.mypy.overrides]]
+# comtypes is Windows-only: on a Windows dev machine it is installed but
+# unstubbed (import-untyped); on Linux CI it is not installed at all
+# (import-not-found). This override keeps `mypy app` meaningful on both
+# platforms without inline ignores that are only correct on one of them.
+module = "comtypes.*"
+ignore_missing_imports = true

@@ -113,8 +113,8 @@ class DirectRtdQuoteProvider:
         if self._server_factory is not None:
             return
         try:
-            import comtypes  # type: ignore[import-untyped]
-            import comtypes.client  # type: ignore[import-untyped]
+            import comtypes
+            import comtypes.client
             from comtypes import COMObject
         except ImportError as exc:
             raise RuntimeError(

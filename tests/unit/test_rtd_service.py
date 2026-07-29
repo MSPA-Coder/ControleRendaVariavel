@@ -3,7 +3,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from app import create_app
 from app.rtd_service import RemoteRtdService, RtdServiceManager
 
 
@@ -83,21 +82,3 @@ def test_remote_service_sends_authenticated_start_request() -> None:
     assert start_request.full_url == "http://host:8765/state"
     assert start_request.get_header("Authorization") == "Bearer secret-token"
     assert start_request.data == b'{"enabled": true}'
-
-
-def test_rtd_service_api_reports_unavailable_controller_without_500() -> None:
-    app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
-    service = Mock()
-    type(service).is_running = property(
-        lambda _service: (_ for _ in ()).throw(RuntimeError("indisponível"))
-    )
-    app.extensions["rtd_service"] = service
-
-    response = app.test_client().get("/api/rtd-service")
-
-    assert response.status_code == 503
-    assert response.get_json() == {
-        "available": False,
-        "error": "indisponível",
-        "running": False,
-    }

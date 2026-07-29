@@ -29,22 +29,31 @@ As cotações são persistidas como snapshots. Se o coletor parar, a tela manté
 
 ## Início rápido
 
-1. Copie `.env.example` para `.env` e troque `SECRET_KEY`.
+1. Copie `.env.example` para `.env`, troque `SECRET_KEY` e defina
+   `POSTGRES_PASSWORD` (o `docker compose` recusa subir sem eles).
 2. Suba banco e web:
 
    ```powershell
    docker compose up --build -d
    ```
 
-3. Abra [http://127.0.0.1:5003](http://127.0.0.1:5003) e cadastre as posições.
-4. No Windows, crie o ambiente do coletor e instale o extra RTD:
+3. Crie o usuário administrador (a aplicação exige login em todas as rotas,
+   exceto `/login` e `/health`):
+
+   ```powershell
+   docker compose exec web flask --app app:create_app users create-admin
+   ```
+
+4. Abra [http://127.0.0.1:5003](http://127.0.0.1:5003), faça login e cadastre
+   as posições.
+5. No Windows, crie o ambiente do coletor e instale o extra RTD:
 
    ```powershell
    py -3.12 -m venv .venv
    .\.venv\Scripts\python.exe -m pip install -e ".[rtd]"
    ```
 
-5. Com `DATABASE_URL` apontando para `localhost:5435`, inicie o coletor:
+6. Com `DATABASE_URL` apontando para `localhost:5435`, inicie o coletor:
 
    ```powershell
    .\.venv\Scripts\flask.exe --app app:create_app poll-rtd --watch
@@ -134,21 +143,46 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\ruff.exe check .
 .\.venv\Scripts\mypy.exe app
+.\.venv\Scripts\pip-audit.exe
 docker compose build
 ```
 
-Testes que exercem persistência devem usar PostgreSQL descartável, nunca SQLite.
-O health check fica em `/health`; dados calculados também estão disponíveis em
-`/api/portfolio`.
+Testes que exercem persistência devem usar PostgreSQL descartável, nunca
+SQLite; o schema de teste é criado a partir das migrações reais do Alembic
+(`tests/conftest.py`). Por padrão os testes usam um segundo banco na mesma
+instância descartável do `docker compose` (`investimentos_test` em
+`localhost:5435`); aponte `TEST_DATABASE_URL` para outra instância se
+necessário. O GitHub Actions (`.github/workflows/ci.yml`) roda `ruff`,
+`mypy`, `pytest` (contra um serviço PostgreSQL descartável) e `pip-audit` em
+todo push/PR. O health check fica em `/health`; dados calculados também
+estão disponíveis em `/api/portfolio` (paginado, ver `page`/`per_page`).
 
 ## Segurança e operação
 
+- Login obrigatório (Flask-Login) em toda a aplicação, exceto `/login` e
+  `/health`. Crie/redefina o usuário administrador com
+  `flask users create-admin`; desative um usuário com
+  `flask users deactivate <username>`.
+- Limite de tentativas (Flask-Limiter) em `/login` e nas rotas `/api/*`.
+  Em memória por padrão (processo único); aponte `RATELIMIT_STORAGE_URI`
+  para um Redis compartilhado ao rodar múltiplos workers.
+- Cabeçalhos de segurança e CSP (Flask-Talisman). `FORCE_HTTPS=false` por
+  padrão (uso na rede local); ative ao colocar a aplicação atrás de um
+  proxy reverso com TLS (ver abaixo) — isso também passa a exigir cookies
+  `Secure`.
 - Ações de escrita usam CSRF.
-- Segredos e credenciais vêm do ambiente.
-- O coletor abre uma instância privada e oculta do Excel, fecha o workbook sem
-  salvar e não altera `Trades.xlsm`.
+- Segredos e credenciais vêm do ambiente; `docker compose` não sobe sem
+  `SECRET_KEY` e `POSTGRES_PASSWORD` definidos.
+- O coletor abre uma instância privada e oculta do Excel, fecha o workbook
+  sem salvar e não altera `Trades.xlsm`.
+- Backup diário do PostgreSQL: agende `scripts/backup.ps1` no Agendador de
+  Tarefas do Windows (usa `docker compose exec db pg_dump`, formato
+  `custom`, com retenção de 30 dias em `backups/`). Restaure com
+  `pg_restore -U investimentos -d investimentos backups/arquivo.dump`.
 - Não exponha o PostgreSQL ou a aplicação diretamente na internet sem TLS,
-  autenticação e um proxy reverso.
+  autenticação e um proxy reverso (ex.: Caddy ou nginx terminando TLS na
+  frente do container `web`, com `TRUST_PROXY_HEADERS=true` e
+  `FORCE_HTTPS=true`).
 
 O mapeamento auditável das fórmulas está em
 [`docs/planilha-acoes.md`](docs/planilha-acoes.md) e

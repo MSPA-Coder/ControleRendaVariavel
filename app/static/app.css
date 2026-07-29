@@ -196,3 +196,17 @@ input, select { border: 1px solid var(--line); border-radius: .4rem; color: var(
   .topbar .filters select { min-width: 0; width: 100%; }
   .broker-fields { grid-template-columns: 1fr; }
 }
+
+.login-page {
+  align-items: center; display: flex; justify-content: center; min-height: 100vh; padding: 1.25rem;
+}
+.login-form {
+  background: white; border: 1px solid var(--line); border-radius: .65rem;
+  display: grid; gap: .85rem; padding: 1.75rem; width: min(320px, 100%);
+}
+.login-form h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
+.login-form input { border: 1px solid var(--line); border-radius: .4rem; padding: .5rem .6rem; }
+.nav-user { align-items: center; display: flex; gap: .6rem; }
+.logout-form { display: inline; }
+.logout-form button { background: none; border: none; color: white; cursor: pointer; font: inherit; opacity: .85; padding: 0; text-decoration: underline; }
+.logout-form button:hover { opacity: 1; }

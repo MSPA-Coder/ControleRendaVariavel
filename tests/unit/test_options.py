@@ -1,8 +1,36 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from app.models import OptionType
-from app.options import calculate_option
+from app.options import _business_days, calculate_option
+
+
+def _business_days_brute_force(start: date, end: date) -> int:
+    if end <= start:
+        return 0
+    return sum(
+        1
+        for offset in range((end - start).days)
+        if date.fromordinal(start.toordinal() + offset).weekday() < 5
+    )
+
+
+def test_business_days_matches_brute_force_reference_across_many_ranges() -> None:
+    # Guards the O(1) rewrite (item 3.1 do relatório) against the original
+    # day-by-day loop across every weekday start and a range of span lengths,
+    # including spans shorter than a full week.
+    base = date(2026, 1, 5)  # a Monday
+    for start_offset in range(8):  # covers every weekday as a start day
+        start = base + timedelta(days=start_offset)
+        for span in range(0, 40):
+            end = start + timedelta(days=span)
+            assert _business_days(start, end) == _business_days_brute_force(start, end)
+
+
+def test_business_days_returns_zero_for_non_positive_range() -> None:
+    day = date(2026, 3, 10)
+    assert _business_days(day, day) == 0
+    assert _business_days(day, day - timedelta(days=5)) == 0
 
 
 def test_call_metrics_match_trades_options_sheet() -> None:

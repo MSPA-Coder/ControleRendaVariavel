@@ -19,6 +19,7 @@ from app.models import (
     OptionQuote,
     Position,
     Quote,
+    User,
 )
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
@@ -27,6 +28,7 @@ from app.rtd_direct import DirectRtdQuoteProvider
 def register_commands(app: Flask) -> None:
     app.cli.add_command(poll_rtd)
     app.cli.add_command(probe_rtd_direct)
+    app.cli.add_command(users_group)
 
 
 @click.command("probe-rtd-direct")
@@ -194,3 +196,56 @@ def poll_rtd(watch: bool) -> None:
             time.sleep(poll_interval_seconds)
     finally:
         providers.close()
+
+
+@click.group("users")
+def users_group() -> None:
+    """Gerenciamento de contas de usuário (autenticação da aplicação)."""
+
+
+@users_group.command("create-admin")
+@click.option("--username", prompt=True, help="Nome de usuário para login.")
+@click.option(
+    "--password",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="Senha do usuário (solicitada de forma oculta se omitida).",
+)
+def create_admin(username: str, password: str) -> None:
+    """Cria um usuário administrador ou redefine sua senha se já existir.
+
+    Uso: flask users create-admin
+    (username/password também podem vir por --username/--password, útil em
+    scripts de provisionamento não interativos; evite deixar a senha em
+    histórico de shell nesse caso.)
+    """
+    username = username.strip()
+    if not username:
+        raise click.ClickException("Informe um nome de usuário.")
+    if len(password) < 8:
+        raise click.ClickException("A senha deve ter ao menos 8 caracteres.")
+
+    user = db.session.scalar(select(User).where(User.username == username))
+    if user is None:
+        user = User(username=username)
+        db.session.add(user)
+        action = "criado"
+    else:
+        action = "atualizado"
+    user.set_password(password)
+    user.is_active_user = True
+    db.session.commit()
+    click.echo(f"Usuário '{username}' {action} com sucesso.")
+
+
+@users_group.command("deactivate")
+@click.argument("username")
+def deactivate_user(username: str) -> None:
+    """Desativa um usuário (mantém o histórico, impede novos logins)."""
+    user = db.session.scalar(select(User).where(User.username == username.strip()))
+    if user is None:
+        raise click.ClickException(f"Usuário '{username}' não encontrado.")
+    user.is_active_user = False
+    db.session.commit()
+    click.echo(f"Usuário '{username}' desativado.")

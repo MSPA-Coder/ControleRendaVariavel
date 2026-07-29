@@ -30,13 +30,23 @@ class OptionMetrics:
 
 
 def _business_days(start: date, end: date) -> int:
+    """Count weekdays (Mon-Fri) in [start, end), O(1) instead of O(n) days.
+
+    Splits the range into full weeks (always 5 business days each) plus a
+    remainder of at most 6 days, which is resolved with simple modular
+    arithmetic on ``start``'s weekday instead of iterating day by day.
+    """
     if end <= start:
         return 0
-    return sum(
-        1
-        for offset in range((end - start).days)
-        if date.fromordinal(start.toordinal() + offset).weekday() < 5
-    )
+    total_days = (end - start).days
+    full_weeks, remainder = divmod(total_days, 7)
+    business_days = full_weeks * 5
+    if remainder:
+        start_weekday = start.weekday()  # 0 = Monday ... 6 = Sunday
+        for offset in range(remainder):
+            if (start_weekday + offset) % 7 < 5:
+                business_days += 1
+    return business_days
 
 
 def calculate_option(

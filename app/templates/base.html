@@ -19,6 +19,15 @@
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.settings' }}" href="{{ url_for('portfolio.settings') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.settings' }}>Configurações</a>
       </span>
       {% block header_controls %}{% endblock %}
+      {% if current_user.is_authenticated %}
+        <span class="nav-user">
+          <span>{{ current_user.username }}</span>
+          <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit">Sair</button>
+          </form>
+        </span>
+      {% endif %}
     </nav>
   </header>
   <main>
