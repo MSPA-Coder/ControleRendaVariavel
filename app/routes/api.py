@@ -7,6 +7,7 @@ from flask.typing import ResponseReturnValue
 from pydantic import BaseModel, ValidationError
 
 from app import limiter
+from app.collector_heartbeat import collector_heartbeat
 from app.portfolio import build_portfolio
 from app.routes import bp
 from app.routes.helpers import (
@@ -57,6 +58,16 @@ def rtd_service_api() -> ResponseReturnValue:
     except (OSError, RuntimeError) as exc:
         current_app.logger.warning("Não foi possível acessar o coletor RTD: %s", exc)
         return jsonify(error=str(exc), running=False, available=False), 503
+
+
+@bp.get("/api/collector-heartbeat")
+@limiter.limit("120 per minute")
+def collector_heartbeat_api() -> ResponseReturnValue:
+    return jsonify(
+        **collector_heartbeat(
+            stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"]
+        )
+    )
 
 
 def _build_portfolio_payload(page: int, per_page: int) -> dict[str, Any]:

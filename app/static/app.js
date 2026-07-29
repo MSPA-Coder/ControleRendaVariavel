@@ -6,6 +6,27 @@
     });
   }
 
+  const catalogCards = document.querySelectorAll("[data-catalog-card]");
+  if (catalogCards.length) {
+    const catalogStateKey = "catalog-open-cards";
+    const openCards = new Set(JSON.parse(sessionStorage.getItem(catalogStateKey) || "[]"));
+    const saveOpenCards = () => {
+      sessionStorage.setItem(
+        catalogStateKey,
+        JSON.stringify([...catalogCards]
+          .filter((card) => card.open)
+          .map((card) => card.dataset.catalogCard)),
+      );
+    };
+    catalogCards.forEach((card) => {
+      card.open = openCards.has(card.dataset.catalogCard) || card.id === window.location.hash.slice(1);
+      card.addEventListener("toggle", saveOpenCards);
+    });
+    document.querySelectorAll("[data-catalog-card] form").forEach((form) => {
+      form.addEventListener("submit", saveOpenCards);
+    });
+  }
+
   const rtdToggle = document.querySelector("[data-rtd-toggle]");
   if (rtdToggle) {
     const rtdLabel = document.querySelector("[data-rtd-label]");
@@ -46,6 +67,49 @@
       sessionStorage.setItem("rtd-auto-start-attempted", "true");
       if (!rtdToggle.checked && !rtdToggle.disabled) changeRtdState(true);
     }
+  }
+
+  const heartbeat = document.querySelector("[data-collector-heartbeat]");
+  if (heartbeat) {
+    const heartbeatApi = heartbeat.dataset.heartbeatApi || "/api/collector-heartbeat";
+    const stateLabel = heartbeat.querySelector("[data-heartbeat-state]");
+    const timeLabel = heartbeat.querySelector("[data-heartbeat-time]");
+    const labels = {
+      online: "Coletor online",
+      stale: "Coletor atrasado",
+      error: "Coletor com erro",
+      waiting: "Coletor aguardando leitura",
+    };
+    const renderHeartbeat = ({ status, last_read_at: lastReadAt }) => {
+      heartbeat.className = `collector-heartbeat is-${status}`;
+      heartbeat.dataset.heartbeatStatus = status;
+      if (stateLabel) stateLabel.textContent = labels[status] || "Coletor indisponível";
+      if (timeLabel) {
+        timeLabel.textContent = lastReadAt
+          ? `Última leitura: ${new Intl.DateTimeFormat("pt-BR", {
+              dateStyle: "short", timeStyle: "medium",
+            }).format(new Date(lastReadAt))}`
+          : "Sem leitura registrada";
+      }
+    };
+    renderHeartbeat({
+      status: heartbeat.dataset.heartbeatStatus,
+      last_read_at: heartbeat.dataset.lastReadAt || null,
+    });
+    const refreshHeartbeat = async () => {
+      if (!document.hidden) {
+        try {
+          const response = await fetch(heartbeatApi, {
+            headers: { Accept: "application/json" }, credentials: "same-origin",
+          });
+          if (response.ok) renderHeartbeat(await response.json());
+        } catch {
+          // Keep the last known heartbeat visible while the next poll retries.
+        }
+      }
+      window.setTimeout(refreshHeartbeat, 10_000);
+    };
+    window.setTimeout(refreshHeartbeat, 10_000);
   }
 
   const portfolio = document.querySelector("[data-refresh-seconds]");

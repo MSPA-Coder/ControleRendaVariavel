@@ -40,6 +40,31 @@ function Test-RtdController {
     }
 }
 
+function Get-DotEnvValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -match "^\s*$([regex]::Escape($Name))\s*=\s*(.*)\s*$") {
+            $value = $matches[1]
+            if ($value.Length -ge 2 -and (
+                ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                ($value.StartsWith("'") -and $value.EndsWith("'"))
+            )) {
+                return $value.Substring(1, $value.Length - 2)
+            }
+            return $value
+        }
+    }
+    return $null
+}
+
 if (-not (Test-Path -LiteralPath $pythonPath)) {
     throw "Ambiente Python não encontrado em $pythonPath."
 }
@@ -63,10 +88,20 @@ if ($token.Length -lt 32) {
     throw "Token do controlador RTD inválido em $tokenPath."
 }
 
-$defaultDatabaseUrl = `
-    "postgresql+psycopg://investimentos:investimentos@127.0.0.1:5435/investimentos"
 if ([string]::IsNullOrWhiteSpace($env:DATABASE_URL)) {
-    $env:DATABASE_URL = $defaultDatabaseUrl
+    $envFile = Join-Path $projectDir ".env"
+    $envDatabaseUrl = Get-DotEnvValue -Path $envFile -Name "DATABASE_URL"
+    if (-not [string]::IsNullOrWhiteSpace($envDatabaseUrl)) {
+        $env:DATABASE_URL = $envDatabaseUrl
+    } else {
+        $postgresPassword = Get-DotEnvValue -Path $envFile -Name "POSTGRES_PASSWORD"
+        if ([string]::IsNullOrWhiteSpace($postgresPassword)) {
+            throw "Defina DATABASE_URL ou POSTGRES_PASSWORD em $envFile para o coletor RTD."
+        }
+        $encodedPassword = [uri]::EscapeDataString($postgresPassword)
+        $env:DATABASE_URL = `
+            "postgresql+psycopg://investimentos:$encodedPassword@127.0.0.1:5435/investimentos"
+    }
 }
 
 $controllerRunning = $false

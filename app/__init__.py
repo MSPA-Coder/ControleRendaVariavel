@@ -136,6 +136,16 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     register_commands(app)
     register_filters(app)
 
+    @app.context_processor
+    def _collector_heartbeat_context() -> dict[str, object]:
+        from app.collector_heartbeat import collector_heartbeat
+
+        return {
+            "collector_heartbeat": collector_heartbeat(
+                stale_after_seconds=app.config["RTD_STALE_AFTER_SECONDS"]
+            )
+        }
+
     @app.before_request
     def _require_login() -> ResponseReturnValue | None:
         if request.endpoint is None or request.endpoint in PUBLIC_ENDPOINTS:

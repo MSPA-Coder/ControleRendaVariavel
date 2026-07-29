@@ -141,6 +141,10 @@ input, select { border: 1px solid var(--line); border-radius: .4rem; color: var(
   flex-wrap: wrap;
   justify-content: space-between;
 }
+.topbar .button {
+  font-size: .82rem;
+  padding: .45rem .65rem;
+}
 .nav-secondary { margin-left: 0; }
 .nav-tab { border-color: transparent; }
 .nav-tab.is-active {
@@ -207,6 +211,16 @@ input, select { border: 1px solid var(--line); border-radius: .4rem; color: var(
 .login-form h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
 .login-form input { border: 1px solid var(--line); border-radius: .4rem; padding: .5rem .6rem; }
 .nav-user { align-items: center; display: flex; gap: .6rem; }
+.collector-heartbeat {
+  align-items: center; background: rgba(255, 255, 255, .12); border-radius: 999px;
+  color: white; display: inline-flex; font-size: .76rem; gap: .35rem; padding: .35rem .55rem;
+}
+.collector-heartbeat time { opacity: .86; }
+.heartbeat-dot { background: #9aa9b4; border-radius: 50%; height: .55rem; width: .55rem; }
+.collector-heartbeat.is-online .heartbeat-dot { background: #60d394; }
+.collector-heartbeat.is-stale .heartbeat-dot { background: #f7c948; }
+.collector-heartbeat.is-error .heartbeat-dot { background: #ff7b7b; }
+.collector-heartbeat.is-waiting .heartbeat-dot { background: #aebbc5; }
 .logout-form { display: inline; }
 .logout-form button { background: none; border: none; color: white; cursor: pointer; font: inherit; opacity: .85; padding: 0; text-decoration: underline; }
 .logout-form button:hover { opacity: 1; }

@@ -2,7 +2,7 @@
 {% block title %}Tabelas · Controle de Renda Variável{% endblock %}
 {% block content %}
 <div class="catalog-grid">
-  <details class="catalog-card">
+  <details class="catalog-card" data-catalog-card="brokers">
     <summary>Corretoras</summary>
     <div class="catalog-card-content">
       <form class="catalog-create broker-fields" method="post" action="{{ url_for('portfolio.create_broker') }}">
@@ -41,7 +41,7 @@
     </div>
   </details>
 
-  <details class="catalog-card catalog-card-wide">
+  <details class="catalog-card catalog-card-wide" data-catalog-card="tickers">
     <summary>Tickers</summary>
     <div class="catalog-card-content">
       <form class="catalog-create ticker-fields" method="post" action="{{ url_for('portfolio.create_ticker') }}">
