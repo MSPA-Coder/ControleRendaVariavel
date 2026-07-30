@@ -14,6 +14,8 @@
       <span class="nav-group">
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.index' }}" href="{{ url_for('portfolio.index') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.index' }}>Ações</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'options.index' }}" href="{{ url_for('options.index') }}" {{ 'aria-current=page' if request.endpoint == 'options.index' }}>Opções</a>
+        <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.transactions' }}" href="{{ url_for('portfolio.transactions') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.transactions' }}>Transações</a>
+        <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.dividends' }}" href="{{ url_for('portfolio.dividends') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.dividends' }}>Proventos</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.tables' }}" href="{{ url_for('portfolio.tables') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.tables' }}>Tabelas</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.settings' }}" href="{{ url_for('portfolio.settings') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.settings' }}>Configurações</a>
       </span>

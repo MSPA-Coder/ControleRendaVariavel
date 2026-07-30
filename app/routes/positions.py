@@ -8,7 +8,8 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from flask.typing import ResponseReturnValue
 
 from app import db
-from app.models import Broker, Position, PositionKind, Side, Ticker
+from app.domain import operation_result
+from app.models import Broker, Position, PositionKind, Side, Ticker, Transaction
 from app.portfolio import build_portfolio
 from app.routes import bp
 from app.routes.helpers import (
@@ -180,3 +181,61 @@ def delete_position(position_id: int) -> ResponseReturnValue:
     db.session.commit()
     flash("Posição excluída.", "success")
     return redirect(url_for("portfolio.index"))
+
+
+@bp.get("/positions/<int:position_id>/close")
+def close_position_form(position_id: int) -> str:
+    position = db.get_or_404(Position, position_id)
+    default_price = position.quote.last_price if position.quote else position.average_cost
+    return render_template(
+        "close_position_form.html",
+        position=position,
+        default_price=default_price,
+        default_date=date.today().isoformat(),
+    )
+
+
+@bp.post("/positions/<int:position_id>/close")
+def close_position(position_id: int) -> ResponseReturnValue:
+    position = db.get_or_404(Position, position_id)
+    raw = {key: value.strip() for key, value in request.form.items()}
+    try:
+        exit_price = Decimal(raw["exit_price"])
+        closed_on = date.fromisoformat(raw["closed_on"])
+    except (KeyError, ValueError, ArithmeticError):
+        flash("Informe um preço de saída e uma data válidos.", "error")
+        return redirect(url_for("portfolio.close_position_form", position_id=position_id))
+    if exit_price < 0:
+        flash("O preço de saída não pode ser negativo.", "error")
+        return redirect(url_for("portfolio.close_position_form", position_id=position_id))
+    if closed_on < position.opened_on:
+        flash("A data de encerramento não pode ser anterior à data de abertura.", "error")
+        return redirect(url_for("portfolio.close_position_form", position_id=position_id))
+
+    result = operation_result(
+        position.side.value,
+        position.quantity,
+        position.average_cost,
+        exit_price,
+        position.result_mode,
+    )
+    db.session.add(
+        Transaction(
+            broker_id=position.broker_id,
+            ticker_id=position.ticker_id,
+            quantity=position.quantity,
+            average_cost=position.average_cost,
+            exit_price=exit_price,
+            side=position.side,
+            opened_on=position.opened_on,
+            closed_on=closed_on,
+            result_mode=position.result_mode,
+            result=result,
+            position_kind=position.position_kind,
+            notes=f"Encerrada a partir da posição #{position.id}.",
+        )
+    )
+    db.session.delete(position)
+    db.session.commit()
+    flash("Posição encerrada e registrada em Transações.", "success")
+    return redirect(url_for("portfolio.transactions"))

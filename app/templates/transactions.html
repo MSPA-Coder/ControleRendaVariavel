@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Transações{% endblock %}
+{% block header_controls %}
+<a class="button button-primary" href="{{ url_for('portfolio.new_transaction') }}">Nova transação</a>
+{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>Corretora
+    <select name="broker" onchange="this.form.submit()">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Posição
+    <select name="position_kind" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
+      {% for kind in position_kinds %}
+        <option value="{{ kind.value }}" {{ 'selected' if selected_kind == kind.value }}>{{ 'Real' if kind.value == 'real' else 'Hipotética' }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="button" href="{{ url_for('portfolio.transactions') }}">Limpar</a>
+</form>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Corr.</th><th>Ticker</th><th>Tipo</th><th>Qtde</th><th>Custo médio</th>
+        <th>Saída</th><th>Resultado</th><th>Abertura</th><th>Encerramento</th>
+        <th>Dias</th><th>Posição</th><th>Notas</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tx in transactions %}
+      <tr>
+        <td>{{ tx.broker }}</td>
+        <td><a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">{{ tx.ticker }}</a></td>
+        <td>{{ tx.side.value }}</td>
+        <td class="number">{{ tx.quantity|quantity }}</td>
+        <td class="number">{{ tx.average_cost|currency(tx.currency) }}</td>
+        <td class="number">{{ tx.exit_price|currency(tx.currency) }}</td>
+        <td class="number {{ tx.result|sign_class }}">{{ tx.result|currency(tx.currency) }}</td>
+        <td>{{ tx.opened_on.strftime('%d-%b-%y') }}</td>
+        <td>{{ tx.closed_on.strftime('%d-%b-%y') }}</td>
+        <td class="number">{{ tx.days_held }}</td>
+        <td>{{ 'Real' if tx.position_kind.value == 'real' else 'Hipotética' }}</td>
+        <td>{{ tx.notes or '' }}</td>
+        <td><a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="13" class="empty">Nenhuma transação registrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<section class="summary" aria-label="Resumo de transações">
+  <article><span>Ganhos</span><strong class="positive">{{ gain|currency('BRL') }}</strong></article>
+  <article><span>Perdas</span><strong class="negative">{{ loss|currency('BRL') }}</strong></article>
+  <article><span>Resultado</span><strong class="{{ result|sign_class }}">{{ result|currency('BRL') }}</strong></article>
+  <article title="Participação de transações com resultado positivo no total (item 4, Nível Operacional).">
+    <span>Win rate</span>
+    <strong>{{ win_rate|percent if win_rate is not none else '-' }}</strong>
+  </article>
+  <article title="Ganhos totais divididos pelas perdas totais (em módulo). Acima de 1 indica que os ganhos superam as perdas.">
+    <span>Profit factor</span>
+    <strong>{{ profit_factor|number(2) if profit_factor is not none else '-' }}</strong>
+  </article>
+</section>
+{% endblock %}

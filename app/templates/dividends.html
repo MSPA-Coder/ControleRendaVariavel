@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Proventos{% endblock %}
+{% block header_controls %}
+<a class="button button-primary" href="{{ url_for('portfolio.new_dividend') }}">Novo provento</a>
+{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>Corretora
+    <select name="broker" onchange="this.form.submit()">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="button" href="{{ url_for('portfolio.dividends') }}">Limpar</a>
+</form>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Corr.</th><th>Ticker</th><th>Valor</th><th>Data de pagamento</th><th>Notas</th><th></th></tr></thead>
+    <tbody>
+    {% for dividend in dividends %}
+      <tr>
+        <td>{{ dividend.broker }}</td>
+        <td><a href="{{ url_for('portfolio.edit_dividend', dividend_id=dividend.id) }}">{{ dividend.ticker }}</a></td>
+        <td class="number">{{ dividend.amount|currency(dividend.currency) }}</td>
+        <td>{{ dividend.payment_date.strftime('%d-%b-%y') }}</td>
+        <td>{{ dividend.notes or '' }}</td>
+        <td><a href="{{ url_for('portfolio.edit_dividend', dividend_id=dividend.id) }}">editar</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">Nenhum provento registrado.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if totals_by_currency %}
+<section class="summary" aria-label="Total de proventos por moeda">
+  {% for currency, total in totals_by_currency %}
+    <article><span>Total recebido · {{ currency }}</span><strong class="positive">{{ total|currency(currency) }}</strong></article>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

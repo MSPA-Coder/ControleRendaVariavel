@@ -106,6 +106,13 @@ e o controlador:
 
 ## Campos de cadastro
 
+Além de posições, o app também registra **Transações** (operações já
+encerradas, com resultado realizado — use "Encerrar posição" a partir de
+uma posição aberta, ou lance manualmente) e **Proventos** (dividendos/JCP
+recebidos). O coletor RTD também grava um snapshot diário de cada ticker
+em `quote_history`, base para KPIs de risco (volatilidade, Sharpe, VaR)
+em uma fase futura.
+
 - `Corretora`, `Ticker`, `Quantidade`, `Custo médio`, `Tipo` (`C`/`V`) e data
   inicial correspondem às entradas da planilha.
 - A aba **Tabelas** mantém os cadastros de corretoras e tickers.

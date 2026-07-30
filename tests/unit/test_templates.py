@@ -5,7 +5,18 @@ from app import create_app
 
 @pytest.mark.parametrize(
     "template_name",
-    ["base.html", "index.html", "options.html", "tables.html", "login.html"],
+    [
+        "base.html",
+        "index.html",
+        "options.html",
+        "tables.html",
+        "login.html",
+        "transactions.html",
+        "transaction_form.html",
+        "dividends.html",
+        "dividend_form.html",
+        "close_position_form.html",
+    ],
 )
 def test_main_templates_compile(template_name: str) -> None:
     app = create_app({"TESTING": True})

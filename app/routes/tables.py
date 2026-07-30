@@ -86,7 +86,11 @@ def delete_broker(broker_id: int) -> ResponseReturnValue:
         flash("Corretora excluída.", "success")
     except IntegrityError:
         db.session.rollback()
-        flash("A corretora não pode ser excluída enquanto possuir posições.", "error")
+        flash(
+            "A corretora não pode ser excluída enquanto possuir posições, "
+            "transações ou proventos vinculados.",
+            "error",
+        )
     return redirect(url_for("portfolio.tables"))
 
 
@@ -134,5 +138,9 @@ def delete_ticker(ticker_id: int) -> ResponseReturnValue:
         flash("Ticker excluído.", "success")
     except IntegrityError:
         db.session.rollback()
-        flash("O ticker não pode ser excluído enquanto possuir posições.", "error")
+        flash(
+            "O ticker não pode ser excluído enquanto possuir posições, "
+            "transações ou proventos vinculados.",
+            "error",
+        )
     return redirect(url_for("portfolio.tables"))

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -311,3 +312,133 @@ class OptionQuote(Base):
     error_message: Mapped[str | None] = mapped_column(String(250))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     position: Mapped[OptionPosition] = relationship(back_populates="quote")
+
+
+class Transaction(Base):
+    """Uma operação encerrada (compra + venda), com o resultado já
+    realizado — item 5/Fase A: "registro de operações de venda
+    (realizadas), não apenas posições abertas". Alimenta win rate,
+    profit factor, payoff ratio e tempo médio em posição (Fase C).
+
+    Não é um livro-razão completo de lotes/FIFO: cada linha representa
+    um ciclo completo de abertura e fechamento, no mesmo espírito de
+    ``Position`` (que representa o estado atual em aberto). Uma posição
+    fechada parcialmente deve ser lançada como duas transações com
+    quantidades proporcionais, se for o caso.
+    """
+
+    __tablename__ = "transactions"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
+        CheckConstraint("exit_price >= 0", name="exit_price_non_negative"),
+        CheckConstraint("closed_on >= opened_on", name="closed_on_not_before_opened_on"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    broker_id: Mapped[int] = mapped_column(
+        ForeignKey("brokers.id", ondelete="RESTRICT"), index=True
+    )
+    ticker_id: Mapped[int] = mapped_column(
+        ForeignKey("tickers.id", ondelete="RESTRICT"), index=True
+    )
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    exit_price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    side: Mapped[Side] = mapped_column(Enum(Side, name="position_side"), default=Side.BUY)
+    opened_on: Mapped[date] = mapped_column(Date)
+    closed_on: Mapped[date] = mapped_column(Date, index=True)
+    result_mode: Mapped[str] = mapped_column(String(1), default="L")
+    result: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    """Resultado realizado, calculado no momento do fechamento (mesma
+    fórmula de ``domain.operation_result``) e persistido — não recalculado
+    depois, pois é um fato histórico."""
+    position_kind: Mapped[PositionKind] = mapped_column(
+        Enum(PositionKind, name="position_kind"), default=PositionKind.REAL
+    )
+    notes: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    broker_ref: Mapped[Broker] = relationship()
+    ticker_ref: Mapped[Ticker] = relationship()
+
+    @property
+    def broker(self) -> str:
+        return self.broker_ref.name
+
+    @property
+    def ticker(self) -> str:
+        return self.ticker_ref.symbol
+
+    @property
+    def currency(self) -> str:
+        return self.ticker_ref.currency
+
+    @property
+    def days_held(self) -> int:
+        return (self.closed_on - self.opened_on).days
+
+
+class Dividend(Base):
+    """Provento recebido (dividendo, JCP, rendimento) — item 5: relatório
+    de Proventos. Não classifica o tipo fiscal do provento; é um registro
+    simples de valor recebido por ativo/corretora/data."""
+
+    __tablename__ = "dividends"
+    __table_args__ = (CheckConstraint("amount > 0", name="amount_positive"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    broker_id: Mapped[int] = mapped_column(
+        ForeignKey("brokers.id", ondelete="RESTRICT"), index=True
+    )
+    ticker_id: Mapped[int] = mapped_column(
+        ForeignKey("tickers.id", ondelete="RESTRICT"), index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    payment_date: Mapped[date] = mapped_column(Date, index=True)
+    notes: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    broker_ref: Mapped[Broker] = relationship()
+    ticker_ref: Mapped[Ticker] = relationship()
+
+    @property
+    def broker(self) -> str:
+        return self.broker_ref.name
+
+    @property
+    def ticker(self) -> str:
+        return self.ticker_ref.symbol
+
+    @property
+    def currency(self) -> str:
+        return self.ticker_ref.currency
+
+
+class QuoteHistory(Base):
+    """Série temporal de cotações por ativo — item 5/relatório 6, e
+    pré-requisito da Fase D (volatilidade, Sharpe, drawdown, VaR, Beta
+    precisam de retornos diários).
+
+    Granularidade deliberadamente DIÁRIA, não a cada poll do coletor
+    (que roda a cada poucos segundos): um "upsert" por
+    (ticker, recorded_date) mantém sempre o último preço observado no
+    dia, sem inflar a tabela com milhares de linhas idênticas por ativo
+    por dia. É isso que os KPIs de risco de fato precisam (retornos
+    diários), e é o suficiente para o gráfico de série histórica."""
+
+    __tablename__ = "quote_history"
+    __table_args__ = (
+        CheckConstraint("price >= 0", name="price_non_negative"),
+        UniqueConstraint("ticker_id", "recorded_date", name="uq_quote_history_ticker_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ticker_id: Mapped[int] = mapped_column(
+        ForeignKey("tickers.id", ondelete="CASCADE"), index=True
+    )
+    price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    recorded_date: Mapped[date] = mapped_column(Date, index=True)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    ticker_ref: Mapped[Ticker] = relationship()

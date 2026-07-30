@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% set editing = position and position.id is defined %}
-{% block title %}{{ "Editar" if editing else "Nova" }} posição{% endblock %}
+{% set editing = transaction and transaction.id is defined %}
+{% block title %}{{ "Editar" if editing else "Nova" }} transação{% endblock %}
 {% block content %}
-<form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position.id) if editing else url_for('portfolio.create_position') }}">
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_transaction', transaction_id=transaction.id) if editing else url_for('portfolio.create_transaction') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h1>{{ "Editar" if editing else "Nova" }} posição</h1>
-  {% set value = position %}
+  <h1>{{ "Editar" if editing else "Nova" }} transação</h1>
+  {% set value = transaction %}
   <label>Corretora<select required name="broker_id">
     <option value="">Selecione</option>
     {% for broker in brokers %}
@@ -19,13 +19,13 @@
     {% endfor %}
   </select></label>
   <label>Quantidade<input required type="number" min="0" step="any" name="quantity" value="{{ value.quantity if value else '' }}"></label>
-  <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}"></label>
+  <label>Custo médio (entrada)<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}"></label>
+  <label>Preço de saída<input required type="number" min="0" step="any" name="exit_price" value="{{ value.exit_price if value else '' }}"></label>
   <label>Tipo<select name="side">
     {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
   </select></label>
-  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing else value.opened_on if value else '' }}"></label>
-  <label>Delta da cotação<input required type="number" min="0.00000001" step="any" name="quote_multiplier" value="{{ value.quote_multiplier if value else '1' }}"></label>
-  <label>Multiplicador do target<input required type="number" min="0.00000001" step="any" name="target_multiplier" value="{{ value.target_multiplier if value else '1.5' }}"></label>
+  <label>Data de abertura<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing else value.opened_on if value else '' }}"></label>
+  <label>Data de encerramento<input required type="date" name="closed_on" value="{{ value.closed_on.isoformat() if editing else value.closed_on if value else '' }}"></label>
   <label>Resultado<select name="result_mode">
     {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}
   </select></label>
@@ -34,16 +34,20 @@
       <option value="{{ kind.value }}" {{ 'selected' if value and value.position_kind|string == kind.value }}>{{ 'Real' if kind.value == 'real' else 'Hipotética' }}</option>
     {% endfor %}
   </select></label>
+  <label>Notas (opcional)<input type="text" maxlength="500" name="notes" value="{{ value.notes if value and value.notes else '' }}"></label>
+  <p class="form-help">
+    O resultado realizado é calculado automaticamente a partir da quantidade,
+    custo médio, preço de saída e modo escolhidos — não é digitado diretamente.
+  </p>
   <div class="form-actions">
-    <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
+    <a class="button" href="{{ url_for('portfolio.transactions') }}">Cancelar</a>
     <button class="button button-primary" type="submit">Salvar</button>
   </div>
 </form>
 {% if editing %}
-<a class="button" href="{{ url_for('portfolio.close_position_form', position_id=position.id) }}">Encerrar posição</a>
-<form class="delete-form" method="post" action="{{ url_for('portfolio.delete_position', position_id=position.id) }}">
+<form class="delete-form" method="post" action="{{ url_for('portfolio.delete_transaction', transaction_id=transaction.id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button class="button button-danger" type="submit">Excluir posição</button>
+  <button class="button button-danger" type="submit">Excluir transação</button>
 </form>
 {% endif %}
 {% endblock %}

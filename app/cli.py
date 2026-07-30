@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import click
 from flask import Flask, current_app
@@ -19,6 +20,7 @@ from app.models import (
     OptionQuote,
     Position,
     Quote,
+    QuoteHistory,
     User,
 )
 from app.rtd import ExcelRtdQuoteProvider, Instrument
@@ -122,6 +124,8 @@ def poll_rtd(watch: bool) -> None:
             try:
                 provider = providers.get(collector_mode)
                 values = provider.fetch(instruments)
+                positions_by_id = {item.id: item for item in positions}
+                ticker_prices: dict[int, tuple[Decimal, datetime]] = {}
                 for value in (item for item in values if item.position_id > 0):
                     statement = insert(Quote).values(
                         position_id=value.position_id,
@@ -144,6 +148,12 @@ def poll_rtd(watch: bool) -> None:
                         },
                     )
                     db.session.execute(statement)
+                    stock_position = positions_by_id.get(value.position_id)
+                    if stock_position is not None:
+                        ticker_prices[stock_position.ticker_id] = (
+                            value.last_price,
+                            value.observed_at,
+                        )
                 values_by_id = {item.position_id: item for item in values}
                 for option_position in option_positions:
                     option_key = -option_position.id * 2
@@ -172,6 +182,31 @@ def poll_rtd(watch: bool) -> None:
                         },
                     )
                     db.session.execute(option_statement)
+                    ticker_prices[option_position.contract.ticker_id] = (
+                        option_value.last_price,
+                        option_value.observed_at,
+                    )
+                    ticker_prices[option_position.contract.underlying_ticker_id] = (
+                        underlying_value.last_price,
+                        underlying_value.observed_at,
+                    )
+                # Fase A: um snapshot por ticker por dia (upsert), não a cada
+                # poll — ver docstring de QuoteHistory para o porquê.
+                for ticker_id, (price, observed_at) in ticker_prices.items():
+                    history_statement = insert(QuoteHistory).values(
+                        ticker_id=ticker_id,
+                        price=price,
+                        recorded_date=observed_at.date(),
+                        recorded_at=observed_at,
+                    )
+                    history_statement = history_statement.on_conflict_do_update(
+                        index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
+                        set_={
+                            "price": history_statement.excluded.price,
+                            "recorded_at": history_statement.excluded.recorded_at,
+                        },
+                    )
+                    db.session.execute(history_statement)
                 db.session.commit()
                 click.echo(
                     f"{len(values)} cotações atualizadas via {collector_mode.value} "

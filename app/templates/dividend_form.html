@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set editing = dividend and dividend.id is defined %}
+{% block title %}{{ "Editar" if editing else "Novo" }} provento{% endblock %}
+{% block content %}
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_dividend', dividend_id=dividend.id) if editing else url_for('portfolio.create_dividend') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>{{ "Editar" if editing else "Novo" }} provento</h1>
+  {% set value = dividend %}
+  <label>Corretora<select required name="broker_id">
+    <option value="">Selecione</option>
+    {% for broker in brokers %}
+      <option value="{{ broker.id }}" {{ 'selected' if value and value.broker_id|int == broker.id }}>{{ broker.name }}</option>
+    {% endfor %}
+  </select></label>
+  <label>Ticker<select required name="ticker_id">
+    <option value="">Selecione</option>
+    {% for ticker in tickers %}
+      <option value="{{ ticker.id }}" {{ 'selected' if value and value.ticker_id|int == ticker.id }}>{{ ticker.symbol }} · {{ ticker.currency }}</option>
+    {% endfor %}
+  </select></label>
+  <label>Valor recebido<input required type="number" min="0" step="any" name="amount" value="{{ value.amount if value else '' }}"></label>
+  <label>Data de pagamento<input required type="date" name="payment_date" value="{{ value.payment_date.isoformat() if editing else value.payment_date if value else '' }}"></label>
+  <label>Notas (opcional)<input type="text" maxlength="500" name="notes" value="{{ value.notes if value and value.notes else '' }}"></label>
+  <div class="form-actions">
+    <a class="button" href="{{ url_for('portfolio.dividends') }}">Cancelar</a>
+    <button class="button button-primary" type="submit">Salvar</button>
+  </div>
+</form>
+{% if editing %}
+<form class="delete-form" method="post" action="{{ url_for('portfolio.delete_dividend', dividend_id=dividend.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="button button-danger" type="submit">Excluir provento</button>
+</form>
+{% endif %}
+{% endblock %}
