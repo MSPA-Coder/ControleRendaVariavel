@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $projectDir = Split-Path -Parent $PSScriptRoot
 $runtimeDir = Join-Path $projectDir ".docker-local"
 $tokenPath = Join-Path $runtimeDir "rtd-control-token"
+$composeEnvPath = Join-Path $runtimeDir "rtd-control.env"
 $pidPath = Join-Path $runtimeDir "rtd-control.pid"
 $stdoutPath = Join-Path $runtimeDir "rtd-control.stdout.log"
 $stderrPath = Join-Path $runtimeDir "rtd-control.stderr.log"
@@ -105,6 +106,8 @@ if ([string]::IsNullOrWhiteSpace($env:DATABASE_URL)) {
 }
 
 $controllerRunning = $false
+$composeToken = "RTD_CONTROL_TOKEN=$token"
+Set-Content -LiteralPath $composeEnvPath -Value $composeToken -NoNewline
 $env:RTD_CONTROL_TOKEN = $token
 if (Test-RtdController -Token $token) {
     $controllerRunning = $true
