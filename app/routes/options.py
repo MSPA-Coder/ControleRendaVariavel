@@ -32,6 +32,7 @@ from app.models import (
     Ticker,
 )
 from app.option_portfolio import build_option_portfolio
+from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 
 bp = Blueprint("options", __name__)
 
@@ -136,11 +137,15 @@ def _parse_position() -> OptionPositionInput:
 
 @bp.get("/options")
 def index() -> str:
+    settings = db.session.get(AppSetting, 1)
+    risk_free_rate = (
+        settings.risk_free_rate_annual if settings else DEFAULT_RISK_FREE_RATE_ANNUAL
+    )
     portfolio = build_option_portfolio(
         _positions(),
         stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
+        risk_free_rate_annual=risk_free_rate,
     )
-    settings = db.session.get(AppSetting, 1)
     return render_template(
         "options.html",
         portfolio=portfolio,
@@ -150,11 +155,15 @@ def index() -> str:
 
 @bp.get("/api/options")
 def api() -> ResponseReturnValue:
+    settings = db.session.get(AppSetting, 1)
+    risk_free_rate = (
+        settings.risk_free_rate_annual if settings else DEFAULT_RISK_FREE_RATE_ANNUAL
+    )
     portfolio = build_option_portfolio(
         _positions(),
         stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
+        risk_free_rate_annual=risk_free_rate,
     )
-    settings = db.session.get(AppSetting, 1)
     return jsonify(
         rows=len(portfolio.positions),
         result=str(portfolio.result),

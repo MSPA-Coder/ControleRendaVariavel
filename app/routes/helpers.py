@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from decimal import Decimal
 from threading import Lock
 from typing import cast
 
@@ -20,6 +21,7 @@ from app.models import (
     PositionKind,
     Ticker,
 )
+from app.portfolio import PositionView
 from app.rtd_service import RtdService
 
 
@@ -95,6 +97,32 @@ def selected_filters() -> tuple[PositionKind | None, str | None, str]:
         kind, raw_kind = PositionKind.REAL, PositionKind.REAL.value
     broker = request.args.get("broker") or None
     return kind, broker, raw_kind
+
+
+def allocation_chart_data(views: list[PositionView]) -> list[dict[str, object]]:
+    """Dados para o gráfico de pizza de alocação por ativo, um por moeda
+    (nunca misturando moedas — mesma convenção do resto do módulo)."""
+    grouped: dict[str, list[PositionView]] = {}
+    for view in views:
+        if view.current_weight is not None:
+            grouped.setdefault(view.position.currency, []).append(view)
+    return [
+        {
+            "currency": currency,
+            "labels": [view.position.ticker for view in group],
+            "weights": [str(view.current_weight) for view in group],
+        }
+        for currency, group in sorted(grouped.items())
+    ]
+
+
+def stale_quote_rate(views: list[PositionView]) -> Decimal | None:
+    """Fração de posições cuja cotação não está "online" (stale ou
+    ausente). Item 4, Nível Operacional: "Taxa de stale quotes"."""
+    if not views:
+        return None
+    not_online = sum(1 for view in views if view.quote_status != "online")
+    return Decimal(not_online) / Decimal(len(views))
 
 
 class TTLCache[T]:

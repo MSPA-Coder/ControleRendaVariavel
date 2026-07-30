@@ -16,6 +16,7 @@
         <th>Desmontar</th><th>Breakeven</th><th>Strike</th><th>Ativo</th>
         <th>Folga strike</th><th>%</th><th>Folga breakeven</th><th>%</th>
         <th>Notional</th><th>Dias úteis</th><th>Exercício</th><th>Montar</th>
+        <th>Δ</th><th>Γ</th><th>Θ/dia</th><th>Vega</th><th>Vol. impl.</th><th>M</th>
         <th>Início</th><th>ST</th>
       </tr>
     </thead>
@@ -24,6 +25,7 @@
       {% set p = item.position %}
       {% set c = p.contract %}
       {% set m = item.metrics %}
+      {% set g = item.greeks %}
       <tr>
         <td>{{ p.broker }}</td>
         <td><a href="{{ url_for('options.edit_position', position_id=p.id) }}">{{ c.ticker_ref.symbol }}</a></td>
@@ -52,14 +54,24 @@
           <td class="number">{{ m.business_days }}</td>
           <td>{{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</td>
           <td class="number">{{ m.build_value|currency(c.ticker_ref.currency, 0) }}</td>
+          {% if g and g.delta is not none %}
+            <td class="number">{{ g.delta|number(3) }}</td>
+            <td class="number">{{ g.gamma|number(4) }}</td>
+            <td class="number">{{ g.theta_daily|currency(c.ticker_ref.currency) }}</td>
+            <td class="number">{{ g.vega|currency(c.ticker_ref.currency) }}</td>
+            <td class="number">{{ g.implied_volatility|percent }}</td>
+          {% else %}
+            <td colspan="5" class="missing" title="Prêmio não permitiu calcular volatilidade implícita">sem gregas</td>
+          {% endif %}
+          <td><span class="status moneyness-{{ g.moneyness }}">{{ g.moneyness }}</span></td>
           <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
           <td><span class="status status-{{ item.quote_status }}">{{ item.quote_status }}</span></td>
         {% else %}
-          <td colspan="23" class="missing">Aguardando primeira cotação RTD</td>
+          <td colspan="29" class="missing">Aguardando primeira cotação RTD</td>
         {% endif %}
       </tr>
     {% else %}
-      <tr><td colspan="28" class="empty">Nenhuma posição de opção cadastrada.</td></tr>
+      <tr><td colspan="34" class="empty">Nenhuma posição de opção cadastrada.</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -69,7 +81,25 @@
   <article><span>Ganhos</span><strong class="positive">{{ portfolio.gain|currency('BRL') }}</strong></article>
   <article><span>Perdas</span><strong class="negative">{{ portfolio.loss|currency('BRL') }}</strong></article>
   <article><span>Resultado</span><strong class="{{ portfolio.result|sign_class }}">{{ portfolio.result|currency('BRL') }}</strong></article>
+  <article title="Soma do decaimento diário esperado do prêmio de todas as posições, já considerando compra/venda.">
+    <span>Theta total/dia</span>
+    <strong class="{{ portfolio.total_theta_daily|sign_class }}">{{ portfolio.total_theta_daily|currency('BRL') if portfolio.total_theta_daily is not none else '-' }}</strong>
+  </article>
 </section>
+
+{% if portfolio.moneyness_totals %}
+<section class="catalog-card moneyness-summary">
+  <h2>Distribuição ITM / ATM / OTM</h2>
+  <div class="summary" aria-label="Distribuição por moneyness">
+    {% for total in portfolio.moneyness_totals %}
+    <article>
+      <span>{{ total.moneyness }} · {{ total.count }} posição(ões)</span>
+      <strong>{{ total.pct|percent }}</strong>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 <section class="catalog-card expiration-summary">
   <h2>Totais por vencimento</h2>
@@ -91,5 +121,18 @@
       </tbody>
     </table>
   </div>
+  {% if portfolio.expirations %}
+  <div id="expiration-chart" class="chart-box"
+       data-expirations="{{ portfolio.expirations|map(attribute='expiration_date')|map('string')|list|tojson }}"
+       data-notional="{{ portfolio.expirations|map(attribute='notional')|map('string')|list|tojson }}"
+       data-unwind="{{ portfolio.expirations|map(attribute='unwind')|map('string')|list|tojson }}"
+       aria-label="Gráfico de exposição por vencimento"></div>
+  {% endif %}
 </section>
+{% endblock %}
+{% block scripts %}
+{% if portfolio.expirations %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='expiration-chart.js') }}"></script>
+{% endif %}
 {% endblock %}

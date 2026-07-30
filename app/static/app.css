@@ -128,6 +128,13 @@ input, select { border: 1px solid var(--line); border-radius: .4rem; color: var(
 .contract-fields { grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; }
 .option-contracts, .expiration-summary, .option-catalog-start { margin-top: 1rem; }
 .expiration-summary { width: min(100%, 780px); }
+.moneyness-summary { margin-top: 1rem; width: min(100%, 780px); }
+.moneyness-summary .summary { margin-top: 0; }
+.chart-box { height: 260px; margin-top: 1rem; position: relative; }
+.chart-box canvas { height: 100% !important; width: 100% !important; }
+.moneyness-ITM { background: #dff5e9; color: #12623a; }
+.moneyness-ATM { background: #fff0c9; color: #765300; }
+.moneyness-OTM { background: #e7ebef; color: var(--muted); }
 .options-table { min-width: 2600px; }
 .flash { border-radius: .4rem; margin: 0 0 1rem; padding: .75rem; }
 .flash-error { background: #ffe0e0; }
@@ -190,7 +197,7 @@ input, select { border: 1px solid var(--line); border-radius: .4rem; color: var(
 .catalog-card[open] > summary { margin-bottom: 1rem; }
 .catalog-card[open] > summary::after { content: "−"; }
 .catalog-card > summary::-webkit-details-marker { display: none; }
-.catalog-card > h2 { display: none; }
+details.catalog-card > h2 { display: none; }
 .broker-fields { grid-template-columns: minmax(180px, 1fr) minmax(120px, .5fr) auto; }
 .ticker-fields {
   grid-template-columns: 1fr 1.5fr repeat(3, minmax(110px, .7fr)) auto;

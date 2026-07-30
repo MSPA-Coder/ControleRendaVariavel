@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import Base
+from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 
 
 class Market(StrEnum):
@@ -80,6 +81,10 @@ class AppSetting(Base):
             "poll_interval_seconds BETWEEN 1 AND 3600",
             name="poll_interval_seconds_range",
         ),
+        CheckConstraint(
+            "risk_free_rate_annual BETWEEN 0 AND 1",
+            name="risk_free_rate_annual_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
@@ -87,6 +92,11 @@ class AppSetting(Base):
         Enum(CollectorMode, name="collector_mode"), default=CollectorMode.EXCEL
     )
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=2)
+    risk_free_rate_annual: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL
+    )
+    """Taxa livre de risco anual usada nas gregas de opções (Black-Scholes).
+    Editável em Configurações; não é obtida automaticamente (ver Fase G)."""
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

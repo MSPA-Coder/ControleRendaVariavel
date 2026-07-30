@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+from app.greeks import OptionGreeks, calculate_greeks
 from app.models import OptionPosition
 from app.options import OptionMetrics, calculate_option
 
@@ -13,6 +14,7 @@ class OptionView:
     position: OptionPosition
     metrics: OptionMetrics | None
     quote_status: str
+    greeks: OptionGreeks | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,18 +27,35 @@ class ExpirationTotal:
 
 
 @dataclass(frozen=True, slots=True)
+class MoneynessTotal:
+    moneyness: str
+    """"ITM", "ATM" ou "OTM" (item 4, Nível Opções)."""
+    count: int
+    pct: Decimal
+    """Participação no total de posições com cotação e gregas calculáveis."""
+
+
+@dataclass(frozen=True, slots=True)
 class OptionPortfolio:
     positions: list[OptionView]
     gain: Decimal
     loss: Decimal
     result: Decimal
     expirations: list[ExpirationTotal]
+    moneyness_totals: list[MoneynessTotal]
+    total_theta_daily: Decimal | None
+    """Soma do decaimento diário esperado do prêmio (item 4: "Theta decay
+    diário"), já considerando a direção de cada posição — uma opção
+    vendida (V) se beneficia da passagem do tempo, então seu theta entra
+    com sinal invertido em relação a uma opção comprada (C). ``None`` se
+    nenhuma posição tiver gregas calculáveis."""
 
 
 def build_option_portfolio(
     positions: list[OptionPosition],
     *,
     stale_after_seconds: int,
+    risk_free_rate_annual: Decimal,
     today: date | None = None,
     now: datetime | None = None,
 ) -> OptionPortfolio:
@@ -46,7 +65,7 @@ def build_option_portfolio(
     for position in positions:
         quote = position.quote
         if quote is None:
-            views.append(OptionView(position, None, "missing"))
+            views.append(OptionView(position, None, "missing", None))
             continue
         status = quote.source_status
         if observed_now - quote.observed_at > timedelta(seconds=stale_after_seconds):
@@ -65,7 +84,15 @@ def build_option_portfolio(
             result_mode=position.result_mode,
             today=current_date,
         )
-        views.append(OptionView(position, position_metrics, status))
+        position_greeks = calculate_greeks(
+            option_type=position.contract.option_type,
+            underlying_price=quote.underlying_price,
+            strike=position.contract.strike,
+            market_price=quote.last_price,
+            remaining_days=position_metrics.remaining_days,
+            risk_free_rate_annual=risk_free_rate_annual,
+        )
+        views.append(OptionView(position, position_metrics, status, position_greeks))
 
     all_metrics = [view.metrics for view in views if view.metrics is not None]
     grouped: dict[date, list[OptionMetrics]] = {}
@@ -96,4 +123,34 @@ def build_option_portfolio(
     loss = sum(
         (metric.result for metric in all_metrics if metric.result < 0), Decimal("0")
     )
-    return OptionPortfolio(views, gain, loss, gain + loss, expirations)
+
+    views_with_greeks = [view for view in views if view.greeks is not None]
+    moneyness_counts: dict[str, int] = {}
+    for view in views_with_greeks:
+        assert view.greeks is not None  # narrows for mypy; filtered above
+        moneyness_counts[view.greeks.moneyness] = moneyness_counts.get(view.greeks.moneyness, 0) + 1
+    total_classified = len(views_with_greeks)
+    moneyness_totals = [
+        MoneynessTotal(
+            moneyness=moneyness,
+            count=count,
+            pct=Decimal(count) / Decimal(total_classified),
+        )
+        for moneyness, count in sorted(moneyness_counts.items())
+    ]
+
+    def _direction(view: OptionView) -> Decimal:
+        return Decimal("1") if view.position.side.value == "C" else Decimal("-1")
+
+    theta_contributions = [
+        _direction(view) * view.greeks.theta_daily
+        for view in views_with_greeks
+        if view.greeks is not None and view.greeks.theta_daily is not None
+    ]
+    total_theta_daily = (
+        sum(theta_contributions, Decimal("0")) if theta_contributions else None
+    )
+
+    return OptionPortfolio(
+        views, gain, loss, gain + loss, expirations, moneyness_totals, total_theta_daily
+    )

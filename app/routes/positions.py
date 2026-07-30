@@ -12,12 +12,14 @@ from app.models import Broker, Position, PositionKind, Side, Ticker
 from app.portfolio import build_portfolio
 from app.routes import bp
 from app.routes.helpers import (
+    allocation_chart_data,
     broker_records,
     brokers,
     poll_interval_seconds,
     positions_query,
     rtd_service,
     selected_filters,
+    stale_quote_rate,
     ticker_records,
 )
 
@@ -99,6 +101,8 @@ def index() -> str:
         poll_interval_seconds=poll_interval_seconds(),
         rtd_service_running=rtd_service_running,
         rtd_service_available=rtd_service_available,
+        allocation_charts=allocation_chart_data(portfolio.positions),
+        stale_rate=stale_quote_rate(portfolio.positions),
     )
 
 

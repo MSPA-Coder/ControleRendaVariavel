@@ -123,6 +123,12 @@
       <strong>{{ total.hhi|number(3) }}</strong>
     </article>
   {% endfor %}
+  {% if stale_rate is not none %}
+    <article title="Participação das posições cuja cotação não está online (atrasada ou ausente).">
+      <span>Cotações desatualizadas</span>
+      <strong class="{{ 'negative' if stale_rate > 0 else '' }}">{{ stale_rate|percent }}</strong>
+    </article>
+  {% endif %}
 </section>
 
 {% if portfolio.broker_groups or portfolio.market_groups %}
@@ -168,5 +174,25 @@
   </div>
   {% endif %}
 </section>
+{% endif %}
+
+{% if allocation_charts %}
+<section class="exposure" aria-label="Alocação por ativo">
+  {% for chart in allocation_charts %}
+  <div class="exposure-table">
+    <h2>Alocação por ativo · {{ chart.currency }}</h2>
+    <div class="chart-box allocation-chart"
+         data-labels="{{ chart.labels|tojson }}"
+         data-weights="{{ chart.weights|tojson }}"
+         aria-label="Gráfico de pizza de alocação por ativo em {{ chart.currency }}"></div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if allocation_charts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='allocation-chart.js') }}"></script>
 {% endif %}
 {% endblock %}

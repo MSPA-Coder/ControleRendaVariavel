@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import suppress
+from decimal import Decimal, InvalidOperation
+
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 
@@ -11,6 +14,7 @@ from app.collector_settings import (
     parse_collector_settings,
 )
 from app.models import AppSetting, CollectorMode
+from app.pricing_settings import parse_pricing_settings
 from app.routes import bp
 
 
@@ -25,6 +29,7 @@ def settings() -> ResponseReturnValue:
     if request.method == "POST":
         try:
             data = parse_collector_settings(request.form)
+            pricing_data = parse_pricing_settings(request.form)
         except ValueError as exc:
             db.session.rollback()
             flash(str(exc), "error")
@@ -38,6 +43,10 @@ def settings() -> ResponseReturnValue:
                 )
             except ValueError:
                 submitted.poll_interval_seconds = 2
+            with suppress(InvalidOperation, TypeError):
+                submitted.risk_free_rate_annual = Decimal(
+                    request.form.get("risk_free_rate_annual", "0.1075")
+                )
             return render_template(
                 "settings.html",
                 settings=submitted,
@@ -46,6 +55,7 @@ def settings() -> ResponseReturnValue:
             ), 422
         current_settings.collector_mode = data.collector_mode
         current_settings.poll_interval_seconds = data.poll_interval_seconds
+        current_settings.risk_free_rate_annual = pricing_data.risk_free_rate_annual
         db.session.commit()
         flash("Configurações do coletor atualizadas.", "success")
         return redirect(url_for("portfolio.settings"))
