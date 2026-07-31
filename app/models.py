@@ -98,6 +98,14 @@ class AppSetting(Base):
     )
     """Taxa livre de risco anual usada nas gregas de opções (Black-Scholes).
     Editável em Configurações; não é obtida automaticamente (ver Fase G)."""
+    benchmark_ticker_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tickers.id", ondelete="SET NULL"), nullable=True
+    )
+    """Ticker usado como referência para o Beta (Fase D). Tipicamente um
+    índice cadastrado manualmente (ex.: Ibovespa), sem coletor RTD — ver
+    ``routes.quotes`` para o lançamento manual de cotações. ``None``
+    desativa o cálculo de Beta em todos os relatórios de risco."""
+    benchmark_ticker_ref: Mapped[Ticker | None] = relationship()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

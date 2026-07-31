@@ -13,9 +13,10 @@ from app.collector_settings import (
     default_collector_settings,
     parse_collector_settings,
 )
-from app.models import AppSetting, CollectorMode
+from app.models import AppSetting, CollectorMode, Ticker
 from app.pricing_settings import parse_pricing_settings
 from app.routes import bp
+from app.routes.helpers import ticker_records
 
 
 @bp.route("/settings", methods=["GET", "POST"])
@@ -30,6 +31,12 @@ def settings() -> ResponseReturnValue:
         try:
             data = parse_collector_settings(request.form)
             pricing_data = parse_pricing_settings(request.form)
+            raw_benchmark_id = request.form.get("benchmark_ticker_id", "").strip()
+            benchmark_ticker_id = int(raw_benchmark_id) if raw_benchmark_id else None
+            if benchmark_ticker_id is not None and (
+                db.session.get(Ticker, benchmark_ticker_id) is None
+            ):
+                raise ValueError("Selecione um ticker cadastrado como referência para o Beta.")
         except ValueError as exc:
             db.session.rollback()
             flash(str(exc), "error")
@@ -47,15 +54,20 @@ def settings() -> ResponseReturnValue:
                 submitted.risk_free_rate_annual = Decimal(
                     request.form.get("risk_free_rate_annual", "0.1075")
                 )
+            with suppress(ValueError, TypeError):
+                raw_id = request.form.get("benchmark_ticker_id", "").strip()
+                submitted.benchmark_ticker_id = int(raw_id) if raw_id else None
             return render_template(
                 "settings.html",
                 settings=submitted,
                 min_interval=MIN_POLL_INTERVAL_SECONDS,
                 max_interval=MAX_POLL_INTERVAL_SECONDS,
+                tickers=ticker_records(),
             ), 422
         current_settings.collector_mode = data.collector_mode
         current_settings.poll_interval_seconds = data.poll_interval_seconds
         current_settings.risk_free_rate_annual = pricing_data.risk_free_rate_annual
+        current_settings.benchmark_ticker_id = benchmark_ticker_id
         db.session.commit()
         flash("Configurações do coletor atualizadas.", "success")
         return redirect(url_for("portfolio.settings"))
@@ -66,4 +78,5 @@ def settings() -> ResponseReturnValue:
         settings=current_settings,
         min_interval=MIN_POLL_INTERVAL_SECONDS,
         max_interval=MAX_POLL_INTERVAL_SECONDS,
+        tickers=ticker_records(),
     )

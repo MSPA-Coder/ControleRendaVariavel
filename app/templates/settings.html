@@ -45,6 +45,24 @@
     </p>
   </fieldset>
 
+  <fieldset>
+    <legend>Risco</legend>
+    <label>Ticker de referência para o Beta
+      <select name="benchmark_ticker_id">
+        <option value="">Nenhum (não calcular Beta)</option>
+        {% for ticker in tickers %}
+          <option value="{{ ticker.id }}" {{ 'selected' if settings.benchmark_ticker_id == ticker.id }}>{{ ticker.symbol }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="form-help">
+      Usado no cálculo do Beta no relatório de Risco (Fase D). Tipicamente
+      um índice cadastrado manualmente em Tabelas (ex.: Ibovespa), sem
+      coletor automático — alimente as cotações históricas dele em
+      Cotações.
+    </p>
+  </fieldset>
+
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
     <button class="button button-primary" type="submit">Salvar configurações</button>

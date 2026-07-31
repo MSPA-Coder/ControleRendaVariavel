@@ -17,6 +17,7 @@
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.transactions' }}" href="{{ url_for('portfolio.transactions') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.transactions' }}>Transações</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.dividends' }}" href="{{ url_for('portfolio.dividends') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.dividends' }}>Proventos</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.quote_history' }}" href="{{ url_for('portfolio.quote_history') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.quote_history' }}>Cotações</a>
+        <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.risk_report' }}" href="{{ url_for('portfolio.risk_report') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.risk_report' }}>Risco</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.tables' }}" href="{{ url_for('portfolio.tables') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.tables' }}>Tabelas</a>
         <a class="button nav-tab {{ 'is-active' if request.endpoint == 'portfolio.settings' }}" href="{{ url_for('portfolio.settings') }}" {{ 'aria-current=page' if request.endpoint == 'portfolio.settings' }}>Configurações</a>
       </span>

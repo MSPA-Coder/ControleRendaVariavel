@@ -23,6 +23,7 @@ def register_blueprints(app: Flask) -> None:
         health,
         positions,
         quotes,
+        risk,
         settings,
         tables,
         transactions,

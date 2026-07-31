@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Risco · Controle de Renda Variável{% endblock %}
+{% block content %}
+<p class="form-help">
+  KPIs calculados a partir do histórico em <a href="{{ url_for('portfolio.quote_history') }}">Cotações</a>
+  para os tickers com posição real aberta hoje. Ficam mais representativos
+  à medida que o histórico acumular mais dias — linhas com menos de
+  {{ min_observations }} observações aparecem marcadas com "⚠".
+  {% if not benchmark_ticker %}
+    Nenhum ticker de referência configurado para o Beta —
+    <a href="{{ url_for('portfolio.settings') }}">defina um em Configurações</a>.
+  {% else %}
+    Beta calculado contra {{ benchmark_ticker.symbol }} (configurável em
+    <a href="{{ url_for('portfolio.settings') }}">Configurações</a>).
+  {% endif %}
+</p>
+
+{% if ticker_metrics %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Observações</th>
+        <th>Retorno anualizado</th>
+        <th>Volatilidade anualizada</th>
+        <th>Sharpe</th>
+        <th>Sortino</th>
+        <th title="Percentil dos retornos diários (5º percentil = 95% de confiança).">VaR 95%</th>
+        <th>Máx. drawdown</th>
+        <th>Beta</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for metrics in ticker_metrics %}
+      <tr>
+        <td>{{ metrics.ticker }}{{ ' ⚠' if not metrics.has_enough_observations }}</td>
+        <td class="number">{{ metrics.observations }}</td>
+        <td class="number {{ metrics.annualized_return|sign_class }}">{{ metrics.annualized_return|percent(2) if metrics.annualized_return is not none else '-' }}</td>
+        <td class="number">{{ metrics.volatility_annualized|percent(2) if metrics.volatility_annualized is not none else '-' }}</td>
+        <td class="number">{{ metrics.sharpe_ratio|number(2) if metrics.sharpe_ratio is not none else '-' }}</td>
+        <td class="number">{{ metrics.sortino_ratio|number(2) if metrics.sortino_ratio is not none else '-' }}</td>
+        <td class="number {{ metrics.var_95|sign_class }}">{{ metrics.var_95|percent(2) if metrics.var_95 is not none else '-' }}</td>
+        <td class="number negative">{{ metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '-' }}</td>
+        <td class="number">{{ metrics.beta_vs_benchmark|number(2) if metrics.beta_vs_benchmark is not none else '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="form-help">Nenhuma posição real aberta com cotações históricas registradas ainda.</p>
+{% endif %}
+
+{% if portfolio_drawdowns %}
+<section class="summary" aria-label="Drawdown máximo por carteira">
+  {% for drawdown in portfolio_drawdowns %}
+    <article title="Aproximação: assume as posições atuais constantes ao longo de todo o histórico simulado (ver documentação da Fase D).">
+      <span>Máx. drawdown da carteira · {{ drawdown.currency }}{{ ' ⚠' if not drawdown.has_enough_observations }}</span>
+      <strong class="negative">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '-' }}</strong>
+    </article>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

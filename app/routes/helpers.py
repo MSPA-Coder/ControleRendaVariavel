@@ -91,6 +91,20 @@ def ticker_price_series(ticker_id: int) -> list[QuoteHistory]:
     return list(db.session.scalars(statement))
 
 
+def open_real_quantities_by_ticker() -> dict[int, Decimal]:
+    """Quantidade líquida por ticker das posições REAIS ainda abertas.
+    Usada pelos relatórios de risco (Fase D) e de performance mensal para
+    a aproximação "posições atuais constantes no passado" (ver
+    ``app.risk.portfolio_value_series``)."""
+    statement = select(Position.ticker_id, Position.quantity).where(
+        Position.position_kind == PositionKind.REAL
+    )
+    totals: dict[int, Decimal] = {}
+    for ticker_id, quantity in db.session.execute(statement):
+        totals[ticker_id] = totals.get(ticker_id, Decimal("0")) + quantity
+    return {ticker_id: quantity for ticker_id, quantity in totals.items() if quantity != 0}
+
+
 def poll_interval_seconds() -> int:
     settings = db.session.get(AppSetting, 1)
     if settings is None:
