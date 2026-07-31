@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Cotações · Controle de Renda Variável{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>Ticker
+    <select name="ticker_id" onchange="this.form.submit()">
+      {% for ticker in tickers %}
+        <option value="{{ ticker.id }}" {{ 'selected' if selected_ticker and ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+{% if selected_ticker %}
+  {% if history %}
+  <div id="quote-history-chart" class="chart-box"
+       data-dates="{{ history|map(attribute='recorded_date')|map('string')|list|tojson }}"
+       data-prices="{{ history|map(attribute='price')|map('string')|list|tojson }}"
+       data-currency="{{ selected_ticker.currency }}"
+       aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}"></div>
+  {% else %}
+  <p class="form-help">
+    Ainda não há cotações históricas registradas para {{ selected_ticker.symbol }}.
+  </p>
+  {% endif %}
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Data</th><th>Preço</th><th></th></tr></thead>
+      <tbody>
+      {% for entry in history|reverse %}
+        <tr>
+          <td>{{ entry.recorded_date.strftime('%d-%b-%y') }}</td>
+          <td class="number">{{ entry.price|currency(selected_ticker.currency) }}</td>
+          <td>
+            <form method="post" action="{{ url_for('portfolio.delete_quote_history_entry', entry_id=entry.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="button button-danger" type="submit">Excluir</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">Nenhuma cotação histórica registrada.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="form-help">Cadastre um ticker em Tabelas para começar a registrar cotações históricas.</p>
+{% endif %}
+
+<section class="catalog-card">
+  <h2>Adicionar cotação manualmente</h2>
+  <p class="form-help">
+    Útil para preencher lacunas do coletor automático ou para alimentar um
+    ativo sem coletor, como um índice de referência (ex.: Ibovespa)
+    cadastrado como um ticker comum em Tabelas — necessário para o Beta
+    da Fase D.
+  </p>
+  <form class="catalog-create" method="post" action="{{ url_for('portfolio.create_quote_history_entry') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Ticker
+      <select name="ticker_id" required>
+        {% for ticker in tickers %}
+          <option value="{{ ticker.id }}" {{ 'selected' if selected_ticker and ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Data<input type="date" name="recorded_date" max="{{ today }}" required></label>
+    <label>Preço<input type="number" name="price" min="0" step="0.00000001" required></label>
+    <button class="button button-primary" type="submit">Adicionar</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+{% if selected_ticker and history %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='quote-history-chart.js') }}"></script>
+{% endif %}
+{% endblock %}

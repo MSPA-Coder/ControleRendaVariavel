@@ -22,6 +22,7 @@ def register_blueprints(app: Flask) -> None:
         dividends,
         health,
         positions,
+        quotes,
         settings,
         tables,
         transactions,

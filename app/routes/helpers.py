@@ -19,6 +19,7 @@ from app.models import (
     OptionExpiration,
     Position,
     PositionKind,
+    QuoteHistory,
     Ticker,
 )
 from app.portfolio import PositionView
@@ -76,6 +77,18 @@ def option_contracts() -> list[OptionContract]:
         .order_by(OptionExpiration.exercise_date, OptionContract.id)
     )
     return list(db.session.scalars(statement).unique())
+
+
+def ticker_price_series(ticker_id: int) -> list[QuoteHistory]:
+    """Série histórica de cotações de um ticker, em ordem cronológica
+    (item 5/relatório de histórico de cotações; também usada pelos KPIs de
+    risco da Fase D, que precisam dos mesmos retornos diários)."""
+    statement = (
+        select(QuoteHistory)
+        .where(QuoteHistory.ticker_id == ticker_id)
+        .order_by(QuoteHistory.recorded_date)
+    )
+    return list(db.session.scalars(statement))
 
 
 def poll_interval_seconds() -> int:

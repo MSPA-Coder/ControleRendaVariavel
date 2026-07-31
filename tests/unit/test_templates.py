@@ -16,6 +16,7 @@ from app import create_app
         "dividends.html",
         "dividend_form.html",
         "close_position_form.html",
+        "quotes.html",
     ],
 )
 def test_main_templates_compile(template_name: str) -> None:
