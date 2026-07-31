@@ -21,6 +21,7 @@ def register_blueprints(app: Flask) -> None:
         api,
         dividends,
         health,
+        performance,
         positions,
         quotes,
         risk,
