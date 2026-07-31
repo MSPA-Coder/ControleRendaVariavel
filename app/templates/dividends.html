@@ -43,4 +43,46 @@
   {% endfor %}
 </section>
 {% endif %}
+
+{% if report.by_ticker or report.by_month %}
+<section class="exposure" aria-label="Relatório de proventos">
+  {% if report.by_ticker %}
+  <div class="exposure-table">
+    <h2>Por ativo</h2>
+    <table>
+      <thead>
+        <tr><th>Ticker</th><th>Recebido</th><th>Custo de aquisição</th><th title="Proventos recebidos ÷ custo de aquisição das posições reais ainda abertas.">Yield on cost</th></tr>
+      </thead>
+      <tbody>
+        {% for total in report.by_ticker %}
+        <tr>
+          <td>{{ total.ticker }}</td>
+          <td class="number">{{ total.total_amount|currency(total.currency) }}</td>
+          <td class="number">{{ total.cost_basis|currency(total.currency) if total.cost_basis is not none else '-' }}</td>
+          <td class="number">{{ total.yield_on_cost|percent(2) if total.yield_on_cost is not none else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if report.by_month %}
+  <div class="exposure-table">
+    <h2>Por mês</h2>
+    <table>
+      <thead><tr><th>Mês</th><th>Moeda</th><th>Recebido</th></tr></thead>
+      <tbody>
+        {% for total in report.by_month %}
+        <tr>
+          <td>{{ total.month.strftime('%m/%Y') }}</td>
+          <td>{{ total.currency }}</td>
+          <td class="number">{{ total.total_amount|currency(total.currency) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}

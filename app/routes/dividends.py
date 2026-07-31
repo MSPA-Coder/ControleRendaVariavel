@@ -9,7 +9,8 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
 from app import db
-from app.models import Broker, Dividend, Ticker
+from app.dividend_report import build_dividend_report
+from app.models import Broker, Dividend, Position, PositionKind, Ticker
 from app.routes import bp
 from app.routes.helpers import broker_records, ticker_records
 
@@ -40,6 +41,26 @@ def _parse_form() -> DividendInput:
     return DividendInput(broker_id, ticker_id, amount, payment_date, notes)
 
 
+def _cost_basis_by_ticker() -> dict[int, Decimal]:
+    """Custo de aquisição atual por ticker: soma de quantidade × custo
+    médio das posições REAIS ainda abertas (item 5, Relatório de
+    Proventos: base de cálculo do "yield on cost").
+
+    Deliberadamente não filtra por corretora nem pelo filtro da página
+    (``broker``): representa a base de custo total do ativo hoje, não uma
+    fatia por corretora — um provento é um evento do ativo, não da
+    corretora que o pagou. Tickers sem posição REAL aberta simplesmente
+    não aparecem no mapeamento resultante.
+    """
+    statement = select(Position.ticker_id, Position.quantity, Position.average_cost).where(
+        Position.position_kind == PositionKind.REAL
+    )
+    totals: dict[int, Decimal] = {}
+    for ticker_id, quantity, average_cost in db.session.execute(statement):
+        totals[ticker_id] = totals.get(ticker_id, Decimal("0")) + quantity * average_cost
+    return totals
+
+
 @bp.get("/dividends")
 def dividends() -> str:
     broker = request.args.get("broker") or None
@@ -57,12 +78,14 @@ def dividends() -> str:
         totals_by_currency[record.currency] = (
             totals_by_currency.get(record.currency, Decimal("0")) + record.amount
         )
+    report = build_dividend_report(records, _cost_basis_by_ticker())
     return render_template(
         "dividends.html",
         dividends=records,
         brokers=broker_records(),
         selected_broker=broker or "",
         totals_by_currency=sorted(totals_by_currency.items()),
+        report=report,
     )
 
 
