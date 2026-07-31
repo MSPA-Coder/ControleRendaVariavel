@@ -102,11 +102,25 @@ def transactions() -> str:
     if broker:
         statement = statement.where(Broker.name == broker)
     records = list(db.session.scalars(statement))
-    gain = sum((tx.result for tx in records if tx.result > 0), Decimal("0"))
-    loss = sum((tx.result for tx in records if tx.result < 0), Decimal("0"))
-    wins = sum(1 for tx in records if tx.result > 0)
+    gains = [tx.result for tx in records if tx.result > 0]
+    losses = [tx.result for tx in records if tx.result < 0]
+    gain = sum(gains, Decimal("0"))
+    loss = sum(losses, Decimal("0"))
+    wins = len(gains)
     win_rate = Decimal(wins) / Decimal(len(records)) if records else None
     profit_factor = (gain / abs(loss)) if loss != 0 else None
+    avg_gain = gain / Decimal(len(gains)) if gains else None
+    avg_loss = abs(loss) / Decimal(len(losses)) if losses else None
+    # Payoff ratio (item 5/Fase C2): média dos ganhos sobre a média das
+    # perdas, em módulo. Só é calculável quando há ao menos uma transação
+    # de cada sinal; caso contrário fica sem sentido (nunca ganhou, ou
+    # nunca perdeu, então não há uma "razão" a expressar).
+    payoff_ratio = (avg_gain / avg_loss) if avg_gain is not None and avg_loss else None
+    avg_days_held = (
+        Decimal(sum(tx.days_held for tx in records)) / Decimal(len(records))
+        if records
+        else None
+    )
     return render_template(
         "transactions.html",
         transactions=records,
@@ -119,6 +133,8 @@ def transactions() -> str:
         result=gain + loss,
         win_rate=win_rate,
         profit_factor=profit_factor,
+        payoff_ratio=payoff_ratio,
+        avg_days_held=avg_days_held,
     )
 
 

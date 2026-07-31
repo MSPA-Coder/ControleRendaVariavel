@@ -280,6 +280,53 @@ def test_transactions_page_computes_win_rate_and_profit_factor(
     assert "3,00" in html
 
 
+def test_transactions_page_computes_payoff_ratio_and_avg_days_held(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        broker_id, ticker_id = _seed_broker_ticker()
+        db.session.add_all(
+            [
+                Transaction(
+                    broker_id=broker_id,
+                    ticker_id=ticker_id,
+                    quantity=Decimal("100"),
+                    average_cost=Decimal("10"),
+                    exit_price=Decimal("20"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 1),
+                    closed_on=date(2026, 1, 11),  # 10 dias, ganho de 1000
+                    result_mode="B",
+                    result=Decimal("1000"),
+                    position_kind=PositionKind.REAL,
+                ),
+                Transaction(
+                    broker_id=broker_id,
+                    ticker_id=ticker_id,
+                    quantity=Decimal("100"),
+                    average_cost=Decimal("10"),
+                    exit_price=Decimal("5"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 1),
+                    closed_on=date(2026, 1, 31),  # 30 dias, perda de 500
+                    result_mode="B",
+                    result=Decimal("-500"),
+                    position_kind=PositionKind.REAL,
+                ),
+            ]
+        )
+        db.session.commit()
+
+    response = auth_client.get("/transactions")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    # payoff ratio = 1000 / 500 = 2.00
+    assert "2,00" in html
+    # tempo médio = (10 + 30) / 2 = 20,0 dias
+    assert "20,0" in html
+
+
 def test_broker_with_transaction_cannot_be_deleted(app: Flask, auth_client: FlaskClient) -> None:
     with app.app_context():
         broker_id, ticker_id = _seed_broker_ticker()
@@ -306,6 +353,45 @@ def test_broker_with_transaction_cannot_be_deleted(app: Flask, auth_client: Flas
     assert "não pode ser excluída" in response.get_data(as_text=True)
     with app.app_context():
         assert db.session.get(Broker, broker_id) is not None
+
+
+def test_dividends_page_shows_yield_on_cost_report(app: Flask, auth_client: FlaskClient) -> None:
+    with app.app_context():
+        broker_id, ticker_id = _seed_broker_ticker()
+        db.session.add(
+            Position(
+                broker_id=broker_id,
+                ticker_id=ticker_id,
+                quantity=Decimal("100"),
+                average_cost=Decimal("10"),  # custo de aquisição = 1000
+                side=Side.BUY,
+                opened_on=date(2026, 1, 1),
+                quote_multiplier=Decimal("1"),
+                target_multiplier=Decimal("1.5"),
+                result_mode="L",
+                position_kind=PositionKind.REAL,
+            )
+        )
+        db.session.commit()
+
+    auth_client.post(
+        "/dividends",
+        data={
+            "broker_id": str(broker_id),
+            "ticker_id": str(ticker_id),
+            "amount": "80",
+            "payment_date": "2026-02-15",
+        },
+    )
+
+    response = auth_client.get("/dividends")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "PETR4" in html
+    # yield on cost = 80 / 1000 = 8,00%
+    assert "8,00%" in html
+    assert "02/2026" in html
 
 
 def test_transactions_and_dividends_require_authentication(client: FlaskClient) -> None:

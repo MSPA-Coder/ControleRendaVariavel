@@ -69,5 +69,13 @@
     <span>Profit factor</span>
     <strong>{{ profit_factor|number(2) if profit_factor is not none else '-' }}</strong>
   </article>
+  <article title="Média dos ganhos dividida pela média das perdas (em módulo). Acima de 1 indica que os ganhos médios superam as perdas médias.">
+    <span>Payoff ratio</span>
+    <strong>{{ payoff_ratio|number(2) if payoff_ratio is not none else '-' }}</strong>
+  </article>
+  <article title="Média de dias entre abertura e encerramento das transações listadas.">
+    <span>Tempo médio em posição</span>
+    <strong>{{ avg_days_held|number(1) if avg_days_held is not none else '-' }} dias</strong>
+  </article>
 </section>
 {% endblock %}
