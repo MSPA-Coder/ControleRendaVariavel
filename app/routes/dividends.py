@@ -13,6 +13,7 @@ from app.dividend_report import build_dividend_report
 from app.models import Broker, Dividend, Position, PositionKind, Ticker
 from app.routes import bp
 from app.routes.helpers import broker_records, ticker_records
+from app.validation import parse_finite_decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +30,7 @@ def _parse_form() -> DividendInput:
     try:
         broker_id = int(raw["broker_id"])
         ticker_id = int(raw["ticker_id"])
-        amount = Decimal(raw["amount"])
+        amount = parse_finite_decimal(raw["amount"], field_name="um valor de provento")
         payment_date = date.fromisoformat(raw["payment_date"])
     except (KeyError, ValueError, ArithmeticError) as exc:
         raise ValueError("Há um valor ausente ou inválido no formulário.") from exc

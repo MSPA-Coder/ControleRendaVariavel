@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Cotações · Controle de Renda Variável{% endblock %}
+{% block title %}Cotacoes - Controle de Renda Variavel{% endblock %}
 {% block content %}
-<form class="filters" method="get">
+<form class="filters quote-ticker-filter" method="get" data-auto-submit>
   <label>Ticker
-    <select name="ticker_id" onchange="this.form.submit()">
+    <select name="ticker_id">
       {% for ticker in tickers %}
         <option value="{{ ticker.id }}" {{ 'selected' if selected_ticker and ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
       {% endfor %}
@@ -11,22 +11,64 @@
   </label>
 </form>
 
+<section class="catalog-card quote-import-card">
+  <h2>Atualizar cotacoes diarias</h2>
+  <p class="form-help">Busca o fechamento diario de todos os tickers cadastrados e atualiza datas ja existentes.</p>
+  <form class="catalog-create quote-import-form" method="post" action="{{ url_for('portfolio.import_quote_history') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Fonte
+      <select name="source" disabled aria-label="Fonte de cotacoes">
+        <option>Yahoo Finance</option>
+      </select>
+    </label>
+    <label>Data inicial<input type="date" name="start_date" value="{{ default_import_start }}" max="{{ today }}" required></label>
+    <label>Data final<input type="date" name="end_date" value="{{ default_import_end }}" max="{{ today }}" required></label>
+    <button class="button button-primary" type="submit">Atualizar todos</button>
+  </form>
+  <form class="quote-history-refresh" method="post" action="{{ url_for('portfolio.import_position_quote_history') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <strong>Revisar historico desde a abertura</strong>
+      <p class="form-help">Reconsulta somente acoes com posicoes abertas desde a primeira data de abertura de cada ticker. Use apos dividendos, splits ou outros ajustes retroativos.</p>
+    </div>
+    <button class="button" type="submit">Atualizar desde a abertura</button>
+  </form>
+  <p class="form-help">Google Finance nao oferece um endpoint publico de historico para atualizacao automatica em servidor; por isso a importacao usa Yahoo Finance.</p>
+</section>
+
 {% if selected_ticker %}
   {% if history %}
-  <div id="quote-history-chart" class="chart-box"
-       data-dates="{{ history|map(attribute='recorded_date')|map('string')|list|tojson }}"
-       data-prices="{{ history|map(attribute='price')|map('string')|list|tojson }}"
-       data-currency="{{ selected_ticker.currency }}"
-       aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}"></div>
+  <section class="quote-history-panel">
+    <div class="chart-toolbar">
+      <h2>Historico de {{ selected_ticker.symbol }}</h2>
+      <label>Visualizacao
+        <select data-quote-chart-type>
+          <option value="line">Linhas</option>
+          <option value="bar">Colunas</option>
+        </select>
+      </label>
+      <label>Periodo
+        <select data-quote-chart-period>
+          <option value="daily">Dia</option>
+          <option value="weekly">Semana</option>
+          <option value="monthly">Mes</option>
+          <option value="yearly">Ano</option>
+        </select>
+      </label>
+    </div>
+    <div id="quote-history-chart" class="chart-box"
+         data-dates='{{ history|map(attribute='recorded_date')|map('string')|list|tojson }}'
+         data-prices='{{ history|map(attribute='price')|map('string')|list|tojson }}'
+         data-currency="{{ selected_ticker.currency }}"
+         aria-label="Grafico de linha com a serie historica de cotacoes de {{ selected_ticker.symbol }}"></div>
+  </section>
   {% else %}
-  <p class="form-help">
-    Ainda não há cotações históricas registradas para {{ selected_ticker.symbol }}.
-  </p>
+  <p class="form-help">Ainda nao ha cotacoes historicas registradas para {{ selected_ticker.symbol }}.</p>
   {% endif %}
 
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Data</th><th>Preço</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Preco</th><th></th></tr></thead>
       <tbody>
       {% for entry in history|reverse %}
         <tr>
@@ -40,22 +82,21 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="3" class="empty">Nenhuma cotação histórica registrada.</td></tr>
+        <tr><td colspan="3" class="empty">Nenhuma cotacao historica registrada.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 {% else %}
-  <p class="form-help">Cadastre um ticker em Tabelas para começar a registrar cotações históricas.</p>
+  <p class="form-help">Cadastre um ticker em Tabelas para comecar a registrar cotacoes historicas.</p>
 {% endif %}
 
 <section class="catalog-card">
-  <h2>Adicionar cotação manualmente</h2>
+  <h2>Adicionar cotacao manualmente</h2>
   <p class="form-help">
-    Útil para preencher lacunas do coletor automático ou para alimentar um
-    ativo sem coletor, como um índice de referência (ex.: Ibovespa)
-    cadastrado como um ticker comum em Tabelas — necessário para o Beta
-    da Fase D.
+    Util para preencher lacunas do coletor automatico ou para alimentar um
+    ativo sem coletor, como um indice de referencia (ex.: Ibovespa)
+    cadastrado como um ticker comum em Tabelas - necessario para o Beta da Fase D.
   </p>
   <form class="catalog-create" method="post" action="{{ url_for('portfolio.create_quote_history_entry') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -67,7 +108,7 @@
       </select>
     </label>
     <label>Data<input type="date" name="recorded_date" max="{{ today }}" required></label>
-    <label>Preço<input type="number" name="price" min="0" step="0.00000001" required></label>
+    <label>Preco<input type="number" name="price" min="0" step="0.00000001" required></label>
     <button class="button button-primary" type="submit">Adicionar</button>
   </form>
 </section>

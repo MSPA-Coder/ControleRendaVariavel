@@ -57,8 +57,9 @@ def _load_user(user_id: str) -> User | None:
 def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
     force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
+    configured_secret_key = os.getenv("SECRET_KEY")
     app.config.from_mapping(
-        SECRET_KEY=os.getenv("SECRET_KEY", "development-only-change-me"),
+        SECRET_KEY=configured_secret_key,
         SESSION_COOKIE_NAME=(
             os.getenv(
                 "RENDA_VARIAVEL_SESSION_COOKIE_NAME",
@@ -87,6 +88,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     )
     if config:
         app.config.update(config)
+    if not app.config["SECRET_KEY"]:
+        if app.config["TESTING"]:
+            app.config["SECRET_KEY"] = "test-only-not-a-real-secret"
+        else:
+            raise RuntimeError("Defina SECRET_KEY antes de iniciar a aplicação.")
+    app.config["REMEMBER_COOKIE_SECURE"] = app.config["FORCE_HTTPS"]
+    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+    app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
 
     if app.config["TRUST_PROXY_HEADERS"]:
         # Only trust X-Forwarded-* when actually deployed behind a reverse

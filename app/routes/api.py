@@ -13,6 +13,7 @@ from app.routes import bp
 from app.routes.helpers import (
     poll_interval_seconds,
     positions_query,
+    quote_stale_after_seconds,
     rtd_service,
     selected_filters,
 )
@@ -65,7 +66,7 @@ def rtd_service_api() -> ResponseReturnValue:
 def collector_heartbeat_api() -> ResponseReturnValue:
     return jsonify(
         **collector_heartbeat(
-            stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"]
+            stale_after_seconds=quote_stale_after_seconds()
         )
     )
 
@@ -77,7 +78,7 @@ def _build_portfolio_payload(page: int, per_page: int) -> dict[str, Any]:
     position_kind, broker, _raw_kind = selected_filters()
     portfolio = build_portfolio(
         positions_query(position_kind, broker),
-        stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
+        stale_after_seconds=quote_stale_after_seconds(),
     )
     total = len(portfolio.positions)
     start = (page - 1) * per_page

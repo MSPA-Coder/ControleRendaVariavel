@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from threading import Event, Lock, Thread
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
+import app.position_closure as position_closure
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Side, Ticker, Transaction
 
@@ -186,6 +189,138 @@ def test_close_position_creates_transaction_and_removes_position(
         assert tx.result == Decimal("499.80000000")
         assert tx.broker_id == broker_id
         assert tx.ticker_id == ticker_id
+        assert tx.source_position_id == position_id
+
+
+def test_close_position_is_idempotent_after_first_success(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        broker_id, ticker_id = _seed_broker_ticker()
+        position = Position(
+            broker_id=broker_id,
+            ticker_id=ticker_id,
+            quantity=Decimal("100"),
+            average_cost=Decimal("20"),
+            side=Side.BUY,
+            opened_on=date(2026, 1, 1),
+            quote_multiplier=Decimal("1"),
+            target_multiplier=Decimal("1.5"),
+            result_mode="L",
+            position_kind=PositionKind.REAL,
+        )
+        db.session.add(position)
+        db.session.commit()
+        position_id = position.id
+
+    first = auth_client.post(
+        f"/positions/{position_id}/close",
+        data={"exit_price": "25", "closed_on": "2026-03-01"},
+        follow_redirects=True,
+    )
+    second = auth_client.post(
+        f"/positions/{position_id}/close",
+        data={"exit_price": "25", "closed_on": "2026-03-01"},
+        follow_redirects=True,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    with app.app_context():
+        transactions = db.session.scalars(db.select(Transaction)).all()
+        assert len(transactions) == 1
+
+
+def test_close_position_lock_serializes_competing_writes(
+    app: Flask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with app.app_context():
+        broker_id, ticker_id = _seed_broker_ticker()
+        position = Position(
+            broker_id=broker_id,
+            ticker_id=ticker_id,
+            quantity=Decimal("100"),
+            average_cost=Decimal("20"),
+            side=Side.BUY,
+            opened_on=date(2026, 1, 1),
+            quote_multiplier=Decimal("1"),
+            target_multiplier=Decimal("1.5"),
+            result_mode="L",
+            position_kind=PositionKind.REAL,
+        )
+        db.session.add(position)
+        db.session.commit()
+        position_id = position.id
+
+    first_calculation_started = Event()
+    release_first_write = Event()
+    second_attempted = Event()
+    second_finished = Event()
+    errors: list[BaseException] = []
+    outcome: dict[str, Transaction | None] = {}
+    calculation_lock = Lock()
+    calculations = 0
+    original_operation_result = position_closure.operation_result
+
+    def hold_the_first_write(
+        side: str,
+        quantity: Decimal,
+        average_cost: Decimal,
+        current_price: Decimal,
+        result_mode: str,
+    ) -> Decimal:
+        nonlocal calculations
+        with calculation_lock:
+            calculations += 1
+            is_first_calculation = calculations == 1
+        if is_first_calculation:
+            first_calculation_started.set()
+            if not release_first_write.wait(timeout=3):
+                raise AssertionError("Timed out waiting to release the first writer.")
+        return original_operation_result(
+            side, quantity, average_cost, current_price, result_mode
+        )
+
+    monkeypatch.setattr(position_closure, "operation_result", hold_the_first_write)
+
+    def writer(name: str) -> None:
+        try:
+            with app.app_context():
+                if name == "second":
+                    second_attempted.set()
+                outcome[name] = position_closure.close_open_position(
+                    position_id, Decimal("25"), date(2026, 3, 1)
+                )
+        except BaseException as exc:  # pragma: no cover - assertion propagation from thread
+            errors.append(exc)
+        finally:
+            if name == "second":
+                second_finished.set()
+
+    first_thread = Thread(target=writer, args=("first",))
+    second_thread = Thread(target=writer, args=("second",))
+    first_thread.start()
+    assert first_calculation_started.wait(timeout=3)
+    second_thread.start()
+    assert second_attempted.wait(timeout=3)
+    try:
+        assert not second_finished.wait(timeout=0.2)
+    finally:
+        release_first_write.set()
+    first_thread.join(timeout=3)
+    second_thread.join(timeout=3)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert not errors
+    assert outcome["first"] is not None
+    assert outcome["second"] is None
+    with app.app_context():
+        assert db.session.get(Position, position_id) is None
+        transactions = db.session.scalars(
+            db.select(Transaction).where(Transaction.source_position_id == position_id)
+        ).all()
+        assert len(transactions) == 1
 
 
 def test_close_position_rejects_closed_before_opened(

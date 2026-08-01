@@ -97,7 +97,7 @@ if ([string]::IsNullOrWhiteSpace($env:DATABASE_URL)) {
     } else {
         $postgresPassword = Get-DotEnvValue -Path $envFile -Name "POSTGRES_PASSWORD"
         if ([string]::IsNullOrWhiteSpace($postgresPassword)) {
-            throw "Defina DATABASE_URL ou POSTGRES_PASSWORD em $envFile para o coletor RTD."
+            throw "Defina POSTGRES_PASSWORD ou DATABASE_URL em $envFile para o coletor RTD."
         }
         $encodedPassword = [uri]::EscapeDataString($postgresPassword)
         $env:DATABASE_URL = `

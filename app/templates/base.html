@@ -25,6 +25,7 @@
       {% block header_controls %}{% endblock %}
       {% if current_user.is_authenticated %}
         <span class="nav-user">
+          {% if request.endpoint != "portfolio.index" %}
           <span
             class="collector-heartbeat is-{{ collector_heartbeat.status }}"
             data-collector-heartbeat
@@ -38,6 +39,7 @@
             <span data-heartbeat-state>Coletor {{ collector_heartbeat.status }}</span>
             <time data-heartbeat-time>{{ collector_heartbeat.last_read_at or 'sem leitura' }}</time>
           </span>
+          {% endif %}
           <span>{{ current_user.username }}</span>
           <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

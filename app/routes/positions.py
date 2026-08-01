@@ -4,13 +4,13 @@ from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
 
-from flask import current_app, flash, redirect, render_template, request, url_for
+from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 
 from app import db
-from app.domain import operation_result
-from app.models import Broker, Position, PositionKind, Side, Ticker, Transaction
+from app.models import Broker, Position, PositionKind, Side, Ticker
 from app.portfolio import build_portfolio
+from app.position_closure import close_open_position
 from app.routes import bp
 from app.routes.helpers import (
     allocation_chart_data,
@@ -18,11 +18,13 @@ from app.routes.helpers import (
     brokers,
     poll_interval_seconds,
     positions_query,
+    quote_stale_after_seconds,
     rtd_service,
     selected_filters,
     stale_quote_rate,
     ticker_records,
 )
+from app.validation import parse_finite_decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,10 +46,14 @@ def _parse_form() -> PositionInput:
     try:
         broker_id = int(raw["broker_id"])
         ticker_id = int(raw["ticker_id"])
-        quantity = Decimal(raw["quantity"])
-        average_cost = Decimal(raw["average_cost"])
-        quote_multiplier = Decimal(raw["quote_multiplier"])
-        target_multiplier = Decimal(raw["target_multiplier"])
+        quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
+        average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
+        quote_multiplier = parse_finite_decimal(
+            raw["quote_multiplier"], field_name="um multiplicador de cotação"
+        )
+        target_multiplier = parse_finite_decimal(
+            raw["target_multiplier"], field_name="um multiplicador de target"
+        )
         opened_on = date.fromisoformat(raw["opened_on"])
         side = Side(raw["side"])
     except (KeyError, ValueError, ArithmeticError) as exc:
@@ -84,7 +90,7 @@ def index() -> str:
     position_kind, broker, raw_kind = selected_filters()
     portfolio = build_portfolio(
         positions_query(position_kind, broker),
-        stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
+        stale_after_seconds=quote_stale_after_seconds(),
     )
     service = rtd_service()
     try:
@@ -197,10 +203,9 @@ def close_position_form(position_id: int) -> str:
 
 @bp.post("/positions/<int:position_id>/close")
 def close_position(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(Position, position_id)
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        exit_price = Decimal(raw["exit_price"])
+        exit_price = parse_finite_decimal(raw["exit_price"], field_name="um preço de saída")
         closed_on = date.fromisoformat(raw["closed_on"])
     except (KeyError, ValueError, ArithmeticError):
         flash("Informe um preço de saída e uma data válidos.", "error")
@@ -208,34 +213,13 @@ def close_position(position_id: int) -> ResponseReturnValue:
     if exit_price < 0:
         flash("O preço de saída não pode ser negativo.", "error")
         return redirect(url_for("portfolio.close_position_form", position_id=position_id))
-    if closed_on < position.opened_on:
+    try:
+        transaction = close_open_position(position_id, exit_price, closed_on)
+    except ValueError:
         flash("A data de encerramento não pode ser anterior à data de abertura.", "error")
         return redirect(url_for("portfolio.close_position_form", position_id=position_id))
-
-    result = operation_result(
-        position.side.value,
-        position.quantity,
-        position.average_cost,
-        exit_price,
-        position.result_mode,
-    )
-    db.session.add(
-        Transaction(
-            broker_id=position.broker_id,
-            ticker_id=position.ticker_id,
-            quantity=position.quantity,
-            average_cost=position.average_cost,
-            exit_price=exit_price,
-            side=position.side,
-            opened_on=position.opened_on,
-            closed_on=closed_on,
-            result_mode=position.result_mode,
-            result=result,
-            position_kind=position.position_kind,
-            notes=f"Encerrada a partir da posição #{position.id}.",
-        )
-    )
-    db.session.delete(position)
-    db.session.commit()
+    if transaction is None:
+        flash("A posição já foi encerrada ou não existe.", "error")
+        return redirect(url_for("portfolio.transactions"))
     flash("Posição encerrada e registrada em Transações.", "success")
     return redirect(url_for("portfolio.transactions"))

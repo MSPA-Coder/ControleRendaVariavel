@@ -20,6 +20,7 @@ from app.models import (
     Position,
     PositionKind,
     QuoteHistory,
+    Side,
     Ticker,
 )
 from app.portfolio import PositionView
@@ -96,12 +97,13 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     Usada pelos relatórios de risco (Fase D) e de performance mensal para
     a aproximação "posições atuais constantes no passado" (ver
     ``app.risk.portfolio_value_series``)."""
-    statement = select(Position.ticker_id, Position.quantity).where(
+    statement = select(Position.ticker_id, Position.quantity, Position.side).where(
         Position.position_kind == PositionKind.REAL
     )
     totals: dict[int, Decimal] = {}
-    for ticker_id, quantity in db.session.execute(statement):
-        totals[ticker_id] = totals.get(ticker_id, Decimal("0")) + quantity
+    for ticker_id, quantity, side in db.session.execute(statement):
+        direction = Decimal("1") if side == Side.BUY else Decimal("-1")
+        totals[ticker_id] = totals.get(ticker_id, Decimal("0")) + direction * quantity
     return {ticker_id: quantity for ticker_id, quantity in totals.items() if quantity != 0}
 
 
@@ -110,6 +112,11 @@ def poll_interval_seconds() -> int:
     if settings is None:
         return DEFAULT_POLL_INTERVAL_SECONDS
     return settings.poll_interval_seconds
+
+
+def quote_stale_after_seconds() -> int:
+    configured = int(current_app.config["RTD_STALE_AFTER_SECONDS"])
+    return max(configured, poll_interval_seconds() * 2 + 5)
 
 
 def rtd_service() -> RtdService:

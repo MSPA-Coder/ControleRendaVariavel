@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
+
+from app.validation import parse_finite_decimal
 
 MIN_RISK_FREE_RATE_ANNUAL = Decimal("0")
 MAX_RISK_FREE_RATE_ANNUAL = Decimal("1")  # 100% a.a., limite generoso de sanidade
@@ -18,10 +20,10 @@ class PricingSettingsInput:
 
 
 def parse_pricing_settings(form: Mapping[str, str]) -> PricingSettingsInput:
-    try:
-        risk_free_rate_annual = Decimal(form.get("risk_free_rate_annual", ""))
-    except (InvalidOperation, TypeError) as exc:
-        raise ValueError("Informe uma taxa livre de risco válida.") from exc
+    risk_free_rate_annual = parse_finite_decimal(
+        form.get("risk_free_rate_annual", ""),
+        field_name="uma taxa livre de risco",
+    )
     if not MIN_RISK_FREE_RATE_ANNUAL <= risk_free_rate_annual <= MAX_RISK_FREE_RATE_ANNUAL:
         raise ValueError(
             f"A taxa livre de risco deve ficar entre {MIN_RISK_FREE_RATE_ANNUAL:%} e "

@@ -238,3 +238,33 @@ details.catalog-card > h2 { display: none; }
 .logout-form { display: inline; }
 .logout-form button { background: none; border: none; color: white; cursor: pointer; font: inherit; opacity: .85; padding: 0; text-decoration: underline; }
 .logout-form button:hover { opacity: 1; }
+
+.topbar .filters label:not(.rtd-toggle) { align-items: center; display: flex; gap: .35rem; }
+.topbar .filters select, .topbar .button, .rtd-toggle { min-height: 2.2rem; }
+.topbar .filters select { padding: .45rem .6rem; }
+.rtd-toggle { gap: .35rem; padding: .35rem .55rem; }
+.rtd-toggle .collector-heartbeat { background: transparent; color: var(--ink); font-size: .75rem; padding: 0; }
+.rtd-toggle .collector-heartbeat time { white-space: nowrap; }
+.quote-import-card { margin-bottom: 1rem; }
+.quote-import-form { grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; }
+.quote-import-form select:disabled { background: #edf4fa; opacity: 1; }
+.allocation-list { display: grid; gap: .35rem; list-style: none; margin: .75rem 0 0; padding: 0; }
+.allocation-list li { border-top: 1px solid var(--line); display: flex; justify-content: space-between; padding-top: .35rem; }
+
+.quote-ticker-filter { margin-bottom: .75rem; }
+.quote-import-card { margin-top: 0; }
+.quote-history-panel { background: white; border: 1px solid var(--line); border-radius: .65rem; margin-bottom: 1rem; padding: .85rem 1rem; }
+.quote-history-panel .chart-box { height: min(34vh, 260px); margin-top: 0; }
+.quote-history-panel + .table-wrap { margin-top: 0; }
+.allocation-chart { min-height: 240px; }
+.allocation-chart svg { display: block; height: 100%; max-width: 100%; width: 100%; }
+.allocation-chart .allocation-legend { fill: var(--ink); font-size: 12px; }
+
+.chart-toolbar { align-items: center; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .5rem; }
+.chart-toolbar h2 { margin: 0; }
+.chart-toolbar label { align-items: center; display: flex; gap: .4rem; min-width: 0; }
+.chart-toolbar select { padding: .35rem .5rem; }
+
+.quote-history-refresh { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 1rem; justify-content: space-between; margin-top: .85rem; padding-top: .85rem; }
+.quote-history-refresh strong { display: block; font-size: .9rem; margin-bottom: .2rem; }
+@media (max-width: 700px) { .quote-history-refresh { align-items: stretch; flex-direction: column; } }

@@ -8,22 +8,8 @@
 
   const catalogCards = document.querySelectorAll("[data-catalog-card]");
   if (catalogCards.length) {
-    const catalogStateKey = "catalog-open-cards";
-    const openCards = new Set(JSON.parse(sessionStorage.getItem(catalogStateKey) || "[]"));
-    const saveOpenCards = () => {
-      sessionStorage.setItem(
-        catalogStateKey,
-        JSON.stringify([...catalogCards]
-          .filter((card) => card.open)
-          .map((card) => card.dataset.catalogCard)),
-      );
-    };
     catalogCards.forEach((card) => {
-      card.open = openCards.has(card.dataset.catalogCard) || card.id === window.location.hash.slice(1);
-      card.addEventListener("toggle", saveOpenCards);
-    });
-    document.querySelectorAll("[data-catalog-card] form").forEach((form) => {
-      form.addEventListener("submit", saveOpenCards);
+      card.open = card.id === window.location.hash.slice(1);
     });
   }
 
@@ -36,6 +22,22 @@
     const setRtdState = (running) => {
       rtdToggle.checked = running;
       if (rtdLabel) rtdLabel.textContent = `RTD ${running ? "ligado" : "desligado"}`;
+    };
+
+    const refreshRtdService = async () => {
+      if (document.hidden) return;
+      try {
+        const response = await fetch(rtdApi, {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "RTD unavailable.");
+        rtdToggle.disabled = !payload.available;
+        setRtdState(Boolean(payload.running));
+      } catch {
+        rtdToggle.disabled = true;
+      }
     };
 
     const changeRtdState = async (enabled) => {
@@ -63,6 +65,8 @@
     };
 
     rtdToggle.addEventListener("change", () => changeRtdState(rtdToggle.checked));
+    refreshRtdService();
+    window.setInterval(refreshRtdService, 10_000);
     if (!sessionStorage.getItem("rtd-auto-start-attempted")) {
       sessionStorage.setItem("rtd-auto-start-attempted", "true");
       if (!rtdToggle.checked && !rtdToggle.disabled) changeRtdState(true);

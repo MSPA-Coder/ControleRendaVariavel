@@ -23,9 +23,11 @@ def collector_heartbeat(*, stale_after_seconds: int) -> dict[str, str | None]:
         return {"status": "waiting", "last_read_at": None}
 
     latest_read_at = max(snapshot.observed_at for snapshot in snapshots)
-    statuses = {snapshot.source_status for snapshot in snapshots}
+    latest_statuses = {
+        snapshot.source_status for snapshot in snapshots if snapshot.observed_at == latest_read_at
+    }
     now = datetime.now(UTC)
-    if "error" in statuses:
+    if "error" in latest_statuses:
         status: HeartbeatStatus = "error"
     elif now - latest_read_at > timedelta(seconds=stale_after_seconds):
         status = "stale"

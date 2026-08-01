@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import click
 from flask import Flask, current_app
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
@@ -21,15 +22,25 @@ from app.models import (
     Position,
     Quote,
     QuoteHistory,
+    Ticker,
     User,
+)
+from app.quote_history_import import (
+    DailyQuote,
+    QuoteHistoryImportError,
+    TickerImportTarget,
+    fetch_yahoo_daily_quotes,
 )
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
+
+MARKET_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 
 
 def register_commands(app: Flask) -> None:
     app.cli.add_command(poll_rtd)
     app.cli.add_command(probe_rtd_direct)
+    app.cli.add_command(import_position_history)
     app.cli.add_command(users_group)
 
 
@@ -196,7 +207,7 @@ def poll_rtd(watch: bool) -> None:
                     history_statement = insert(QuoteHistory).values(
                         ticker_id=ticker_id,
                         price=price,
-                        recorded_date=observed_at.date(),
+                        recorded_date=observed_at.astimezone(MARKET_TIMEZONE).date(),
                         recorded_at=observed_at,
                     )
                     history_statement = history_statement.on_conflict_do_update(
@@ -231,6 +242,59 @@ def poll_rtd(watch: bool) -> None:
             time.sleep(poll_interval_seconds)
     finally:
         providers.close()
+
+
+@click.command("import-position-history")
+def import_position_history() -> None:
+    """Import daily stock history from each open position's first date."""
+
+    rows = db.session.execute(
+        select(
+            Position.ticker_id,
+            Ticker.symbol,
+            Ticker.market,
+            func.min(Position.opened_on).label("start_date"),
+        )
+        .join(Ticker, Ticker.id == Position.ticker_id)
+        .group_by(Position.ticker_id, Ticker.symbol, Ticker.market)
+        .order_by(Ticker.symbol)
+    ).all()
+    targets = [
+        (TickerImportTarget(row.ticker_id, row.symbol, row.market), row.start_date)
+        for row in rows
+    ]
+    db.session.rollback()
+
+    imported: list[tuple[int, DailyQuote]] = []
+    failures: list[str] = []
+    for target, start_date in targets:
+        try:
+            quotes = fetch_yahoo_daily_quotes(target, start_date, datetime.now(UTC).date())
+        except QuoteHistoryImportError:
+            failures.append(target.symbol)
+            continue
+        imported.extend((target.id, quote) for quote in quotes)
+    if imported:
+        with db.session.begin():
+            for ticker_id, quote in imported:
+                statement = insert(QuoteHistory).values(
+                    ticker_id=ticker_id,
+                    price=quote.price,
+                    recorded_date=quote.recorded_date,
+                    recorded_at=quote.recorded_at,
+                )
+                statement = statement.on_conflict_do_update(
+                    index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
+                    set_={
+                        "price": statement.excluded.price,
+                        "recorded_at": statement.excluded.recorded_at,
+                    },
+                )
+                db.session.execute(statement)
+    click.echo(f"{len(imported)} daily quotes imported for {len(targets) - len(failures)} tickers.")
+    if failures:
+        click.echo("No Yahoo history for: " + ", ".join(failures), err=True)
+
 
 
 @click.group("users")

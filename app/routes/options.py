@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.option_portfolio import build_option_portfolio
 from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.validation import parse_finite_decimal
 
 bp = Blueprint("options", __name__)
 
@@ -103,9 +104,13 @@ def _parse_position() -> OptionPositionInput:
     try:
         broker_id = int(raw["broker_id"])
         contract_id = int(raw["contract_id"])
-        quantity = Decimal(raw["quantity"])
-        average_cost = Decimal(raw["average_cost"])
-        target_price = Decimal(raw["target_price"]) if raw.get("target_price") else None
+        quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
+        average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
+        target_price = (
+            parse_finite_decimal(raw["target_price"], field_name="um target")
+            if raw.get("target_price")
+            else None
+        )
         side = Side(raw["side"])
         opened_on = date.fromisoformat(raw["opened_on"])
         position_kind = PositionKind(raw.get("position_kind", PositionKind.REAL.value))
@@ -305,7 +310,7 @@ def create_contract() -> ResponseReturnValue:
         underlying_ticker_id = int(request.form["underlying_ticker_id"])
         expiration_id = int(request.form["expiration_id"])
         option_type = OptionType(request.form["option_type"])
-        strike = Decimal(request.form["strike"])
+        strike = parse_finite_decimal(request.form["strike"], field_name="um strike")
         if strike < 0 or ticker_id == underlying_ticker_id:
             raise ValueError
         db.session.add(
@@ -343,7 +348,7 @@ def update_contract(contract_id: int) -> ResponseReturnValue:
     try:
         ticker_id = int(request.form["ticker_id"])
         underlying_ticker_id = int(request.form["underlying_ticker_id"])
-        strike = Decimal(request.form["strike"])
+        strike = parse_finite_decimal(request.form["strike"], field_name="um strike")
         if strike < 0 or ticker_id == underlying_ticker_id:
             raise ValueError
         contract.ticker_id = ticker_id

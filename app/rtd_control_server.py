@@ -83,7 +83,7 @@ def main() -> None:
     if len(token) < 32:
         raise SystemExit("Defina RTD_CONTROL_TOKEN com pelo menos 32 caracteres.")
 
-    host = os.getenv("RTD_CONTROL_HOST", "0.0.0.0")
+    host = os.getenv("RTD_CONTROL_HOST", "127.0.0.1")
     port = int(os.getenv("RTD_CONTROL_PORT", "8765"))
     service = RtdServiceManager(Path(__file__).resolve().parent.parent, available=True)
     server = ThreadingHTTPServer((host, port), _handler(service, token))

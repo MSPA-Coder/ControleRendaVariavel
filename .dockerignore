@@ -1,9 +1,11 @@
-.env
-.docker-local/
+.git/
+.github/
 .codex/
-.agents/
+.docker-local/
+.env
 .venv/
 __pycache__/
+**/__pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
@@ -12,6 +14,4 @@ __pycache__/
 htmlcov/
 dist/
 tmp/
-sheet-acoes.json
-sheet-acoes.pdf
 backups/

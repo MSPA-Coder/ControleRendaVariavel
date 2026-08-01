@@ -13,6 +13,7 @@ from app.domain import operation_result
 from app.models import Broker, PositionKind, Side, Ticker, Transaction
 from app.routes import bp
 from app.routes.helpers import broker_records, ticker_records
+from app.validation import parse_finite_decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,9 +36,9 @@ def _parse_form() -> TransactionInput:
     try:
         broker_id = int(raw["broker_id"])
         ticker_id = int(raw["ticker_id"])
-        quantity = Decimal(raw["quantity"])
-        average_cost = Decimal(raw["average_cost"])
-        exit_price = Decimal(raw["exit_price"])
+        quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
+        average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
+        exit_price = parse_finite_decimal(raw["exit_price"], field_name="um preço de saída")
         opened_on = date.fromisoformat(raw["opened_on"])
         closed_on = date.fromisoformat(raw["closed_on"])
         side = Side(raw["side"])

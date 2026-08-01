@@ -20,10 +20,10 @@ services:
   web:
     build:
       context: .
-      secrets:
-        - host_ca
+      target: runtime
     env_file:
-      - .docker-local/rtd-control.env
+      - path: .docker-local/rtd-control.env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://investimentos:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}@db:5432/investimentos
       SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no .env}
@@ -38,6 +38,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5003/health', timeout=2)"]
@@ -45,9 +47,57 @@ services:
       timeout: 3s
       retries: 6
 
+  migrate:
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - path: .docker-local/rtd-control.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://investimentos:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}@db:5432/investimentos
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["flask", "--app", "app:create_app", "db", "upgrade"]
+
+  test-db:
+    image: postgres:17-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: investimentos_test
+      POSTGRES_USER: investimentos
+      POSTGRES_PASSWORD: investimentos_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U investimentos -d investimentos_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test:
+    build:
+      context: .
+      target: development
+    profiles: ["test"]
+    environment:
+      TEST_DATABASE_URL: postgresql+psycopg://investimentos:investimentos_test@test-db:5432/investimentos_test
+      SECRET_KEY: test-only-not-a-real-secret
+      RATELIMIT_ENABLED: "false"
+      COVERAGE_FILE: /tmp/.coverage
+      PYTEST_ADDOPTS: -o cache_dir=/tmp/pytest-cache
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command:
+      ["sh", "-c", "coverage erase && coverage run --source=app -m pytest && coverage report --show-missing"]
+
+  quality:
+    build:
+      context: .
+      target: development
+    profiles: ["test"]
+    command: ["sh", "-c", "ruff check . && mypy app && pip-audit"]
+
 volumes:
   postgres_data:
-
-secrets:
-  host_ca:
-    file: .docker-local/host-ca.crt

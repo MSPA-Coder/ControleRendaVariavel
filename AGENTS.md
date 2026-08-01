@@ -1,6 +1,6 @@
 ﻿# Base compartilhada de engenharia
 
-<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.0" -->
+<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.2" -->
 
 ## Governança deste bloco-base
 
@@ -37,6 +37,12 @@ Mudanças aprovadas nesta base devem:
 - preservar os marcadores de início e fim;
 - atualizar a verificação automática de integridade, quando existente.
 
+### Histórico de mudanças
+
+- **1.2** — Exige bootstrap de bancos novos por revisões Alembic e adoção legada explícita e verificada.
+- **1.1** — Acrescenta diretrizes para HTMX e explicita o desenvolvimento
+  container-first, mantendo no host somente as ferramentas de orquestração.
+
 A flexibilidade técnica prevista neste documento não autoriza o próprio agente a
 apagar ou reescrever as orientações. Soluções alternativas devem ser
 implementadas como decisões justificadas ou desvios aprovados, mantendo a base
@@ -52,6 +58,28 @@ persistência. Testes unitários de cálculos, validações e regras puras não 
 banco de dados. SQLite somente é permitido quando for o objeto explícito da
 funcionalidade testada, como a leitura de uma base legada; não é usado para
 simular PostgreSQL.
+
+### Ambiente de desenvolvimento container-first
+
+O host mantém somente Codex, Git, GitHub CLI, Docker Desktop, editor e os
+componentes necessários à execução do Docker. Python, PostgreSQL, `psql`,
+Node.js quando necessário, dependências, migrações, testes, lint, análise de
+tipos, build e demais ferramentas do projeto são executados em contêineres.
+
+- O projeto deve oferecer comandos Docker Compose reproduzíveis para iniciar a
+  aplicação e o banco, aplicar migrações e executar testes e controles de
+  qualidade.
+- Não presuma que executáveis do projeto estejam instalados ou disponíveis no
+  `PATH` do host.
+- Uma ferramenta ausente deve ser incorporada à imagem ou ao serviço adequado,
+  com versão controlada; não deve ser instalada no host como correção pontual.
+- Use volumes e caches somente quando preservarem isolamento e
+  reprodutibilidade, evitando arquivos do repositório pertencentes a `root`.
+- Serviços de desenvolvimento e teste usam credenciais, redes, bancos e volumes
+  separados da produção.
+- O acesso ao daemon Docker equivale a acesso privilegiado ao host. Não monte o
+  socket do Docker em contêineres nem use modo privilegiado sem necessidade
+  concreta, avaliação de risco e autorização explícita.
 
 Essas escolhas são a base atual, não uma proibição de evolução. Bibliotecas,
 ferramentas, padrões ou componentes adicionais podem ser adotados quando
@@ -115,6 +143,11 @@ persistência.
 - Índices GIN ou de expressão para `JSONB` devem corresponder a consultas reais
   e ter benefício verificável.
 - Toda alteração persistente de schema usa uma nova revisão Alembic.
+- Bancos novos são criados exclusivamente por `alembic upgrade head`; não use
+  `create_all()` seguido de `stamp` como atalho de bootstrap operacional.
+- A adoção de schema legado sem `alembic_version` é uma operação administrativa
+  explícita, com verificação estrutural, backup validado e registro da revisão;
+  ela não ocorre automaticamente no startup.
 - Migrações autogeradas são candidatas e precisam de revisão manual.
 - Não reescreva uma migração que possa ter sido aplicada em outro banco.
 - Alterações destrutivas ou transformações de dados reais exigem backup
@@ -285,6 +318,34 @@ Ao concluir uma tarefa, informe:
 - CSS e JavaScript permanecem em assets próprios quando a política de segurança
   impedir código inline.
 
+### HTMX e interação orientada pelo servidor
+
+HTMX pode ser adotado como mecanismo preferencial para interações incrementais
+orientadas pelo servidor quando reduzir JavaScript próprio e preservar a
+simplicidade do fluxo Flask e HTML.
+
+- O servidor continua sendo a fonte de verdade. Atributos `hx-*`, estados da
+  interface e respostas parciais não substituem validação, autenticação,
+  autorização, CSRF, transações ou invariantes de domínio.
+- `HX-Request` e demais cabeçalhos do cliente são sinais de negociação de
+  apresentação, nunca prova de autorização ou origem confiável.
+- Endpoints HTMX usam semântica HTTP coerente: operações seguras não alteram
+  estado; escritas usam métodos adequados e proteção CSRF.
+- Respostas parciais são produzidas por templates e componentes reutilizáveis,
+  sem duplicar regras de negócio no navegador.
+- Preserve HTML semântico, acessibilidade, foco, mensagens de erro, estados de
+  carregamento e navegação/histórico quando a interação alterar conteúdo ou URL.
+- Ofereça resposta completa ou degradação progressiva quando isso for viável e
+  trouxer benefício concreto de robustez, acessibilidade ou testabilidade.
+- JavaScript complementar fica em assets próprios e é reservado a comportamentos
+  que HTMX e HTML não resolvam com clareza. Evite handlers inline quando forem
+  incompatíveis com a CSP do projeto.
+- Fixe a versão do HTMX. Prefira asset local versionado; quando usar CDN,
+  autorize explicitamente a origem na CSP e use integridade do sub-recurso
+  quando disponível. Nunca dependa de uma versão `latest` em produção.
+- Testes HTTP cobrem tanto requisições normais quanto requisições HTMX nos
+  fluxos em que a resposta ou o comportamento diferir.
+
 ## Produção e Docker
 
 O artefato de produção é uma imagem construída e reproduzível.
@@ -418,4 +479,8 @@ do parser RTD. Antes de concluir:
 
 ## Desvios aprovados da base compartilhada
 
-Nenhum.
+- **Controlador e coletor RTD/COM no Windows** — autorizado explicitamente pelo
+  mantenedor em 2026-08-01. Como Excel e COM não são executáveis no contêiner
+  Linux, somente esse controlador e coletor podem usar um ambiente Python
+  isolado no host Windows. Aplicação web, banco, migrações, testes, qualidade,
+  build e demais comandos continuam obrigatoriamente em Docker.

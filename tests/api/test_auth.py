@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 from flask.testing import FlaskClient
 
 from app.models import User
+
+_TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://investimentos:investimentos@localhost:5435/investimentos_test",
+)
+_MIGRATIONS_DIR = str(Path(__file__).resolve().parents[2] / "migrations")
 
 
 def test_health_check_does_not_require_authentication(client: FlaskClient) -> None:
@@ -68,7 +77,6 @@ def test_login_cookie_is_marked_secure_when_force_https_is_enabled(
 
     from app import create_app
     from app import db as _db
-    from tests.conftest import _MIGRATIONS_DIR, _TEST_DATABASE_URL
 
     monkeypatch.setenv("FORCE_HTTPS", "true")
     https_app = create_app(
@@ -97,22 +105,33 @@ def test_login_cookie_is_marked_secure_when_force_https_is_enabled(
 
     set_cookie_headers = response.headers.getlist("Set-Cookie")
     assert any("Secure" in header for header in set_cookie_headers)
+    remember_cookie = next(header for header in set_cookie_headers if "remember_token=" in header)
+    assert "Secure" in remember_cookie
+    assert "HttpOnly" in remember_cookie
+    assert "SameSite=Lax" in remember_cookie
 
 
-def test_login_is_rate_limited() -> None:
+def test_login_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sqlalchemy as sa
+    from flask_migrate import upgrade as alembic_upgrade
+
     from app import create_app
     from app import db as _db
 
+    monkeypatch.setenv("SECRET_KEY", "test-only-not-a-real-secret")
     limited_app = create_app(
         {
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_DATABASE_URI": _TEST_DATABASE_URL,
             "RATELIMIT_ENABLED": True,
         }
     )
     with limited_app.app_context():
-        _db.create_all()
+        with _db.engine.begin() as connection:
+            connection.execute(sa.text("DROP SCHEMA public CASCADE"))
+            connection.execute(sa.text("CREATE SCHEMA public"))
+        alembic_upgrade(directory=_MIGRATIONS_DIR)
         user = User(username="tester")
         user.set_password("correct-horse-battery-staple")
         _db.session.add(user)

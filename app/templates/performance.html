@@ -15,8 +15,8 @@
   <h2>{{ report.currency }}</h2>
   {% if report.points %}
   <div class="monthly-performance-chart chart-box"
-       data-months="{{ report.points|map(attribute='month')|map('string')|list|tojson }}"
-       data-values="{{ report.points|map(attribute='ending_value')|map('string')|list|tojson }}"
+       data-months='{{ report.points|map(attribute='month')|map('string')|list|tojson }}'
+       data-values='{{ report.points|map(attribute='ending_value')|map('string')|list|tojson }}'
        data-currency="{{ report.currency }}"
        aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}"></div>
 

@@ -26,6 +26,8 @@ def operation_result(
     result_mode: str,
 ) -> Decimal:
     """Equivalent to ResultadoOperacao for the arguments used by sheet Ações."""
+    if result_mode not in {"L", "B"}:
+        raise ValueError("Modo de resultado inválido.")
     direction = ONE if side == "C" else -ONE
     gross = direction * quantity * (current_price - average_cost)
     return gross * LIQUID_FACTOR if result_mode == "L" else gross

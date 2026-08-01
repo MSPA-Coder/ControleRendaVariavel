@@ -86,6 +86,11 @@ class AppSetting(Base):
             "risk_free_rate_annual BETWEEN 0 AND 1",
             name="risk_free_rate_annual_range",
         ),
+        CheckConstraint(
+            "risk_free_rate_annual NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="risk_free_rate_annual_finite",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
@@ -152,6 +157,23 @@ class Position(Base):
         CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
         CheckConstraint("quote_multiplier > 0", name="quote_multiplier_positive"),
         CheckConstraint("target_multiplier > 0", name="target_multiplier_positive"),
+        CheckConstraint(
+            "quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="quantity_finite",
+        ),
+        CheckConstraint(
+            "average_cost NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="average_cost_finite",
+        ),
+        CheckConstraint(
+            "quote_multiplier NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="quote_multiplier_finite",
+        ),
+        CheckConstraint(
+            "target_multiplier NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="target_multiplier_finite",
+        ),
+        CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -208,6 +230,14 @@ class Quote(Base):
     __table_args__ = (
         CheckConstraint("last_price >= 0", name="last_price_non_negative"),
         CheckConstraint("previous_close >= 0", name="previous_close_non_negative"),
+        CheckConstraint(
+            "last_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="last_price_finite",
+        ),
+        CheckConstraint(
+            "previous_close NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="previous_close_finite",
+        ),
     )
 
     position_id: Mapped[int] = mapped_column(
@@ -235,7 +265,13 @@ class OptionExpiration(Base):
 
 class OptionContract(Base):
     __tablename__ = "option_contracts"
-    __table_args__ = (CheckConstraint("strike >= 0", name="strike_non_negative"),)
+    __table_args__ = (
+        CheckConstraint("strike >= 0", name="strike_non_negative"),
+        CheckConstraint(
+            "strike NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="strike_finite",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ticker_id: Mapped[int] = mapped_column(
@@ -268,6 +304,20 @@ class OptionPosition(Base):
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
         CheckConstraint("target_price IS NULL OR target_price >= 0", name="target_non_negative"),
+        CheckConstraint(
+            "quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="quantity_finite",
+        ),
+        CheckConstraint(
+            "average_cost NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="average_cost_finite",
+        ),
+        CheckConstraint(
+            "target_price IS NULL OR target_price NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="target_finite",
+        ),
+        CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -307,6 +357,18 @@ class OptionQuote(Base):
         CheckConstraint("last_price >= 0", name="last_price_non_negative"),
         CheckConstraint("previous_close >= 0", name="previous_close_non_negative"),
         CheckConstraint("underlying_price >= 0", name="underlying_price_non_negative"),
+        CheckConstraint(
+            "last_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="last_price_finite",
+        ),
+        CheckConstraint(
+            "previous_close NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="previous_close_finite",
+        ),
+        CheckConstraint(
+            "underlying_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="underlying_price_finite",
+        ),
     )
 
     option_position_id: Mapped[int] = mapped_column(
@@ -341,6 +403,23 @@ class Transaction(Base):
         CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
         CheckConstraint("exit_price >= 0", name="exit_price_non_negative"),
         CheckConstraint("closed_on >= opened_on", name="closed_on_not_before_opened_on"),
+        CheckConstraint(
+            "quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="quantity_finite",
+        ),
+        CheckConstraint(
+            "average_cost NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="average_cost_finite",
+        ),
+        CheckConstraint(
+            "exit_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="exit_price_finite",
+        ),
+        CheckConstraint(
+            "result NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="result_finite",
+        ),
+        CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -364,6 +443,7 @@ class Transaction(Base):
     position_kind: Mapped[PositionKind] = mapped_column(
         Enum(PositionKind, name="position_kind"), default=PositionKind.REAL
     )
+    source_position_id: Mapped[int | None] = mapped_column(Integer, unique=True)
     notes: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -393,7 +473,13 @@ class Dividend(Base):
     simples de valor recebido por ativo/corretora/data."""
 
     __tablename__ = "dividends"
-    __table_args__ = (CheckConstraint("amount > 0", name="amount_positive"),)
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="amount_positive"),
+        CheckConstraint(
+            "amount NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="amount_finite",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     broker_id: Mapped[int] = mapped_column(
@@ -438,6 +524,10 @@ class QuoteHistory(Base):
     __tablename__ = "quote_history"
     __table_args__ = (
         CheckConstraint("price >= 0", name="price_non_negative"),
+        CheckConstraint(
+            "price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="price_finite",
+        ),
         UniqueConstraint("ticker_id", "recorded_date", name="uq_quote_history_ticker_date"),
     )
 
