@@ -1,4 +1,39 @@
 (() => {
+  const navFlyout = document.getElementById("nav-flyout");
+  const navScrim = document.querySelector("[data-nav-scrim]");
+  const navButtons = document.querySelectorAll("[data-nav-group]");
+
+  if (navFlyout && navScrim && navButtons.length) {
+    const panels = navFlyout.querySelectorAll("[data-nav-panel]");
+    const closeNavigation = () => {
+      navFlyout.hidden = true;
+      navScrim.hidden = true;
+      navButtons.forEach((button) => button.setAttribute("aria-expanded", "false"));
+    };
+    const openNavigation = (group) => {
+      panels.forEach((panel) => { panel.hidden = panel.dataset.navPanel !== group; });
+      navFlyout.hidden = false;
+      navScrim.hidden = false;
+      navButtons.forEach((button) => {
+        button.setAttribute("aria-expanded", String(button.dataset.navGroup === group));
+      });
+    };
+
+    navButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (!navFlyout.hidden && button.getAttribute("aria-expanded") === "true") {
+          closeNavigation();
+        } else {
+          openNavigation(button.dataset.navGroup);
+        }
+      });
+    });
+    navScrim.addEventListener("click", closeNavigation);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !navFlyout.hidden) closeNavigation();
+    });
+  }
+
   const filterForm = document.querySelector("[data-auto-submit]");
   if (filterForm) {
     filterForm.querySelectorAll("select").forEach((select) => {
@@ -6,10 +41,42 @@
     });
   }
 
+  const quoteManagementToggle = document.querySelector("[data-quote-management-toggle]");
+  const quoteManagementCard = document.getElementById("quote-management-card");
+  if (quoteManagementToggle && quoteManagementCard) {
+    quoteManagementToggle.addEventListener("click", () => {
+      const isOpen = quoteManagementCard.hidden;
+      quoteManagementCard.hidden = !isOpen;
+      quoteManagementToggle.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) {
+        quoteManagementCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        quoteManagementCard.focus({ preventScroll: true });
+      }
+    });
+  }
+
   const catalogCards = document.querySelectorAll("[data-catalog-card]");
   if (catalogCards.length) {
+    const openCatalogCardFromHash = () => {
+      const cardId = window.location.hash.slice(1);
+      catalogCards.forEach((card) => {
+        card.open = card.id === cardId;
+      });
+    };
+
+    openCatalogCardFromHash();
+    window.addEventListener("hashchange", openCatalogCardFromHash);
+
     catalogCards.forEach((card) => {
-      card.open = card.id === window.location.hash.slice(1);
+      card.addEventListener("toggle", () => {
+        if (!card.open) return;
+        catalogCards.forEach((otherCard) => {
+          if (otherCard !== card) otherCard.open = false;
+        });
+        if (card.id && window.location.hash !== `#${card.id}`) {
+          window.history.replaceState(null, "", `#${card.id}`);
+        }
+      });
     });
   }
 

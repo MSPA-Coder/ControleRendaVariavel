@@ -3,19 +3,62 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from flask import render_template
-from sqlalchemy import select
+from flask import render_template, request
+from sqlalchemy import Select, select
 
 from app import db
-from app.models import Ticker
-from app.monthly_performance import MonthlyPerformanceReport, build_monthly_performance
+from app.models import Broker, OptionContract, OptionPosition, Position, Side, Ticker
+from app.monthly_performance import (
+    MonthlyPerformanceReport,
+    build_monthly_performance,
+    normalize_performance_period,
+)
 from app.routes import bp
-from app.routes.helpers import open_real_quantities_by_ticker, ticker_price_series
+from app.routes.helpers import brokers, selected_filters, ticker_price_series
 
 
 @bp.get("/performance")
 def monthly_performance() -> str:
-    quantities_by_ticker = open_real_quantities_by_ticker()
+    position_kind, broker, selected_kind = selected_filters()
+    period = normalize_performance_period(request.args.get("period"))
+    portfolio = request.args.get("portfolio", "stocks")
+    if portfolio not in {"all", "stocks", "options"}:
+        portfolio = "stocks"
+
+    quantities_by_ticker: dict[int, Decimal] = {}
+
+    def add_quantities(statement: Select[tuple[int, Decimal, Side]]) -> None:
+        for ticker_id, quantity, side in db.session.execute(statement):
+            direction = Decimal("1") if side == Side.BUY else Decimal("-1")
+            quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
+                direction * quantity
+            )
+
+    if portfolio in {"all", "stocks"}:
+        stock_positions = select(Position.ticker_id, Position.quantity, Position.side).join(
+            Position.broker_ref
+        )
+        if position_kind is not None:
+            stock_positions = stock_positions.where(Position.position_kind == position_kind)
+        if broker:
+            stock_positions = stock_positions.where(Broker.name == broker)
+        add_quantities(stock_positions)
+
+    if portfolio in {"all", "options"}:
+        option_positions = (
+            select(OptionContract.ticker_id, OptionPosition.quantity, OptionPosition.side)
+            .join(OptionPosition.contract)
+            .join(OptionPosition.broker_ref)
+        )
+        if position_kind is not None:
+            option_positions = option_positions.where(OptionPosition.position_kind == position_kind)
+        if broker:
+            option_positions = option_positions.where(Broker.name == broker)
+        add_quantities(option_positions)
+
+    quantities_by_ticker = {
+        ticker_id: quantity for ticker_id, quantity in quantities_by_ticker.items() if quantity != 0
+    }
     tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}
 
     price_series_by_ticker: dict[int, list[tuple[date, Decimal]]] = {
@@ -33,8 +76,16 @@ def monthly_performance() -> str:
         quantities_by_currency.setdefault(ticker.currency, {})[ticker_id] = quantity
 
     reports: list[MonthlyPerformanceReport] = [
-        build_monthly_performance(currency, quantities, price_series_by_ticker)
+        build_monthly_performance(currency, quantities, price_series_by_ticker, period=period)
         for currency, quantities in sorted(quantities_by_currency.items())
     ]
 
-    return render_template("performance.html", reports=reports)
+    return render_template(
+        "performance.html",
+        reports=reports,
+        brokers=brokers(),
+        selected_broker=broker or "",
+        selected_kind=selected_kind,
+        selected_portfolio=portfolio,
+        selected_period=period,
+    )

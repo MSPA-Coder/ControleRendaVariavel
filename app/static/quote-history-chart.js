@@ -31,16 +31,16 @@
     var min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
     var left = 54, right = 16, top = 16, bottom = 38, plotWidth = width - left - right, plotHeight = height - top - bottom;
     function y(value) { return top + (max - value) / span * plotHeight; }
-    ctx.strokeStyle = "#c6d4df"; ctx.fillStyle = "#66788a"; ctx.font = "12px sans-serif";
+    ctx.strokeStyle = "#c9d8e2"; ctx.fillStyle = "#5c7180"; ctx.font = "12px sans-serif";
     for (var tick = 0; tick <= 4; tick += 1) { var yy = top + plotHeight * tick / 4, value = max - span * tick / 4; ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke(); ctx.fillText(formatCurrency(value, currency), 2, yy + 4); }
     var step = plotWidth / rows.length, body = Math.max(2, Math.min(16, step * .62));
     rows.forEach(function (row, index) {
       var x = left + step * (index + .5), rising = row.close >= row.open;
-      ctx.strokeStyle = rising ? "#167245" : "#d82323"; ctx.fillStyle = ctx.strokeStyle;
+      ctx.strokeStyle = rising ? "#007f5f" : "#b42318"; ctx.fillStyle = ctx.strokeStyle;
       ctx.beginPath(); ctx.moveTo(x, y(row.high)); ctx.lineTo(x, y(row.low)); ctx.stroke();
       var yOpen = y(row.open), yClose = y(row.close), bodyTop = Math.min(yOpen, yClose), bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
       ctx.fillRect(x - body / 2, bodyTop, body, bodyHeight);
-      if (rows.length <= 18 || index % Math.ceil(rows.length / 8) === 0) { ctx.fillStyle = "#66788a"; ctx.fillText(row.label, x - body, height - 14); }
+      if (rows.length <= 18 || index % Math.ceil(rows.length / 8) === 0) { ctx.fillStyle = "#5c7180"; ctx.fillText(row.label, x - body, height - 14); }
     });
   }
   function render(chartType, period) {
@@ -51,7 +51,7 @@
     if (period !== "daily") { drawCandles(container, rows, currency); return; }
     if (typeof Chart === "undefined") return;
     container.replaceChildren(); var canvas = document.createElement("canvas"); container.appendChild(canvas);
-    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: rows.map(function (row) { return row.label; }), datasets: [{ data: rows.map(function (row) { return row.close; }), borderColor: "#214f78", backgroundColor: "#214f78", pointRadius: 2, tension: .15 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
+    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: rows.map(function (row) { return row.label; }), datasets: [{ data: rows.map(function (row) { return row.close; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
   }
   function init() {
     var type = document.querySelector("[data-quote-chart-type]"), period = document.querySelector("[data-quote-chart-period]");

@@ -98,7 +98,7 @@ def test_options_dashboard_renders_greeks_and_charts(
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     for marker in [
-        "moneyness-summary",
+        "option-moneyness",
         "expiration-chart",
         "Theta total",
         "Vol. impl",

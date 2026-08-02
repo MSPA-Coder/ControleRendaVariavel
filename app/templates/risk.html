@@ -53,7 +53,7 @@
 {% endif %}
 
 {% if portfolio_drawdowns %}
-<section class="summary" aria-label="Drawdown máximo por carteira">
+<section class="summary risk-summary" aria-label="Drawdown máximo por carteira">
   {% for drawdown in portfolio_drawdowns %}
     <article title="Aproximação: assume as posições atuais constantes ao longo de todo o histórico simulado (ver documentação da Fase D).">
       <span>Máx. drawdown da carteira · {{ drawdown.currency }}{{ ' ⚠' if not drawdown.has_enough_observations }}</span>

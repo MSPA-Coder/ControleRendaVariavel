@@ -19,6 +19,10 @@ from app.routes.helpers import (
 )
 
 
+def _tables_redirect(section: str) -> ResponseReturnValue:
+    return redirect(url_for("portfolio.tables", _anchor=section))
+
+
 @bp.get("/tables")
 def tables() -> str:
     return render_template(
@@ -50,7 +54,7 @@ def create_broker() -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return redirect(url_for("portfolio.tables"))
+    return _tables_redirect("brokers")
 
 
 @bp.post("/tables/brokers/<int:broker_id>")
@@ -74,7 +78,7 @@ def update_broker(broker_id: int) -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return redirect(url_for("portfolio.tables"))
+    return _tables_redirect("brokers")
 
 
 @bp.post("/tables/brokers/<int:broker_id>/delete")
@@ -91,7 +95,7 @@ def delete_broker(broker_id: int) -> ResponseReturnValue:
             "transações ou proventos vinculados.",
             "error",
         )
-    return redirect(url_for("portfolio.tables"))
+    return _tables_redirect("brokers")
 
 
 @bp.post("/tables/tickers")
@@ -106,7 +110,7 @@ def create_ticker() -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return redirect(url_for("portfolio.tables"))
+    return _tables_redirect("tickers")
 
 
 @bp.post("/tables/tickers/<int:ticker_id>")
@@ -126,7 +130,7 @@ def update_ticker(ticker_id: int) -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return redirect(url_for("portfolio.tables"))
+    return _tables_redirect("tickers")
 
 
 @bp.post("/tables/tickers/<int:ticker_id>/delete")
@@ -143,4 +147,4 @@ def delete_ticker(ticker_id: int) -> ResponseReturnValue:
             "transações ou proventos vinculados.",
             "error",
         )
-    return redirect(url_for("portfolio.tables"))
+    return _tables_redirect("tickers")

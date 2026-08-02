@@ -92,7 +92,74 @@ def test_monthly_performance_shows_placeholder_without_open_positions(
     response = auth_client.get("/performance")
 
     assert response.status_code == 200
-    assert "Nenhuma posição real aberta" in response.get_data(as_text=True)
+    assert "Nenhuma posição aberta encontrada para os filtros." in response.get_data(as_text=True)
+
+
+def test_monthly_performance_renders_filters_with_current_defaults(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        _seed_broker()
+
+    response = auth_client.get("/performance")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert '<option value="real" selected>Real</option>' in html
+    assert '<option value="all" selected>Todas</option>' in html
+    assert 'value="stocks"' in html
+    assert '>Ações</option>' in html
+    assert 'value="week"' in html
+    assert 'value="semester"' in html
+
+
+def test_monthly_performance_filters_by_broker(app: Flask, auth_client: FlaskClient) -> None:
+    with app.app_context():
+        first_ticker_id = _seed_ticker("PETR4")
+        second_ticker_id = _seed_ticker("VALE3")
+        first_broker_id = _seed_broker()
+        second_broker = Broker(name="Rico", acronym="RI")
+        db.session.add(second_broker)
+        db.session.commit()
+        _seed_open_position(first_ticker_id, broker_id=first_broker_id)
+        _seed_open_position(second_ticker_id, broker_id=second_broker.id)
+        _seed_quote_history(first_ticker_id, [("2026-01-05", "100"), ("2026-02-05", "110")])
+        _seed_quote_history(second_ticker_id, [("2026-01-05", "50"), ("2026-02-05", "55")])
+
+    response = auth_client.get("/performance?broker=Genial&portfolio=stocks")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'value="Genial" selected' in html
+    assert 'value="stocks" selected' in html
+    assert "R$ 1.100,00" in html
+    assert "R$ 550,00" not in html
+
+
+def test_monthly_performance_period_is_selected_and_applied_by_the_backend(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        ticker_id = _seed_ticker("PETR4")
+        _seed_open_position(ticker_id, quantity="10")
+        _seed_quote_history(
+            ticker_id,
+            [
+                ("2026-07-31", "100"),
+                ("2026-08-02", "110"),
+                ("2026-08-08", "120"),
+            ],
+        )
+
+    all_period = auth_client.get("/performance")
+    week_period = auth_client.get("/performance?period=week")
+
+    assert "07/2026" in all_period.get_data(as_text=True)
+    week_html = week_period.get_data(as_text=True)
+    assert week_period.status_code == 200
+    assert '<option value="week" selected>Semana</option>' in week_html
+    assert "07/2026" not in week_html
+    assert "R$ 1.200,00" in week_html
 
 
 def test_monthly_performance_groups_by_currency(app: Flask, auth_client: FlaskClient) -> None:
@@ -115,3 +182,12 @@ def test_monthly_performance_groups_by_currency(app: Flask, auth_client: FlaskCl
 
 def test_monthly_performance_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/performance").status_code == 302
+
+
+def test_monthly_performance_defaults_to_stock_portfolio(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    response = auth_client.get("/performance")
+
+    assert response.status_code == 200
+    assert b'<option value="stocks" selected>' in response.data

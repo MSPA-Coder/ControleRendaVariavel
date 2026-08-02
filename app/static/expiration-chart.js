@@ -42,9 +42,9 @@
     container.appendChild(canvas);
 
     var style = getComputedStyle(document.documentElement);
-    var navy = style.getPropertyValue("--navy").trim() || "#214f78";
-    var line = style.getPropertyValue("--line").trim() || "#c6d4df";
-    var ink = style.getPropertyValue("--ink").trim() || "#142536";
+    var navy = style.getPropertyValue("--navy").trim() || "#0a2a43";
+    var line = style.getPropertyValue("--line").trim() || "#c9d8e2";
+    var ink = style.getPropertyValue("--ink").trim() || "#142b3c";
 
     new Chart(canvas.getContext("2d"), {
       type: "bar",

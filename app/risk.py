@@ -190,6 +190,8 @@ def max_drawdown(values: Sequence[Decimal]) -> Decimal | None:
 def portfolio_value_series(
     quantities: Mapping[Any, Decimal],
     price_series: Mapping[Any, Sequence[tuple[date, Decimal]]],
+    *,
+    require_all_tickers: bool = True,
 ) -> list[tuple[date, Decimal]]:
     """Valor da carteira ao longo do tempo, para o drawdown por carteira
     inteira (item 4/Fase D).
@@ -224,9 +226,11 @@ def portfolio_value_series(
                 last_known[key] = series[cursor][1]
                 cursor += 1
             cursors[key] = cursor
-        if len(last_known) < len(tickers):
+        if require_all_tickers and len(last_known) < len(tickers):
             continue
-        total = sum((quantities[key] * last_known[key] for key in tickers), Decimal("0"))
+        total = sum(
+            (quantities[key] * price for key, price in last_known.items()), Decimal("0")
+        )
         values.append((current_date, total))
     return values
 

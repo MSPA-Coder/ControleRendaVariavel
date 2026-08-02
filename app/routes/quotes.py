@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app import db
@@ -16,18 +16,21 @@ from app.quote_history_import import (
     fetch_yahoo_daily_quotes,
 )
 from app.routes import bp
-from app.routes.helpers import ticker_price_series, ticker_records
+from app.routes.helpers import stock_ticker_records, ticker_price_series, ticker_records
 from app.validation import parse_finite_decimal
 
 
 @bp.get("/quotes")
 def quote_history() -> str:
-    tickers = ticker_records()
+    tickers = stock_ticker_records()
     selected_ticker: Ticker | None = None
     raw_ticker_id = request.args.get("ticker_id")
     if raw_ticker_id:
         try:
-            selected_ticker = db.session.get(Ticker, int(raw_ticker_id))
+            ticker_id = int(raw_ticker_id)
+            selected_ticker = next(
+                (ticker for ticker in tickers if ticker.id == ticker_id), None
+            )
         except ValueError:
             selected_ticker = None
     if selected_ticker is None and tickers:
@@ -198,11 +201,25 @@ def import_position_quote_history() -> ResponseReturnValue:
     return redirect(url_for("portfolio.quote_history"))
 
 
-@bp.post("/quotes/<int:entry_id>/delete")
-def delete_quote_history_entry(entry_id: int) -> ResponseReturnValue:
-    entry = db.get_or_404(QuoteHistory, entry_id)
-    ticker_id = entry.ticker_id
-    db.session.delete(entry)
+@bp.post("/quotes/delete-by-date")
+def delete_quote_history_by_date() -> ResponseReturnValue:
+    raw = {key: value.strip() for key, value in request.form.items()}
+    try:
+        ticker_id = int(raw["ticker_id"])
+        recorded_date = date.fromisoformat(raw["recorded_date"])
+    except (KeyError, ValueError):
+        flash("Informe um ticker e uma data de cotacao validos.", "error")
+        return redirect(url_for("portfolio.quote_history"))
+
+    deleted_ticker_id = db.session.scalar(
+        delete(QuoteHistory).where(
+            QuoteHistory.ticker_id == ticker_id,
+            QuoteHistory.recorded_date == recorded_date,
+        ).returning(QuoteHistory.ticker_id)
+    )
     db.session.commit()
-    flash("Cotação histórica excluída.", "success")
+    if deleted_ticker_id is not None:
+        flash("Cotacao historica excluida.", "success")
+    else:
+        flash("Nao ha cotacao registrada para a data informada.", "error")
     return redirect(url_for("portfolio.quote_history", ticker_id=ticker_id))

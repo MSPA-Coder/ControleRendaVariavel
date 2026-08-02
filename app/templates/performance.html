@@ -1,5 +1,40 @@
 {% extends "base.html" %}
 {% block title %}Performance mensal · Controle de Renda Variável{% endblock %}
+{% block header_controls %}
+<form class="filters header-controls" method="get" data-auto-submit>
+  <label>Posição
+    <select name="position_kind">
+      <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
+      <option value="real" {{ 'selected' if selected_kind == 'real' }}>Real</option>
+      <option value="hypothetical" {{ 'selected' if selected_kind == 'hypothetical' }}>Hipotética</option>
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}<option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Carteira
+    <select name="portfolio">
+      <option value="stocks" {{ 'selected' if selected_portfolio == 'stocks' }}>Ações</option>
+      <option value="all" {{ 'selected' if selected_portfolio == 'all' }}>Todas</option>
+      <option value="options" {{ 'selected' if selected_portfolio == 'options' }}>Opções</option>
+    </select>
+  </label>
+  <label>Período
+    <select name="period">
+      <option value="week" {{ 'selected' if selected_period == 'week' }}>Semana</option>
+      <option value="month" {{ 'selected' if selected_period == 'month' }}>Mês</option>
+      <option value="quarter" {{ 'selected' if selected_period == 'quarter' }}>Trimestre</option>
+      <option value="semester" {{ 'selected' if selected_period == 'semester' }}>Semestre</option>
+      <option value="year" {{ 'selected' if selected_period == 'year' }}>Ano</option>
+      <option value="all" {{ 'selected' if selected_period == 'all' }}>Todas</option>
+    </select>
+  </label>
+  <a class="button" href="{{ url_for('portfolio.monthly_performance') }}">Limpar</a>
+</form>
+{% endblock %}
 {% block content %}
 <p class="form-help">
   Evolução patrimonial e retorno mensal a partir das cotações em
@@ -8,6 +43,8 @@
   mesma aproximação usada no drawdown por carteira em
   <a href="{{ url_for('portfolio.risk_report') }}">Risco</a>. Sem tratamento
   de aportes/retiradas (sem Dietz/IRR): é só o valor da carteira mês a mês.
+  O período é aplicado no servidor sobre todas as cotações históricas
+  disponíveis para os ativos selecionados.
 </p>
 
 {% if reports %}
@@ -39,7 +76,7 @@
   {% endif %}
   {% endfor %}
 {% else %}
-<p class="form-help">Nenhuma posição real aberta ainda.</p>
+<p class="form-help">Nenhuma posição aberta encontrada para os filtros.</p>
 {% endif %}
 {% endblock %}
 {% block scripts %}

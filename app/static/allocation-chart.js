@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var PALETTE = ["#214f78", "#3d7fb5", "#7fb0d6", "#a9cbe6", "#c6d4df", "#167245", "#4fa876", "#8ccaa6", "#e2b93b", "#d88a23"];
+  var PALETTE = ["#0a2a43", "#0f766e", "#2d8b9a", "#5aa6b5", "#9ccbd3", "#007f5f", "#51a77b", "#9bcdb0", "#d6a63b", "#bd6a45"];
 
   function parseData(container, attr) {
     try { return JSON.parse(container.dataset[attr] || "[]"); } catch (_) { return []; }
@@ -25,7 +25,7 @@
     canvas.setAttribute("role", "img");
     canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Alocacao por ativo");
     container.appendChild(canvas);
-    var ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#142536";
+    var ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#142b3c";
     new Chart(canvas.getContext("2d"), {
       type: chartType,
       data: { labels: labels, datasets: [{ data: weights, backgroundColor: labels.map(function (_, index) { return PALETTE[index % PALETTE.length]; }) }] },

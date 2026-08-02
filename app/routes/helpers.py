@@ -61,6 +61,16 @@ def ticker_records() -> list[Ticker]:
     return list(db.session.scalars(select(Ticker).order_by(Ticker.symbol)))
 
 
+def stock_ticker_records() -> list[Ticker]:
+    """Tickers de ações e índices, excluindo os que representam contratos de opção."""
+    statement = (
+        select(Ticker)
+        .where(~Ticker.option_contract.has())
+        .order_by(Ticker.symbol)
+    )
+    return list(db.session.scalars(statement))
+
+
 def option_expirations() -> list[OptionExpiration]:
     statement = select(OptionExpiration).order_by(OptionExpiration.exercise_date)
     return list(db.session.scalars(statement))

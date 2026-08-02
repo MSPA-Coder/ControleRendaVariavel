@@ -85,12 +85,8 @@
     <span>Theta total/dia</span>
     <strong class="{{ portfolio.total_theta_daily|sign_class }}">{{ portfolio.total_theta_daily|currency('BRL') if portfolio.total_theta_daily is not none else '-' }}</strong>
   </article>
-</section>
-
 {% if portfolio.moneyness_totals %}
-<section class="catalog-card moneyness-summary">
-  <h2>Distribuição ITM / ATM / OTM</h2>
-  <div class="summary" aria-label="Distribuição por moneyness">
+  <div class="option-moneyness" aria-label="Distribuição por moneyness">
     {% for total in portfolio.moneyness_totals %}
     <article>
       <span>{{ total.moneyness }} · {{ total.count }} posição(ões)</span>
@@ -98,8 +94,8 @@
     </article>
     {% endfor %}
   </div>
-</section>
 {% endif %}
+</section>
 
 <section class="catalog-card expiration-summary">
   <h2>Totais por vencimento</h2>

@@ -74,7 +74,7 @@
       <tr>
         <td>{{ p.broker }}</td>
         <td><a href="{{ url_for('portfolio.edit_position', position_id=p.id) }}">{{ p.ticker }}</a></td>
-        <td class="number">{{ p.quantity|quantity }}</td>
+        <td class="number">{{ p.quantity|number(0 if p.currency == 'BRL' else 4) }}</td>
         <td class="number">{{ p.average_cost|currency(p.currency) }}</td>
         {% if m %}
           <td class="number">{{ m.current_price|currency(p.currency) }}</td>
