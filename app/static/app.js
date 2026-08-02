@@ -1,36 +1,43 @@
 (() => {
-  const navFlyout = document.getElementById("nav-flyout");
+  const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");
-  const navButtons = document.querySelectorAll("[data-nav-group]");
 
-  if (navFlyout && navScrim && navButtons.length) {
-    const panels = navFlyout.querySelectorAll("[data-nav-panel]");
+  if (megaWraps.length && navScrim) {
     const closeNavigation = () => {
-      navFlyout.hidden = true;
-      navScrim.hidden = true;
-      navButtons.forEach((button) => button.setAttribute("aria-expanded", "false"));
-    };
-    const openNavigation = (group) => {
-      panels.forEach((panel) => { panel.hidden = panel.dataset.navPanel !== group; });
-      navFlyout.hidden = false;
-      navScrim.hidden = false;
-      navButtons.forEach((button) => {
-        button.setAttribute("aria-expanded", String(button.dataset.navGroup === group));
+      megaWraps.forEach((wrap) => {
+        const button = wrap.querySelector(".grp-btn");
+        const mega = wrap.querySelector(".mega");
+        if (button) {
+          button.classList.remove("open");
+          button.setAttribute("aria-expanded", "false");
+        }
+        if (mega) mega.classList.remove("show");
       });
+      navScrim.hidden = true;
+    };
+    const openNavigation = (wrap) => {
+      const button = wrap.querySelector(".grp-btn");
+      const mega = wrap.querySelector(".mega");
+      if (button) {
+        button.classList.add("open");
+        button.setAttribute("aria-expanded", "true");
+      }
+      if (mega) mega.classList.add("show");
+      navScrim.hidden = false;
     };
 
-    navButtons.forEach((button) => {
+    megaWraps.forEach((wrap) => {
+      const button = wrap.querySelector(".grp-btn");
+      if (!button) return;
       button.addEventListener("click", () => {
-        if (!navFlyout.hidden && button.getAttribute("aria-expanded") === "true") {
-          closeNavigation();
-        } else {
-          openNavigation(button.dataset.navGroup);
-        }
+        const isOpen = button.classList.contains("open");
+        closeNavigation();
+        if (!isOpen) openNavigation(wrap);
       });
     });
     navScrim.addEventListener("click", closeNavigation);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !navFlyout.hidden) closeNavigation();
+      if (event.key === "Escape" && !navScrim.hidden) closeNavigation();
     });
   }
 

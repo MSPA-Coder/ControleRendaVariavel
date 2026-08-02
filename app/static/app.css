@@ -1,24 +1,33 @@
 :root {
   color-scheme: light;
-  --navy: #0a2a43;
-  --navy-dark: #061c2d;
-  --ice: #eef5f9;
-  --line: #c9d8e2;
-  --ink: #142b3c;
-  --muted: #5c7180;
-  --positive: #007f5f;
-  --negative: #b42318;
-  --accent: #0f766e;
-  --accent-dark: #0b5e58;
-  --surface: #fbfdfe;
-  --surface-muted: #edf4f7;
+  /* Paleta do protótipo de mega menu: verde institucional sobre neutros frios. */
+  --bg: #f5f7f5;
+  --surface: #ffffff;
+  --surface-muted: #edf1ee;
+  --line: #e1e5e1;
+  --ink: #12211c;
+  --muted: #5b6b64;
+  --muted-2: #8a968e;
+  --accent: #0b6e4f;
+  --accent-soft: #e4f3ec;
+  --accent-line: #bfe1ce;
+  --positive: #0b6e4f;
+  --negative: #c23b3b;
+  --radius: 10px;
+  /* Aliases legados: mantêm os componentes existentes consistentes com a nova paleta. */
+  --navy: #12211c;
+  --navy-dark: #0b1712;
+  --ice: #edf3ef;
+  --accent-dark: #084f39;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 87.5%;
 }
 
 * { box-sizing: border-box; }
-body { background: #eaf1f5; color: var(--ink); margin: 0; zoom: .9; }
+body { background: var(--bg); color: var(--ink); margin: 0; zoom: .9; }
 a { color: var(--accent-dark); }
+h1, h2, h3, .logo-text { font-family: "Space Grotesk", Inter, sans-serif; }
+.number, .num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
 main { padding: 1.1rem; }
 .topbar {
   align-items: center; background: var(--navy-dark); display: flex;
@@ -304,53 +313,77 @@ details.catalog-card > h2 { display: none; }
   .quote-history-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* Paleta financeira: azul institucional, teal de crescimento e neutros frios. */
-.app-shell { display: flex; min-height: 100vh; }
+/* Paleta financeira: verde institucional e neutros frios, com mega menu horizontal. */
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
 .app-main { min-width: 0; flex: 1; }
-.nav-rail {
-  align-items: center; background: var(--navy-dark); display: flex; flex: 0 0 4.5rem;
-  flex-direction: column; gap: .45rem; min-height: 100vh; padding: .9rem .7rem;
-  position: sticky; top: 0; z-index: 30;
+
+.navbar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 30; }
+.navbar-row { align-items: center; display: flex; gap: .4rem; padding: 0 1.4rem; height: 60px; }
+.logo { align-items: center; color: var(--ink); display: flex; gap: .55rem; margin-right: 1.1rem; text-decoration: none; }
+.logo-mark {
+  align-items: center; background: var(--accent); border-radius: .5rem; color: white; display: flex;
+  font-family: "Space Grotesk", Inter, sans-serif; font-size: .72rem; font-weight: 700; height: 1.9rem;
+  justify-content: center; letter-spacing: .01em; padding: 0 .4rem; width: auto; min-width: 1.9rem;
 }
-.rail-logo {
-  align-items: center; background: var(--accent); border-radius: .65rem; color: white;
-  display: flex; font-size: .82rem; font-weight: 800; height: 2.5rem;
-  justify-content: center; margin-bottom: .75rem; text-decoration: none; width: 2.5rem;
+.logo-text { font-size: .98rem; font-weight: 700; }
+
+/* Sem position:relative aqui de propósito: o painel .mega usa o .navbar
+   (que é sticky, logo já é um contexto de posicionamento) como referência,
+   para poder ocupar a largura inteira da barra e organizar os cards em
+   linha horizontal, em vez de ficar restrito à largura do botão. */
+.mega-wrap { position: static; }
+.grp-btn {
+  align-items: center; background: transparent; border: 1px solid transparent; border-radius: .5rem;
+  color: var(--ink); cursor: pointer; display: flex; font: inherit; font-size: .84rem; font-weight: 600;
+  gap: .35rem; padding: .5rem .75rem;
 }
-.rail-button {
-  align-items: center; background: transparent; border: 1px solid transparent; border-radius: .65rem;
-  color: #a9c2cf; cursor: pointer; display: flex; height: 2.65rem; justify-content: center;
-  padding: 0; width: 2.65rem;
+.grp-btn:hover { background: var(--bg); }
+.grp-btn.open, .grp-btn.group-active { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.grp-btn svg { fill: none; height: 12px; stroke: currentColor; stroke-width: 2.2; transition: transform .15s; width: 12px; }
+.grp-btn.open svg { transform: rotate(180deg); }
+
+.navbar-right { align-items: center; display: flex; gap: .6rem; margin-left: auto; }
+.avatar {
+  align-items: center; background: var(--navy); border-radius: 50%; color: white; display: flex;
+  font-size: .68rem; font-weight: 700; height: 1.9rem; justify-content: center; width: 1.9rem;
 }
-.rail-button:hover, .rail-button:focus-visible { background: #103b59; color: #f5fbfd; }
-.rail-button.is-active, .rail-button[aria-expanded="true"] { background: rgba(15, 118, 110, .28); color: #78d3c7; }
-.rail-button:focus-visible, .flyout-link:focus-visible { outline: 3px solid #55c2b6; outline-offset: 2px; }
-.rail-button svg { fill: none; height: 1.25rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; width: 1.25rem; }
-.rail-avatar {
-  align-items: center; background: #103b59; border: 1px solid rgba(232, 245, 250, .18); border-radius: 50%;
-  color: #f5fbfd; display: flex; font-size: .68rem; font-weight: 700; height: 2rem;
-  justify-content: center; margin-top: auto; width: 2rem;
+
+.mega {
+  background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: 0 18px 34px -18px rgba(18, 33, 28, .18);
+  display: none; left: 0; position: absolute; right: 0; top: 60px; z-index: 29;
 }
-.nav-flyout {
-  background: #08263d; border-right: 1px solid rgba(232, 245, 250, .12); bottom: 0;
-  box-shadow: 16px 0 32px rgba(3, 19, 31, .3); color: #f5fbfd; left: 4.5rem;
-  padding: 1.5rem 1rem; position: fixed; top: 0; width: 18.5rem; z-index: 40;
+.mega.show { display: block; }
+.mega-inner { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); padding: 1.2rem 1.4rem 1.4rem; }
+.mega-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+  display: block; padding: .9rem 1rem; text-align: left; text-decoration: none; color: inherit;
 }
-.nav-flyout[hidden], .nav-scrim[hidden] { display: none; }
-.nav-flyout h2 { font-size: 1.1rem; margin: 0 0 1.25rem; }
-.flyout-eyebrow { color: #78d3c7; font-size: .72rem; font-weight: 750; letter-spacing: .09em; margin: 0 0 .3rem; text-transform: uppercase; }
-.flyout-link { border-radius: .55rem; color: #f5fbfd; display: block; font-weight: 600; margin: .25rem 0; padding: .72rem .8rem; text-decoration: none; }
-.flyout-link:hover { background: #103b59; color: white; }
-.flyout-link.is-active { background: rgba(15, 118, 110, .3); box-shadow: inset 3px 0 0 #55c2b6; color: #a4e3da; }
-.nav-scrim { background: rgba(3, 19, 31, .55); inset: 0; position: fixed; z-index: 35; }
-.app-main .topbar { background: #08263d; border-bottom-color: rgba(232, 245, 250, .12); padding: .75rem 1.25rem; }
+.mega-card:hover { background: var(--accent-soft); border-color: var(--accent-line); }
+.mega-card.is-current { background: var(--accent-soft); border-color: var(--accent); }
+.mega-card .ico {
+  align-items: center; background: var(--accent-soft); border-radius: .5rem; color: var(--accent); display: flex;
+  height: 2rem; justify-content: center; margin-bottom: .55rem; width: 2rem;
+}
+.mega-card .ico svg { fill: none; height: 15px; stroke: currentColor; stroke-width: 1.7; width: 15px; }
+.mega-card .t { display: block; font-size: .9rem; font-weight: 700; margin-bottom: .2rem; }
+.mega-card .d { color: var(--muted); display: block; font-size: .76rem; line-height: 1.4; }
+
+.nav-current-page {
+  background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 20px;
+  color: var(--accent); font-size: .78rem; font-weight: 700; padding: .3rem .7rem;
+}
+.nav-username { color: var(--muted); font-size: .82rem; font-weight: 600; }
+
+.nav-scrim { background: rgba(18, 33, 28, .35); inset: 0; position: fixed; z-index: 25; }
+.nav-scrim[hidden] { display: none; }
+
+.app-main .topbar { background: var(--navy); border-bottom-color: rgba(232, 245, 250, .12); padding: .75rem 1.25rem; }
 .app-main .topbar nav { align-items: center; }
 .app-main .nav-user { color: #f5fbfd; margin-left: auto; }
-.app-main .collector-heartbeat { background: rgba(15, 118, 110, .28); color: #a4e3da; }
+.app-main .collector-heartbeat { background: rgba(11, 110, 79, .32); color: #a4e3da; }
 @media (max-width: 700px) {
-  .nav-rail { bottom: 0; flex: none; flex-direction: row; gap: .25rem; min-height: 0; padding: .45rem .55rem; position: fixed; top: auto; width: 100%; }
-  .rail-logo { margin: 0 .35rem 0 0; }
-  .rail-avatar { margin: 0 0 0 auto; }
-  .nav-flyout { bottom: 4.1rem; left: 0; top: auto; width: min(20rem, calc(100% - 1rem)); }
-  .app-main { padding-bottom: 4.1rem; }
+  .navbar-row { flex-wrap: wrap; height: auto; padding: .6rem .8rem; }
+  .navbar-right { margin-left: 0; order: -1; width: 100%; justify-content: space-between; }
+  .mega { top: auto; }
+  .nav-username { display: none; }
 }
