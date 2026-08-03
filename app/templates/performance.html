@@ -48,33 +48,47 @@
 </p>
 
 {% if reports %}
-  {% for report in reports %}
-  <h2>{{ report.currency }}</h2>
-  {% if report.points %}
-  <div class="monthly-performance-chart chart-box"
-       data-months='{{ report.points|map(attribute='month')|map('string')|list|tojson }}'
-       data-values='{{ report.points|map(attribute='ending_value')|map('string')|list|tojson }}'
-       data-currency="{{ report.currency }}"
-       aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}"></div>
+  <div class="monthly-performance-grid">
+    {% for report in reports %}
+    <section class="monthly-performance-report">
+      <header>
+        <h2>{{ report.currency }}</h2>
+      </header>
+      {% if report.points %}
+      <div class="monthly-performance-chart-card">
+        <div class="chart-card-header">
+          <strong>Gráfico</strong>
+        </div>
+        <div class="monthly-performance-chart chart-box"
+             data-months='{{ report.points|map(attribute='month')|map('string')|list|tojson }}'
+             data-values='{{ report.points|map(attribute='ending_value')|map('string')|list|tojson }}'
+             data-currency="{{ report.currency }}"
+             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}"></div>
+      </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Mês</th><th>Valor</th><th>Retorno mensal</th></tr></thead>
-      <tbody>
-        {% for point in report.points|reverse %}
-        <tr>
-          <td>{{ point.month.strftime('%m/%Y') }}</td>
-          <td class="number">{{ point.ending_value|currency(report.currency) }}</td>
-          <td class="number {{ point.return_pct|sign_class }}">{{ point.return_pct|percent(2) if point.return_pct is not none else '-' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <details class="monthly-performance-data-card">
+        <summary>Dados</summary>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Mês</th><th>Valor</th><th>Retorno mensal</th></tr></thead>
+            <tbody>
+              {% for point in report.points|reverse %}
+              <tr>
+                <td>{{ point.month.strftime('%m/%Y') }}</td>
+                <td class="number">{{ point.ending_value|currency(report.currency) }}</td>
+                <td class="number {{ point.return_pct|sign_class }}">{{ point.return_pct|percent(2) if point.return_pct is not none else '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% else %}
+      <p class="form-help">Ainda não há cotações históricas suficientes em {{ report.currency }}.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
   </div>
-  {% else %}
-  <p class="form-help">Ainda não há cotações históricas suficientes em {{ report.currency }}.</p>
-  {% endif %}
-  {% endfor %}
 {% else %}
 <p class="form-help">Nenhuma posição aberta encontrada para os filtros.</p>
 {% endif %}

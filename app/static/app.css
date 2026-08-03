@@ -114,9 +114,15 @@ tbody tr:hover { background: #e1f0f4; }
 }
 .settings-form h1 { margin: 0; }
 .settings-form fieldset {
-  background: var(--surface); border: 1px solid var(--line); border-radius: .65rem; padding: 1.1rem;
+  background: var(--surface); border: 1px solid var(--line); border-radius: .75rem;
+  padding: 1.6rem 1.1rem 1.1rem; position: relative;
 }
-.settings-form legend { color: var(--ink); font-weight: 700; padding: 0 .35rem; }
+.settings-form legend {
+  position: absolute; top: -0.55rem; left: 1rem;
+  display: inline-flex; align-items: center; gap: .25rem;
+  background: var(--surface); color: var(--ink); font-weight: 700;
+  font-size: 1rem; padding: 0 .65rem;
+}
 .radio-option {
   align-items: start; color: var(--ink); display: grid; gap: .75rem;
   grid-template-columns: auto 1fr; padding: .6rem 0;
@@ -155,6 +161,90 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
 .option-moneyness { display: contents; }
 .chart-box { height: 260px; margin-top: 1rem; position: relative; }
 .chart-box canvas { height: 100% !important; width: 100% !important; }
+.monthly-performance-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.monthly-performance-report {
+  display: grid;
+  gap: 1rem;
+}
+.monthly-performance-report header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.monthly-performance-report h2 {
+  margin: 0;
+}
+.monthly-performance-chart-card,
+.monthly-performance-data-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: .65rem;
+  overflow: hidden;
+}
+.monthly-performance-chart-card {
+  display: grid;
+  gap: 1rem;
+  min-height: 360px;
+}
+.monthly-performance-chart-card .chart-card-header,
+.monthly-performance-data-card .data-card-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.monthly-performance-chart-card .chart-card-header strong,
+.monthly-performance-data-card .data-card-header strong {
+  font-size: 0.95rem;
+}
+.monthly-performance-chart-card .monthly-performance-chart {
+  height: 320px;
+  padding: 0 1rem 1rem;
+}
+.monthly-performance-chart-card .monthly-performance-chart canvas {
+  height: 100% !important;
+}
+.monthly-performance-data-card {
+  display: grid;
+  gap: 0;
+}
+.monthly-performance-data-card summary {
+  padding: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  font-weight: 700;
+}
+.monthly-performance-data-card summary::marker {
+  display: none;
+}
+.monthly-performance-data-card summary::after {
+  content: "▾";
+  margin-left: 0.75rem;
+  transition: transform 0.2s ease;
+}
+.monthly-performance-data-card[open] summary::after {
+  transform: rotate(180deg);
+}
+.monthly-performance-data-card[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+.monthly-performance-data-card .table-wrap {
+  padding: 1rem;
+}
+.monthly-performance-data-card .table-wrap table {
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .monthly-performance-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .moneyness-ITM { background: #dff3eb; color: #00634a; }
 .moneyness-ATM { background: #fff4d6; color: #795800; }
 .moneyness-OTM { background: #e7edf1; color: var(--muted); }

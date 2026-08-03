@@ -50,14 +50,17 @@
     </label>
   </fieldset>
 
-  <label>Intervalo entre leituras (segundos)
-    <input type="number" name="poll_interval_seconds"
-           min="{{ min_interval }}" max="{{ max_interval }}" step="1"
-           value="{{ settings.poll_interval_seconds }}" required>
-  </label>
-  <p class="form-help">
-    A alteração será aplicada pelo coletor contínuo no próximo ciclo de leitura.
-  </p>
+  <fieldset>
+    <legend>Intervalo entre leituras</legend>
+    <label>Intervalo entre leituras (segundos)
+      <input type="number" name="poll_interval_seconds"
+             min="{{ min_interval }}" max="{{ max_interval }}" step="1"
+             value="{{ settings.poll_interval_seconds }}" required>
+    </label>
+    <p class="form-help">
+      A alteração será aplicada pelo coletor contínuo no próximo ciclo de leitura.
+    </p>
+  </fieldset>
 
   <fieldset>
     <legend>Alertas</legend>
