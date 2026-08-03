@@ -1,12 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Transações{% endblock %}
 {% block header_controls %}
-<a class="button button-primary" href="{{ url_for('portfolio.new_transaction') }}">Nova transação</a>
-{% endblock %}
-{% block content %}
-<form class="filters" method="get">
+<form class="filters header-controls" method="get" data-auto-submit>
   <label>Status
-    <select name="status" onchange="this.form.submit()">
+    <select name="status">
       <option value="all" {{ 'selected' if selected_status == 'all' }}>Todas</option>
       {% for status in transaction_statuses %}
         <option value="{{ status.value }}" {{ 'selected' if selected_status == status.value }}>{{ 'Abertas' if status.value == 'open' else 'Fechadas' }}</option>
@@ -14,7 +11,7 @@
     </select>
   </label>
   <label>Corretora
-    <select name="broker" onchange="this.form.submit()">
+    <select name="broker">
       <option value="">Todas</option>
       {% for broker in brokers %}
         <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
@@ -22,7 +19,7 @@
     </select>
   </label>
   <label>Posição
-    <select name="position_kind" onchange="this.form.submit()">
+    <select name="position_kind">
       <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
       {% for kind in position_kinds %}
         <option value="{{ kind.value }}" {{ 'selected' if selected_kind == kind.value }}>{{ 'Real' if kind.value == 'real' else 'Hipotética' }}</option>
@@ -31,7 +28,9 @@
   </label>
   <a class="button" href="{{ url_for('portfolio.transactions') }}">Limpar</a>
 </form>
-
+<a class="button button-primary" href="{{ url_for('portfolio.new_transaction') }}">Nova transação</a>
+{% endblock %}
+{% block content %}
 <div class="table-wrap">
   <table>
     <thead>

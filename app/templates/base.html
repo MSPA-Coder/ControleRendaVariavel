@@ -30,10 +30,10 @@
   <div class="app-shell">
     <header class="navbar">
       <div class="navbar-row">
-        <a class="logo" href="{{ url_for('portfolio.index') }}">
+        <div class="logo">
           <span class="logo-mark" aria-hidden="true">CRV</span>
           <span class="logo-text">Renda Variável</span>
-        </a>
+        </div>
 
         <div class="mega-wrap" data-group="carteira">
           <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.index', 'options.index', 'portfolio.transactions', 'portfolio.dividends'] }}" type="button" data-nav-group="carteira" aria-controls="mega-carteira" aria-expanded="false">
@@ -152,23 +152,20 @@
           {% endif %}
           {% if crumb[1] %}<span class="nav-current-page">{{ crumb[1] }}</span>{% endif %}
           <span class="nav-username">{{ current_user.username }}</span>
-          <span class="avatar" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
+          <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Sair</button></form>
         </div>
         {% endif %}
       </div>
     </header>
     <div class="nav-scrim" data-nav-scrim hidden></div>
 
+    {% set header_controls_html %}{% block header_controls %}{% endblock %}{% endset %}
     <div class="app-main">
+      {% if header_controls_html|trim %}
       <header class="topbar"><nav aria-label="Barra de ferramentas">
-        {% block header_controls %}{% endblock %}
-        {% if current_user.is_authenticated %}
-          <span class="nav-user">
-            <span>{{ current_user.username }}</span>
-            <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Sair</button></form>
-          </span>
-        {% endif %}
+        {{ header_controls_html }}
       </nav></header>
+      {% endif %}
       <main>
         {% for category, message in get_flashed_messages(with_categories=true) %}<div class="flash flash-{{ category }}" role="status">{{ message }}</div>{% endfor %}
         {% block content %}{% endblock %}
