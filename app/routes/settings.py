@@ -16,7 +16,7 @@ from app.collector_settings import (
 from app.models import AppSetting, CollectorMode, Ticker
 from app.pricing_settings import parse_pricing_settings
 from app.routes import bp
-from app.routes.helpers import ticker_records
+from app.routes.helpers import quote_stale_after_seconds, ticker_records
 
 
 @bp.route("/settings", methods=["GET", "POST"])
@@ -37,6 +37,20 @@ def settings() -> ResponseReturnValue:
                 db.session.get(Ticker, benchmark_ticker_id) is None
             ):
                 raise ValueError("Selecione um ticker cadastrado como referência para o Beta.")
+            raw_stale_alert = request.form.get("stale_alert_seconds", "").strip()
+            if raw_stale_alert:
+                try:
+                    stale_alert_seconds = int(raw_stale_alert)
+                except ValueError as exc:
+                    raise ValueError(
+                        "O alerta de cotação desatualizada deve ser um número inteiro de segundos."
+                    ) from exc
+                if not 1 <= stale_alert_seconds <= 86400:
+                    raise ValueError(
+                        "O alerta de cotação desatualizada deve ficar entre 1 e 86400 segundos."
+                    )
+            else:
+                stale_alert_seconds = None
         except ValueError as exc:
             db.session.rollback()
             flash(str(exc), "error")
@@ -57,17 +71,22 @@ def settings() -> ResponseReturnValue:
             with suppress(ValueError, TypeError):
                 raw_id = request.form.get("benchmark_ticker_id", "").strip()
                 submitted.benchmark_ticker_id = int(raw_id) if raw_id else None
+            with suppress(ValueError, TypeError):
+                raw_stale = request.form.get("stale_alert_seconds", "").strip()
+                submitted.stale_alert_seconds = int(raw_stale) if raw_stale else None
             return render_template(
                 "settings.html",
                 settings=submitted,
                 min_interval=MIN_POLL_INTERVAL_SECONDS,
                 max_interval=MAX_POLL_INTERVAL_SECONDS,
                 tickers=ticker_records(),
+                effective_stale_alert_seconds=quote_stale_after_seconds(),
             ), 422
         current_settings.collector_mode = data.collector_mode
         current_settings.poll_interval_seconds = data.poll_interval_seconds
         current_settings.risk_free_rate_annual = pricing_data.risk_free_rate_annual
         current_settings.benchmark_ticker_id = benchmark_ticker_id
+        current_settings.stale_alert_seconds = stale_alert_seconds
         db.session.commit()
         flash("Configurações do coletor atualizadas.", "success")
         return redirect(url_for("portfolio.settings"))
@@ -79,4 +98,5 @@ def settings() -> ResponseReturnValue:
         min_interval=MIN_POLL_INTERVAL_SECONDS,
         max_interval=MAX_POLL_INTERVAL_SECONDS,
         tickers=ticker_records(),
+        effective_stale_alert_seconds=quote_stale_after_seconds(),
     )

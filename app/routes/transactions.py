@@ -6,11 +6,11 @@ from decimal import Decimal
 
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
-from sqlalchemy import select
+from sqlalchemy import case, select
 
 from app import db
 from app.domain import operation_result
-from app.models import Broker, PositionKind, Side, Ticker, Transaction
+from app.models import Broker, PositionKind, Side, Ticker, Transaction, TransactionStatus
 from app.routes import bp
 from app.routes.helpers import broker_records, ticker_records
 from app.validation import parse_finite_decimal
@@ -81,18 +81,25 @@ def _build_transaction(data: TransactionInput) -> Transaction:
     )
     fields = asdict(data)
     fields["result"] = result
-    return Transaction(**fields)
+    return Transaction(status=TransactionStatus.CLOSED, **fields)
 
 
 @bp.get("/transactions")
 def transactions() -> str:
     position_kind_raw = request.args.get("position_kind", "all")
     broker = request.args.get("broker") or None
+    status_raw = request.args.get("status", "all")
+    status_order = case((Transaction.status == TransactionStatus.OPEN, 0), else_=1)
     statement = (
         select(Transaction)
         .join(Transaction.broker_ref)
         .join(Transaction.ticker_ref)
-        .order_by(Transaction.closed_on.desc(), Transaction.id.desc())
+        .order_by(
+            status_order,
+            Transaction.closed_on.desc(),
+            Transaction.opened_on.desc(),
+            Transaction.id.desc(),
+        )
     )
     if position_kind_raw != "all":
         try:
@@ -102,13 +109,24 @@ def transactions() -> str:
             position_kind_raw = "all"
     if broker:
         statement = statement.where(Broker.name == broker)
+    if status_raw != "all":
+        try:
+            status = TransactionStatus(status_raw)
+            statement = statement.where(Transaction.status == status)
+        except ValueError:
+            status_raw = "all"
     records = list(db.session.scalars(statement))
-    gains = [tx.result for tx in records if tx.result > 0]
-    losses = [tx.result for tx in records if tx.result < 0]
+    # KPIs de performance só fazem sentido para transações já encerradas —
+    # linhas abertas (status=OPEN) não têm resultado realizado ainda, então
+    # ficam de fora dessas contas independentemente do filtro de status
+    # escolhido acima (que afeta só o que aparece na tabela).
+    closed_records = [tx for tx in records if tx.status == TransactionStatus.CLOSED]
+    gains = [tx.result for tx in closed_records if tx.result is not None and tx.result > 0]
+    losses = [tx.result for tx in closed_records if tx.result is not None and tx.result < 0]
     gain = sum(gains, Decimal("0"))
     loss = sum(losses, Decimal("0"))
     wins = len(gains)
-    win_rate = Decimal(wins) / Decimal(len(records)) if records else None
+    win_rate = Decimal(wins) / Decimal(len(closed_records)) if closed_records else None
     profit_factor = (gain / abs(loss)) if loss != 0 else None
     avg_gain = gain / Decimal(len(gains)) if gains else None
     avg_loss = abs(loss) / Decimal(len(losses)) if losses else None
@@ -117,10 +135,9 @@ def transactions() -> str:
     # de cada sinal; caso contrário fica sem sentido (nunca ganhou, ou
     # nunca perdeu, então não há uma "razão" a expressar).
     payoff_ratio = (avg_gain / avg_loss) if avg_gain is not None and avg_loss else None
+    days_held = [tx.days_held for tx in closed_records if tx.days_held is not None]
     avg_days_held = (
-        Decimal(sum(tx.days_held for tx in records)) / Decimal(len(records))
-        if records
-        else None
+        Decimal(sum(days_held)) / Decimal(len(days_held)) if days_held else None
     )
     return render_template(
         "transactions.html",
@@ -128,7 +145,9 @@ def transactions() -> str:
         brokers=broker_records(),
         selected_broker=broker or "",
         selected_kind=position_kind_raw,
+        selected_status=status_raw,
         position_kinds=PositionKind,
+        transaction_statuses=TransactionStatus,
         gain=gain,
         loss=loss,
         result=gain + loss,
@@ -172,8 +191,16 @@ def create_transaction() -> ResponseReturnValue:
 
 
 @bp.get("/transactions/<int:transaction_id>/edit")
-def edit_transaction(transaction_id: int) -> str:
+def edit_transaction(transaction_id: int) -> ResponseReturnValue:
     transaction = db.get_or_404(Transaction, transaction_id)
+    if transaction.status == TransactionStatus.OPEN:
+        if transaction.source_position_id is not None:
+            flash("Essa transação está aberta; edite-a pela posição em Carteira.", "error")
+            return redirect(
+                url_for("portfolio.edit_position", position_id=transaction.source_position_id)
+            )
+        flash("Essa transação está aberta e não pode ser editada por aqui.", "error")
+        return redirect(url_for("portfolio.transactions"))
     return render_template(
         "transaction_form.html",
         transaction=transaction,
@@ -187,6 +214,9 @@ def edit_transaction(transaction_id: int) -> str:
 @bp.post("/transactions/<int:transaction_id>")
 def update_transaction(transaction_id: int) -> ResponseReturnValue:
     transaction = db.get_or_404(Transaction, transaction_id)
+    if transaction.status == TransactionStatus.OPEN:
+        flash("Essa transação está aberta; edite-a pela posição em Carteira.", "error")
+        return redirect(url_for("portfolio.transactions"))
     try:
         data = _parse_form()
     except ValueError as exc:
@@ -211,6 +241,9 @@ def update_transaction(transaction_id: int) -> ResponseReturnValue:
 @bp.post("/transactions/<int:transaction_id>/delete")
 def delete_transaction(transaction_id: int) -> ResponseReturnValue:
     transaction = db.get_or_404(Transaction, transaction_id)
+    if transaction.status == TransactionStatus.OPEN:
+        flash("Essa transação está aberta; exclua a posição em Carteira.", "error")
+        return redirect(url_for("portfolio.transactions"))
     db.session.delete(transaction)
     db.session.commit()
     flash("Transação excluída.", "success")

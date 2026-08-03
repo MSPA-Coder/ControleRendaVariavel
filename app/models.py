@@ -51,6 +51,11 @@ class OptionType(StrEnum):
     PUT = "put"
 
 
+class TransactionStatus(StrEnum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+
 class User(Base, UserMixin):  # type: ignore[misc]
     __tablename__ = "users"
 
@@ -91,6 +96,10 @@ class AppSetting(Base):
             "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="risk_free_rate_annual_finite",
         ),
+        CheckConstraint(
+            "stale_alert_seconds IS NULL OR stale_alert_seconds BETWEEN 1 AND 86400",
+            name="stale_alert_seconds_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
@@ -111,6 +120,11 @@ class AppSetting(Base):
     ``routes.quotes`` para o lançamento manual de cotações. ``None``
     desativa o cálculo de Beta em todos os relatórios de risco."""
     benchmark_ticker_ref: Mapped[Ticker | None] = relationship()
+    stale_alert_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Segundos sem leitura para considerar uma cotação desatualizada,
+    definido manualmente pelo usuário em Configurações. ``None`` mantém o
+    cálculo automático (``routes.helpers.quote_stale_after_seconds``),
+    baseado no intervalo de coleta configurado."""
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -385,24 +399,36 @@ class OptionQuote(Base):
 
 
 class Transaction(Base):
-    """Uma operação encerrada (compra + venda), com o resultado já
-    realizado — item 5/Fase A: "registro de operações de venda
-    (realizadas), não apenas posições abertas". Alimenta win rate,
-    profit factor, payoff ratio e tempo médio em posição (Fase C).
+    """Uma operação de renda variável: aberta (espelha uma ``Position`` em
+    aberto) ou fechada (compra + venda, com o resultado já realizado —
+    item 5/Fase A: "registro de operações de venda (realizadas), não
+    apenas posições abertas"). As fechadas alimentam win rate, profit
+    factor, payoff ratio e tempo médio em posição (Fase C).
 
     Não é um livro-razão completo de lotes/FIFO: cada linha representa
-    um ciclo completo de abertura e fechamento, no mesmo espírito de
-    ``Position`` (que representa o estado atual em aberto). Uma posição
-    fechada parcialmente deve ser lançada como duas transações com
-    quantidades proporcionais, se for o caso.
+    um ciclo completo de abertura (e, quando fechada, também de
+    fechamento), no mesmo espírito de ``Position``. Uma posição fechada
+    parcialmente deve ser lançada como duas transações com quantidades
+    proporcionais, se for o caso.
+
+    Toda ``Position`` criada em Carteira ganha automaticamente uma linha
+    aqui com ``status=OPEN`` (ver ``app.position_closure``), para que a
+    aba Transações mostre tanto as posições abertas quanto as já
+    encerradas, filtráveis pelo status. Ao encerrar a posição, a mesma
+    linha é atualizada para ``status=CLOSED`` em vez de criar uma nova.
     """
 
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
-        CheckConstraint("exit_price >= 0", name="exit_price_non_negative"),
-        CheckConstraint("closed_on >= opened_on", name="closed_on_not_before_opened_on"),
+        CheckConstraint(
+            "exit_price IS NULL OR exit_price >= 0", name="exit_price_non_negative"
+        ),
+        CheckConstraint(
+            "closed_on IS NULL OR closed_on >= opened_on",
+            name="closed_on_not_before_opened_on",
+        ),
         CheckConstraint(
             "quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="quantity_finite",
@@ -412,14 +438,23 @@ class Transaction(Base):
             name="average_cost_finite",
         ),
         CheckConstraint(
-            "exit_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            "exit_price IS NULL OR exit_price NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="exit_price_finite",
         ),
         CheckConstraint(
-            "result NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            "result IS NULL OR result NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="result_finite",
         ),
         CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
+        CheckConstraint(
+            "(status = 'OPEN' AND closed_on IS NULL AND exit_price IS NULL "
+            "AND result IS NULL) OR "
+            "(status = 'CLOSED' AND closed_on IS NOT NULL AND exit_price IS NOT NULL "
+            "AND result IS NOT NULL)",
+            name="status_fields_consistency",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -431,19 +466,29 @@ class Transaction(Base):
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
-    exit_price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
     side: Mapped[Side] = mapped_column(Enum(Side, name="position_side"), default=Side.BUY)
     opened_on: Mapped[date] = mapped_column(Date)
-    closed_on: Mapped[date] = mapped_column(Date, index=True)
+    closed_on: Mapped[date | None] = mapped_column(Date, index=True)
     result_mode: Mapped[str] = mapped_column(String(1), default="L")
-    result: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    result: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
     """Resultado realizado, calculado no momento do fechamento (mesma
     fórmula de ``domain.operation_result``) e persistido — não recalculado
-    depois, pois é um fato histórico."""
+    depois, pois é um fato histórico. ``None`` enquanto a transação estiver
+    aberta (``status == TransactionStatus.OPEN``)."""
+    status: Mapped[TransactionStatus] = mapped_column(
+        Enum(TransactionStatus, name="transaction_status"), default=TransactionStatus.CLOSED
+    )
     position_kind: Mapped[PositionKind] = mapped_column(
         Enum(PositionKind, name="position_kind"), default=PositionKind.REAL
     )
     source_position_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    """Enquanto ``status == OPEN``, é o id da ``Position`` espelhada por esta
+    linha (usado para localizá-la e atualizá-la ao editar/encerrar a
+    posição). Para linhas fechadas automaticamente a partir de uma posição
+    encerrada, preserva esse mesmo id como referência histórica, mesmo após
+    a posição ser excluída. ``None`` para transações lançadas manualmente,
+    sem posição de origem."""
     notes: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -463,7 +508,9 @@ class Transaction(Base):
         return self.ticker_ref.currency
 
     @property
-    def days_held(self) -> int:
+    def days_held(self) -> int | None:
+        if self.closed_on is None:
+            return None
         return (self.closed_on - self.opened_on).days
 
 
