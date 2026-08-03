@@ -28,6 +28,7 @@ def test_rtd_service_api_reports_unavailable_controller_without_500(
         "available": False,
         "error": "indisponível",
         "running": False,
+        "status": "unavailable",
     }
 
 
@@ -37,11 +38,13 @@ def test_rtd_service_api_toggle_accepts_valid_payload(
     service = Mock()
     service.is_running = True
     service.available = True
+    service.status = "running"
     app.extensions["rtd_service"] = service
 
     response = auth_client.post("/api/rtd-service", json={"enabled": True})
 
     assert response.status_code == 200
+    assert response.get_json()["status"] == "running"
     service.start.assert_called_once_with()
 
 

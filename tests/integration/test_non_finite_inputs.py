@@ -144,6 +144,7 @@ def test_settings_reject_non_finite_risk_free_rate(
     response = auth_client.post(
         "/settings",
         data={
+            "operational_profile": "test",
             "collector_mode": "excel",
             "poll_interval_seconds": "2",
             "risk_free_rate_annual": value,

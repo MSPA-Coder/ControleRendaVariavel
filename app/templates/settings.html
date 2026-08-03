@@ -4,6 +4,33 @@
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <fieldset>
+    <legend>Perfil operacional</legend>
+    <label class="radio-option">
+      <input type="radio" name="operational_profile" value="test"
+             {{ 'checked' if operational_profile == 'test' }}
+             {{ 'disabled' if operational_profile is none }}>
+      <span>
+        <strong>Desenvolvimento/Testes</strong>
+        <small>Não inicia Docker, controlador ou coletor no logon. Ao executar o início manual, o RTD permanece desligado até ser ativado na aplicação.</small>
+      </span>
+    </label>
+    <label class="radio-option">
+      <input type="radio" name="operational_profile" value="production"
+             {{ 'checked' if operational_profile == 'production' }}
+             {{ 'disabled' if operational_profile is none }}>
+      <span>
+        <strong>Produção automática</strong>
+        <small>No logon, inicia a pilha e o controlador; o coletor é supervisionado e retoma quando o Profit/RTD estiver disponível.</small>
+      </span>
+    </label>
+    {% if operational_profile is none %}
+      <p class="form-help" role="status">
+        Perfil indisponível: o controlador RTD do Windows não respondeu. Nenhuma opção foi presumida.
+      </p>
+    {% endif %}
+  </fieldset>
+
+  <fieldset>
     <legend>Coletor de cotações</legend>
     <label class="radio-option">
       <input type="radio" name="collector_mode" value="excel"
@@ -79,7 +106,8 @@
 
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">Salvar configurações</button>
+    <button class="button button-primary" type="submit"
+            {{ 'disabled' if operational_profile is none }}>Salvar configurações</button>
   </div>
 </form>
 {% endblock %}

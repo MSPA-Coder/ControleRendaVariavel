@@ -93,9 +93,19 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
     const rtdApi = rtdToggle.dataset.rtdApi || "/api/rtd-service";
 
-    const setRtdState = (running) => {
+    const rtdStatusLabels = {
+      waiting_for_profit: "RTD aguardando Profit",
+      starting: "RTD iniciando",
+      backoff: "RTD em nova tentativa",
+      error: "RTD com erro",
+      unavailable: "RTD indisponível",
+    };
+    const setRtdState = (running, status = "") => {
       rtdToggle.checked = running;
-      if (rtdLabel) rtdLabel.textContent = `RTD ${running ? "ligado" : "desligado"}`;
+      if (rtdLabel) {
+        rtdLabel.textContent = rtdStatusLabels[status]
+          || `RTD ${running ? "ligado" : "desligado"}`;
+      }
     };
 
     const refreshRtdService = async () => {
@@ -108,9 +118,10 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "RTD unavailable.");
         rtdToggle.disabled = !payload.available;
-        setRtdState(Boolean(payload.running));
+        setRtdState(Boolean(payload.running), payload.status);
       } catch {
         rtdToggle.disabled = true;
+        setRtdState(false, "unavailable");
       }
     };
 
@@ -128,7 +139,7 @@
           body: JSON.stringify({ enabled }),
         });
         const payload = await response.json();
-        setRtdState(Boolean(payload.running));
+        setRtdState(Boolean(payload.running), payload.status);
         if (!response.ok) throw new Error(payload.error || "Falha ao alterar o RTD.");
       } catch (error) {
         setRtdState(!enabled);
@@ -141,10 +152,6 @@
     rtdToggle.addEventListener("change", () => changeRtdState(rtdToggle.checked));
     refreshRtdService();
     window.setInterval(refreshRtdService, 10_000);
-    if (!sessionStorage.getItem("rtd-auto-start-attempted")) {
-      sessionStorage.setItem("rtd-auto-start-attempted", "true");
-      if (!rtdToggle.checked && !rtdToggle.disabled) changeRtdState(true);
-    }
   }
 
   const heartbeat = document.querySelector("[data-collector-heartbeat]");

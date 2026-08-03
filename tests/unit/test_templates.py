@@ -22,6 +22,7 @@ from app import create_app
         "quotes.html",
         "risk.html",
         "performance.html",
+        "settings.html",
     ],
 )
 def test_main_templates_compile(template_name: str) -> None:
