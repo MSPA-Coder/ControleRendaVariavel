@@ -4,6 +4,33 @@
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <fieldset>
+    <legend>Perfil operacional</legend>
+    <label class="radio-option">
+      <input type="radio" name="operational_profile" value="test"
+             {{ 'checked' if operational_profile == 'test' }}
+             {{ 'disabled' if operational_profile is none }}>
+      <span>
+        <strong>Desenvolvimento/Testes</strong>
+        <small>Não inicia Docker, controlador ou coletor no logon. Ao executar o início manual, o RTD permanece desligado até ser ativado na aplicação.</small>
+      </span>
+    </label>
+    <label class="radio-option">
+      <input type="radio" name="operational_profile" value="production"
+             {{ 'checked' if operational_profile == 'production' }}
+             {{ 'disabled' if operational_profile is none }}>
+      <span>
+        <strong>Produção automática</strong>
+        <small>No logon, inicia a pilha e o controlador; o coletor é supervisionado e retoma quando o Profit/RTD estiver disponível.</small>
+      </span>
+    </label>
+    {% if operational_profile is none %}
+      <p class="form-help" role="status">
+        Perfil indisponível: o controlador RTD do Windows não respondeu. Nenhuma opção foi presumida.
+      </p>
+    {% endif %}
+  </fieldset>
+
+  <fieldset>
     <legend>Coletor de cotações</legend>
     <label class="radio-option">
       <input type="radio" name="collector_mode" value="excel"
@@ -23,14 +50,31 @@
     </label>
   </fieldset>
 
-  <label>Intervalo entre leituras (segundos)
-    <input type="number" name="poll_interval_seconds"
-           min="{{ min_interval }}" max="{{ max_interval }}" step="1"
-           value="{{ settings.poll_interval_seconds }}" required>
-  </label>
-  <p class="form-help">
-    A alteração será aplicada pelo coletor contínuo no próximo ciclo de leitura.
-  </p>
+  <fieldset>
+    <legend>Intervalo entre leituras</legend>
+    <label>Intervalo entre leituras (segundos)
+      <input type="number" name="poll_interval_seconds"
+             min="{{ min_interval }}" max="{{ max_interval }}" step="1"
+             value="{{ settings.poll_interval_seconds }}" required>
+    </label>
+    <p class="form-help">
+      A alteração será aplicada pelo coletor contínuo no próximo ciclo de leitura.
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Alertas</legend>
+    <label>Alertar cotação desatualizada após (segundos)
+      <input type="number" name="stale_alert_seconds" min="1" max="86400" step="1"
+             value="{{ settings.stale_alert_seconds if settings.stale_alert_seconds is not none else '' }}"
+             placeholder="automático">
+    </label>
+    <p class="form-help">
+      Deixe em branco para o cálculo automático (pelo menos duas vezes o
+      intervalo de leitura acima, mais uma margem de segurança). Com o
+      intervalo atual, o valor efetivo é de {{ effective_stale_alert_seconds }} segundos.
+    </p>
+  </fieldset>
 
   <fieldset>
     <legend>Precificação de opções</legend>
@@ -57,15 +101,16 @@
     </label>
     <p class="form-help">
       Usado no cálculo do Beta no relatório de Risco (Fase D). Tipicamente
-      um índice cadastrado manualmente em Tabelas (ex.: Ibovespa), sem
-      coletor automático — alimente as cotações históricas dele em
+      um índice cadastrado manualmente em Cadastros → Tickers (ex.: Ibovespa),
+      sem coletor automático — alimente as cotações históricas dele em
       Cotações.
     </p>
   </fieldset>
 
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">Salvar configurações</button>
+    <button class="button button-primary" type="submit"
+            {{ 'disabled' if operational_profile is none }}>Salvar configurações</button>
   </div>
 </form>
 {% endblock %}

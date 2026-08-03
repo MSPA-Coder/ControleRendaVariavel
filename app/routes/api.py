@@ -55,10 +55,16 @@ def rtd_service_api() -> ResponseReturnValue:
                 service.start()
             else:
                 service.stop()
-        return jsonify(running=service.is_running, available=service.available)
+        return jsonify(
+            running=service.is_running,
+            available=service.available,
+            status=service.status,
+        )
     except (OSError, RuntimeError) as exc:
         current_app.logger.warning("Não foi possível acessar o coletor RTD: %s", exc)
-        return jsonify(error=str(exc), running=False, available=False), 503
+        return jsonify(
+            error=str(exc), running=False, available=False, status="unavailable"
+        ), 503
 
 
 @bp.get("/api/collector-heartbeat")

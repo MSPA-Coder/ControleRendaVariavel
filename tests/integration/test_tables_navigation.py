@@ -3,22 +3,61 @@ from __future__ import annotations
 from flask.testing import FlaskClient
 
 
-def test_tables_keep_catalogs_in_an_exclusive_native_accordion(
-    auth_client: FlaskClient,
-) -> None:
+def test_each_reference_table_has_its_own_page(auth_client: FlaskClient) -> None:
+    pages = {
+        "/tables/brokers": "Corretoras",
+        "/tables/tickers": "Tickers",
+        "/tables/options/expirations": "Vencimentos de calls e puts",
+        "/tables/options/contracts": "Contratos de opções",
+    }
+    for url, heading in pages.items():
+        response = auth_client.get(url)
+        assert response.status_code == 200, url
+        html = response.get_data(as_text=True)
+        assert heading in html
+
+
+def test_bare_tables_urls_redirect_to_the_default_page(auth_client: FlaskClient) -> None:
     response = auth_client.get("/tables")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/tables/brokers")
 
-    assert response.status_code == 200
-    html = response.get_data(as_text=True)
-    for section in ("brokers", "tickers", "expirations", "option-contracts"):
-        assert f'id="{section}" name="reference-table"' in html
+    response = auth_client.get("/tables/options")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/tables/options/expirations")
 
 
-def test_broker_save_returns_to_its_catalog_section(auth_client: FlaskClient) -> None:
+def test_broker_save_returns_to_the_brokers_page(auth_client: FlaskClient) -> None:
     response = auth_client.post(
         "/tables/brokers",
         data={"name": "Genial", "acronym": "GE"},
     )
 
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/tables#brokers")
+    assert response.headers["Location"].endswith("/tables/brokers")
+
+
+def test_ticker_save_returns_to_the_tickers_page(auth_client: FlaskClient) -> None:
+    response = auth_client.post(
+        "/tables/tickers",
+        data={
+            "symbol": "ITUB4",
+            "trading_name": "Itaú Unibanco PN",
+            "market": "B3",
+            "rtd_market_code": "B",
+            "currency": "BRL",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/tables/tickers")
+
+
+def test_expiration_save_returns_to_the_expirations_page(auth_client: FlaskClient) -> None:
+    response = auth_client.post(
+        "/tables/options/expirations",
+        data={"call_code": "2027A", "put_code": "2027M", "exercise_date": "2027-01-18"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/tables/options/expirations")

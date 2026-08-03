@@ -1,12 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Proventos{% endblock %}
 {% block header_controls %}
-<a class="button button-primary" href="{{ url_for('portfolio.new_dividend') }}">Novo provento</a>
-{% endblock %}
-{% block content %}
-<form class="filters" method="get">
+<form class="filters header-controls" method="get" data-auto-submit>
   <label>Corretora
-    <select name="broker" onchange="this.form.submit()">
+    <select name="broker">
       <option value="">Todas</option>
       {% for broker in brokers %}
         <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
@@ -15,7 +12,9 @@
   </label>
   <a class="button" href="{{ url_for('portfolio.dividends') }}">Limpar</a>
 </form>
-
+<a class="button button-primary" href="{{ url_for('portfolio.new_dividend') }}">Novo provento</a>
+{% endblock %}
+{% block content %}
 <div class="table-wrap">
   <table>
     <thead><tr><th>Corr.</th><th>Ticker</th><th>Valor</th><th>Data de pagamento</th><th>Notas</th><th></th></tr></thead>

@@ -71,6 +71,38 @@ Para encerrar o coletor, o Excel associado e os containers:
 O Profit deve estar aberto, autenticado e com RTD habilitado. O coletor mantem
 uma instancia privada do Excel e nunca grava em `Trades.xlsm`.
 
+### Perfil operacional do host
+
+O perfil local em `.docker-local/operational-profile` e gerenciado pela aba
+Settings: `test` nao inicia Docker, Profit ou controlador no logon; `production`
+habilita a tarefa agendada **ControleRendaVariavel RTD Production** para o
+usuario conectado. A tarefa aguarda o Docker Desktop, executa `docker compose
+up -d` e mantem o controlador RTD em primeiro plano, com ate 999 retentativas
+de um minuto apos falhas. Ela nao usa privilegios elevados e nao roda fora da
+sessao interativa, necessaria ao COM/Profit.
+
+No perfil `test`, use `scripts/start.ps1` como entrada oficial: ele sobe a pilha
+e o controlador, mas deixa o coletor desligado ate a ativacao manual na
+interface. Assim o Profit pode permanecer fechado sem gerar tentativas ou erros
+RTD. No perfil `production`, o supervisor espera um Profit interativo estar
+aberto e estavel antes de iniciar o coletor; quedas do coletor usam retentativas
+com espera progressiva.
+
+Ao mudar de `production` para `test`, o coletor e a inicializacao futura sao
+desligados, mas os containers da sessao atual continuam ativos. Use
+`scripts/stop.ps1` para encerra-los. A mudanca inversa habilita a tarefa e passa
+a supervisionar o coletor imediatamente, sem iniciar o Profit automaticamente.
+
+O backend usa a interface reproduzivel abaixo para trocar o modo; ela nunca
+persiste PID nem encerra processos que nao tenham sido autenticados e validados
+como o controlador deste projeto:
+
+```powershell
+.\scripts\rtd-automation.ps1 -Action Enable
+.\scripts\rtd-automation.ps1 -Action Disable
+.\scripts\rtd-automation.ps1 -Action Status
+```
+
 ## Operacao
 
 - Todas as rotas, exceto `/login` e `/health`, exigem autenticacao.

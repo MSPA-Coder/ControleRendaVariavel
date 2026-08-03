@@ -1,36 +1,43 @@
 (() => {
-  const navFlyout = document.getElementById("nav-flyout");
+  const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");
-  const navButtons = document.querySelectorAll("[data-nav-group]");
 
-  if (navFlyout && navScrim && navButtons.length) {
-    const panels = navFlyout.querySelectorAll("[data-nav-panel]");
+  if (megaWraps.length && navScrim) {
     const closeNavigation = () => {
-      navFlyout.hidden = true;
-      navScrim.hidden = true;
-      navButtons.forEach((button) => button.setAttribute("aria-expanded", "false"));
-    };
-    const openNavigation = (group) => {
-      panels.forEach((panel) => { panel.hidden = panel.dataset.navPanel !== group; });
-      navFlyout.hidden = false;
-      navScrim.hidden = false;
-      navButtons.forEach((button) => {
-        button.setAttribute("aria-expanded", String(button.dataset.navGroup === group));
+      megaWraps.forEach((wrap) => {
+        const button = wrap.querySelector(".grp-btn");
+        const mega = wrap.querySelector(".mega");
+        if (button) {
+          button.classList.remove("open");
+          button.setAttribute("aria-expanded", "false");
+        }
+        if (mega) mega.classList.remove("show");
       });
+      navScrim.hidden = true;
+    };
+    const openNavigation = (wrap) => {
+      const button = wrap.querySelector(".grp-btn");
+      const mega = wrap.querySelector(".mega");
+      if (button) {
+        button.classList.add("open");
+        button.setAttribute("aria-expanded", "true");
+      }
+      if (mega) mega.classList.add("show");
+      navScrim.hidden = false;
     };
 
-    navButtons.forEach((button) => {
+    megaWraps.forEach((wrap) => {
+      const button = wrap.querySelector(".grp-btn");
+      if (!button) return;
       button.addEventListener("click", () => {
-        if (!navFlyout.hidden && button.getAttribute("aria-expanded") === "true") {
-          closeNavigation();
-        } else {
-          openNavigation(button.dataset.navGroup);
-        }
+        const isOpen = button.classList.contains("open");
+        closeNavigation();
+        if (!isOpen) openNavigation(wrap);
       });
     });
     navScrim.addEventListener("click", closeNavigation);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !navFlyout.hidden) closeNavigation();
+      if (event.key === "Escape" && !navScrim.hidden) closeNavigation();
     });
   }
 
@@ -86,9 +93,19 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
     const rtdApi = rtdToggle.dataset.rtdApi || "/api/rtd-service";
 
-    const setRtdState = (running) => {
+    const rtdStatusLabels = {
+      waiting_for_profit: "RTD aguardando Profit",
+      starting: "RTD iniciando",
+      backoff: "RTD em nova tentativa",
+      error: "RTD com erro",
+      unavailable: "RTD indisponível",
+    };
+    const setRtdState = (running, status = "") => {
       rtdToggle.checked = running;
-      if (rtdLabel) rtdLabel.textContent = `RTD ${running ? "ligado" : "desligado"}`;
+      if (rtdLabel) {
+        rtdLabel.textContent = rtdStatusLabels[status]
+          || `RTD ${running ? "ligado" : "desligado"}`;
+      }
     };
 
     const refreshRtdService = async () => {
@@ -101,9 +118,10 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "RTD unavailable.");
         rtdToggle.disabled = !payload.available;
-        setRtdState(Boolean(payload.running));
+        setRtdState(Boolean(payload.running), payload.status);
       } catch {
         rtdToggle.disabled = true;
+        setRtdState(false, "unavailable");
       }
     };
 
@@ -121,7 +139,7 @@
           body: JSON.stringify({ enabled }),
         });
         const payload = await response.json();
-        setRtdState(Boolean(payload.running));
+        setRtdState(Boolean(payload.running), payload.status);
         if (!response.ok) throw new Error(payload.error || "Falha ao alterar o RTD.");
       } catch (error) {
         setRtdState(!enabled);
@@ -134,10 +152,6 @@
     rtdToggle.addEventListener("change", () => changeRtdState(rtdToggle.checked));
     refreshRtdService();
     window.setInterval(refreshRtdService, 10_000);
-    if (!sessionStorage.getItem("rtd-auto-start-attempted")) {
-      sessionStorage.setItem("rtd-auto-start-attempted", "true");
-      if (!rtdToggle.checked && !rtdToggle.disabled) changeRtdState(true);
-    }
   }
 
   const heartbeat = document.querySelector("[data-collector-heartbeat]");

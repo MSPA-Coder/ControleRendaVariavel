@@ -125,8 +125,12 @@ def poll_interval_seconds() -> int:
 
 
 def quote_stale_after_seconds() -> int:
+    floor = poll_interval_seconds() * 2 + 5
+    settings = db.session.get(AppSetting, 1)
+    if settings is not None and settings.stale_alert_seconds is not None:
+        return max(settings.stale_alert_seconds, floor)
     configured = int(current_app.config["RTD_STALE_AFTER_SECONDS"])
-    return max(configured, poll_interval_seconds() * 2 + 5)
+    return max(configured, floor)
 
 
 def rtd_service() -> RtdService:

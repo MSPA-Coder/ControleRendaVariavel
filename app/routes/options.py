@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.option_portfolio import build_option_portfolio
 from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.routes.helpers import option_contracts, option_expirations, ticker_records
 from app.validation import parse_finite_decimal
 
 bp = Blueprint("options", __name__)
@@ -245,7 +246,24 @@ def delete_position(position_id: int) -> ResponseReturnValue:
 
 @bp.get("/tables/options")
 def tables() -> ResponseReturnValue:
-    return redirect(url_for("portfolio.tables", _anchor="expirations"))
+    """Alias de compatibilidade: Cadastros agora é uma página por tabela."""
+    return redirect(url_for("options.table_expirations"))
+
+
+@bp.get("/tables/options/expirations")
+def table_expirations() -> ResponseReturnValue:
+    return render_template("table_expirations.html", expirations=option_expirations())
+
+
+@bp.get("/tables/options/contracts")
+def table_contracts() -> ResponseReturnValue:
+    return render_template(
+        "table_contracts.html",
+        contracts=option_contracts(),
+        tickers=ticker_records(),
+        expirations=option_expirations(),
+        option_types=OptionType,
+    )
 
 
 @bp.post("/tables/options/expirations")
@@ -268,7 +286,7 @@ def create_expiration() -> ResponseReturnValue:
     except (KeyError, ValueError, IntegrityError):
         db.session.rollback()
         flash("Vencimento inválido ou já cadastrado.", "error")
-    return redirect(url_for("portfolio.tables", _anchor="expirations"))
+    return redirect(url_for("options.table_expirations"))
 
 
 @bp.post("/tables/options/expirations/<int:expiration_id>/delete")
@@ -280,7 +298,7 @@ def delete_expiration(expiration_id: int) -> ResponseReturnValue:
     except IntegrityError:
         db.session.rollback()
         flash("O vencimento possui contratos e não pode ser excluído.", "error")
-    return redirect(url_for("portfolio.tables", _anchor="expirations"))
+    return redirect(url_for("options.table_expirations"))
 
 
 @bp.post("/tables/options/expirations/<int:expiration_id>")
@@ -300,7 +318,7 @@ def update_expiration(expiration_id: int) -> ResponseReturnValue:
     except (KeyError, ValueError, IntegrityError):
         db.session.rollback()
         flash("Vencimento inválido ou duplicado.", "error")
-    return redirect(url_for("portfolio.tables", _anchor="expirations"))
+    return redirect(url_for("options.table_expirations"))
 
 
 @bp.post("/tables/options/contracts")
@@ -327,7 +345,7 @@ def create_contract() -> ResponseReturnValue:
     except (KeyError, ValueError, ArithmeticError, IntegrityError):
         db.session.rollback()
         flash("Contrato inválido ou ticker já associado a uma opção.", "error")
-    return redirect(url_for("portfolio.tables", _anchor="option-contracts"))
+    return redirect(url_for("options.table_contracts"))
 
 
 @bp.post("/tables/options/contracts/<int:contract_id>/delete")
@@ -339,7 +357,7 @@ def delete_contract(contract_id: int) -> ResponseReturnValue:
     except IntegrityError:
         db.session.rollback()
         flash("O contrato possui posições e não pode ser excluído.", "error")
-    return redirect(url_for("portfolio.tables", _anchor="option-contracts"))
+    return redirect(url_for("options.table_contracts"))
 
 
 @bp.post("/tables/options/contracts/<int:contract_id>")
@@ -361,4 +379,4 @@ def update_contract(contract_id: int) -> ResponseReturnValue:
     except (KeyError, ValueError, ArithmeticError, IntegrityError):
         db.session.rollback()
         flash("Contrato inválido ou ticker já associado a uma opção.", "error")
-    return redirect(url_for("portfolio.tables", _anchor="option-contracts"))
+    return redirect(url_for("options.table_contracts"))

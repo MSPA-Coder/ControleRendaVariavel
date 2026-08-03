@@ -10,7 +10,12 @@ from flask.typing import ResponseReturnValue
 from app import db
 from app.models import Broker, Position, PositionKind, Side, Ticker
 from app.portfolio import build_portfolio
-from app.position_closure import close_open_position
+from app.position_closure import (
+    close_open_position,
+    create_open_transaction_for_position,
+    delete_open_transaction_for_position,
+    sync_open_transaction_for_position,
+)
 from app.routes import bp
 from app.routes.helpers import (
     allocation_chart_data,
@@ -139,7 +144,10 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             position_kinds=PositionKind,
         ), 422
-    db.session.add(Position(**asdict(data)))
+    position = Position(**asdict(data))
+    db.session.add(position)
+    db.session.flush()
+    create_open_transaction_for_position(position)
     db.session.commit()
     flash("Posição adicionada.", "success")
     return redirect(url_for("portfolio.index"))
@@ -175,6 +183,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
         ), 422
     for key, value in asdict(data).items():
         setattr(position, key, value)
+    sync_open_transaction_for_position(position)
     db.session.commit()
     flash("Posição atualizada.", "success")
     return redirect(url_for("portfolio.index"))
@@ -183,6 +192,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
 @bp.post("/positions/<int:position_id>/delete")
 def delete_position(position_id: int) -> ResponseReturnValue:
     position = db.get_or_404(Position, position_id)
+    delete_open_transaction_for_position(position.id)
     db.session.delete(position)
     db.session.commit()
     flash("Posição excluída.", "success")

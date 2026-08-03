@@ -8,32 +8,30 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.models import Broker, Market, OptionType, Ticker
+from app.models import Broker, Market, Ticker
 from app.reference_data import parse_broker, parse_ticker
 from app.routes import bp
-from app.routes.helpers import (
-    broker_records,
-    option_contracts,
-    option_expirations,
-    ticker_records,
-)
+from app.routes.helpers import broker_records, ticker_records
 
 
-def _tables_redirect(section: str) -> ResponseReturnValue:
-    return redirect(url_for("portfolio.tables", _anchor=section))
+def _tables_redirect(endpoint: str) -> ResponseReturnValue:
+    return redirect(url_for(f"portfolio.{endpoint}"))
 
 
 @bp.get("/tables")
-def tables() -> str:
-    return render_template(
-        "tables.html",
-        brokers=broker_records(),
-        tickers=ticker_records(),
-        markets=Market,
-        contracts=option_contracts(),
-        expirations=option_expirations(),
-        option_types=OptionType,
-    )
+def tables() -> ResponseReturnValue:
+    """Alias de compatibilidade: Cadastros agora é uma página por tabela."""
+    return redirect(url_for("portfolio.table_brokers"))
+
+
+@bp.get("/tables/brokers")
+def table_brokers() -> str:
+    return render_template("table_brokers.html", brokers=broker_records())
+
+
+@bp.get("/tables/tickers")
+def table_tickers() -> str:
+    return render_template("table_tickers.html", tickers=ticker_records(), markets=Market)
 
 
 @bp.post("/tables/brokers")
@@ -54,7 +52,7 @@ def create_broker() -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return _tables_redirect("brokers")
+    return _tables_redirect("table_brokers")
 
 
 @bp.post("/tables/brokers/<int:broker_id>")
@@ -78,7 +76,7 @@ def update_broker(broker_id: int) -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return _tables_redirect("brokers")
+    return _tables_redirect("table_brokers")
 
 
 @bp.post("/tables/brokers/<int:broker_id>/delete")
@@ -95,7 +93,7 @@ def delete_broker(broker_id: int) -> ResponseReturnValue:
             "transações ou proventos vinculados.",
             "error",
         )
-    return _tables_redirect("brokers")
+    return _tables_redirect("table_brokers")
 
 
 @bp.post("/tables/tickers")
@@ -110,7 +108,7 @@ def create_ticker() -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return _tables_redirect("tickers")
+    return _tables_redirect("table_tickers")
 
 
 @bp.post("/tables/tickers/<int:ticker_id>")
@@ -130,7 +128,7 @@ def update_ticker(ticker_id: int) -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
-    return _tables_redirect("tickers")
+    return _tables_redirect("table_tickers")
 
 
 @bp.post("/tables/tickers/<int:ticker_id>/delete")
@@ -147,4 +145,4 @@ def delete_ticker(ticker_id: int) -> ResponseReturnValue:
             "transações ou proventos vinculados.",
             "error",
         )
-    return _tables_redirect("tickers")
+    return _tables_redirect("table_tickers")

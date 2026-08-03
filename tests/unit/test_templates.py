@@ -9,7 +9,10 @@ from app import create_app
         "base.html",
         "index.html",
         "options.html",
-        "tables.html",
+        "table_brokers.html",
+        "table_tickers.html",
+        "table_expirations.html",
+        "table_contracts.html",
         "login.html",
         "transactions.html",
         "transaction_form.html",
@@ -19,6 +22,7 @@ from app import create_app
         "quotes.html",
         "risk.html",
         "performance.html",
+        "settings.html",
     ],
 )
 def test_main_templates_compile(template_name: str) -> None:

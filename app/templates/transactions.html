@@ -1,12 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Transações{% endblock %}
 {% block header_controls %}
-<a class="button button-primary" href="{{ url_for('portfolio.new_transaction') }}">Nova transação</a>
-{% endblock %}
-{% block content %}
-<form class="filters" method="get">
+<form class="filters header-controls" method="get" data-auto-submit>
+  <label>Status
+    <select name="status">
+      <option value="all" {{ 'selected' if selected_status == 'all' }}>Todas</option>
+      {% for status in transaction_statuses %}
+        <option value="{{ status.value }}" {{ 'selected' if selected_status == status.value }}>{{ 'Abertas' if status.value == 'open' else 'Fechadas' }}</option>
+      {% endfor %}
+    </select>
+  </label>
   <label>Corretora
-    <select name="broker" onchange="this.form.submit()">
+    <select name="broker">
       <option value="">Todas</option>
       {% for broker in brokers %}
         <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
@@ -14,7 +19,7 @@
     </select>
   </label>
   <label>Posição
-    <select name="position_kind" onchange="this.form.submit()">
+    <select name="position_kind">
       <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
       {% for kind in position_kinds %}
         <option value="{{ kind.value }}" {{ 'selected' if selected_kind == kind.value }}>{{ 'Real' if kind.value == 'real' else 'Hipotética' }}</option>
@@ -23,35 +28,50 @@
   </label>
   <a class="button" href="{{ url_for('portfolio.transactions') }}">Limpar</a>
 </form>
-
+<a class="button button-primary" href="{{ url_for('portfolio.new_transaction') }}">Nova transação</a>
+{% endblock %}
+{% block content %}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
-        <th>Corr.</th><th>Ticker</th><th>Tipo</th><th>Qtde</th><th>Custo médio</th>
+        <th>Status</th><th>Corr.</th><th>Ticker</th><th>Tipo</th><th>Qtde</th><th>Custo médio</th>
         <th>Saída</th><th>Resultado</th><th>Abertura</th><th>Encerramento</th>
         <th>Dias</th><th>Posição</th><th>Notas</th><th></th>
       </tr>
     </thead>
     <tbody>
     {% for tx in transactions %}
-      <tr>
+      <tr class="{{ 'transaction-open' if tx.status.value == 'open' }}">
+        <td><span class="tag {{ 'tag-open' if tx.status.value == 'open' else 'tag-closed' }}">{{ 'Aberta' if tx.status.value == 'open' else 'Fechada' }}</span></td>
         <td>{{ tx.broker }}</td>
-        <td><a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">{{ tx.ticker }}</a></td>
+        <td>
+          {% if tx.status.value == 'open' %}
+            <a href="{{ url_for('portfolio.edit_position', position_id=tx.source_position_id) }}">{{ tx.ticker }}</a>
+          {% else %}
+            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">{{ tx.ticker }}</a>
+          {% endif %}
+        </td>
         <td>{{ tx.side.value }}</td>
         <td class="number">{{ tx.quantity|quantity }}</td>
         <td class="number">{{ tx.average_cost|currency(tx.currency) }}</td>
         <td class="number">{{ tx.exit_price|currency(tx.currency) }}</td>
         <td class="number {{ tx.result|sign_class }}">{{ tx.result|currency(tx.currency) }}</td>
         <td>{{ tx.opened_on.strftime('%d-%b-%y') }}</td>
-        <td>{{ tx.closed_on.strftime('%d-%b-%y') }}</td>
-        <td class="number">{{ tx.days_held }}</td>
+        <td>{{ tx.closed_on.strftime('%d-%b-%y') if tx.closed_on else '—' }}</td>
+        <td class="number">{{ tx.days_held if tx.days_held is not none else '—' }}</td>
         <td>{{ 'Real' if tx.position_kind.value == 'real' else 'Hipotética' }}</td>
         <td>{{ tx.notes or '' }}</td>
-        <td><a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a></td>
+        <td>
+          {% if tx.status.value == 'open' %}
+            <a href="{{ url_for('portfolio.close_position_form', position_id=tx.source_position_id) }}">encerrar</a>
+          {% else %}
+            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>
+          {% endif %}
+        </td>
       </tr>
     {% else %}
-      <tr><td colspan="13" class="empty">Nenhuma transação registrada.</td></tr>
+      <tr><td colspan="14" class="empty">Nenhuma transação registrada.</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -61,19 +81,19 @@
   <article><span>Ganhos</span><strong class="positive">{{ gain|currency('BRL') }}</strong></article>
   <article><span>Perdas</span><strong class="negative">{{ loss|currency('BRL') }}</strong></article>
   <article><span>Resultado</span><strong class="{{ result|sign_class }}">{{ result|currency('BRL') }}</strong></article>
-  <article title="Participação de transações com resultado positivo no total (item 4, Nível Operacional).">
+  <article title="Participação de transações com resultado positivo no total, entre as já encerradas (item 4, Nível Operacional).">
     <span>Win rate</span>
     <strong>{{ win_rate|percent if win_rate is not none else '-' }}</strong>
   </article>
-  <article title="Ganhos totais divididos pelas perdas totais (em módulo). Acima de 1 indica que os ganhos superam as perdas.">
+  <article title="Ganhos totais divididos pelas perdas totais (em módulo), entre as transações encerradas. Acima de 1 indica que os ganhos superam as perdas.">
     <span>Profit factor</span>
     <strong>{{ profit_factor|number(2) if profit_factor is not none else '-' }}</strong>
   </article>
-  <article title="Média dos ganhos dividida pela média das perdas (em módulo). Acima de 1 indica que os ganhos médios superam as perdas médias.">
+  <article title="Média dos ganhos dividida pela média das perdas (em módulo), entre as transações encerradas. Acima de 1 indica que os ganhos médios superam as perdas médias.">
     <span>Payoff ratio</span>
     <strong>{{ payoff_ratio|number(2) if payoff_ratio is not none else '-' }}</strong>
   </article>
-  <article title="Média de dias entre abertura e encerramento das transações listadas.">
+  <article title="Média de dias entre abertura e encerramento das transações já encerradas.">
     <span>Tempo médio em posição</span>
     <strong>{{ avg_days_held|number(1) if avg_days_held is not none else '-' }} dias</strong>
   </article>
