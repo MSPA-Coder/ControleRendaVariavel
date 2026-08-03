@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 from flask import Flask
@@ -277,3 +278,25 @@ def test_settings_rejects_unknown_benchmark_ticker_id(
         settings = db.session.get(AppSetting, 1)
         assert settings is not None
         assert settings.benchmark_ticker_id is None
+
+
+def test_settings_form_has_no_fields_outside_a_fieldset(auth_client: FlaskClient) -> None:
+    response = auth_client.get("/settings")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    form_start = html.index('<form class="settings-form"')
+    form_end = html.index("</form>", form_start)
+    form_body = html[form_start:form_end]
+
+    # Remove every complete <fieldset>...</fieldset> card. Whatever remains
+    # directly inside <form> should only be the hidden CSRF input and the
+    # form-actions bar (Cancelar/Salvar) — never a loose label/input/help
+    # paragraph, which is exactly the bug where "Intervalo entre leituras"
+    # sat between two fieldsets instead of inside one.
+    without_fieldsets = re.sub(r"<fieldset\b.*?</fieldset>", "", form_body, flags=re.S)
+
+    assert "<label" not in without_fieldsets
+    assert "poll_interval_seconds" not in without_fieldsets
+    assert "form-help" not in without_fieldsets

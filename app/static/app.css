@@ -349,11 +349,10 @@ details.catalog-card > h2 { display: none; }
 .collector-heartbeat.is-error .heartbeat-dot { background: #dc5c52; }
 .collector-heartbeat.is-waiting .heartbeat-dot { background: #9cafbb; }
 .logout-form { display: inline; }
-.logout-form button {
-  background: none; border: 1px solid var(--line); border-radius: .5rem; color: var(--muted);
-  cursor: pointer; font: inherit; font-size: .82rem; padding: .4rem .75rem;
+.avatar {
+  align-items: center; background: var(--navy); border-radius: 50%; color: white; display: flex;
+  font-size: .68rem; font-weight: 700; height: 1.9rem; justify-content: center; width: 1.9rem;
 }
-.logout-form button:hover { background: var(--bg); color: var(--ink); }
 
 .topbar .filters label:not(.rtd-toggle) { align-items: center; display: flex; gap: .35rem; }
 .topbar .filters select, .topbar .button, .rtd-toggle { min-height: 2.2rem; }

@@ -108,6 +108,64 @@ def test_transaction_rejects_closed_before_opened(app: Flask, auth_client: Flask
         assert db.session.scalar(db.select(Transaction)) is None
 
 
+def test_transactions_page_defaults_position_filter_to_real(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        broker_id, ticker_id = _seed_broker_ticker()
+        db.session.add_all(
+            [
+                Transaction(
+                    broker_id=broker_id,
+                    ticker_id=ticker_id,
+                    quantity=Decimal("100"),
+                    average_cost=Decimal("20"),
+                    exit_price=Decimal("25"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 1),
+                    closed_on=date(2026, 2, 1),
+                    result_mode="L",
+                    position_kind=PositionKind.REAL,
+                    result=Decimal("499.80000000"),
+                ),
+                Transaction(
+                    broker_id=broker_id,
+                    ticker_id=ticker_id,
+                    quantity=Decimal("50"),
+                    average_cost=Decimal("10"),
+                    exit_price=Decimal("15"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 1),
+                    closed_on=date(2026, 2, 1),
+                    result_mode="L",
+                    position_kind=PositionKind.HYPOTHETICAL,
+                    result=Decimal("249.90000000"),
+                ),
+            ]
+        )
+        db.session.commit()
+
+    # Sem nenhum parâmetro de query — deve vir pré-selecionado "Real", igual
+    # ao padrão de selected_filters() usado em Ações/Carteira, e a tabela deve
+    # trazer só a transação real (a hipotética some da listagem).
+    response = auth_client.get("/transactions")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    kind_select_start = html.index('name="position_kind"')
+    kind_select_end = html.index("</select>", kind_select_start)
+    kind_select = html[kind_select_start:kind_select_end]
+    assert 'value="real" selected' in kind_select
+    assert 'value="all" selected' not in kind_select
+
+    # Confere que o filtro foi de fato aplicado na consulta (não só no
+    # <select> renderizado): só a linha real aparece na tabela.
+    tbody = html.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+    assert tbody.count('<tr class="') == 1
+    assert "Hipotética" not in tbody
+
+
 def test_dividend_full_crud_roundtrip(app: Flask, auth_client: FlaskClient) -> None:
     with app.app_context():
         broker_id, ticker_id = _seed_broker_ticker()

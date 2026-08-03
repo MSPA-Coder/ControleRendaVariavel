@@ -12,7 +12,7 @@ from app import db
 from app.domain import operation_result
 from app.models import Broker, PositionKind, Side, Ticker, Transaction, TransactionStatus
 from app.routes import bp
-from app.routes.helpers import broker_records, ticker_records
+from app.routes.helpers import broker_records, selected_filters, ticker_records
 from app.validation import parse_finite_decimal
 
 
@@ -86,8 +86,7 @@ def _build_transaction(data: TransactionInput) -> Transaction:
 
 @bp.get("/transactions")
 def transactions() -> str:
-    position_kind_raw = request.args.get("position_kind", "all")
-    broker = request.args.get("broker") or None
+    kind, broker, position_kind_raw = selected_filters()
     status_raw = request.args.get("status", "all")
     status_order = case((Transaction.status == TransactionStatus.OPEN, 0), else_=1)
     statement = (
@@ -101,12 +100,8 @@ def transactions() -> str:
             Transaction.id.desc(),
         )
     )
-    if position_kind_raw != "all":
-        try:
-            kind = PositionKind(position_kind_raw)
-            statement = statement.where(Transaction.position_kind == kind)
-        except ValueError:
-            position_kind_raw = "all"
+    if kind is not None:
+        statement = statement.where(Transaction.position_kind == kind)
     if broker:
         statement = statement.where(Broker.name == broker)
     if status_raw != "all":
