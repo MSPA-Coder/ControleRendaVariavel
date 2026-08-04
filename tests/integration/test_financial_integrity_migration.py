@@ -12,6 +12,8 @@ from flask_migrate import upgrade as alembic_upgrade
 from app import db
 from app.models import Market, QuoteHistory, Ticker
 
+pytestmark = [pytest.mark.critical, pytest.mark.migration_persistence]
+
 _MIGRATIONS_DIR = str(Path(__file__).resolve().parents[2] / "migrations")
 
 

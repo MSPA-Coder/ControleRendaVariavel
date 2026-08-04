@@ -1,12 +1,16 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.monthly_performance import (
     MonthlyPerformanceReport,
     build_monthly_performance,
     normalize_performance_period,
     select_performance_period,
 )
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def test_build_monthly_performance_reduces_to_one_point_per_month() -> None:

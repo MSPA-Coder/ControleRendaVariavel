@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import Broker, Market, Position, Ticker
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def _seed_reference_data() -> tuple[int, int]:
@@ -81,6 +84,7 @@ def test_position_full_crud_roundtrip(app: Flask, auth_client: FlaskClient) -> N
         assert db.session.get(Position, position_id) is None
 
 
+@pytest.mark.security
 def test_positions_routes_require_authentication(client: FlaskClient) -> None:
     response = client.get("/positions/new")
 

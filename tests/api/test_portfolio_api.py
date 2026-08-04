@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Side, Ticker
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule, pytest.mark.observable_contract]
 
 
 def _seed_positions(count: int) -> None:
@@ -41,6 +44,7 @@ def _seed_positions(count: int) -> None:
     db.session.commit()
 
 
+@pytest.mark.security
 def test_portfolio_api_requires_authentication(client: FlaskClient) -> None:
     response = client.get("/api/portfolio")
 

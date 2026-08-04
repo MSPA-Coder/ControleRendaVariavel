@@ -11,6 +11,8 @@ from app.rtd_service import (
     RtdServiceManager,
 )
 
+pytestmark = [pytest.mark.critical, pytest.mark.architecture]
+
 
 class Clock:
     def __init__(self) -> None:

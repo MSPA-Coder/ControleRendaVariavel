@@ -13,6 +13,8 @@ from app.models import (
     Ticker,
 )
 
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+
 
 def _seed_reference_data() -> tuple[int, int]:
     broker = Broker(name="XP Investimentos", acronym="XP")

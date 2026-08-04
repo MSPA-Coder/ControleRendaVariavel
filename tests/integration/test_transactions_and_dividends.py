@@ -12,6 +12,8 @@ import app.position_closure as position_closure
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Side, Ticker, Transaction
 
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+
 
 def _seed_broker_ticker() -> tuple[int, int]:
     broker = Broker(name="XP Investimentos", acronym="XP")
@@ -587,6 +589,7 @@ def test_dividends_page_shows_yield_on_cost_report(app: Flask, auth_client: Flas
     assert "02/2026" in html
 
 
+@pytest.mark.security
 def test_transactions_and_dividends_require_authentication(client: FlaskClient) -> None:
     assert client.get("/transactions").status_code == 302
     assert client.get("/dividends").status_code == 302

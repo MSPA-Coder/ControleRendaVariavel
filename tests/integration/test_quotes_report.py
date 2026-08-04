@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import Market, QuoteHistory, Ticker
+
+pytestmark = [pytest.mark.business_rule, pytest.mark.observable_contract]
 
 
 def _seed_ticker() -> int:
@@ -106,5 +109,6 @@ def test_delete_quote_history_entry_by_ticker_and_date(
         assert db.session.query(QuoteHistory).filter_by(ticker_id=ticker_id).count() == 0
 
 
+@pytest.mark.security
 def test_quotes_report_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/quotes").status_code == 302

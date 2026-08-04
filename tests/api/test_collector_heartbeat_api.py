@@ -3,12 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import Broker, Market, Position, Quote, Side, Ticker
 
+pytestmark = [pytest.mark.critical, pytest.mark.observable_contract]
 
+
+@pytest.mark.security
 def test_collector_heartbeat_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/api/collector-heartbeat").status_code == 401
 

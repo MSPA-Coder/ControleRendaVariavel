@@ -4,6 +4,8 @@ import pytest
 
 from app.rtd import ExcelRtdQuoteProvider, Instrument, parse_decimal
 
+pytestmark = [pytest.mark.business_rule]
+
 
 @pytest.mark.parametrize(
     ("raw", "expected"),

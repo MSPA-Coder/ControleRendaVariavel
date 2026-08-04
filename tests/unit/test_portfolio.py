@@ -3,8 +3,12 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
+
 from app.models import Market, Position, Side
 from app.portfolio import build_portfolio
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def make_position(

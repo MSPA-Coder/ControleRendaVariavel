@@ -8,6 +8,8 @@ from flask.testing import FlaskClient
 
 from app.models import User
 
+pytestmark = [pytest.mark.critical, pytest.mark.security]
+
 _TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+psycopg://investimentos:investimentos@localhost:5435/investimentos_test",

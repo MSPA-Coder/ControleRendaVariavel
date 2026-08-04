@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import Broker, Market, Position, PositionKind, QuoteHistory, Side, Ticker
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def _seed_ticker(symbol: str, currency: str = "BRL") -> int:
@@ -180,6 +183,7 @@ def test_monthly_performance_groups_by_currency(app: Flask, auth_client: FlaskCl
     assert "USD" in html
 
 
+@pytest.mark.security
 def test_monthly_performance_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/performance").status_code == 302
 

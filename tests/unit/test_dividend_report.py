@@ -3,8 +3,12 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
+
 from app.dividend_report import build_dividend_report
 from app.models import Dividend
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def make_dividend(

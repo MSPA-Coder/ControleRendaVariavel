@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import AppSetting, Market, Position, PositionKind, QuoteHistory, Side, Ticker
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def _seed_ticker(symbol: str, currency: str = "BRL") -> int:
@@ -147,5 +150,6 @@ def test_risk_report_shows_portfolio_drawdown_by_currency(
     assert "BRL" in html
 
 
+@pytest.mark.security
 def test_risk_report_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/risk").status_code == 302

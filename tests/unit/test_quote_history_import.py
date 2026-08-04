@@ -13,6 +13,8 @@ from app.quote_history_import import (
     fetch_yahoo_daily_quotes,
 )
 
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+
 
 class _Response(BytesIO):
     def __enter__(self) -> _Response:

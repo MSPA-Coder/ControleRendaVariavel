@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,6 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from app.models import AppSetting, Market, Ticker
 from app.rtd_service import OperationalProfile
+
+pytestmark = [pytest.mark.business_rule]
 
 
 class FakeRtdService:
@@ -100,6 +103,7 @@ def test_settings_shows_unavailable_host_without_guessing_profile(
     )
 
 
+@pytest.mark.critical
 def test_settings_updates_host_profile_before_persisting_other_settings(
     app: Flask, auth_client: FlaskClient
 ) -> None:
@@ -118,6 +122,7 @@ def test_settings_updates_host_profile_before_persisting_other_settings(
         assert settings.risk_free_rate_annual == Decimal("0.12")
 
 
+@pytest.mark.critical
 def test_settings_does_not_persist_other_settings_when_host_profile_fails(
     app: Flask, auth_client: FlaskClient
 ) -> None:
@@ -138,6 +143,7 @@ def test_settings_does_not_persist_other_settings_when_host_profile_fails(
         assert settings.risk_free_rate_annual == Decimal("0.1075")
 
 
+@pytest.mark.critical
 def test_settings_restores_host_profile_when_database_commit_fails(
     app: Flask, auth_client: FlaskClient, monkeypatch
 ) -> None:
@@ -198,6 +204,7 @@ def test_settings_rejects_risk_free_rate_out_of_range(
         assert settings.risk_free_rate_annual == Decimal("0.1075")
 
 
+@pytest.mark.security
 def test_settings_requires_authentication(client: FlaskClient) -> None:
     response = client.get("/settings")
 
@@ -280,6 +287,7 @@ def test_settings_rejects_unknown_benchmark_ticker_id(
         assert settings.benchmark_ticker_id is None
 
 
+@pytest.mark.interface_smoke
 def test_settings_form_has_no_fields_outside_a_fieldset(auth_client: FlaskClient) -> None:
     response = auth_client.get("/settings")
 

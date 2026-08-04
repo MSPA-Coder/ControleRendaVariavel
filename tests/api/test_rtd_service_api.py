@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
+pytestmark = [pytest.mark.observable_contract]
 
+
+@pytest.mark.security
+@pytest.mark.critical
 def test_rtd_service_api_requires_authentication(client: FlaskClient) -> None:
     response = client.get("/api/rtd-service")
 

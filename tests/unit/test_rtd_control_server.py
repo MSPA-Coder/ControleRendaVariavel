@@ -12,6 +12,8 @@ import pytest
 from app.rtd_control_server import _handler
 from app.rtd_service import OperationalProfile
 
+pytestmark = [pytest.mark.architecture]
+
 
 @pytest.fixture
 def control_server() -> tuple[str, Mock]:
@@ -32,6 +34,8 @@ def control_server() -> tuple[str, Mock]:
         thread.join(timeout=2)
 
 
+@pytest.mark.security
+@pytest.mark.critical
 def test_profile_endpoint_is_authenticated(control_server: tuple[str, Mock]) -> None:
     base_url, _service = control_server
 

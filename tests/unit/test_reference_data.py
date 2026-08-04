@@ -3,6 +3,8 @@ import pytest
 from app.models import Market
 from app.reference_data import parse_broker, parse_ticker
 
+pytestmark = [pytest.mark.business_rule]
+
 
 def test_broker_fields_are_normalized() -> None:
     broker = parse_broker({"name": "  Banco   Teste  ", "acronym": " bt "})

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
 from flask import Flask
 
 from app import db
 from app.models import User
+
+pytestmark = [pytest.mark.critical, pytest.mark.security]
 
 
 def test_create_admin_creates_new_user(app: Flask) -> None:

@@ -2,6 +2,8 @@ import pytest
 
 from app import create_app
 
+pytestmark = [pytest.mark.interface_smoke]
+
 
 @pytest.mark.parametrize(
     "template_name",
@@ -31,6 +33,8 @@ def test_main_templates_compile(template_name: str) -> None:
     app.jinja_env.get_template(template_name)
 
 
+@pytest.mark.security
+@pytest.mark.critical
 def test_session_cookie_is_not_secure_by_default() -> None:
     # The app is deployed over plain HTTP on a local network by default (see
     # README); a Secure cookie flag here would silently break login, since

@@ -25,7 +25,15 @@ jobs:
       - name: Quality checks
         run: docker compose --profile test run --rm quality
 
-      - name: Test suite
+      # AGENTS.md 1.3 ("Classificação, manutenção e falhas encontradas"): the
+      # critical-risk subset (money, integrity, transactions, migrations,
+      # authorization, security) runs first, uninstrumented and fail-fast, so
+      # a regression in a critical control is diagnosed before paying for the
+      # slower, fully-instrumented run below.
+      - name: Critical test controls
+        run: docker compose --profile test run --rm test pytest -q -x --tb=short -m critical
+
+      - name: Test suite (full)
         run: docker compose --profile test run --rm test
 
       - name: Runtime smoke test

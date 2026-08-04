@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from flask.testing import FlaskClient
+
+pytestmark = [pytest.mark.interface_smoke]
 
 
 def test_navbar_shows_avatar_next_to_username_and_logout(auth_client: FlaskClient) -> None:

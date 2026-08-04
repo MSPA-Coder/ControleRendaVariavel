@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Quote, Side, Ticker
+
+pytestmark = [pytest.mark.business_rule, pytest.mark.observable_contract]
 
 
 def _seed_two_positions_one_stale() -> None:

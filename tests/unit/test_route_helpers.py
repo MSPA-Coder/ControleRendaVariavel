@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Side, Ticker
 from app.routes.helpers import open_real_quantities_by_ticker
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def test_open_real_quantities_by_ticker_applies_side_signal(app: Flask) -> None:

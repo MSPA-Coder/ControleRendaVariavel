@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
@@ -18,6 +19,8 @@ from app.models import (
     Side,
     Ticker,
 )
+
+pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
 
 
 def _seed_option_position(risk_free_rate_annual: Decimal | None = None) -> None:
@@ -118,6 +121,7 @@ def test_options_dashboard_shows_moneyness_badge(app: Flask, auth_client: FlaskC
     assert 'class="status moneyness-ATM"' in html
 
 
+@pytest.mark.security
 def test_options_dashboard_requires_authentication(client: FlaskClient) -> None:
     response = client.get("/options")
 

@@ -136,3 +136,20 @@ docker compose --profile test down --volumes --remove-orphans
 O servico `test` usa PostgreSQL descartavel e cria o schema exclusivamente por
 `alembic upgrade head`. O servico `quality` executa Ruff, mypy e pip-audit. A
 CI repete esse fluxo em Docker para cada push e pull request.
+
+### Classificacao de testes por risco
+
+Cada teste carrega ao menos um marcador pytest equivalente as categorias do
+AGENTS.md (`critical`, `business_rule`, `security`, `migration_persistence`,
+`observable_contract`, `interface_smoke`, `architecture`, `e2e`); veja
+`[tool.pytest.ini_options]` em `pyproject.toml` para a lista completa. `critical`
+cobre dinheiro, integridade, transacoes, migracoes, autorizacao e seguranca.
+
+Na CI, o subconjunto `critical` roda primeiro, sem cobertura e com `-x`, para
+reduzir o tempo de diagnostico; a suite completa (com cobertura) roda em
+seguida, sempre sem filtros parciais. Para reproduzir isso localmente:
+
+```powershell
+docker compose --profile test run --rm test pytest -q -x --tb=short -m critical
+docker compose --profile test run --rm test
+```

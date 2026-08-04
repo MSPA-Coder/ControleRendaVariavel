@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from flask.testing import FlaskClient
+
+pytestmark = [pytest.mark.interface_smoke, pytest.mark.observable_contract]
 
 
 def test_each_reference_table_has_its_own_page(auth_client: FlaskClient) -> None:
