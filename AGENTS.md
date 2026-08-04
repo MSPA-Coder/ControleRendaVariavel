@@ -1,6 +1,6 @@
 ﻿# Base compartilhada de engenharia
 
-<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.2" -->
+<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.3" -->
 
 ## Governança deste bloco-base
 
@@ -39,6 +39,7 @@ Mudanças aprovadas nesta base devem:
 
 ### Histórico de mudanças
 
+- **1.3** — Classifica testes por risco, prioriza controles críticos e exige correção de falhas preexistentes identificadas na validação.
 - **1.2** — Exige bootstrap de bancos novos por revisões Alembic e adoção legada explícita e verificada.
 - **1.1** — Acrescenta diretrizes para HTMX e explicita o desenvolvimento
   container-first, mantendo no host somente as ferramentas de orquestração.
@@ -215,6 +216,37 @@ Para projetos novos, prefira pytest, Ruff, análise de tipos gradual com mypy ou
 ferramenta equivalente, auditoria de dependências e CI. Suítes existentes em
 `unittest` podem permanecer quando forem confiáveis; não as reescreva apenas
 para uniformizar ferramentas.
+
+### Classificação, manutenção e falhas encontradas
+
+Organize a suíte por risco e finalidade. Cada teste deve pertencer a pelo menos
+uma categoria equivalente a: crítico, regra de negócio, segurança, migração e
+persistência, contrato observável, smoke de interface, arquitetura ou jornada
+E2E. A ferramenta do projeto pode representar essas categorias por marcadores,
+pastas, convenções de nome ou outra configuração verificável.
+
+- Testes de dinheiro, regras de negócio, integridade, transações, migrações,
+  autorização e segurança são controles críticos e não devem ser removidos
+  apenas para reduzir volume ou duração.
+- Testes de markup, texto incidental, existência de arquivo ou detalhe interno
+  só são mantidos quando protegem um contrato de segurança, acessibilidade,
+  compatibilidade ou operação. Consolide testes redundantes nesse nível sem
+  reduzir a cobertura do risco correspondente.
+- Regressões reais de interface, JavaScript ou atualizações parciais devem ser
+  protegidas por teste funcional ou E2E proporcional; uma inspeção estática de
+  código não é substituto suficiente quando o risco é de comportamento no
+  navegador.
+- A CI deve executar primeiro os controles críticos para reduzir o tempo de
+  diagnóstico e preservar uma etapa posterior de validação completa, incluindo
+  os controles aplicáveis e jornadas E2E críticas.
+
+Falhas preexistentes encontradas em testes, lint, análise de tipos, migrações,
+build, auditorias ou smoke tests devem ser investigadas e corrigidas na mesma
+tarefa quando a causa estiver dentro do repositório. Após corrigir, execute
+primeiro o controle que falhou, depois os controles relacionados e repita a
+validação final aplicável. Solicite direção antes de prosseguir somente quando
+a correção exigir mudança de produto, ação destrutiva, acesso externo ou
+coordenação fora do repositório.
 
 ## Estratégia de validação progressiva
 
