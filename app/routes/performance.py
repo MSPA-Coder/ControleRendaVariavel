@@ -9,6 +9,7 @@ from sqlalchemy import Select, select
 from app import db
 from app.models import Broker, OptionContract, OptionPosition, Position, Side, Ticker
 from app.monthly_performance import (
+    MonthlyPerformancePoint,
     MonthlyPerformanceReport,
     align_benchmark_to_points,
     build_monthly_performance,
@@ -27,18 +28,22 @@ def monthly_performance() -> str:
         portfolio = "stocks"
 
     quantities_by_ticker: dict[int, Decimal] = {}
+    opened_on_by_ticker: dict[int, date] = {}
 
-    def add_quantities(statement: Select[tuple[int, Decimal, Side]]) -> None:
-        for ticker_id, quantity, side in db.session.execute(statement):
+    def add_quantities(statement: Select[tuple[int, Decimal, Side, date]]) -> None:
+        for ticker_id, quantity, side, opened_on in db.session.execute(statement):
             direction = Decimal("1") if side == Side.BUY else Decimal("-1")
             quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
                 direction * quantity
             )
+            earliest = opened_on_by_ticker.get(ticker_id)
+            if earliest is None or opened_on < earliest:
+                opened_on_by_ticker[ticker_id] = opened_on
 
     if portfolio in {"all", "stocks"}:
-        stock_positions = select(Position.ticker_id, Position.quantity, Position.side).join(
-            Position.broker_ref
-        )
+        stock_positions = select(
+            Position.ticker_id, Position.quantity, Position.side, Position.opened_on
+        ).join(Position.broker_ref)
         if position_kind is not None:
             stock_positions = stock_positions.where(Position.position_kind == position_kind)
         if broker:
@@ -47,7 +52,12 @@ def monthly_performance() -> str:
 
     if portfolio in {"all", "options"}:
         option_positions = (
-            select(OptionContract.ticker_id, OptionPosition.quantity, OptionPosition.side)
+            select(
+                OptionContract.ticker_id,
+                OptionPosition.quantity,
+                OptionPosition.side,
+                OptionPosition.opened_on,
+            )
             .join(OptionPosition.contract)
             .join(OptionPosition.broker_ref)
         )
@@ -76,6 +86,16 @@ def monthly_performance() -> str:
             continue
         quantities_by_currency.setdefault(ticker.currency, {})[ticker_id] = quantity
 
+    position_start_by_currency: dict[str, date] = {
+        currency: min(
+            opened_on_by_ticker[ticker_id]
+            for ticker_id in ticker_ids
+            if ticker_id in opened_on_by_ticker
+        )
+        for currency, ticker_ids in quantities_by_currency.items()
+        if any(ticker_id in opened_on_by_ticker for ticker_id in ticker_ids)
+    }
+
     reports: list[MonthlyPerformanceReport] = [
         build_monthly_performance(currency, quantities, price_series_by_ticker, period=period)
         for currency, quantities in sorted(quantities_by_currency.items())
@@ -92,19 +112,40 @@ def monthly_performance() -> str:
             )
         except ValueError:
             selected_benchmark = None
+
+    # No modo de comparação, o gráfico (só o gráfico — a tabela "Dados"
+    # abaixo continua mostrando o histórico completo simulado) fica
+    # restrito a "desde que a posição mais antiga da moeda foi aberta":
+    # comparar contra um índice usando meses anteriores à existência real
+    # da carteira não diz nada sobre o desempenho dela (ver discussão com
+    # o usuário / práticas de mercado, ex. Sharesight "since first
+    # purchase").
+    chart_points_by_currency: dict[str, list[MonthlyPerformancePoint]] = {
+        report.currency: report.points for report in reports
+    }
     benchmark_values_by_currency: dict[str, list[str | None]] = {}
     if selected_benchmark is not None:
         benchmark_series = [
             (entry.recorded_date, entry.price)
             for entry in ticker_price_series(selected_benchmark.id)
         ]
-        benchmark_values_by_currency = {
-            report.currency: [
-                str(value) if value is not None else None
-                for value in align_benchmark_to_points(report.points, benchmark_series)
+        for report in reports:
+            aligned = align_benchmark_to_points(report.points, benchmark_series)
+            points = report.points
+            start = position_start_by_currency.get(report.currency)
+            if start is not None:
+                start_month = start.replace(day=1)
+                kept = [
+                    (point, value)
+                    for point, value in zip(points, aligned, strict=True)
+                    if point.month >= start_month
+                ]
+                points = [point for point, _ in kept]
+                aligned = [value for _, value in kept]
+            chart_points_by_currency[report.currency] = points
+            benchmark_values_by_currency[report.currency] = [
+                str(value) if value is not None else None for value in aligned
             ]
-            for report in reports
-        }
 
     return render_template(
         "performance.html",
@@ -116,5 +157,6 @@ def monthly_performance() -> str:
         selected_period=period,
         benchmark_candidates=candidates,
         selected_benchmark=selected_benchmark,
+        chart_points_by_currency=chart_points_by_currency,
         benchmark_values_by_currency=benchmark_values_by_currency,
     )

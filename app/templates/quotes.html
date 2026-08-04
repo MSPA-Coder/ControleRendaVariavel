@@ -43,16 +43,16 @@
       </label>
     </div>
     <div id="quote-history-chart" class="chart-box"
-         data-dates='{{ history|map(attribute='recorded_date')|map('string')|list|tojson }}'
-         data-prices='{{ history|map(attribute='price')|map('string')|list|tojson }}'
+         data-dates='{{ chart_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
+         data-prices='{{ chart_history|map(attribute='price')|map('string')|list|tojson }}'
          data-currency="{{ selected_ticker.currency }}"
          data-label="{{ selected_ticker.symbol }}"
          {% if selected_benchmark %}
          data-benchmark-label="{{ selected_benchmark.symbol }}"
-         data-benchmark-dates='{{ benchmark_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
-         data-benchmark-prices='{{ benchmark_history|map(attribute='price')|map('string')|list|tojson }}'
+         data-benchmark-dates='{{ chart_benchmark_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
+         data-benchmark-prices='{{ chart_benchmark_history|map(attribute='price')|map('string')|list|tojson }}'
          {% endif %}
-         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol if selected_benchmark }}"></div>
+         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a abertura da posição' if selected_benchmark }}"></div>
     <div class="quote-history-browser" aria-label="Cotações registradas">
       {% for year, year_entries in history|reverse|groupby('recorded_date.year') %}
         <section class="quote-history-year">

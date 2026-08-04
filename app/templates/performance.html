@@ -56,15 +56,17 @@
   O período é aplicado no servidor sobre todas as cotações históricas
   disponíveis para os ativos selecionados.
   {% if selected_benchmark %}
-  Comparando com a evolução percentual de {{ selected_benchmark.symbol }} no
-  mesmo período (cada série é indexada ao seu próprio primeiro ponto
-  disponível, não a valores absolutos).
+  Comparando com a evolução percentual de {{ selected_benchmark.symbol }}
+  desde a abertura da posição mais antiga em cada moeda (não desde o início
+  de todo o histórico de cotações disponível, que costuma remontar a muito
+  antes da compra e não diria muito sobre o desempenho da carteira).
   {% endif %}
 </p>
 
 {% if reports %}
   <div class="monthly-performance-grid">
     {% for report in reports %}
+    {% set chart_points = chart_points_by_currency.get(report.currency, report.points) %}
     <section class="monthly-performance-report">
       <header>
         <h2>{{ report.currency }}</h2>
@@ -74,15 +76,19 @@
         <div class="chart-card-header">
           <strong>Gráfico</strong>
         </div>
+        {% if chart_points %}
         <div class="monthly-performance-chart chart-box"
-             data-months='{{ report.points|map(attribute='month')|map('string')|list|tojson }}'
-             data-values='{{ report.points|map(attribute='ending_value')|map('string')|list|tojson }}'
+             data-months='{{ chart_points|map(attribute='month')|map('string')|list|tojson }}'
+             data-values='{{ chart_points|map(attribute='ending_value')|map('string')|list|tojson }}'
              data-currency="{{ report.currency }}"
              {% if selected_benchmark %}
              data-benchmark-label="{{ selected_benchmark.symbol }}"
              data-benchmark-values='{{ benchmark_values_by_currency.get(report.currency, [])|tojson }}'
              {% endif %}
-             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}{{ ' comparada à evolução de ' + selected_benchmark.symbol if selected_benchmark }}"></div>
+             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a abertura da posição' if selected_benchmark }}"></div>
+        {% else %}
+        <p class="form-help">Sem meses no período em {{ report.currency }} desde a abertura da posição.</p>
+        {% endif %}
       </div>
 
       <details class="monthly-performance-data-card">

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from datetime import date
 from decimal import Decimal
 from threading import Lock
 from typing import cast
 
 from flask import current_app, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -120,6 +121,18 @@ def ticker_price_series(ticker_id: int) -> list[QuoteHistory]:
         .order_by(QuoteHistory.recorded_date)
     )
     return list(db.session.scalars(statement))
+
+
+def ticker_position_start_date(ticker_id: int) -> date | None:
+    """Data de abertura mais antiga entre as posições (reais ou
+    hipotéticas) de um ticker, ou ``None`` se ele nunca foi usado em uma
+    posição. Usada para ancorar o comparador de índice em "desde que a
+    posição foi aberta" em vez de todo o histórico de cotações disponível
+    (que costuma remontar a muito antes da compra) — ver
+    ``app.routes.helpers.benchmark_candidates``."""
+    return db.session.scalar(
+        select(func.min(Position.opened_on)).where(Position.ticker_id == ticker_id)
+    )
 
 
 def open_real_quantities_by_ticker() -> dict[int, Decimal]:

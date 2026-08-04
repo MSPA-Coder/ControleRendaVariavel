@@ -33,7 +33,12 @@ def _seed_broker() -> int:
     return broker.id
 
 
-def _seed_open_position(ticker_id: int, quantity: str = "10", broker_id: int | None = None) -> None:
+def _seed_open_position(
+    ticker_id: int,
+    quantity: str = "10",
+    broker_id: int | None = None,
+    opened_on: date = date(2026, 1, 1),
+) -> None:
     db.session.add(
         Position(
             broker_id=broker_id or _seed_broker(),
@@ -41,7 +46,7 @@ def _seed_open_position(ticker_id: int, quantity: str = "10", broker_id: int | N
             quantity=Decimal(quantity),
             average_cost=Decimal("10"),
             side=Side.BUY,
-            opened_on=date(2026, 1, 1),
+            opened_on=opened_on,
             quote_multiplier=Decimal("1"),
             target_multiplier=Decimal("1.5"),
             result_mode="L",
@@ -186,6 +191,46 @@ def test_monthly_performance_groups_by_currency(app: Flask, auth_client: FlaskCl
 @pytest.mark.security
 def test_monthly_performance_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/performance").status_code == 302
+
+
+def test_monthly_performance_chart_truncates_to_position_start_but_table_keeps_full_history(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        ticker_id = _seed_ticker("PETR4")
+        # Posição só foi aberta em fevereiro, mas há cotação histórica de
+        # janeiro (comum quando o ticker já existia antes da compra).
+        _seed_open_position(ticker_id, quantity="10", opened_on=date(2026, 2, 1))
+        _seed_quote_history(
+            ticker_id,
+            [("2026-01-31", "100"), ("2026-02-28", "110"), ("2026-03-31", "120")],
+        )
+        benchmark_id = _seed_ticker("BOVA11")
+        _seed_quote_history(
+            benchmark_id,
+            [("2026-01-20", "50"), ("2026-02-15", "55"), ("2026-03-20", "58")],
+        )
+
+    page = auth_client.get(f"/performance?period=all&benchmark_ticker_id={benchmark_id}")
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+
+    chart_start = html.find('class="monthly-performance-chart chart-box"')
+    chart_end = html.find("</div>", chart_start)
+    chart_html = html[chart_start:chart_end]
+    # O gráfico não deve conter o mês anterior à abertura da posição nem a
+    # cotação do índice referente a esse mês.
+    assert "2026-01" not in chart_html
+    assert "50" not in chart_html
+    assert "2026-02" in chart_html and "2026-03" in chart_html
+    assert "55" in chart_html and "58" in chart_html
+
+    table_start = html.find("<summary>Dados</summary>")
+    table_html = html[table_start : html.find("</details>", table_start)]
+    # A tabela "Dados" continua com o histórico completo simulado (janeiro
+    # incluso), independente da comparação com o índice.
+    assert "01/2026" in table_html
 
 
 def test_monthly_performance_defaults_to_stock_portfolio(

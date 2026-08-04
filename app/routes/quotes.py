@@ -19,6 +19,7 @@ from app.routes import bp
 from app.routes.helpers import (
     benchmark_candidates,
     stock_ticker_records,
+    ticker_position_start_date,
     ticker_price_series,
     ticker_records,
 )
@@ -59,6 +60,24 @@ def quote_history() -> str:
         ticker_price_series(selected_benchmark.id) if selected_benchmark else []
     )
 
+    # No modo de comparação, o gráfico (só o gráfico — o navegador de
+    # cotações abaixo continua mostrando o histórico completo) fica
+    # restrito a "desde que a posição foi aberta": comparar contra um
+    # índice usando cotações de antes da compra não diz nada sobre o
+    # desempenho da posição (ver discussão com o usuário / práticas de
+    # mercado, ex. Sharesight "since first purchase").
+    chart_history = history
+    chart_benchmark_history = benchmark_history
+    if selected_benchmark is not None:
+        position_start = ticker_position_start_date(selected_ticker.id) if selected_ticker else None
+        if position_start is not None:
+            chart_history = [
+                entry for entry in history if entry.recorded_date >= position_start
+            ]
+            chart_benchmark_history = [
+                entry for entry in benchmark_history if entry.recorded_date >= position_start
+            ]
+
     return render_template(
         "quotes.html",
         tickers=tickers,
@@ -66,7 +85,8 @@ def quote_history() -> str:
         history=history,
         benchmark_candidates=candidates,
         selected_benchmark=selected_benchmark,
-        benchmark_history=benchmark_history,
+        chart_history=chart_history,
+        chart_benchmark_history=chart_benchmark_history,
         today=date.today().isoformat(),
         default_import_start=(date.today() - timedelta(days=59)).isoformat(),
         default_import_end=date.today().isoformat(),
