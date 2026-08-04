@@ -16,7 +16,12 @@ from app.quote_history_import import (
     fetch_yahoo_daily_quotes,
 )
 from app.routes import bp
-from app.routes.helpers import stock_ticker_records, ticker_price_series, ticker_records
+from app.routes.helpers import (
+    benchmark_candidates,
+    stock_ticker_records,
+    ticker_price_series,
+    ticker_records,
+)
 from app.validation import parse_finite_decimal
 
 
@@ -36,11 +41,32 @@ def quote_history() -> str:
     if selected_ticker is None and tickers:
         selected_ticker = tickers[0]
     history = ticker_price_series(selected_ticker.id) if selected_ticker else []
+
+    candidates = benchmark_candidates(
+        exclude_ticker_id=selected_ticker.id if selected_ticker else None
+    )
+    selected_benchmark: Ticker | None = None
+    raw_benchmark_id = request.args.get("benchmark_ticker_id")
+    if raw_benchmark_id:
+        try:
+            benchmark_id = int(raw_benchmark_id)
+            selected_benchmark = next(
+                (ticker for ticker in candidates if ticker.id == benchmark_id), None
+            )
+        except ValueError:
+            selected_benchmark = None
+    benchmark_history = (
+        ticker_price_series(selected_benchmark.id) if selected_benchmark else []
+    )
+
     return render_template(
         "quotes.html",
         tickers=tickers,
         selected_ticker=selected_ticker,
         history=history,
+        benchmark_candidates=candidates,
+        selected_benchmark=selected_benchmark,
+        benchmark_history=benchmark_history,
         today=date.today().isoformat(),
         default_import_start=(date.today() - timedelta(days=59)).isoformat(),
         default_import_end=date.today().isoformat(),

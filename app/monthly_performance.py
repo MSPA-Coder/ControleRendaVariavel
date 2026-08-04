@@ -119,3 +119,20 @@ def build_monthly_performance(
         )
         previous_value = ending_value
     return MonthlyPerformanceReport(currency=currency, points=points)
+
+
+def align_benchmark_to_points(
+    points: Sequence[MonthlyPerformancePoint],
+    benchmark_series: Sequence[tuple[date, Decimal]],
+) -> list[Decimal | None]:
+    """Reduz a série diária de um ticker de referência a um valor por mês (o
+    último disponível dentro do mês, mesmo critério de ``_month_end_values``),
+    alinhado aos meses de ``points`` para permitir comparar a evolução da
+    carteira com a de um índice no gráfico de performance mensal.
+
+    Meses sem cotação do índice viram ``None`` (buraco preservado, nunca
+    interpolado) em vez de serem omitidos, para que o índice de cada ponto em
+    ``points`` continue correspondendo pela posição na lista resultante.
+    """
+    month_ends = dict(_month_end_values(benchmark_series))
+    return [month_ends.get(point.month) for point in points]

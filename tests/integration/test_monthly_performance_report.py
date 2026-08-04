@@ -195,3 +195,48 @@ def test_monthly_performance_defaults_to_stock_portfolio(
 
     assert response.status_code == 200
     assert b'<option value="stocks" selected>' in response.data
+
+
+def test_monthly_performance_offers_and_applies_benchmark_comparison(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        ticker_id = _seed_ticker("PETR4")
+        _seed_open_position(ticker_id, quantity="10")
+        _seed_quote_history(ticker_id, [("2026-01-31", "100"), ("2026-02-28", "110")])
+        benchmark_id = _seed_ticker("BOVA11")
+        _seed_quote_history(benchmark_id, [("2026-01-20", "50"), ("2026-02-15", "55")])
+
+    page = auth_client.get(f"/performance?benchmark_ticker_id={benchmark_id}")
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert f'<option value="{benchmark_id}" selected>BOVA11</option>' in html
+    assert 'data-benchmark-label="BOVA11"' in html
+    assert "Comparando com a evolução percentual de BOVA11" in html
+    assert "50" in html and "55" in html  # série mensal alinhada embutida no HTML
+
+
+def test_monthly_performance_hides_comparison_control_without_candidates(
+    auth_client: FlaskClient,
+) -> None:
+    response = auth_client.get("/performance")
+
+    assert response.status_code == 200
+    assert "Comparar com" not in response.get_data(as_text=True)
+
+
+def test_monthly_performance_ignores_unknown_benchmark_ticker_id(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        ticker_id = _seed_ticker("PETR4")
+        _seed_open_position(ticker_id, quantity="10")
+        _seed_quote_history(ticker_id, [("2026-01-31", "100")])
+        _seed_ticker("BOVA11")  # candidato existe, mas não é o id enviado
+
+    response = auth_client.get("/performance?benchmark_ticker_id=999999")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "data-benchmark-label" not in html

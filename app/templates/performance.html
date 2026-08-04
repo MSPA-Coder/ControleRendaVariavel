@@ -32,6 +32,16 @@
       <option value="all" {{ 'selected' if selected_period == 'all' }}>Todas</option>
     </select>
   </label>
+  {% if benchmark_candidates %}
+  <label>Comparar com
+    <select name="benchmark_ticker_id">
+      <option value="">Nenhum</option>
+      {% for benchmark in benchmark_candidates %}
+        <option value="{{ benchmark.id }}" {{ 'selected' if selected_benchmark and benchmark.id == selected_benchmark.id }}>{{ benchmark.symbol }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
   <a class="button" href="{{ url_for('portfolio.monthly_performance') }}">Limpar</a>
 </form>
 {% endblock %}
@@ -45,6 +55,11 @@
   de aportes/retiradas (sem Dietz/IRR): é só o valor da carteira mês a mês.
   O período é aplicado no servidor sobre todas as cotações históricas
   disponíveis para os ativos selecionados.
+  {% if selected_benchmark %}
+  Comparando com a evolução percentual de {{ selected_benchmark.symbol }} no
+  mesmo período (cada série é indexada ao seu próprio primeiro ponto
+  disponível, não a valores absolutos).
+  {% endif %}
 </p>
 
 {% if reports %}
@@ -63,7 +78,11 @@
              data-months='{{ report.points|map(attribute='month')|map('string')|list|tojson }}'
              data-values='{{ report.points|map(attribute='ending_value')|map('string')|list|tojson }}'
              data-currency="{{ report.currency }}"
-             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}"></div>
+             {% if selected_benchmark %}
+             data-benchmark-label="{{ selected_benchmark.symbol }}"
+             data-benchmark-values='{{ benchmark_values_by_currency.get(report.currency, [])|tojson }}'
+             {% endif %}
+             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}{{ ' comparada à evolução de ' + selected_benchmark.symbol if selected_benchmark }}"></div>
       </div>
 
       <details class="monthly-performance-data-card">

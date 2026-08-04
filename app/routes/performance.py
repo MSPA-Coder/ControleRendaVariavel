@@ -10,11 +10,12 @@ from app import db
 from app.models import Broker, OptionContract, OptionPosition, Position, Side, Ticker
 from app.monthly_performance import (
     MonthlyPerformanceReport,
+    align_benchmark_to_points,
     build_monthly_performance,
     normalize_performance_period,
 )
 from app.routes import bp
-from app.routes.helpers import brokers, selected_filters, ticker_price_series
+from app.routes.helpers import benchmark_candidates, brokers, selected_filters, ticker_price_series
 
 
 @bp.get("/performance")
@@ -80,6 +81,31 @@ def monthly_performance() -> str:
         for currency, quantities in sorted(quantities_by_currency.items())
     ]
 
+    candidates = benchmark_candidates()
+    selected_benchmark: Ticker | None = None
+    raw_benchmark_id = request.args.get("benchmark_ticker_id")
+    if raw_benchmark_id:
+        try:
+            benchmark_id = int(raw_benchmark_id)
+            selected_benchmark = next(
+                (ticker for ticker in candidates if ticker.id == benchmark_id), None
+            )
+        except ValueError:
+            selected_benchmark = None
+    benchmark_values_by_currency: dict[str, list[str | None]] = {}
+    if selected_benchmark is not None:
+        benchmark_series = [
+            (entry.recorded_date, entry.price)
+            for entry in ticker_price_series(selected_benchmark.id)
+        ]
+        benchmark_values_by_currency = {
+            report.currency: [
+                str(value) if value is not None else None
+                for value in align_benchmark_to_points(report.points, benchmark_series)
+            ]
+            for report in reports
+        }
+
     return render_template(
         "performance.html",
         reports=reports,
@@ -88,4 +114,7 @@ def monthly_performance() -> str:
         selected_kind=selected_kind,
         selected_portfolio=portfolio,
         selected_period=period,
+        benchmark_candidates=candidates,
+        selected_benchmark=selected_benchmark,
+        benchmark_values_by_currency=benchmark_values_by_currency,
     )

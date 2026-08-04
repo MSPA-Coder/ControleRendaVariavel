@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 import pytest
@@ -112,3 +113,78 @@ def test_delete_quote_history_entry_by_ticker_and_date(
 @pytest.mark.security
 def test_quotes_report_requires_authentication(client: FlaskClient) -> None:
     assert client.get("/quotes").status_code == 302
+
+
+def _seed_price(ticker_id: int, day: str, price: str) -> None:
+    db.session.add(
+        QuoteHistory(
+            ticker_id=ticker_id,
+            price=Decimal(price),
+            recorded_date=date.fromisoformat(day),
+            recorded_at=datetime.combine(date.fromisoformat(day), time.min, tzinfo=UTC),
+        )
+    )
+    db.session.commit()
+
+
+def test_quotes_offers_and_applies_benchmark_comparison(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        ticker_id = _seed_ticker()
+        _seed_price(ticker_id, "2026-01-05", "125000")
+        benchmark = Ticker(
+            symbol="BOVA11",
+            trading_name="iShares Bovespa",
+            market=Market.B3,
+            rtd_market_code="B",
+            currency="BRL",
+        )
+        db.session.add(benchmark)
+        db.session.commit()
+        benchmark_id = benchmark.id
+        _seed_price(benchmark_id, "2026-01-05", "108")
+
+    page = auth_client.get(f"/quotes?ticker_id={ticker_id}&benchmark_ticker_id={benchmark_id}")
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert f'<option value="{benchmark_id}" selected>BOVA11</option>' in html
+    assert 'data-benchmark-label="BOVA11"' in html
+    assert "data-benchmark-dates=" in html
+    assert "108" in html
+
+
+def test_quotes_excludes_selected_ticker_from_its_own_benchmark_options(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        benchmark = Ticker(
+            symbol="BOVA11",
+            trading_name="iShares Bovespa",
+            market=Market.B3,
+            rtd_market_code="B",
+            currency="BRL",
+        )
+        db.session.add(benchmark)
+        db.session.commit()
+        benchmark_id = benchmark.id
+        _seed_price(benchmark_id, "2026-01-05", "108")
+
+    page = auth_client.get(f"/quotes?ticker_id={benchmark_id}")
+
+    assert page.status_code == 200
+    assert "Comparar com" not in page.get_data(as_text=True)
+
+
+def test_quotes_hides_comparison_control_without_candidates(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    with app.app_context():
+        ticker_id = _seed_ticker()
+        _seed_price(ticker_id, "2026-01-05", "125000")
+
+    page = auth_client.get(f"/quotes?ticker_id={ticker_id}")
+
+    assert page.status_code == 200
+    assert "Comparar com" not in page.get_data(as_text=True)

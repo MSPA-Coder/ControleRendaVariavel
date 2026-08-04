@@ -11,6 +11,15 @@
             <option value="{{ ticker.id }}" {{ 'selected' if ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
           {% endfor %}
         </select>
+        {% if benchmark_candidates %}
+        <label for="quote-benchmark">Comparar com</label>
+        <select id="quote-benchmark" name="benchmark_ticker_id">
+          <option value="">Nenhum</option>
+          {% for benchmark in benchmark_candidates %}
+            <option value="{{ benchmark.id }}" {{ 'selected' if selected_benchmark and benchmark.id == selected_benchmark.id }}>{{ benchmark.symbol }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
       </form>
       <button class="button" type="button" data-quote-management-toggle
               aria-controls="quote-management-card" aria-expanded="false">Gerenciar Cotações</button>
@@ -37,7 +46,13 @@
          data-dates='{{ history|map(attribute='recorded_date')|map('string')|list|tojson }}'
          data-prices='{{ history|map(attribute='price')|map('string')|list|tojson }}'
          data-currency="{{ selected_ticker.currency }}"
-         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}"></div>
+         data-label="{{ selected_ticker.symbol }}"
+         {% if selected_benchmark %}
+         data-benchmark-label="{{ selected_benchmark.symbol }}"
+         data-benchmark-dates='{{ benchmark_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
+         data-benchmark-prices='{{ benchmark_history|map(attribute='price')|map('string')|list|tojson }}'
+         {% endif %}
+         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol if selected_benchmark }}"></div>
     <div class="quote-history-browser" aria-label="Cotações registradas">
       {% for year, year_entries in history|reverse|groupby('recorded_date.year') %}
         <section class="quote-history-year">

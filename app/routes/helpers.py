@@ -71,6 +71,26 @@ def stock_ticker_records() -> list[Ticker]:
     return list(db.session.scalars(statement))
 
 
+BENCHMARK_SYMBOLS = ("BOVA11", "USDBRL=X")
+"""Índices de referência oferecidos no comparador de evolução dos gráficos de
+cotação e de performance. Cadastrados como tickers comuns (mesma convenção já
+usada para o Ibovespa no Beta da Fase D, ver `quotes.html`), não como um tipo
+de ativo à parte — por isso a busca é por símbolo, não por uma tabela nova."""
+
+
+def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
+    """Tickers de referência cadastrados, na ordem fixa de ``BENCHMARK_SYMBOLS``
+    (não alfabética, para o dropdown ficar estável). ``exclude_ticker_id``
+    evita oferecer comparar um ticker consigo mesmo."""
+    statement = select(Ticker).where(Ticker.symbol.in_(BENCHMARK_SYMBOLS))
+    by_symbol = {ticker.symbol: ticker for ticker in db.session.scalars(statement)}
+    return [
+        by_symbol[symbol]
+        for symbol in BENCHMARK_SYMBOLS
+        if symbol in by_symbol and by_symbol[symbol].id != exclude_ticker_id
+    ]
+
+
 def option_expirations() -> list[OptionExpiration]:
     statement = select(OptionExpiration).order_by(OptionExpiration.exercise_date)
     return list(db.session.scalars(statement))

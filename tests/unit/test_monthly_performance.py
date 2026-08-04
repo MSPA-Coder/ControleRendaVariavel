@@ -5,6 +5,7 @@ import pytest
 
 from app.monthly_performance import (
     MonthlyPerformanceReport,
+    align_benchmark_to_points,
     build_monthly_performance,
     normalize_performance_period,
     select_performance_period,
@@ -121,3 +122,62 @@ def test_normalize_performance_period_defaults_to_all() -> None:
     assert normalize_performance_period("invalid") == "all"
     values = [(date(2026, 1, 1), Decimal("100"))]
     assert select_performance_period(values, "invalid") == values
+
+
+def test_align_benchmark_to_points_uses_last_value_within_each_month() -> None:
+    report = build_monthly_performance(
+        "BRL",
+        {"AAA": Decimal("1")},
+        {
+            "AAA": [
+                (date(2026, 1, 31), Decimal("100")),
+                (date(2026, 2, 28), Decimal("110")),
+            ]
+        },
+    )
+    benchmark_series = [
+        (date(2026, 1, 5), Decimal("50")),
+        (date(2026, 1, 20), Decimal("55")),  # último de janeiro
+        (date(2026, 2, 3), Decimal("60")),
+        (date(2026, 2, 25), Decimal("58")),  # último de fevereiro
+    ]
+
+    assert align_benchmark_to_points(report.points, benchmark_series) == [
+        Decimal("55"),
+        Decimal("58"),
+    ]
+
+
+def test_align_benchmark_to_points_leaves_missing_months_as_none() -> None:
+    report = build_monthly_performance(
+        "BRL",
+        {"AAA": Decimal("1")},
+        {
+            "AAA": [
+                (date(2026, 1, 31), Decimal("100")),
+                (date(2026, 2, 28), Decimal("110")),
+                (date(2026, 3, 31), Decimal("120")),
+            ]
+        },
+    )
+    # Sem nenhuma cotação do índice em fevereiro: o buraco é preservado
+    # (None), nunca interpolado, mas a posição na lista continua
+    # correspondendo ao mês de `report.points`.
+    benchmark_series = [
+        (date(2026, 1, 15), Decimal("50")),
+        (date(2026, 3, 10), Decimal("70")),
+    ]
+
+    assert align_benchmark_to_points(report.points, benchmark_series) == [
+        Decimal("50"),
+        None,
+        Decimal("70"),
+    ]
+
+
+def test_align_benchmark_to_points_empty_series_is_all_none() -> None:
+    report = build_monthly_performance(
+        "BRL", {"AAA": Decimal("1")}, {"AAA": [(date(2026, 1, 31), Decimal("100"))]}
+    )
+
+    assert align_benchmark_to_points(report.points, []) == [None]
