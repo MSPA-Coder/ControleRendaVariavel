@@ -29,6 +29,38 @@ def test_ticker_fields_are_normalized() -> None:
     assert ticker.market == Market.B3
     assert ticker.rtd_market_code == "B"
     assert ticker.currency == "BRL"
+    assert ticker.is_benchmark is False  # ausente no form (checkbox desmarcado) => False
+
+
+@pytest.mark.parametrize("raw_value", ["1", "true", "True", "on", "yes"])
+def test_ticker_is_benchmark_accepts_common_checkbox_truthy_values(raw_value: str) -> None:
+    ticker = parse_ticker(
+        {
+            "symbol": "BOVA11",
+            "trading_name": "iShares Bovespa",
+            "market": "B3",
+            "rtd_market_code": "B",
+            "currency": "BRL",
+            "is_benchmark": raw_value,
+        }
+    )
+
+    assert ticker.is_benchmark is True
+
+
+def test_ticker_is_benchmark_rejects_unrecognized_value() -> None:
+    ticker = parse_ticker(
+        {
+            "symbol": "BOVA11",
+            "trading_name": "iShares Bovespa",
+            "market": "B3",
+            "rtd_market_code": "B",
+            "currency": "BRL",
+            "is_benchmark": "nonsense",
+        }
+    )
+
+    assert ticker.is_benchmark is False
 
 
 @pytest.mark.parametrize(

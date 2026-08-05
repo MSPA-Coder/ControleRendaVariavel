@@ -17,29 +17,6 @@
     );
   }
 
-  function formatPercent(value) {
-    return (
-      (value >= 0 ? "+" : "") +
-      value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
-      "%"
-    );
-  }
-
-  // Rebase para "evolução percentual desde o primeiro ponto disponível":
-  // cada série usa sua PRÓPRIA primeira cotação como base, para comparar o
-  // valor absoluto da carteira (em R$/US$) com um índice de referência
-  // (preço de outro ativo, ou uma taxa de câmbio) no mesmo eixo percentual.
-  // Entradas `null` (mês sem cotação do índice) permanecem `null`.
-  function rebaseToPercent(values) {
-    var base = null;
-    return values.map(function (value) {
-      if (value === null || value === undefined || !Number.isFinite(value)) return null;
-      if (base === null) base = value;
-      if (base === 0) return null;
-      return (value / base - 1) * 100;
-    });
-  }
-
   function renderChart(container) {
     if (typeof Chart === "undefined") return;
     var months = parseData(container, "months");
@@ -62,11 +39,18 @@
     var ink = style.getPropertyValue("--ink").trim() || "#142b3c";
 
     if (benchmarkLabel) {
-      var benchmarkRaw = parseData(container, "benchmarkValues").map(function (value) {
+      // Ambas as séries já vêm em valor absoluto (R$/US$) do backend: a
+      // carteira real e o valor hipotético de aplicar o mesmo capital, na
+      // mesma data de cada compra, no benchmark (ver
+      // app.monthly_performance.build_benchmark_shadow_series). Sem rebase
+      // para %, ao contrário do gráfico de Cotações: aqui as duas curvas já
+      // nascem na mesma unidade e no mesmo referencial de aportes, então
+      // comparar os valores absolutos é o que faz sentido — rebasear para %
+      // a carteira (que recebe aportes) contra o índice (base fixa) foi
+      // justamente o problema que motivou essa mudança.
+      var benchmarkValues = parseData(container, "benchmarkValues").map(function (value) {
         return value === null ? null : Number(value);
       });
-      var portfolioPct = rebaseToPercent(values);
-      var benchmarkPct = rebaseToPercent(benchmarkRaw);
       new Chart(canvas.getContext("2d"), {
         type: "line",
         data: {
@@ -74,7 +58,7 @@
           datasets: [
             {
               label: "Carteira",
-              data: portfolioPct,
+              data: values,
               borderColor: navy,
               backgroundColor: navy,
               pointRadius: 3,
@@ -83,7 +67,7 @@
             },
             {
               label: benchmarkLabel,
-              data: benchmarkPct,
+              data: benchmarkValues,
               borderColor: "#b45309",
               backgroundColor: "#b45309",
               pointRadius: 3,
@@ -98,7 +82,15 @@
           maintainAspectRatio: false,
           scales: {
             x: { ticks: { color: ink }, grid: { display: false } },
-            y: { ticks: { color: ink, callback: formatPercent }, grid: { color: line } },
+            y: {
+              ticks: {
+                color: ink,
+                callback: function (value) {
+                  return formatCurrency(value, currency);
+                },
+              },
+              grid: { color: line },
+            },
           },
           plugins: {
             legend: { display: true },
@@ -108,7 +100,7 @@
                   return (
                     item.dataset.label +
                     ": " +
-                    (item.parsed.y === null ? "sem dado" : formatPercent(item.parsed.y))
+                    (item.parsed.y === null ? "sem dado" : formatCurrency(item.parsed.y, currency))
                   );
                 },
               },

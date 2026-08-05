@@ -12,6 +12,7 @@ from app.monthly_performance import (
     MonthlyPerformancePoint,
     MonthlyPerformanceReport,
     align_benchmark_to_points,
+    build_benchmark_shadow_series,
     build_monthly_performance,
     normalize_performance_period,
 )
@@ -29,6 +30,12 @@ def monthly_performance() -> str:
 
     quantities_by_ticker: dict[int, Decimal] = {}
     opened_on_by_ticker: dict[int, date] = {}
+    # Custo total (quantidade × custo médio atual) por ticker de AÇÃO — usado
+    # só para a curva hipotética do benchmark (build_benchmark_shadow_series
+    # abaixo). Não é preenchido a partir de posições de opção: a comparação
+    # com benchmark é restrita a ações (payoff de opção é de outra natureza,
+    # ver discussão com o usuário).
+    invested_amount_by_ticker: dict[int, Decimal] = {}
 
     def add_quantities(statement: Select[tuple[int, Decimal, Side, date]]) -> None:
         for ticker_id, quantity, side, opened_on in db.session.execute(statement):
@@ -42,13 +49,29 @@ def monthly_performance() -> str:
 
     if portfolio in {"all", "stocks"}:
         stock_positions = select(
-            Position.ticker_id, Position.quantity, Position.side, Position.opened_on
+            Position.ticker_id,
+            Position.quantity,
+            Position.side,
+            Position.opened_on,
+            Position.average_cost,
         ).join(Position.broker_ref)
         if position_kind is not None:
             stock_positions = stock_positions.where(Position.position_kind == position_kind)
         if broker:
             stock_positions = stock_positions.where(Broker.name == broker)
-        add_quantities(stock_positions)
+        for ticker_id, quantity, side, opened_on, average_cost in db.session.execute(
+            stock_positions
+        ):
+            direction = Decimal("1") if side == Side.BUY else Decimal("-1")
+            quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
+                direction * quantity
+            )
+            earliest = opened_on_by_ticker.get(ticker_id)
+            if earliest is None or opened_on < earliest:
+                opened_on_by_ticker[ticker_id] = opened_on
+            invested_amount_by_ticker[ticker_id] = (
+                invested_amount_by_ticker.get(ticker_id, Decimal("0")) + quantity * average_cost
+            )
 
     if portfolio in {"all", "options"}:
         option_positions = (
@@ -101,7 +124,12 @@ def monthly_performance() -> str:
         for currency, quantities in sorted(quantities_by_currency.items())
     ]
 
-    candidates = benchmark_candidates()
+    # Comparação com benchmark restrita a portfolio == "stocks": com opções
+    # na mesma carteira ("all"/"options"), o valor de mercado somaria
+    # grandezas de natureza muito diferente (payoff não-linear de opção vs.
+    # preço de um índice), e a curva hipotética abaixo só tem como projetar
+    # valor investido de ações (ver invested_amount_by_ticker).
+    candidates = benchmark_candidates() if portfolio == "stocks" else []
     selected_benchmark: Ticker | None = None
     raw_benchmark_id = request.args.get("benchmark_ticker_id")
     if raw_benchmark_id:
@@ -130,7 +158,17 @@ def monthly_performance() -> str:
             for entry in ticker_price_series(selected_benchmark.id)
         ]
         for report in reports:
-            aligned = align_benchmark_to_points(report.points, benchmark_series)
+            currency_ticker_ids = quantities_by_currency.get(report.currency, {})
+            contributions = [
+                (
+                    opened_on_by_ticker[ticker_id],
+                    invested_amount_by_ticker.get(ticker_id, Decimal("0")),
+                )
+                for ticker_id in currency_ticker_ids
+                if ticker_id in opened_on_by_ticker
+            ]
+            shadow_series = build_benchmark_shadow_series(contributions, benchmark_series)
+            aligned = align_benchmark_to_points(report.points, shadow_series)
             points = report.points
             start = position_start_by_currency.get(report.currency)
             if start is not None:

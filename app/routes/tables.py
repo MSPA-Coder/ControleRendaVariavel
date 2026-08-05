@@ -11,7 +11,7 @@ from app import db
 from app.models import Broker, Market, Ticker
 from app.reference_data import parse_broker, parse_ticker
 from app.routes import bp
-from app.routes.helpers import broker_records, ticker_records
+from app.routes.helpers import broker_records, ticker_has_holdings, ticker_records
 
 
 def _tables_redirect(endpoint: str) -> ResponseReturnValue:
@@ -121,6 +121,11 @@ def update_ticker(ticker_id: int) -> ResponseReturnValue:
         )
         if duplicate is not None:
             raise ValueError("Esse ticker já está cadastrado.")
+        if data.is_benchmark and not ticker.is_benchmark and ticker_has_holdings(ticker.id):
+            raise ValueError(
+                "Esse ticker já está em uso em uma posição, transação, provento ou "
+                "contrato de opção; não pode virar referência de comparação."
+            )
         for key, value in asdict(data).items():
             setattr(ticker, key, value)
         db.session.commit()

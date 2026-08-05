@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from threading import Lock
 from typing import cast
@@ -25,7 +25,14 @@ from app.models import (
     Ticker,
 )
 from app.portfolio import PositionView
+from app.quote_history_import import TickerImportTarget
 from app.rtd_service import RtdService
+
+DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS = 730
+"""Janela usada para a primeira importação de um ticker de referência
+(``Ticker.is_benchmark``) quando ainda não existe nenhuma posição
+cadastrada no app (portanto sem uma data real para ancorar o início do
+histórico) — ver ``quote_update_targets``."""
 
 
 def positions_query(
@@ -72,24 +79,103 @@ def stock_ticker_records() -> list[Ticker]:
     return list(db.session.scalars(statement))
 
 
-BENCHMARK_SYMBOLS = ("BOVA11", "USDBRL=X")
-"""Índices de referência oferecidos no comparador de evolução dos gráficos de
-cotação e de performance. Cadastrados como tickers comuns (mesma convenção já
-usada para o Ibovespa no Beta da Fase D, ver `quotes.html`), não como um tipo
-de ativo à parte — por isso a busca é por símbolo, não por uma tabela nova."""
+def investable_ticker_records() -> list[Ticker]:
+    """Tickers elegíveis para Posições, Transações, Proventos e Contratos de
+    Opção (como ativo ou como subjacente): exclui os marcados como
+    referência de comparação (``Ticker.is_benchmark``), que não
+    representam algo que se compra ou vende na carteira — ver
+    ``benchmark_candidates``."""
+    statement = select(Ticker).where(Ticker.is_benchmark.is_(False)).order_by(Ticker.symbol)
+    return list(db.session.scalars(statement))
+
+
+def ticker_has_holdings(ticker_id: int) -> bool:
+    """``True`` se o ticker já está referenciado por alguma posição (real
+    ou hipotética) ou contrato de opção (como opção ou como subjacente).
+
+    Usado por ``app.routes.tables`` para impedir marcar um ticker como
+    referência de comparação (``Ticker.is_benchmark``) enquanto ele ainda
+    estiver em uso como ativo — as duas coisas são mutuamente exclusivas
+    (ver também ``investable_ticker_records``, que faz a exclusão inversa
+    nos formulários que criam esse tipo de vínculo)."""
+    has_position = db.session.scalar(
+        select(Position.id).where(Position.ticker_id == ticker_id).limit(1)
+    )
+    if has_position is not None:
+        return True
+    has_option_link = db.session.scalar(
+        select(OptionContract.id)
+        .where(
+            (OptionContract.ticker_id == ticker_id)
+            | (OptionContract.underlying_ticker_id == ticker_id)
+        )
+        .limit(1)
+    )
+    return has_option_link is not None
 
 
 def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
-    """Tickers de referência cadastrados, na ordem fixa de ``BENCHMARK_SYMBOLS``
-    (não alfabética, para o dropdown ficar estável). ``exclude_ticker_id``
-    evita oferecer comparar um ticker consigo mesmo."""
-    statement = select(Ticker).where(Ticker.symbol.in_(BENCHMARK_SYMBOLS))
-    by_symbol = {ticker.symbol: ticker for ticker in db.session.scalars(statement)}
+    """Tickers marcados como referência de comparação (``Ticker.is_benchmark``),
+    em ordem alfabética, oferecidos nos comparadores de evolução dos
+    gráficos de Cotações e Performance. ``exclude_ticker_id`` evita
+    oferecer comparar um ticker consigo mesmo."""
+    statement = select(Ticker).where(Ticker.is_benchmark.is_(True)).order_by(Ticker.symbol)
     return [
-        by_symbol[symbol]
-        for symbol in BENCHMARK_SYMBOLS
-        if symbol in by_symbol and by_symbol[symbol].id != exclude_ticker_id
+        ticker for ticker in db.session.scalars(statement) if ticker.id != exclude_ticker_id
     ]
+
+
+def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
+    """Tickers e data inicial para a atualização de histórico "desde a
+    posição" (comando ``flask import-position-history`` e rota
+    ``/quotes/import-position-history``).
+
+    Reúne dois grupos, sem duplicar um ticker que esteja nos dois:
+
+    - Tickers com ao menos uma posição (real ou hipotética): a partir da
+      data de abertura mais antiga desse ticker especificamente (mesmo
+      critério de sempre).
+    - Tickers de referência (``Ticker.is_benchmark``): a partir da data de
+      abertura mais antiga entre TODAS as posições existentes, para que o
+      histórico do benchmark cubra qualquer comparação possível — mesmo
+      sem ter, ele próprio, uma posição. É isso que evita a necessidade de
+      abrir uma posição "fantasma" só para manter a cotação atualizada
+      (ver discussão com o usuário). Sem nenhuma posição cadastrada ainda,
+      usa ``DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS`` para já deixar
+      histórico disponível antes da primeira compra.
+    """
+    position_rows = db.session.execute(
+        select(
+            Position.ticker_id,
+            Ticker.symbol,
+            Ticker.market,
+            func.min(Position.opened_on).label("start_date"),
+        )
+        .join(Ticker, Ticker.id == Position.ticker_id)
+        .group_by(Position.ticker_id, Ticker.symbol, Ticker.market)
+    ).all()
+    targets: dict[int, tuple[TickerImportTarget, date]] = {
+        row.ticker_id: (
+            TickerImportTarget(row.ticker_id, row.symbol, row.market),
+            row.start_date,
+        )
+        for row in position_rows
+    }
+
+    earliest_position_start = db.session.scalar(select(func.min(Position.opened_on)))
+    benchmark_start = earliest_position_start or (
+        date.today() - timedelta(days=DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS)
+    )
+    benchmark_rows = db.session.execute(
+        select(Ticker.id, Ticker.symbol, Ticker.market).where(Ticker.is_benchmark.is_(True))
+    ).all()
+    for row in benchmark_rows:
+        if row.id in targets:
+            # Já coberto por uma posição própria, com data mais específica.
+            continue
+        targets[row.id] = (TickerImportTarget(row.id, row.symbol, row.market), benchmark_start)
+
+    return sorted(targets.values(), key=lambda pair: pair[0].symbol)
 
 
 def option_expirations() -> list[OptionExpiration]:

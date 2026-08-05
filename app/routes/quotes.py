@@ -4,11 +4,11 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 
 from app import db
-from app.models import Position, QuoteHistory, Ticker
+from app.models import QuoteHistory, Ticker
 from app.quote_history_import import (
     DailyQuote,
     QuoteHistoryImportError,
@@ -18,6 +18,7 @@ from app.quote_history_import import (
 from app.routes import bp
 from app.routes.helpers import (
     benchmark_candidates,
+    quote_update_targets,
     stock_ticker_records,
     ticker_position_start_date,
     ticker_price_series,
@@ -193,23 +194,10 @@ def import_quote_history() -> ResponseReturnValue:
 
 @bp.post("/quotes/import-position-history")
 def import_position_quote_history() -> ResponseReturnValue:
-    """Refresh stock history from the earliest open-position date per ticker."""
+    """Refresh stock history from the earliest open-position date per
+    ticker, plus every ticker registered as a comparison benchmark."""
 
-    rows = db.session.execute(
-        select(
-            Position.ticker_id,
-            Ticker.symbol,
-            Ticker.market,
-            func.min(Position.opened_on).label("start_date"),
-        )
-        .join(Ticker, Ticker.id == Position.ticker_id)
-        .group_by(Position.ticker_id, Ticker.symbol, Ticker.market)
-        .order_by(Ticker.symbol)
-    ).all()
-    targets = [
-        (TickerImportTarget(row.ticker_id, row.symbol, row.market), row.start_date)
-        for row in rows
-    ]
+    targets = quote_update_targets()
     db.session.rollback()
 
     imported: list[tuple[int, DailyQuote]] = []

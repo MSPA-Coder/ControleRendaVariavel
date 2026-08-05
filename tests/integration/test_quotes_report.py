@@ -160,6 +160,7 @@ def test_quotes_offers_and_applies_benchmark_comparison(
             market=Market.B3,
             rtd_market_code="B",
             currency="BRL",
+            is_benchmark=True,
         )
         db.session.add(benchmark)
         db.session.commit()
@@ -192,6 +193,7 @@ def test_quotes_comparison_falls_back_to_full_history_without_a_position(
             market=Market.B3,
             rtd_market_code="B",
             currency="BRL",
+            is_benchmark=True,
         )
         db.session.add(benchmark)
         db.session.commit()
@@ -223,6 +225,7 @@ def test_quotes_chart_truncates_to_position_start_but_browser_keeps_full_history
             market=Market.B3,
             rtd_market_code="B",
             currency="BRL",
+            is_benchmark=True,
         )
         db.session.add(benchmark)
         db.session.commit()
@@ -259,6 +262,7 @@ def test_quotes_excludes_selected_ticker_from_its_own_benchmark_options(
             market=Market.B3,
             rtd_market_code="B",
             currency="BRL",
+            is_benchmark=True,
         )
         db.session.add(benchmark)
         db.session.commit()

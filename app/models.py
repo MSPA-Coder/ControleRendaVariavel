@@ -152,6 +152,19 @@ class Ticker(Base):
     market: Mapped[Market] = mapped_column(Enum(Market, name="market"))
     rtd_market_code: Mapped[str] = mapped_column(String(1))
     currency: Mapped[str] = mapped_column(String(3))
+    is_benchmark: Mapped[bool] = mapped_column(Boolean, default=False)
+    """Marca um ticker como referência de comparação (ex.: BOVA11, IBOV,
+    USDBRL=X) em vez de um ativo detido em carteira.
+
+    Tickers de referência: aparecem nos comparadores de evolução das
+    cotações e da performance (``app.routes.helpers.benchmark_candidates``)
+    e têm sua cotação diária atualizada junto com os demais ativos
+    (``app.routes.helpers.quote_update_targets``), mas ficam de fora dos
+    formulários de Posições, Transações, Proventos e Contratos de Opção
+    (``app.routes.helpers.investable_ticker_records``) — não representam
+    algo que se possa comprar/vender na carteira. Ver validação cruzada em
+    ``app.routes.tables`` que impede marcar como referência um ticker já
+    usado em uma posição ou em um contrato de opção, e vice-versa."""
     positions: Mapped[list[Position]] = relationship(back_populates="ticker_ref")
     option_contract: Mapped[OptionContract | None] = relationship(
         back_populates="ticker_ref",

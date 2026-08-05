@@ -56,10 +56,12 @@
   O período é aplicado no servidor sobre todas as cotações históricas
   disponíveis para os ativos selecionados.
   {% if selected_benchmark %}
-  Comparando com a evolução percentual de {{ selected_benchmark.symbol }}
-  desde a abertura da posição mais antiga em cada moeda (não desde o início
-  de todo o histórico de cotações disponível, que costuma remontar a muito
-  antes da compra e não diria muito sobre o desempenho da carteira).
+  Comparando com quanto valeria hoje se, em cada ativo, o mesmo capital hoje
+  investido (quantidade × custo médio atual) tivesse sido aplicado em
+  {{ selected_benchmark.symbol }} na data de abertura daquela posição — não a
+  evolução percentual do índice, que não é comparável a um valor de carteira
+  que recebe novos aportes ao longo do tempo. Restrito a ações, desde a
+  abertura da posição mais antiga em cada moeda.
   {% endif %}
 </p>
 

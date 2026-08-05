@@ -13,6 +13,7 @@ class TickerInput:
     market: Market
     rtd_market_code: str
     currency: str
+    is_benchmark: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,4 +49,5 @@ def parse_ticker(form: Mapping[str, str]) -> TickerInput:
         raise ValueError("Moeda inválida.")
     if not trading_name or len(trading_name) > 80:
         raise ValueError("Informe um nome de pregão válido.")
-    return TickerInput(symbol, trading_name, market, rtd_market_code, currency)
+    is_benchmark = form.get("is_benchmark", "").strip().lower() in {"1", "true", "on", "yes"}
+    return TickerInput(symbol, trading_name, market, rtd_market_code, currency, is_benchmark)

@@ -12,7 +12,7 @@ from app import db
 from app.domain import operation_result
 from app.models import Broker, PositionKind, Side, Ticker, Transaction, TransactionStatus
 from app.routes import bp
-from app.routes.helpers import broker_records, selected_filters, ticker_records
+from app.routes.helpers import broker_records, investable_ticker_records, selected_filters
 from app.validation import parse_finite_decimal
 
 
@@ -44,8 +44,11 @@ def _parse_form() -> TransactionInput:
         side = Side(raw["side"])
     except (KeyError, ValueError, ArithmeticError) as exc:
         raise ValueError("Há um valor ausente ou inválido no formulário.") from exc
-    if db.session.get(Broker, broker_id) is None or db.session.get(Ticker, ticker_id) is None:
+    ticker = db.session.get(Ticker, ticker_id)
+    if db.session.get(Broker, broker_id) is None or ticker is None:
         raise ValueError("Selecione uma corretora e um ticker cadastrados.")
+    if ticker.is_benchmark:
+        raise ValueError("Esse ticker está marcado como referência de comparação.")
     if quantity <= 0 or average_cost < 0 or exit_price < 0:
         raise ValueError(
             "Quantidade deve ser positiva; custo e preço de saída não podem ser negativos."
@@ -159,7 +162,7 @@ def new_transaction() -> str:
         "transaction_form.html",
         transaction=None,
         brokers=broker_records(),
-        tickers=ticker_records(),
+        tickers=investable_ticker_records(),
         sides=Side,
         position_kinds=PositionKind,
     )
@@ -175,7 +178,7 @@ def create_transaction() -> ResponseReturnValue:
             "transaction_form.html",
             transaction=request.form,
             brokers=broker_records(),
-            tickers=ticker_records(),
+            tickers=investable_ticker_records(),
             sides=Side,
             position_kinds=PositionKind,
         ), 422
@@ -200,7 +203,7 @@ def edit_transaction(transaction_id: int) -> ResponseReturnValue:
         "transaction_form.html",
         transaction=transaction,
         brokers=broker_records(),
-        tickers=ticker_records(),
+        tickers=investable_ticker_records(),
         sides=Side,
         position_kinds=PositionKind,
     )
@@ -220,7 +223,7 @@ def update_transaction(transaction_id: int) -> ResponseReturnValue:
             "transaction_form.html",
             transaction=request.form,
             brokers=broker_records(),
-            tickers=ticker_records(),
+            tickers=investable_ticker_records(),
             sides=Side,
             position_kinds=PositionKind,
         ), 422

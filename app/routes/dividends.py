@@ -12,7 +12,7 @@ from app import db
 from app.dividend_report import build_dividend_report
 from app.models import Broker, Dividend, Position, PositionKind, Ticker
 from app.routes import bp
-from app.routes.helpers import broker_records, ticker_records
+from app.routes.helpers import broker_records, investable_ticker_records
 from app.validation import parse_finite_decimal
 
 
@@ -34,8 +34,11 @@ def _parse_form() -> DividendInput:
         payment_date = date.fromisoformat(raw["payment_date"])
     except (KeyError, ValueError, ArithmeticError) as exc:
         raise ValueError("Há um valor ausente ou inválido no formulário.") from exc
-    if db.session.get(Broker, broker_id) is None or db.session.get(Ticker, ticker_id) is None:
+    ticker = db.session.get(Ticker, ticker_id)
+    if db.session.get(Broker, broker_id) is None or ticker is None:
         raise ValueError("Selecione uma corretora e um ticker cadastrados.")
+    if ticker.is_benchmark:
+        raise ValueError("Esse ticker está marcado como referência de comparação.")
     if amount <= 0:
         raise ValueError("O valor do provento deve ser positivo.")
     notes = raw.get("notes") or None
@@ -93,7 +96,10 @@ def dividends() -> str:
 @bp.get("/dividends/new")
 def new_dividend() -> str:
     return render_template(
-        "dividend_form.html", dividend=None, brokers=broker_records(), tickers=ticker_records()
+        "dividend_form.html",
+        dividend=None,
+        brokers=broker_records(),
+        tickers=investable_ticker_records(),
     )
 
 
@@ -107,7 +113,7 @@ def create_dividend() -> ResponseReturnValue:
             "dividend_form.html",
             dividend=request.form,
             brokers=broker_records(),
-            tickers=ticker_records(),
+            tickers=investable_ticker_records(),
         ), 422
     db.session.add(Dividend(**asdict(data)))
     db.session.commit()
@@ -119,7 +125,10 @@ def create_dividend() -> ResponseReturnValue:
 def edit_dividend(dividend_id: int) -> str:
     dividend = db.get_or_404(Dividend, dividend_id)
     return render_template(
-        "dividend_form.html", dividend=dividend, brokers=broker_records(), tickers=ticker_records()
+        "dividend_form.html",
+        dividend=dividend,
+        brokers=broker_records(),
+        tickers=investable_ticker_records(),
     )
 
 
@@ -134,7 +143,7 @@ def update_dividend(dividend_id: int) -> ResponseReturnValue:
             "dividend_form.html",
             dividend=request.form,
             brokers=broker_records(),
-            tickers=ticker_records(),
+            tickers=investable_ticker_records(),
         ), 422
     for key, value in asdict(data).items():
         setattr(dividend, key, value)

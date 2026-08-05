@@ -33,7 +33,7 @@ from app.models import (
 )
 from app.option_portfolio import build_option_portfolio
 from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
-from app.routes.helpers import option_contracts, option_expirations, ticker_records
+from app.routes.helpers import investable_ticker_records, option_contracts, option_expirations
 from app.validation import parse_finite_decimal
 
 bp = Blueprint("options", __name__)
@@ -260,7 +260,7 @@ def table_contracts() -> ResponseReturnValue:
     return render_template(
         "table_contracts.html",
         contracts=option_contracts(),
-        tickers=ticker_records(),
+        tickers=investable_ticker_records(),
         expirations=option_expirations(),
         option_types=OptionType,
     )
@@ -331,6 +331,12 @@ def create_contract() -> ResponseReturnValue:
         strike = parse_finite_decimal(request.form["strike"], field_name="um strike")
         if strike < 0 or ticker_id == underlying_ticker_id:
             raise ValueError
+        ticker = db.session.get(Ticker, ticker_id)
+        underlying = db.session.get(Ticker, underlying_ticker_id)
+        if ticker is None or underlying is None:
+            raise ValueError
+        if ticker.is_benchmark or underlying.is_benchmark:
+            raise ValueError
         db.session.add(
             OptionContract(
                 ticker_id=ticker_id,
@@ -368,6 +374,12 @@ def update_contract(contract_id: int) -> ResponseReturnValue:
         underlying_ticker_id = int(request.form["underlying_ticker_id"])
         strike = parse_finite_decimal(request.form["strike"], field_name="um strike")
         if strike < 0 or ticker_id == underlying_ticker_id:
+            raise ValueError
+        ticker = db.session.get(Ticker, ticker_id)
+        underlying = db.session.get(Ticker, underlying_ticker_id)
+        if ticker is None or underlying is None:
+            raise ValueError
+        if ticker.is_benchmark or underlying.is_benchmark:
             raise ValueError
         contract.ticker_id = ticker_id
         contract.underlying_ticker_id = underlying_ticker_id

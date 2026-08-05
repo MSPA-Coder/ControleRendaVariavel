@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import click
 from flask import Flask, current_app
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
@@ -22,15 +22,14 @@ from app.models import (
     Position,
     Quote,
     QuoteHistory,
-    Ticker,
     User,
 )
 from app.quote_history_import import (
     DailyQuote,
     QuoteHistoryImportError,
-    TickerImportTarget,
     fetch_yahoo_daily_quotes,
 )
+from app.routes.helpers import quote_update_targets
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
 
@@ -246,23 +245,10 @@ def poll_rtd(watch: bool) -> None:
 
 @click.command("import-position-history")
 def import_position_history() -> None:
-    """Import daily stock history from each open position's first date."""
+    """Import daily stock history from each open position's first date,
+    plus every ticker registered as a comparison benchmark."""
 
-    rows = db.session.execute(
-        select(
-            Position.ticker_id,
-            Ticker.symbol,
-            Ticker.market,
-            func.min(Position.opened_on).label("start_date"),
-        )
-        .join(Ticker, Ticker.id == Position.ticker_id)
-        .group_by(Position.ticker_id, Ticker.symbol, Ticker.market)
-        .order_by(Ticker.symbol)
-    ).all()
-    targets = [
-        (TickerImportTarget(row.ticker_id, row.symbol, row.market), row.start_date)
-        for row in rows
-    ]
+    targets = quote_update_targets()
     db.session.rollback()
 
     imported: list[tuple[int, DailyQuote]] = []
