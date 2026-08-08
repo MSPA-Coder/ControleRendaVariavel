@@ -110,6 +110,39 @@ As imagens de teste copiam o código-fonte, então **toda** fase precisa de
 | 5 — Limpeza e docs | pendente | — |
 | 6 — Encerramento | pendente | — |
 
+## Como retomar
+
+O trabalho está todo commitado em `feature/htmx`; nada depende de estado em
+memória. Para continuar:
+
+1. `git checkout feature/htmx`
+2. `docker compose --profile test build` — as imagens copiam o código-fonte,
+   então sem isso os testes rodam a versão anterior.
+3. Próxima fase pendente: **fase 4 (filtros)**.
+
+### Padrão já estabelecido (seguir nas fases seguintes)
+
+- Fragmento fica em `app/templates/partials/`, como macro ou include, e é
+  usado **também** pela página inteira — nunca duplicar a apresentação.
+- A rota do fragmento vive em `app/routes/partials.py` e reaproveita um
+  builder de contexto compartilhado com a rota da página (ver
+  `portfolio_results_context` em `app/routes/positions.py`).
+- O fragmento devolve seus próprios atributos `hx-*`, senão o ciclo de
+  atualização morre depois da primeira troca.
+- A URL de polling carrega os filtros vigentes
+  (`url_for(..., **request.args)`).
+- Todo fragmento ganha teste de autenticação e teste de paridade com a
+  página.
+
+### Paralelização sugerida para a fase 4
+
+Os arquivos são disjuntos, então dá para dividir entre agentes Sonnet:
+
+- agente A: `transactions.html`, `dividends.html`
+- agente B: `quotes.html`, `performance.html`
+- agente C: `exposure_asset/broker/market.html` (via `partials/exposure.html`)
+- serial, por último: `index.html` — já mexido nas fases 2 e 3
+
 ## Decisões tomadas
 
 - **HTMX 2.0.10**, baixado do unpkg (dist oficial do pacote `htmx.org`),
