@@ -26,11 +26,19 @@ Valores monetarios usam `Decimal` de ponta a ponta e moedas nunca sao
 somadas entre si: totais, pesos e percentuais sao sempre calculados por
 moeda.
 
-### API JSON
+### Interface
 
-`/api/portfolio` (paginada), `/api/options`, `/api/collector-heartbeat` e
-`/api/rtd-service` respondem JSON para o proprio frontend. Todas exigem
-sessao autenticada e respondem `401` sem ela.
+As paginas sao renderizadas pelo servidor e atualizadas por
+[HTMX](https://htmx.org), servido localmente em versao fixa. Trocar um filtro
+ou receber uma cotacao nova substitui apenas a regiao afetada, preservando a
+URL e o historico do navegador; nao ha recarga de pagina.
+
+Nao existe API JSON: o servidor responde HTML, inclusive nos fragmentos. O
+unico endpoint que devolve JSON e `/health`, usado pelo health check do
+container.
+
+O JavaScript proprio cobre apenas o que o HTMX nao resolve: o menu, os
+paineis recolhiveis e os graficos Chart.js.
 
 ## Execucao
 

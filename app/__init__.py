@@ -83,7 +83,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         TRUST_PROXY_HEADERS=os.getenv("TRUST_PROXY_HEADERS", "false").lower() == "true",
         RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
         RATELIMIT_ENABLED=os.getenv("RATELIMIT_ENABLED", "true").lower() == "true",
-        PORTFOLIO_API_CACHE_TTL_SECONDS=float(os.getenv("PORTFOLIO_API_CACHE_TTL_SECONDS", "2")),
     )
     if config:
         app.config.update(config)
@@ -119,12 +118,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # No inline <script>/<style> is used anywhere in app/templates, so
         # the default same-origin CSP applies cleanly without 'unsafe-inline'.
         content_security_policy={"default-src": "'self'", "object-src": "'none'"},
-    )
-
-    from app.routes.helpers import TTLCache
-
-    app.extensions["portfolio_api_cache"] = TTLCache(
-        app.config["PORTFOLIO_API_CACHE_TTL_SECONDS"]
     )
 
     from app.rtd_service import RemoteRtdService, RtdServiceManager
