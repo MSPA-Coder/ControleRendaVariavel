@@ -98,14 +98,29 @@ def _parse_form() -> PositionInput:
     )
 
 
-@bp.get("/")
-def index() -> str:
+def portfolio_results_context() -> dict[str, object]:
+    """Contexto da regiao de resultados da carteira.
+
+    Compartilhado entre a pagina inteira e o fragmento atualizado por HTMX,
+    para que os dois nunca divirjam.
+    """
     position_kind, broker, raw_kind = selected_filters()
     group_by_broker = request.args.get("group_by_broker") == "1"
-    portfolio = build_portfolio(
-        positions_query(position_kind, broker, group_by_broker=group_by_broker),
-        stale_after_seconds=quote_stale_after_seconds(),
-    )
+    return {
+        "portfolio": build_portfolio(
+            positions_query(position_kind, broker, group_by_broker=group_by_broker),
+            stale_after_seconds=quote_stale_after_seconds(),
+        ),
+        "group_by_broker": group_by_broker,
+        "poll_interval_seconds": poll_interval_seconds(),
+        "selected_broker": broker or "",
+        "selected_kind": raw_kind,
+    }
+
+
+@bp.get("/")
+def index() -> str:
+    results = portfolio_results_context()
     service = rtd_service()
     try:
         rtd_service_running = service.is_running
@@ -117,15 +132,11 @@ def index() -> str:
         rtd_service_status = "unavailable"
     return render_template(
         "index.html",
-        portfolio=portfolio,
         brokers=brokers(),
-        selected_broker=broker or "",
-        selected_kind=raw_kind,
-        group_by_broker=group_by_broker,
-        poll_interval_seconds=poll_interval_seconds(),
         rtd_service_running=rtd_service_running,
         rtd_service_available=rtd_service_available,
         rtd_service_status=rtd_service_status,
+        **results,
     )
 
 
