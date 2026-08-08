@@ -238,6 +238,9 @@ o reconstroi ao terminar.
 A suite nunca acessa o banco operacional: ela usa `TEST_DATABASE_URL`, que
 aponta para o servico descartavel `test-db`.
 
+Para levar esta politica a outro projeto que use a mesma base de engenharia,
+veja [`docs/migracao-politica-de-testes.md`](docs/migracao-politica-de-testes.md).
+
 ### Classificacao de testes
 
 Um marcador so existe quando algum comando seleciona por ele:
