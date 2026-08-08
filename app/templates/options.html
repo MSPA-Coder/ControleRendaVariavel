@@ -1,18 +1,8 @@
 {% extends "base.html" %}
+{% import "partials/collector.html" as collector %}
 {% block header_controls %}
 <span class="header-controls">
-  <span
-    class="collector-heartbeat is-{{ collector_heartbeat.status }}"
-    data-collector-heartbeat
-    data-heartbeat-api="{{ url_for('portfolio.collector_heartbeat_api') }}"
-    data-heartbeat-status="{{ collector_heartbeat.status }}"
-    data-last-read-at="{{ collector_heartbeat.last_read_at or '' }}"
-    role="status"
-    aria-live="polite"
-  >
-    <span class="heartbeat-dot" aria-hidden="true"></span>
-    <time data-heartbeat-time>{{ collector_heartbeat.last_read_at or 'sem leitura' }}</time>
-  </span>
+  {{ collector.heartbeat(collector_heartbeat) }}
   <a class="button button-primary" href="{{ url_for('options.new_position') }}">Nova posição</a>
 </span>
 {% endblock %}

@@ -4,26 +4,19 @@ from typing import Any
 
 from flask import current_app, jsonify, request
 from flask.typing import ResponseReturnValue
-from pydantic import BaseModel, ValidationError
 
 from app import limiter
-from app.collector_heartbeat import collector_heartbeat
 from app.portfolio import build_portfolio
 from app.routes import bp
 from app.routes.helpers import (
     poll_interval_seconds,
     positions_query,
     quote_stale_after_seconds,
-    rtd_service,
     selected_filters,
 )
 
 DEFAULT_PER_PAGE = 50
 MAX_PER_PAGE = 200
-
-
-class RtdToggleRequest(BaseModel):
-    enabled: bool
 
 
 def _pagination_params() -> tuple[int, int]:
@@ -38,43 +31,6 @@ def _pagination_params() -> tuple[int, int]:
     page = max(page, 1)
     per_page = min(max(per_page, 1), MAX_PER_PAGE)
     return page, per_page
-
-
-@bp.route("/api/rtd-service", methods=["GET", "POST"])
-@limiter.limit("120 per minute")
-def rtd_service_api() -> ResponseReturnValue:
-    service = rtd_service()
-    try:
-        if request.method == "POST":
-            payload = request.get_json(silent=True)
-            try:
-                toggle = RtdToggleRequest.model_validate(payload or {})
-            except ValidationError:
-                return jsonify(error="Informe o estado booleano 'enabled'."), 400
-            if toggle.enabled:
-                service.start()
-            else:
-                service.stop()
-        return jsonify(
-            running=service.is_running,
-            available=service.available,
-            status=service.status,
-        )
-    except (OSError, RuntimeError) as exc:
-        current_app.logger.warning("Não foi possível acessar o coletor RTD: %s", exc)
-        return jsonify(
-            error=str(exc), running=False, available=False, status="unavailable"
-        ), 503
-
-
-@bp.get("/api/collector-heartbeat")
-@limiter.limit("120 per minute")
-def collector_heartbeat_api() -> ResponseReturnValue:
-    return jsonify(
-        **collector_heartbeat(
-            stale_after_seconds=quote_stale_after_seconds()
-        )
-    )
 
 
 def _build_portfolio_payload(page: int, per_page: int) -> dict[str, Any]:

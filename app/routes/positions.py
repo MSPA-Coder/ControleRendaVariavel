@@ -110,9 +110,11 @@ def index() -> str:
     try:
         rtd_service_running = service.is_running
         rtd_service_available = service.available
-    except RuntimeError:
+        rtd_service_status = service.status
+    except (OSError, RuntimeError):
         rtd_service_running = False
         rtd_service_available = False
+        rtd_service_status = "unavailable"
     return render_template(
         "index.html",
         portfolio=portfolio,
@@ -123,6 +125,7 @@ def index() -> str:
         poll_interval_seconds=poll_interval_seconds(),
         rtd_service_running=rtd_service_running,
         rtd_service_available=rtd_service_available,
+        rtd_service_status=rtd_service_status,
     )
 
 

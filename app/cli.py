@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from zoneinfo import ZoneInfo
 
 import click
 from flask import Flask, current_app
@@ -13,6 +12,7 @@ from sqlalchemy.orm import joinedload
 from app import db
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
 from app.collector_settings import default_collector_settings
+from app.domain import MARKET_TIMEZONE
 from app.models import (
     AppSetting,
     CollectorMode,
@@ -32,8 +32,6 @@ from app.quote_history_import import (
 from app.routes.helpers import quote_update_targets, upsert_quote_history
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
-
-MARKET_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 
 
 def register_commands(app: Flask) -> None:

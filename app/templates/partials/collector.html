@@ -1,0 +1,50 @@
+{# Fragmentos do estado do coletor RTD, atualizados por HTMX.
+
+   `polling=true` faz o próprio fragmento se reagendar depois de cada troca:
+   os atributos `hx-*` voltam no HTML devolvido pelo servidor, então o ciclo
+   continua sem JavaScript próprio. Quando o indicador é embutido em outro
+   fragmento que já faz polling (o controle do RTD), `polling=false` evita
+   duas requisições concorrentes para a mesma informação. #}
+
+{% macro heartbeat(collector_heartbeat, polling=true) %}
+<span
+  class="collector-heartbeat is-{{ collector_heartbeat.status }}"
+  {% if polling %}
+  hx-get="{{ url_for('portfolio.collector_heartbeat_partial') }}"
+  hx-trigger="every 10s"
+  hx-swap="outerHTML"
+  {% endif %}
+  title="{{ collector_heartbeat.status|collector_status_label }}"
+  role="status"
+  aria-live="polite"
+>
+  <span class="heartbeat-dot" aria-hidden="true"></span>
+  <span class="visually-hidden">{{ collector_heartbeat.status|collector_status_label }}</span>
+  <time {% if collector_heartbeat.last_read_at %}datetime="{{ collector_heartbeat.last_read_at }}"{% endif %}>{{ collector_heartbeat.last_read_at|read_at }}</time>
+</span>
+{% endmacro %}
+
+{% macro rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) %}
+{# `hx-disabled-elt="this"` desabilita o controle durante a requisição, o
+   mesmo cuidado que o JS anterior tinha para evitar cliques repetidos. #}
+<label class="rtd-toggle" title="Ativar ou desligar o coletor de cotações RTD"
+       hx-get="{{ url_for('portfolio.rtd_service_partial') }}"
+       hx-trigger="every 10s"
+       hx-swap="outerHTML"
+       hx-disabled-elt="find input">
+  <input
+    type="checkbox"
+    role="switch"
+    name="enabled"
+    aria-label="Coletor RTD"
+    hx-post="{{ url_for('portfolio.rtd_service_partial') }}"
+    hx-target="closest label"
+    hx-swap="outerHTML"
+    {{ 'checked' if rtd_service_running }}
+    {{ 'disabled' if not rtd_service_available }}
+  >
+  <span class="rtd-toggle-track" aria-hidden="true"></span>
+  <span>{{ rtd_service_status|rtd_status_label(rtd_service_running) }}</span>
+  {{ heartbeat(collector_heartbeat, polling=false) }}
+</label>
+{% endmacro %}

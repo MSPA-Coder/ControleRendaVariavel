@@ -350,6 +350,12 @@ details.catalog-card > h2 { display: none; }
   gap: .35rem; padding: .35rem .55rem;
 }
 .collector-heartbeat time { opacity: .86; }
+/* Texto só para leitores de tela: o estado do coletor é comunicado
+   visualmente pela cor do ponto, que sozinha não é acessível. */
+.visually-hidden {
+  clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden;
+  position: absolute; white-space: nowrap; width: 1px;
+}
 .heartbeat-dot { background: #9cafbb; border-radius: 50%; height: .55rem; width: .55rem; }
 .collector-heartbeat.is-online .heartbeat-dot { background: #2fb98a; }
 .collector-heartbeat.is-stale .heartbeat-dot { background: #e1a11a; }

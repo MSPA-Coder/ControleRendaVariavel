@@ -104,7 +104,7 @@ As imagens de teste copiam o código-fonte, então **toda** fase precisa de
 | Fase | Situação | Commit |
 |---|---|---|
 | 1 — Fundação | **concluída** | `htmx 2.0.10` vendorizado, CSRF via `hx-headers`, `is_htmx_request()`, 5 testes |
-| 2 — Coletor e RTD | pendente | — |
+| 2 — Coletor e RTD | **concluída** | parciais auto-atualizáveis, 2 endpoints JSON removidos, app.js 240→131 linhas |
 | 3 — Carteira | pendente | — |
 | 4 — Filtros | pendente | — |
 | 5 — Limpeza e docs | pendente | — |
