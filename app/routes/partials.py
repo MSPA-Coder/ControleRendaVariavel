@@ -20,7 +20,6 @@ from app import limiter
 from app.collector_heartbeat import collector_heartbeat
 from app.routes import bp
 from app.routes.helpers import quote_stale_after_seconds, rtd_service
-from app.routes.positions import portfolio_results_context
 
 
 def _render_heartbeat() -> str:
@@ -79,14 +78,3 @@ def rtd_service_partial() -> ResponseReturnValue:
         with suppress(OSError, RuntimeError):
             service.start() if enabled else service.stop()
     return _render_rtd_toggle()
-
-
-@bp.get("/partials/portfolio")
-@limiter.limit("120 per minute")
-def portfolio_partial() -> ResponseReturnValue:
-    """Regiao de resultados da carteira, atualizada em intervalo curto.
-
-    Substitui apenas o fragmento: antes, o navegador recarregava a pagina
-    inteira a cada ciclo do coletor.
-    """
-    return render_template("partials/portfolio_results.html", **portfolio_results_context())

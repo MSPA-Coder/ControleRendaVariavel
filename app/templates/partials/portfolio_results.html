@@ -7,7 +7,7 @@
    pagina (era o que o JavaScript anterior fazia com window.location.reload).
 #}
 <div id="portfolio-results"
-     hx-get="{{ url_for('portfolio.portfolio_partial', **request.args) }}"
+     hx-get="{{ url_for('portfolio.index', **request.args) }}"
      hx-trigger="every {{ poll_interval_seconds }}s"
      hx-swap="outerHTML">
 <div class="table-wrap">

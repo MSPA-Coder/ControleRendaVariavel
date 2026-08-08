@@ -106,7 +106,7 @@ As imagens de teste copiam o código-fonte, então **toda** fase precisa de
 | 1 — Fundação | **concluída** | `htmx 2.0.10` vendorizado, CSRF via `hx-headers`, `is_htmx_request()`, 5 testes |
 | 2 — Coletor e RTD | **concluída** | parciais auto-atualizáveis, 2 endpoints JSON removidos, app.js 240→131 linhas |
 | 3 — Carteira | **concluída** | fragmento auto-atualizável; fim do `window.location.reload()` |
-| 4 — Filtros | pendente | — |
+| 4 — Filtros | **concluída** | 8 páginas trocam só a região filtrada; fim do `data-auto-submit` |
 | 5 — Limpeza e docs | pendente | — |
 | 6 — Encerramento | pendente | — |
 

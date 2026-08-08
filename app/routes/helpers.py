@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from threading import Lock
@@ -440,6 +440,27 @@ def exposure_chart_data(
             "weight_values": [weight for _, weight in group],
         }
         for currency, group in sorted(grouped.items())
+    ]
+
+
+def exposure_group_rows(
+    groups: Sequence[BrokerGroup] | Sequence[MarketGroup],
+    label: Callable[[BrokerGroup], str] | Callable[[MarketGroup], str],
+) -> list[dict[str, object]]:
+    """Linhas da tabela de grupos das paginas de Exposicao.
+
+    O rotulo e resolvido aqui porque corretora e mercado o obtem de
+    atributos diferentes; com ele pronto, as tres paginas compartilham um
+    unico fragmento em vez de um template por recorte.
+    """
+    return [
+        {
+            "label": label(group),  # type: ignore[arg-type]
+            "currency": group.currency,
+            "current_total": group.current_total,
+            "current_weight": group.current_weight,
+        }
+        for group in groups
     ]
 
 

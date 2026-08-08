@@ -12,7 +12,7 @@ from app.models import AppSetting, Broker, Market, Position, PositionKind, Quote
 
 pytestmark = [pytest.mark.observable_contract]
 
-PARTIAL_URL = "/partials/portfolio"
+HTMX = {"HX-Request": "true"}
 
 
 def _seed() -> None:
@@ -55,8 +55,9 @@ def _seed() -> None:
 
 @pytest.mark.security
 @pytest.mark.critical
-def test_portfolio_partial_requires_authentication(client: FlaskClient) -> None:
-    assert client.get(PARTIAL_URL).status_code == 302
+def test_partial_requires_authentication(client: FlaskClient) -> None:
+    """`HX-Request` muda a forma da resposta, nunca a autorização."""
+    assert client.get("/", headers=HTMX).status_code == 302
 
 
 @pytest.mark.critical
@@ -69,7 +70,7 @@ def test_partial_and_page_show_the_same_numbers(app: Flask, auth_client: FlaskCl
         _seed()
 
     page = auth_client.get("/").get_data(as_text=True)
-    partial = auth_client.get(PARTIAL_URL).get_data(as_text=True)
+    partial = auth_client.get("/", headers=HTMX).get_data(as_text=True)
 
     # Resultado líquido de 100 x (25 - 20), com o fator de corretagem.
     assert "PETR4" in page and "PETR4" in partial
@@ -82,7 +83,7 @@ def test_partial_keeps_polling_itself(app: Flask, auth_client: FlaskClient) -> N
     with app.app_context():
         _seed()
 
-    html = auth_client.get(PARTIAL_URL).get_data(as_text=True)
+    html = auth_client.get("/", headers=HTMX).get_data(as_text=True)
 
     assert 'id="portfolio-results"' in html
     assert "hx-trigger=" in html and "every" in html
@@ -96,7 +97,7 @@ def test_partial_preserves_the_active_filters(app: Flask, auth_client: FlaskClie
     with app.app_context():
         _seed()
 
-    html = auth_client.get(f"{PARTIAL_URL}?broker=Genial").get_data(as_text=True)
+    html = auth_client.get("/?broker=Genial", headers=HTMX).get_data(as_text=True)
 
     assert "Nenhuma posição encontrada" in html
     assert "broker=Genial" in html
@@ -115,7 +116,7 @@ def test_polling_interval_follows_the_configured_value(
         settings.poll_interval_seconds = 37
         db.session.commit()
 
-    html = auth_client.get(PARTIAL_URL).get_data(as_text=True)
+    html = auth_client.get("/", headers=HTMX).get_data(as_text=True)
 
     assert 'hx-trigger="every 37s"' in html
 
@@ -132,3 +133,20 @@ def test_page_no_longer_carries_the_full_reload_hooks(
 
     assert "data-refresh-seconds" not in html
     assert "data-refresh-api" not in html
+
+
+def test_htmx_response_is_a_fragment_not_the_whole_page(
+    app: Flask, auth_client: FlaskClient
+) -> None:
+    """A mesma URL serve a página e o fragmento; sem isso o filtro empurraria
+    ao histórico o endereço de um fragmento em vez do da página."""
+    with app.app_context():
+        _seed()
+
+    fragment = auth_client.get("/", headers=HTMX).get_data(as_text=True)
+    page = auth_client.get("/").get_data(as_text=True)
+
+    assert "<!doctype html>" not in fragment.lower()
+    assert "<nav" not in fragment.lower()
+    assert "<!doctype html>" in page.lower()
+    assert 'id="portfolio-results"' in page

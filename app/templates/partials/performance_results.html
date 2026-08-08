@@ -1,0 +1,77 @@
+{# Regiao trocada pelo filtro em performance.html. Fica em parcial para que
+   a pagina e a resposta HTMX saiam do mesmo template. #}
+<div id="performance-results">
+<p class="form-help">
+  Evolução patrimonial e retorno mensal a partir das cotações em
+  <a href="{{ url_for('portfolio.quote_history') }}">Cotações</a>, assumindo
+  as posições reais atuais constantes ao longo de todo o histórico —
+  mesma aproximação usada no drawdown por carteira em
+  <a href="{{ url_for('portfolio.risk_report') }}">Risco</a>. Sem tratamento
+  de aportes/retiradas (sem Dietz/IRR): é só o valor da carteira mês a mês.
+  O período é aplicado no servidor sobre todas as cotações históricas
+  disponíveis para os ativos selecionados.
+  {% if selected_benchmark %}
+  Comparando com quanto valeria hoje se, em cada ativo, o mesmo capital hoje
+  investido (quantidade × custo médio atual) tivesse sido aplicado em
+  {{ selected_benchmark.symbol }} na data de abertura daquela posição — não a
+  evolução percentual do índice, que não é comparável a um valor de carteira
+  que recebe novos aportes ao longo do tempo. Restrito a ações, desde a
+  abertura da posição mais antiga em cada moeda.
+  {% endif %}
+</p>
+
+{% if reports %}
+  <div class="monthly-performance-grid">
+    {% for report in reports %}
+    {% set chart_points = chart_points_by_currency.get(report.currency, report.points) %}
+    <section class="monthly-performance-report">
+      <header>
+        <h2>{{ report.currency }}</h2>
+      </header>
+      {% if report.points %}
+      <div class="monthly-performance-chart-card">
+        <div class="chart-card-header">
+          <strong>Gráfico</strong>
+        </div>
+        {% if chart_points %}
+        <div class="monthly-performance-chart chart-box"
+             data-months='{{ chart_points|map(attribute='month')|map('string')|list|tojson }}'
+             data-values='{{ chart_points|map(attribute='ending_value')|map('string')|list|tojson }}'
+             data-currency="{{ report.currency }}"
+             {% if selected_benchmark %}
+             data-benchmark-label="{{ selected_benchmark.symbol }}"
+             data-benchmark-values='{{ benchmark_values_by_currency.get(report.currency, [])|tojson }}'
+             {% endif %}
+             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a abertura da posição' if selected_benchmark }}"></div>
+        {% else %}
+        <p class="form-help">Sem meses no período em {{ report.currency }} desde a abertura da posição.</p>
+        {% endif %}
+      </div>
+
+      <details class="monthly-performance-data-card">
+        <summary>Dados</summary>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Mês</th><th>Valor</th><th>Retorno mensal</th></tr></thead>
+            <tbody>
+              {% for point in report.points|reverse %}
+              <tr>
+                <td>{{ point.month.strftime('%m/%Y') }}</td>
+                <td class="number">{{ point.ending_value|currency(report.currency) }}</td>
+                <td class="number {{ point.return_pct|sign_class }}">{{ point.return_pct|percent(2) if point.return_pct is not none else '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% else %}
+      <p class="form-help">Ainda não há cotações históricas suficientes em {{ report.currency }}.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </div>
+{% else %}
+<p class="form-help">Nenhuma posição aberta encontrada para os filtros.</p>
+{% endif %}
+</div>

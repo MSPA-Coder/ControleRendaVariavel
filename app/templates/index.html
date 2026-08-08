@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% import "partials/collector.html" as collector %}
 {% block header_controls %}
-<form class="filters header-controls" method="get" data-auto-submit>
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for('portfolio.index') }}"
+      hx-trigger="change"
+      hx-target="#portfolio-results"
+      hx-swap="outerHTML"
+      hx-push-url="true">
   <label>Posição
     <select name="position_kind">
       <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>

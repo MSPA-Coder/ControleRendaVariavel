@@ -22,6 +22,7 @@ from app.routes.helpers import (
     accumulate_signed_quantity,
     benchmark_candidates,
     brokers,
+    is_htmx_request,
     price_series_by_ticker,
     selected_filters,
     ticker_price_series,
@@ -30,6 +31,12 @@ from app.routes.helpers import (
 
 @bp.get("/performance")
 def monthly_performance() -> str:
+    """Performance mensal: pagina inteira, ou so a regiao trocada pelo filtro.
+
+    A mesma URL serve os dois casos, entao o filtro empurra ao historico o
+    endereco real da pagina. `HX-Request` decide apenas a forma da resposta;
+    a autorizacao e identica nos dois caminhos.
+    """
     position_kind, broker, selected_kind = selected_filters()
     period = normalize_performance_period(request.args.get("period"))
     portfolio = request.args.get("portfolio", "stocks")
@@ -176,16 +183,18 @@ def monthly_performance() -> str:
                 str(value) if value is not None else None for value in aligned
             ]
 
-    return render_template(
-        "performance.html",
-        reports=reports,
-        brokers=brokers(),
-        selected_broker=broker or "",
-        selected_kind=selected_kind,
-        selected_portfolio=portfolio,
-        selected_period=period,
-        benchmark_candidates=candidates,
-        selected_benchmark=selected_benchmark,
-        chart_points_by_currency=chart_points_by_currency,
-        benchmark_values_by_currency=benchmark_values_by_currency,
-    )
+    context = {
+        "reports": reports,
+        "brokers": brokers(),
+        "selected_broker": broker or "",
+        "selected_kind": selected_kind,
+        "selected_portfolio": portfolio,
+        "selected_period": period,
+        "benchmark_candidates": candidates,
+        "selected_benchmark": selected_benchmark,
+        "chart_points_by_currency": chart_points_by_currency,
+        "benchmark_values_by_currency": benchmark_values_by_currency,
+    }
+    if is_htmx_request():
+        return render_template("partials/performance_results.html", **context)
+    return render_template("performance.html", **context)

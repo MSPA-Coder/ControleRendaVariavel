@@ -23,7 +23,9 @@ from app.routes.helpers import (
     broker_exposure_chart_data,
     broker_records,
     brokers,
+    exposure_group_rows,
     investable_ticker_records,
+    is_htmx_request,
     market_exposure_chart_data,
     poll_interval_seconds,
     positions_query,
@@ -120,7 +122,16 @@ def portfolio_results_context() -> dict[str, object]:
 
 @bp.get("/")
 def index() -> str:
+    """Carteira: pagina inteira, ou so a regiao de resultados para o HTMX.
+
+    A mesma URL serve os dois casos, entao o filtro pode empurrar ao
+    historico o endereco real da pagina (`/?broker=...`) em vez do endereco
+    de um fragmento. `HX-Request` decide apenas a forma da resposta; a
+    autorizacao e identica nos dois caminhos.
+    """
     results = portfolio_results_context()
+    if is_htmx_request():
+        return render_template("partials/portfolio_results.html", **results)
     service = rtd_service()
     try:
         rtd_service_running = service.is_running
@@ -258,46 +269,72 @@ def close_position(position_id: int) -> ResponseReturnValue:
 
 
 def _render_exposure(
-    template: str, chart_data: Callable[[PortfolioView], list[dict[str, object]]]
+    template_context: Callable[[PortfolioView], dict[str, object]],
 ) -> str:
-    """Renderiza uma das páginas de Análise > Exposição.
+    """Renderiza uma das paginas de Analise > Exposicao.
 
-    As três páginas só diferem no template e em qual recorte da carteira
-    alimenta o gráfico; os filtros, a consulta e o contexto são idênticos.
+    As tres paginas compartilham filtros, consulta e fragmento; so mudam os
+    rotulos e qual recorte da carteira alimenta o grafico. Com `HX-Request`
+    devolve so a regiao trocada pelo filtro.
     """
     position_kind, broker, raw_kind = selected_filters()
     portfolio = build_portfolio(
         positions_query(position_kind, broker),
         stale_after_seconds=quote_stale_after_seconds(),
     )
-    return render_template(
-        template,
-        portfolio=portfolio,
-        brokers=brokers(),
-        selected_broker=broker or "",
-        selected_kind=raw_kind,
-        allocation_charts=chart_data(portfolio),
-    )
+    context = {
+        "portfolio": portfolio,
+        "brokers": brokers(),
+        "selected_broker": broker or "",
+        "selected_kind": raw_kind,
+        "group_rows": [],
+        "group_heading": "",
+        **template_context(portfolio),
+    }
+    if is_htmx_request():
+        return render_template("partials/exposure_results.html", **context)
+    return render_template(context.pop("template"), **context)  # type: ignore[arg-type]
 
 
 @bp.get("/analysis/exposure-asset")
 def exposure_asset() -> str:
     return _render_exposure(
-        "exposure_asset.html", lambda portfolio: allocation_chart_data(portfolio.positions)
+        lambda portfolio: {
+            "template": "exposure_asset.html",
+            "allocation_charts": allocation_chart_data(portfolio.positions),
+            "heading": "Alocacao por ativo",
+            "subject": "ativo",
+        }
     )
 
 
 @bp.get("/analysis/exposure-broker")
 def exposure_broker() -> str:
     return _render_exposure(
-        "exposure_broker.html",
-        lambda portfolio: broker_exposure_chart_data(portfolio.broker_groups),
+        lambda portfolio: {
+            "template": "exposure_broker.html",
+            "allocation_charts": broker_exposure_chart_data(portfolio.broker_groups),
+            "group_rows": exposure_group_rows(
+                portfolio.broker_groups, lambda group: group.broker
+            ),
+            "group_heading": "Corretora",
+            "heading": "Exposicao por corretora",
+            "subject": "corretora",
+        }
     )
 
 
 @bp.get("/analysis/exposure-market")
 def exposure_market() -> str:
     return _render_exposure(
-        "exposure_market.html",
-        lambda portfolio: market_exposure_chart_data(portfolio.market_groups),
+        lambda portfolio: {
+            "template": "exposure_market.html",
+            "allocation_charts": market_exposure_chart_data(portfolio.market_groups),
+            "group_rows": exposure_group_rows(
+                portfolio.market_groups, lambda group: group.market.value
+            ),
+            "group_heading": "Mercado",
+            "heading": "Exposicao por mercado",
+            "subject": "mercado",
+        }
     )

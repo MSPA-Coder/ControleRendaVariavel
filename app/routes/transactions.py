@@ -12,7 +12,12 @@ from app import db
 from app.domain import operation_result
 from app.models import Broker, PositionKind, Side, Ticker, Transaction, TransactionStatus
 from app.routes import bp
-from app.routes.helpers import broker_records, investable_ticker_records, selected_filters
+from app.routes.helpers import (
+    broker_records,
+    investable_ticker_records,
+    is_htmx_request,
+    selected_filters,
+)
 from app.validation import parse_finite_decimal
 
 
@@ -87,8 +92,12 @@ def _build_transaction(data: TransactionInput) -> Transaction:
     return Transaction(status=TransactionStatus.CLOSED, **fields)
 
 
-@bp.get("/transactions")
-def transactions() -> str:
+def transactions_results_context() -> dict[str, object]:
+    """Contexto da região de resultados de Transações.
+
+    Compartilhado entre a página inteira e o fragmento atualizado por HTMX,
+    para que os dois nunca divirjam.
+    """
     kind, broker, position_kind_raw = selected_filters()
     status_raw = request.args.get("status", "all")
     status_order = case((Transaction.status == TransactionStatus.OPEN, 0), else_=1)
@@ -137,22 +146,39 @@ def transactions() -> str:
     avg_days_held = (
         Decimal(sum(days_held)) / Decimal(len(days_held)) if days_held else None
     )
+    return {
+        "transactions": records,
+        "selected_broker": broker or "",
+        "selected_kind": position_kind_raw,
+        "selected_status": status_raw,
+        "position_kinds": PositionKind,
+        "transaction_statuses": TransactionStatus,
+        "gain": gain,
+        "loss": loss,
+        "result": gain + loss,
+        "win_rate": win_rate,
+        "profit_factor": profit_factor,
+        "payoff_ratio": payoff_ratio,
+        "avg_days_held": avg_days_held,
+    }
+
+
+@bp.get("/transactions")
+def transactions() -> str:
+    """Transações: página inteira, ou só a região de resultados para o HTMX.
+
+    A mesma URL serve os dois casos, então o filtro pode empurrar ao
+    histórico o endereço real da página (`/transactions?...`) em vez do
+    endereço de um fragmento. `HX-Request` decide apenas a forma da
+    resposta; a autorização é idêntica nos dois caminhos.
+    """
+    results = transactions_results_context()
+    if is_htmx_request():
+        return render_template("partials/transactions_results.html", **results)
     return render_template(
         "transactions.html",
-        transactions=records,
         brokers=broker_records(),
-        selected_broker=broker or "",
-        selected_kind=position_kind_raw,
-        selected_status=status_raw,
-        position_kinds=PositionKind,
-        transaction_statuses=TransactionStatus,
-        gain=gain,
-        loss=loss,
-        result=gain + loss,
-        win_rate=win_rate,
-        profit_factor=profit_factor,
-        payoff_ratio=payoff_ratio,
-        avg_days_held=avg_days_held,
+        **results,
     )
 
 

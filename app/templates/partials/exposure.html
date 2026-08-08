@@ -3,7 +3,14 @@
    exibido; filtros, gráfico e scripts são os mesmos. #}
 
 {% macro filters(brokers, selected_kind, selected_broker, clear_endpoint) %}
-<form class="filters header-controls" method="get" data-auto-submit>
+{# hx-get aponta para a propria pagina, nao para uma rota de fragmento: e
+   isso que faz o historico do navegador receber a URL real da pagina. #}
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for(clear_endpoint) }}"
+      hx-trigger="change"
+      hx-target="#exposure-results"
+      hx-swap="outerHTML"
+      hx-push-url="true">
   <label>Posição
     <select name="position_kind">
       <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>

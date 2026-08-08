@@ -41,18 +41,6 @@
     });
   }
 
-  const filterForm = document.querySelector("[data-auto-submit]");
-  if (filterForm) {
-    // `data-quote-chart-period` (e outros controles puramente client-side,
-    // sem `name`) não devem recarregar a página — eles só redesenham um
-    // gráfico local; ver quote-history-chart.js.
-    filterForm
-      .querySelectorAll("select:not([data-quote-chart-period]), input[type=checkbox]:not([data-rtd-toggle])")
-      .forEach((field) => {
-        field.addEventListener("change", () => filterForm.requestSubmit());
-      });
-  }
-
   const quoteManagementToggle = document.querySelector("[data-quote-management-toggle]");
   const quoteManagementCard = document.getElementById("quote-management-card");
   if (quoteManagementToggle && quoteManagementCard) {

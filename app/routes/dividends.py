@@ -15,6 +15,7 @@ from app.routes import bp
 from app.routes.helpers import (
     broker_records,
     investable_ticker_records,
+    is_htmx_request,
     open_real_cost_basis_by_ticker,
 )
 from app.validation import parse_finite_decimal
@@ -49,8 +50,12 @@ def _parse_form() -> DividendInput:
     return DividendInput(broker_id, ticker_id, amount, payment_date, notes)
 
 
-@bp.get("/dividends")
-def dividends() -> str:
+def dividends_results_context() -> dict[str, object]:
+    """Contexto da região de resultados de Proventos.
+
+    Compartilhado entre a página inteira e o fragmento atualizado por HTMX,
+    para que os dois nunca divirjam.
+    """
     broker = request.args.get("broker") or None
     statement = (
         select(Dividend)
@@ -67,13 +72,30 @@ def dividends() -> str:
             totals_by_currency.get(record.currency, Decimal("0")) + record.amount
         )
     report = build_dividend_report(records, open_real_cost_basis_by_ticker())
+    return {
+        "dividends": records,
+        "selected_broker": broker or "",
+        "totals_by_currency": sorted(totals_by_currency.items()),
+        "report": report,
+    }
+
+
+@bp.get("/dividends")
+def dividends() -> str:
+    """Proventos: página inteira, ou só a região de resultados para o HTMX.
+
+    A mesma URL serve os dois casos, então o filtro pode empurrar ao
+    histórico o endereço real da página (`/dividends?...`) em vez do
+    endereço de um fragmento. `HX-Request` decide apenas a forma da
+    resposta; a autorização é idêntica nos dois caminhos.
+    """
+    results = dividends_results_context()
+    if is_htmx_request():
+        return render_template("partials/dividends_results.html", **results)
     return render_template(
         "dividends.html",
-        dividends=records,
         brokers=broker_records(),
-        selected_broker=broker or "",
-        totals_by_currency=sorted(totals_by_currency.items()),
-        report=report,
+        **results,
     )
 
 

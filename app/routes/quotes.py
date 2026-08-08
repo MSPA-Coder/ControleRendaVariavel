@@ -16,6 +16,7 @@ from app.quote_history_import import (
 from app.routes import bp
 from app.routes.helpers import (
     benchmark_candidates,
+    is_htmx_request,
     quote_update_target_tickers,
     quote_update_targets,
     stock_ticker_records,
@@ -28,6 +29,12 @@ from app.validation import parse_finite_decimal
 
 @bp.get("/quotes")
 def quote_history() -> str:
+    """Cotacoes: pagina inteira, ou so a regiao trocada pelo filtro.
+
+    A mesma URL serve os dois casos, entao o filtro empurra ao historico o
+    endereco real da pagina. `HX-Request` decide apenas a forma da resposta;
+    a autorizacao e identica nos dois caminhos.
+    """
     tickers = stock_ticker_records()
     selected_ticker: Ticker | None = None
     raw_ticker_id = request.args.get("ticker_id")
@@ -78,19 +85,21 @@ def quote_history() -> str:
                 entry for entry in benchmark_history if entry.recorded_date >= position_start
             ]
 
-    return render_template(
-        "quotes.html",
-        tickers=tickers,
-        selected_ticker=selected_ticker,
-        history=history,
-        benchmark_candidates=candidates,
-        selected_benchmark=selected_benchmark,
-        chart_history=chart_history,
-        chart_benchmark_history=chart_benchmark_history,
-        today=date.today().isoformat(),
-        default_import_start=(date.today() - timedelta(days=59)).isoformat(),
-        default_import_end=date.today().isoformat(),
-    )
+    context = {
+        "tickers": tickers,
+        "selected_ticker": selected_ticker,
+        "history": history,
+        "benchmark_candidates": candidates,
+        "selected_benchmark": selected_benchmark,
+        "chart_history": chart_history,
+        "chart_benchmark_history": chart_benchmark_history,
+        "today": date.today().isoformat(),
+        "default_import_start": (date.today() - timedelta(days=59)).isoformat(),
+        "default_import_end": date.today().isoformat(),
+    }
+    if is_htmx_request():
+        return render_template("partials/quotes_results.html", **context)
+    return render_template("quotes.html", **context)
 
 
 @bp.post("/quotes")
