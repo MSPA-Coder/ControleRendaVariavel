@@ -10,8 +10,6 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Quote, Side, Ticker
 
-pytestmark = [pytest.mark.observable_contract]
-
 HEARTBEAT_URL = "/partials/collector-heartbeat"
 RTD_URL = "/partials/rtd-service"
 

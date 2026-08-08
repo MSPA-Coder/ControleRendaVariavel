@@ -2,7 +2,7 @@ import pytest
 
 from app import create_app
 
-pytestmark = [pytest.mark.interface_smoke]
+pytestmark = [pytest.mark.smoke]
 
 
 @pytest.mark.parametrize(

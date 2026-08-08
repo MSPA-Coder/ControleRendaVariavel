@@ -10,8 +10,6 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import AppSetting, Broker, Market, Position, PositionKind, Quote, Side, Ticker
 
-pytestmark = [pytest.mark.observable_contract]
-
 HTMX = {"HX-Request": "true"}
 
 
@@ -61,7 +59,6 @@ def test_partial_requires_authentication(client: FlaskClient) -> None:
 
 
 @pytest.mark.critical
-@pytest.mark.business_rule
 def test_partial_and_page_show_the_same_numbers(app: Flask, auth_client: FlaskClient) -> None:
     """O fragmento e a página inteira saem do mesmo contexto e do mesmo
     template. Se divergirem, o auto-refresh passaria a mostrar números
@@ -90,7 +87,6 @@ def test_partial_keeps_polling_itself(app: Flask, auth_client: FlaskClient) -> N
     assert 'hx-swap="outerHTML"' in html
 
 
-@pytest.mark.business_rule
 def test_partial_preserves_the_active_filters(app: Flask, auth_client: FlaskClient) -> None:
     """A atualização automática não pode descartar o recorte escolhido: a
     URL de polling carrega os filtros vigentes."""
@@ -103,7 +99,6 @@ def test_partial_preserves_the_active_filters(app: Flask, auth_client: FlaskClie
     assert "broker=Genial" in html
 
 
-@pytest.mark.business_rule
 def test_polling_interval_follows_the_configured_value(
     app: Flask, auth_client: FlaskClient
 ) -> None:

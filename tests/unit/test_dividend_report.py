@@ -8,7 +8,7 @@ import pytest
 from app.dividend_report import build_dividend_report
 from app.models import Dividend
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def make_dividend(

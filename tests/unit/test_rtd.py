@@ -4,7 +4,7 @@ import pytest
 
 from app.rtd import ExcelRtdQuoteProvider, Instrument, parse_decimal
 
-pytestmark = [pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 @pytest.mark.parametrize(

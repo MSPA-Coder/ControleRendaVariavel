@@ -8,7 +8,7 @@ import pytest
 from app.models import Market, Position, Side
 from app.portfolio import build_portfolio
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def make_position(

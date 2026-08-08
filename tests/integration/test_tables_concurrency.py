@@ -7,7 +7,7 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def test_create_broker_survives_a_concurrent_duplicate_commit(

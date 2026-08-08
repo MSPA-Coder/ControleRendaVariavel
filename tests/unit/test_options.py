@@ -6,7 +6,7 @@ import pytest
 from app.models import OptionType
 from app.options import _business_days, calculate_option
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def _business_days_brute_force(start: date, end: date) -> int:

@@ -10,8 +10,6 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker, Market, Position, PositionKind, QuoteHistory, Side, Ticker
 
-pytestmark = [pytest.mark.business_rule, pytest.mark.observable_contract]
-
 
 def _seed_ticker() -> int:
     ticker = Ticker(

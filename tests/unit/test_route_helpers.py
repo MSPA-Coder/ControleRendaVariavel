@@ -30,7 +30,7 @@ from app.routes.helpers import (
     ticker_has_holdings,
 )
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def test_open_real_quantities_by_ticker_applies_side_signal(app: Flask) -> None:

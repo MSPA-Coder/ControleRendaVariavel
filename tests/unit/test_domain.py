@@ -5,7 +5,7 @@ import pytest
 
 from app.domain import calculate_position, operation_result, safe_div
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 @pytest.mark.parametrize(

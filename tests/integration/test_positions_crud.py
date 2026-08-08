@@ -7,7 +7,7 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker, Market, Position, Ticker
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def _seed_reference_data() -> tuple[int, int]:

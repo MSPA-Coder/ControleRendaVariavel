@@ -7,7 +7,7 @@ import pytest
 from app.rtd import Instrument
 from app.rtd_direct import DirectRtdQuoteProvider, RtdUpdateEvent, decode_refresh_data
 
-pytestmark = [pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 class FakeDirectServer:

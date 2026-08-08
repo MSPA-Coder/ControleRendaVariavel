@@ -238,20 +238,22 @@ o reconstroi ao terminar.
 A suite nunca acessa o banco operacional: ela usa `TEST_DATABASE_URL`, que
 aponta para o servico descartavel `test-db`.
 
-### Classificacao de testes por risco
+### Classificacao de testes
 
-Cada teste carrega ao menos um marcador pytest equivalente as categorias do
-AGENTS.md (`critical`, `business_rule`, `security`, `migration_persistence`,
-`observable_contract`, `interface_smoke`, `architecture`, `e2e`); veja
-`[tool.pytest.ini_options]` em `pyproject.toml` para a lista completa.
-`critical` cobre dinheiro, integridade, transacoes, migracoes, autorizacao e
-seguranca.
+Um marcador so existe quando algum comando seleciona por ele:
 
-Na CI, o subconjunto `critical` roda primeiro, sem cobertura e com `-x`,
-para reduzir o tempo de diagnostico; a suite completa (com cobertura) roda
-em seguida, sempre sem filtros parciais. Para reproduzir isso localmente:
+| Marcador | Significa | Quando roda |
+|---|---|---|
+| `critical` | dinheiro, integridade, transacoes, migracoes, autorizacao | primeiro na CI, com falha rapida; nunca removido para reduzir volume |
+| `security` | autenticacao, autorizacao, CSRF, sessao | sempre que a mudanca alcanca essas areas |
+| `smoke` | marcacao, navegacao, renderizacao | quando templates ou estaticos mudam |
+
+Os marcadores nao formam uma particao: um teste de autorizacao e `critical` e
+`security` ao mesmo tempo. Testes que nao se encaixam em nenhum ficam sem
+marcador e rodam na suite completa, que e o padrao.
 
 ```powershell
-docker compose --profile test run --rm test pytest -q -x --tb=short -m critical
-docker compose --profile test run --rm test
+docker compose --profile test run --rm test pytest -q -m critical -n 4
+docker compose --profile test run --rm test pytest -q -m security
+docker compose --profile test run --rm test pytest -q -m smoke
 ```

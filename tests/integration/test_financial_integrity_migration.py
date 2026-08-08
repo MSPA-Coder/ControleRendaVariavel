@@ -12,7 +12,7 @@ from flask_migrate import upgrade as alembic_upgrade
 
 from app import db
 
-pytestmark = [pytest.mark.critical, pytest.mark.migration_persistence]
+pytestmark = [pytest.mark.critical]
 
 _MIGRATIONS_DIR = str(Path(__file__).resolve().parents[2] / "migrations")
 

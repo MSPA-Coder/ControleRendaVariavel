@@ -26,9 +26,9 @@ jobs:
         run: docker compose --profile test run --rm quality
 
       # Anel 4 (AGENTS.md, "Estratégia de validação progressiva"): a CI é o
-      # lugar dos controles de ambiente. O subconjunto crítico roda primeiro,
-      # sem instrumentação e com falha rápida, para que uma regressão em
-      # controle crítico seja diagnosticada antes da execução completa.
+      # lugar dos controles de ambiente. `critical` roda primeiro, sem
+      # instrumentação e com falha rápida, para que uma regressão em dinheiro,
+      # integridade ou autorização seja diagnosticada antes da execução completa.
       - name: Critical test controls
         run: docker compose --profile test run --rm test pytest -q -x --tb=short -m critical -n 4
 

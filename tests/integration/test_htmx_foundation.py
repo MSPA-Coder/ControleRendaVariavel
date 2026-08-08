@@ -6,7 +6,7 @@ from flask.testing import FlaskClient
 
 from app.routes.helpers import is_htmx_request
 
-pytestmark = [pytest.mark.interface_smoke]
+pytestmark = [pytest.mark.smoke]
 
 
 def test_htmx_is_served_locally_and_version_pinned(auth_client: FlaskClient) -> None:

@@ -23,7 +23,7 @@ from app.risk import (
     sortino_ratio,
 )
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 ASSET_PRICES = [
     (date(2026, 1, 1), Decimal("100")),

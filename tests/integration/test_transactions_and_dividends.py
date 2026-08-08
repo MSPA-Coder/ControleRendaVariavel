@@ -12,7 +12,7 @@ import app.position_closure as position_closure
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Side, Ticker, Transaction
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def _seed_broker_ticker() -> tuple[int, int]:

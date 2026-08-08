@@ -1,6 +1,6 @@
 ﻿# Base compartilhada de engenharia
 
-<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.5" -->
+<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.6" -->
 
 ## Governança deste bloco-base
 
@@ -39,6 +39,9 @@ Mudanças aprovadas nesta base devem:
 
 ### Histórico de mudanças
 
+- **1.6** — Reduz a classificação de testes a marcadores que algum comando
+  seleciona (`critical`, `security`, `smoke`), admite testes sem marcador e
+  exige que um teste condicionado a dados semeie o cenário que verifica.
 - **1.5** — Substitui o portão único de encerramento por anéis de validação
   proporcionais ao raio da mudança, move os controles de ambiente para CI e
   release, exige que os anéis sejam executáveis e trata a duração da suíte
@@ -230,35 +233,48 @@ ferramenta equivalente, auditoria de dependências e CI. Suítes existentes em
 `unittest` podem permanecer quando forem confiáveis; não as reescreva apenas
 para uniformizar ferramentas.
 
-### Classificação, manutenção e falhas encontradas
+### Classificação de testes
 
-Organize a suíte por risco e finalidade. Cada teste deve pertencer a pelo menos
-uma categoria equivalente a: crítico, regra de negócio, segurança, migração e
-persistência, contrato observável, smoke de interface, arquitetura ou jornada
-E2E. A ferramenta do projeto pode representar essas categorias por marcadores,
-pastas, convenções de nome ou outra configuração verificável.
+Um marcador só existe quando **algum comando seleciona por ele**. Classificar
+por classificar produz rótulo que ninguém consulta, dá trabalho de manter e
+envelhece em silêncio: categorias vazias, categorias com um único teste e
+categorias que apenas repetem outra.
 
-- Testes de dinheiro, regras de negócio, integridade, transações, migrações,
-  autorização e segurança são controles críticos e não devem ser removidos
-  apenas para reduzir volume ou duração.
-- Testes de markup, texto incidental, existência de arquivo ou detalhe interno
-  só são mantidos quando protegem um contrato de segurança, acessibilidade,
-  compatibilidade ou operação. Consolide testes redundantes nesse nível sem
-  reduzir a cobertura do risco correspondente.
-- Regressões reais de interface, JavaScript ou atualizações parciais devem ser
-  protegidas por teste funcional ou E2E proporcional; uma inspeção estática de
-  código não é substituto suficiente quando o risco é de comportamento no
-  navegador.
-- A CI deve executar primeiro os controles críticos para reduzir o tempo de
-  diagnóstico e preservar uma etapa posterior de validação completa, incluindo
-  os controles aplicáveis e jornadas E2E críticas.
+Três marcadores bastam, porque cada um responde a uma pergunta operacional:
+
+| Marcador | Pergunta que responde | Consequência |
+|---|---|---|
+| `critical` | isto pode custar dinheiro, corromper dados ou abrir acesso indevido? | roda primeiro, com falha rápida; nunca é removido para reduzir volume ou duração |
+| `security` | isto protege autenticação, autorização, CSRF ou sessão? | roda sempre que a mudança alcança essas áreas, qualquer que seja o tamanho dela |
+| `smoke` | isto verifica marcação, navegação ou renderização? | roda quando templates ou estáticos mudam; pode ser consolidado quando redundante |
+
+Os marcadores **não formam uma partição**: um teste de autorização é
+`critical` e `security` ao mesmo tempo. O que não pode existir é marcador sem
+comando que o use.
+
+Testes que não se encaixam em nenhum dos três ficam **sem marcador**. Isso não
+os torna menos importantes: eles rodam na suíte completa, que é o padrão. A
+ausência de marcador significa apenas que nenhuma seleção precisa distingui-los.
+
+- Dinheiro, regras de negócio, integridade, transações, migrações e
+  autorização são controles críticos: marque-os e não os remova por volume.
+- Testes de marcação, texto incidental ou existência de arquivo só se
+  justificam quando protegem um contrato de segurança, acessibilidade,
+  compatibilidade ou operação. Consolide os redundantes sem reduzir a
+  cobertura do risco correspondente.
+- Regressões de interface, JavaScript ou atualização parcial exigem teste
+  funcional proporcional; inspeção estática de código não substitui
+  comportamento verificado.
+- Um teste que passa sem exercitar nada é pior que teste ausente, porque
+  compra confiança sem entregá-la. Ao criar um teste condicionado a dados,
+  garanta que o cenário exista — semeie o que for necessário.
 
 Falhas preexistentes encontradas em testes, lint, análise de tipos, migrações,
 build, auditorias ou smoke tests devem ser investigadas e corrigidas na mesma
 tarefa quando a causa estiver dentro do repositório. Após corrigir, execute
-primeiro o controle que falhou, depois os controles relacionados e repita a
-validação final aplicável. Solicite direção antes de prosseguir somente quando
-a correção exigir mudança de produto, ação destrutiva, acesso externo ou
+primeiro o controle que falhou, depois os relacionados, e repita a validação
+final aplicável. Solicite direção antes de prosseguir somente quando a
+correção exigir mudança de produto, ação destrutiva, acesso externo ou
 coordenação fora do repositório.
 
 ## Estratégia de validação progressiva

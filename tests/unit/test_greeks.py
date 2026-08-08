@@ -10,7 +10,7 @@ from app.greeks import (
 )
 from app.models import OptionType
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 # Valores de referência do exemplo clássico de Hull ("Options, Futures, and
 # Other Derivatives"): S=K=100, r=5%, sigma=20%, T=1 ano.

@@ -8,7 +8,7 @@ import pytest
 from app.models import OptionPosition, OptionType, Side
 from app.option_portfolio import build_option_portfolio
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def make_option_position(

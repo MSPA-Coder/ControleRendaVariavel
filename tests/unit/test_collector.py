@@ -1,13 +1,9 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-import pytest
-
 from app.collector import CollectorProviderManager
 from app.models import CollectorMode
 from app.rtd import Instrument, QuoteValue
-
-pytestmark = [pytest.mark.architecture]
 
 
 class FakeManagedProvider:

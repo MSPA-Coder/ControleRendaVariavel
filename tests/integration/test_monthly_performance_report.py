@@ -10,7 +10,7 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker, Market, Position, PositionKind, QuoteHistory, Side, Ticker
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def _seed_ticker(symbol: str, currency: str = "BRL", is_benchmark: bool = False) -> int:

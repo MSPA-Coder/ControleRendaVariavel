@@ -10,8 +10,6 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker, Market, PositionKind, Side, Ticker, Transaction, TransactionStatus
 
-pytestmark = [pytest.mark.observable_contract]
-
 HTMX = {"HX-Request": "true"}
 
 
@@ -55,7 +53,6 @@ def test_partial_requires_authentication(client: FlaskClient) -> None:
 
 
 @pytest.mark.critical
-@pytest.mark.business_rule
 def test_partial_and_page_show_the_same_numbers(app: Flask, auth_client: FlaskClient) -> None:
     """O fragmento e a página inteira saem do mesmo contexto e do mesmo
     template. Se divergirem, a atualização via HTMX passaria a mostrar
@@ -88,7 +85,6 @@ def test_htmx_response_is_a_fragment_not_the_whole_page(
     assert 'id="transactions-results"' in fragment
 
 
-@pytest.mark.business_rule
 def test_filter_actually_filters(app: Flask, auth_client: FlaskClient) -> None:
     """Um filtro aplicado precisa realmente restringir a consulta, não só o
     valor pré-selecionado no <select>."""

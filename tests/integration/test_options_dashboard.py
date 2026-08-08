@@ -20,7 +20,7 @@ from app.models import (
     Ticker,
 )
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def _seed_option_position(risk_free_rate_annual: Decimal | None = None) -> None:

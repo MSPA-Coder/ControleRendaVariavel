@@ -11,7 +11,7 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Market, QuoteHistory, Ticker
 
-pytestmark = [pytest.mark.interface_smoke]
+pytestmark = [pytest.mark.smoke]
 
 
 def _form_markup(html: str, opening: str) -> str:
@@ -119,7 +119,6 @@ def test_dashboard_filters_stay_inside_the_form(auth_client: FlaskClient) -> Non
     assert 'name="group_by_broker"' in filters
 
 
-@pytest.mark.business_rule
 def test_quotes_filter_actually_selects_the_requested_ticker(
     app: Flask, auth_client: FlaskClient
 ) -> None:

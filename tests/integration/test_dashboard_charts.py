@@ -10,7 +10,7 @@ from flask.testing import FlaskClient
 from app import db
 from app.models import Broker, Market, Position, PositionKind, Quote, Side, Ticker
 
-pytestmark = [pytest.mark.business_rule, pytest.mark.observable_contract]
+pytestmark = [pytest.mark.smoke]
 
 
 def _seed_two_positions_one_stale() -> None:

@@ -12,7 +12,7 @@ from app.monthly_performance import (
     select_performance_period,
 )
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def test_build_monthly_performance_reduces_to_one_point_per_month() -> None:

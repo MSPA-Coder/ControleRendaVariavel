@@ -81,6 +81,17 @@ $wideReach = @(
     'tests/conftest.py'
 )
 
+function Test-PathTouched {
+    param([string[]]$Patterns)
+
+    foreach ($path in Get-ChangedPaths) {
+        foreach ($pattern in $Patterns) {
+            if ($path -like "$pattern*") { return $true }
+        }
+    }
+    return $false
+}
+
 function Test-WideReach {
     $changed = Get-ChangedPaths
     foreach ($path in $changed) {
@@ -120,8 +131,21 @@ if ($Level -eq 'commit') {
         }
     }
     else {
-        Invoke-Step 'testes unitarios' {
-            docker compose --profile test run --rm test pytest -q tests/unit
+        $selection = @('tests/unit')
+        # Templates e estaticos nao sao exercitados por teste unitario nenhum:
+        # sem isto, uma mudanca de marcacao so seria vista no anel de push.
+        if (Test-PathTouched @('app/templates/', 'app/static/')) {
+            $selection = @('-m', 'smoke')
+        }
+        # Autorizacao, CSRF e sessao carregam risco proprio, independentemente
+        # do tamanho da mudanca.
+        Invoke-Step "testes do anel 2 ($($selection -join ' '))" {
+            docker compose --profile test run --rm test pytest -q @selection
+        }
+        if (Test-PathTouched @('app/routes/auth.py', 'app/__init__.py')) {
+            Invoke-Step 'controles de seguranca' {
+                docker compose --profile test run --rm test pytest -q -m security
+            }
         }
     }
     Write-Host ""

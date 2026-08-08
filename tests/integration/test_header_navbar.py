@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from flask.testing import FlaskClient
 
-pytestmark = [pytest.mark.interface_smoke]
+pytestmark = [pytest.mark.smoke]
 
 
 def test_navbar_renders_avatar_and_logout_button(auth_client: FlaskClient) -> None:

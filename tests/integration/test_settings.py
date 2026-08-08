@@ -12,7 +12,7 @@ from app import db
 from app.models import AppSetting, Market, Ticker
 from app.rtd_service import OperationalProfile
 
-pytestmark = [pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 class FakeRtdService:
@@ -287,7 +287,7 @@ def test_settings_rejects_unknown_benchmark_ticker_id(
         assert settings.benchmark_ticker_id is None
 
 
-@pytest.mark.interface_smoke
+@pytest.mark.smoke
 def test_settings_form_has_no_fields_outside_a_fieldset(auth_client: FlaskClient) -> None:
     response = auth_client.get("/settings")
 

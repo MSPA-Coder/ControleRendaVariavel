@@ -13,7 +13,7 @@ from app.models import (
     Ticker,
 )
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 def _seed_reference_data() -> tuple[int, int]:

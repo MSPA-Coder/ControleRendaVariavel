@@ -12,8 +12,6 @@ import pytest
 from app.rtd_control_server import _handler
 from app.rtd_service import OperationalProfile
 
-pytestmark = [pytest.mark.architecture]
-
 
 @pytest.fixture
 def control_server() -> tuple[str, Mock]:

@@ -3,8 +3,6 @@ import pytest
 from app.collector_settings import parse_collector_settings
 from app.models import CollectorMode
 
-pytestmark = [pytest.mark.business_rule]
-
 
 def test_parse_collector_settings_accepts_both_modes() -> None:
     excel = parse_collector_settings(

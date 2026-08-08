@@ -3,8 +3,6 @@ from __future__ import annotations
 import pytest
 from flask.testing import FlaskClient
 
-pytestmark = [pytest.mark.observable_contract]
-
 HTMX = {"HX-Request": "true"}
 
 # Toda página cujo filtro troca só uma região: URL, id do alvo e o texto do

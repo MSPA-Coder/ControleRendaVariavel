@@ -10,7 +10,7 @@ from app import db
 from app.models import Broker, Market, Position, PositionKind, QuoteHistory, Side, Ticker
 from app.rtd import QuoteValue
 
-pytestmark = [pytest.mark.critical, pytest.mark.business_rule]
+pytestmark = [pytest.mark.critical]
 
 
 class _FakeProvider:
