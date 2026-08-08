@@ -164,4 +164,15 @@
   } else {
     renderAllCharts();
   }
+
+  // HTMX troca a regiao de conteudo sem recarregar a pagina, e o Chart.js
+  // vive num <canvas> que e substituido junto. Redesenhar aqui e o que
+  // mantem o grafico existindo depois de um filtro. A checagem pelo
+  // conteudo do fragmento trocado evita redesenhar quando a troca foi em
+  // outra parte da pagina (o indicador do coletor, por exemplo), o que
+  // duplicaria instancias sobre o mesmo canvas.
+  document.addEventListener("htmx:afterSwap", function (event) {
+    var swapped = event.target;
+    if (swapped && swapped.querySelector && swapped.querySelector(".monthly-performance-chart")) renderAllCharts();
+  });
 })();

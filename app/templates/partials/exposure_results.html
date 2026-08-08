@@ -1,0 +1,31 @@
+{% import "partials/exposure.html" as exposure %}
+{# Regiao trocada pelo filtro nas tres paginas de Analise > Exposicao. Elas
+   diferem apenas nos rotulos e em ter ou nao tabela de grupos, entao um
+   unico fragmento atende as tres sem duplicar apresentacao. #}
+<div id="exposure-results">
+{% if group_rows %}
+<div class="exposure-table">
+  <table>
+    <thead>
+      <tr><th>{{ group_heading }}</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
+    </thead>
+    <tbody>
+      {% for row in group_rows %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td>{{ row.currency }}</td>
+        <td class="number">{{ row.current_total|currency(row.currency) }}</td>
+        <td class="number">{{ row.current_weight|percent }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if allocation_charts %}
+{{ exposure.charts(allocation_charts, heading, subject) }}
+{% elif not group_rows %}
+{{ exposure.empty_state() }}
+{% endif %}
+</div>

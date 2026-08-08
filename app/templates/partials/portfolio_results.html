@@ -1,0 +1,125 @@
+{# Resultado da carteira: tabela e resumo por moeda.
+
+   O wrapper se reagenda sozinho — os atributos hx-* voltam a cada troca — e
+   a URL carrega os filtros vigentes, para que a atualizacao automatica nao
+   descarte o recorte que o usuario escolheu. O intervalo vem do banco, entao
+   mudar a configuracao passa a valer na proxima troca, sem recarregar a
+   pagina (era o que o JavaScript anterior fazia com window.location.reload).
+#}
+<div id="portfolio-results"
+     hx-get="{{ url_for('portfolio.index', **request.args) }}"
+     hx-trigger="every {{ poll_interval_seconds }}s"
+     hx-swap="outerHTML">
+<div class="table-wrap">
+  <table class="portfolio-table">
+    <thead>
+      <tr class="group-head">
+        <th colspan="3">Posição</th>
+        <th colspan="3">Cotações</th>
+        <th colspan="3">Resultado</th>
+        <th colspan="3">Targets</th>
+        <th colspan="4">Carteira</th>
+        <th colspan="4">Controle</th>
+      </tr>
+      <tr>
+        <th>Corr.</th><th>Ticker</th><th>Qtde</th>
+        <th>Custo</th><th>Atual</th><th>Var. dia</th>
+        <th>Atualizado</th><th>%</th><th>365</th>
+        <th>Stop gain</th><th>%</th><th>Breakeven</th>
+        <th>Desmontar</th><th>%</th><th>Montar</th><th>%</th>
+        <th>Tipo</th><th>Dias</th><th>Início</th><th>ST</th>
+      </tr>
+    </thead>
+    {% for group in portfolio.broker_groups %}
+    <tbody>
+    {% for item in group.positions %}
+      {% set p = item.position %}
+      {% set m = item.metrics %}
+      <tr>
+        <td>{{ '' if group_by_broker else p.broker }}</td>
+        <td><a href="{{ url_for('portfolio.edit_position', position_id=p.id) }}">{{ p.ticker }}</a></td>
+        <td class="number">{{ p.quantity|number(0 if p.currency == 'BRL' else 4) }}</td>
+        <td class="number">{{ p.average_cost|currency(p.currency) }}</td>
+        {% if m %}
+          <td class="number">{{ m.current_price|currency(p.currency) }}</td>
+          <td class="number {{ m.daily_variation|sign_class }}">{{ m.daily_variation|percent }}</td>
+          <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency) }}</td>
+          <td class="number {{ m.return_pct|sign_class }}">{{ m.return_pct|percent }}</td>
+          <td class="number {{ m.annualized_return|sign_class }}">{{ m.annualized_return|percent }}</td>
+          <td class="number">{{ m.stop_gain|currency(p.currency) }}</td>
+          <td class="number {{ m.distance_to_target|sign_class }}">{{ m.distance_to_target|percent(2) }}</td>
+          <td class="number {{ m.breakeven|sign_class }}">{{ m.breakeven|percent }}</td>
+          <td class="number">{{ m.unwind_value|currency(p.currency) }}</td>
+          <td class="number">{{ item.current_weight|percent }}</td>
+          <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency) }}</td>
+          <td class="number">{{ item.cost_weight|percent }}</td>
+          <td>{{ p.side.value }}</td><td class="number">{{ m.days }}</td>
+        {% else %}
+          <td colspan="14" class="missing">Aguardando primeira cotação RTD</td>
+          <td>{{ p.side.value }}</td><td class="number">-</td>
+        {% endif %}
+        <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
+        <td><span class="status status-{{ item.quote_status }}">{{ item.quote_status }}</span></td>
+      </tr>
+    {% endfor %}
+    {% if group_by_broker %}
+      <tr class="broker-total">
+        <th colspan="3">{{ group.broker }} · {{ group.positions|length }} posição(ões)</th>
+        <td class="number">{{ group.cost_total|currency(group.currency) }}</td>
+        <td class="number">{{ group.current_total|currency(group.currency) }}</td>
+        <td></td>
+        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency) }}</td>
+        <td colspan="13"></td>
+      </tr>
+    {% endif %}
+    </tbody>
+    {% else %}
+    <tbody><tr><td colspan="20" class="empty">Nenhuma posição encontrada para os filtros.</td></tr></tbody>
+    {% endfor %}
+    {% if not group_by_broker and portfolio.currency_totals %}
+    <tbody>
+    {% for total in portfolio.currency_totals %}
+      <tr class="broker-total">
+        <th colspan="3">Total geral · {{ total.currency }}</th>
+        <td class="number">{{ total.cost_total|currency(total.currency) }}</td>
+        <td class="number">{{ total.current_total|currency(total.currency) }}</td>
+        <td></td>
+        <td class="number {{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</td>
+        <td colspan="13"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    {% endif %}
+  </table>
+</div>
+
+<section class="summary portfolio-summary" aria-label="Resumo da carteira">
+  {% for total in portfolio.currency_totals %}
+  <article class="currency-card">
+    <h3>{{ total.currency }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Valor atual</span>
+        <strong>{{ total.current_total|currency(total.currency) }}</strong>
+      </article>
+      <article>
+        <span>Custo</span>
+        <strong>{{ total.cost_total|currency(total.currency) }}</strong>
+      </article>
+      <article>
+        <span>Resultado</span>
+        <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</strong>
+      </article>
+      <article>
+        <span>Retorno</span>
+        <strong class="{{ total.return_pct|sign_class }}">{{ total.return_pct|percent(2) }}</strong>
+      </article>
+      <article title="Índice Herfindahl-Hirschman: quanto menor, mais diversificada a carteira nesta moeda.">
+        <span>Concentração (HHI)</span>
+        <strong>{{ total.hhi|number(3) }}</strong>
+      </article>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+</div>

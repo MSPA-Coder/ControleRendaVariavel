@@ -8,7 +8,6 @@ from flask import (
     Blueprint,
     current_app,
     flash,
-    jsonify,
     redirect,
     render_template,
     request,
@@ -33,7 +32,12 @@ from app.models import (
 )
 from app.option_portfolio import build_option_portfolio
 from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
-from app.routes.helpers import investable_ticker_records, option_contracts, option_expirations
+from app.routes.helpers import (
+    investable_ticker_records,
+    is_htmx_request,
+    option_contracts,
+    option_expirations,
+)
 from app.validation import parse_finite_decimal
 
 bp = Blueprint("options", __name__)
@@ -143,6 +147,7 @@ def _parse_position() -> OptionPositionInput:
 
 @bp.get("/options")
 def index() -> str:
+    """Opcoes: pagina inteira, ou so a regiao de resultados para o HTMX."""
     settings = db.session.get(AppSetting, 1)
     risk_free_rate = (
         settings.risk_free_rate_annual if settings else DEFAULT_RISK_FREE_RATE_ANNUAL
@@ -152,29 +157,13 @@ def index() -> str:
         stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
         risk_free_rate_annual=risk_free_rate,
     )
-    return render_template(
-        "options.html",
-        portfolio=portfolio,
-        poll_interval_seconds=settings.poll_interval_seconds if settings else 2,
-    )
-
-
-@bp.get("/api/options")
-def api() -> ResponseReturnValue:
-    settings = db.session.get(AppSetting, 1)
-    risk_free_rate = (
-        settings.risk_free_rate_annual if settings else DEFAULT_RISK_FREE_RATE_ANNUAL
-    )
-    portfolio = build_option_portfolio(
-        _positions(),
-        stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
-        risk_free_rate_annual=risk_free_rate,
-    )
-    return jsonify(
-        rows=len(portfolio.positions),
-        result=str(portfolio.result),
-        poll_interval_seconds=settings.poll_interval_seconds if settings else 2,
-    )
+    context = {
+        "portfolio": portfolio,
+        "poll_interval_seconds": settings.poll_interval_seconds if settings else 2,
+    }
+    if is_htmx_request():
+        return render_template("partials/options_results.html", **context)
+    return render_template("options.html", **context)
 
 
 @bp.get("/options/new")

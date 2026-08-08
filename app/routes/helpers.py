@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from threading import Lock
 from typing import cast
 
 from flask import current_app, request
@@ -384,6 +382,18 @@ def quote_stale_after_seconds() -> int:
     return max(configured, floor)
 
 
+def is_htmx_request() -> bool:
+    """``True`` quando a requisição veio do HTMX.
+
+    É um sinal de **apresentação**: decide se a resposta é a página inteira
+    ou apenas o fragmento atualizado. Nunca deve ser usado como prova de
+    autenticação, autorização ou origem confiável — o cabeçalho é definido
+    pelo cliente e pode ser forjado. Autorização continua sendo aplicada no
+    servidor, do mesmo jeito para os dois tipos de requisição.
+    """
+    return request.headers.get("HX-Request") == "true"
+
+
 def rtd_service() -> RtdService:
     return cast(RtdService, current_app.extensions["rtd_service"])
 
@@ -431,6 +441,27 @@ def exposure_chart_data(
     ]
 
 
+def exposure_group_rows(
+    groups: Sequence[BrokerGroup] | Sequence[MarketGroup],
+    label: Callable[[BrokerGroup], str] | Callable[[MarketGroup], str],
+) -> list[dict[str, object]]:
+    """Linhas da tabela de grupos das paginas de Exposicao.
+
+    O rotulo e resolvido aqui porque corretora e mercado o obtem de
+    atributos diferentes; com ele pronto, as tres paginas compartilham um
+    unico fragmento em vez de um template por recorte.
+    """
+    return [
+        {
+            "label": label(group),  # type: ignore[arg-type]
+            "currency": group.currency,
+            "current_total": group.current_total,
+            "current_weight": group.current_weight,
+        }
+        for group in groups
+    ]
+
+
 def allocation_chart_data(views: list[PositionView]) -> list[dict[str, object]]:
     """Exposição por ativo."""
     return exposure_chart_data(
@@ -450,31 +481,3 @@ def market_exposure_chart_data(market_groups: list[MarketGroup]) -> list[dict[st
     return exposure_chart_data(
         (group.currency, group.market.value, group.current_weight) for group in market_groups
     )
-
-
-class TTLCache[T]:
-    """A tiny in-process, thread-safe TTL cache for expensive read paths.
-
-    Deliberately used to cache already-serialized (plain dict/JSON-ready)
-    values rather than SQLAlchemy ORM objects: ORM instances are bound to a
-    request-scoped session, so caching them across requests risks
-    ``DetachedInstanceError`` once that session closes. A couple of seconds
-    of staleness is acceptable here because RTD quotes already refresh on
-    their own ~2s cadence (``RTD_REFRESH_SECONDS``).
-    """
-
-    def __init__(self, ttl_seconds: float) -> None:
-        self._ttl_seconds = ttl_seconds
-        self._lock = Lock()
-        self._store: dict[str, tuple[float, T]] = {}
-
-    def get_or_set(self, key: str, factory: Callable[[], T]) -> T:
-        now = time.monotonic()
-        with self._lock:
-            cached = self._store.get(key)
-            if cached is not None and now - cached[0] < self._ttl_seconds:
-                return cached[1]
-        value = factory()
-        with self._lock:
-            self._store[key] = (now, value)
-        return value

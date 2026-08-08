@@ -5,15 +5,7 @@
 {{ exposure.filters(brokers, selected_kind, selected_broker, 'portfolio.exposure_market') }}
 {% endblock %}
 {% block content %}
-{% if portfolio.market_groups %}
-{% call(group) exposure.group_table(portfolio.market_groups, 'Mercado') %}{{ group.market.value }}{% endcall %}
-{% else %}
-{{ exposure.empty_state() }}
-{% endif %}
-
-{% if allocation_charts %}
-{{ exposure.charts(allocation_charts, 'Exposição por mercado', 'mercado') }}
-{% endif %}
+{% include "partials/exposure_results.html" %}
 {% endblock %}
 {% block scripts %}
 {% if allocation_charts %}{{ exposure.chart_scripts() }}{% endif %}

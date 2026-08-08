@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, localcontext
+from zoneinfo import ZoneInfo
+
+MARKET_TIMEZONE = ZoneInfo("America/Sao_Paulo")
+"""Fuso de referência do mercado. Define o "dia" de um snapshot de cotação
+e a formatação de horários de leitura exibidos na interface."""
 
 ZERO = Decimal("0")
 ONE = Decimal("1")

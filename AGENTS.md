@@ -518,17 +518,32 @@ mesmo `compose.yaml` dos serviços de teste.
 - O serviço `test-db` é um PostgreSQL separado, sem volume nomeado; a suíte
   usa `TEST_DATABASE_URL` e nunca alcança o banco operacional.
 
-## Estado atual da interface
+## Interface
 
-A interface é HTML semântico com CSS e JavaScript próprios, servida por
-páginas completas. **HTMX não é usado hoje**: as atualizações incrementais
-(cotações, estado do coletor) são feitas por `fetch` periódico em
-`app/static/app.js`, contra as rotas JSON de `app/routes/api.py`.
+A interface é HTML semântico renderizado pelo servidor, com **HTMX** para as
+atualizações incrementais e CSS/JavaScript próprios para o que é puramente
+visual.
 
-A seção de HTMX da base compartilhada descreve uma opção disponível, não uma
-obrigação. Adotá-lo é uma mudança de arquitetura de front-end e exige
-autorização explícita do mantenedor, com registro do problema concreto que
-pretende resolver.
+- HTMX fica em `app/static/vendor/`, com **versão fixa** e servido pela
+  própria origem: a CSP é `default-src 'self'` e não há exceção para CDN.
+- O token CSRF vai em toda requisição HTMX pelo atributo `hx-headers` do
+  `<body>` — atributo, não handler inline, que a CSP bloquearia.
+- `HX-Request` decide apenas a **forma** da resposta. Use
+  `app.routes.helpers.is_htmx_request`; nunca o trate como autenticação,
+  autorização ou prova de origem.
+- Cada região atualizável tem uma parcial em `app/templates/partials/`,
+  usada **tanto** pela página inteira quanto pela resposta HTMX. Não crie uma
+  segunda cópia da apresentação.
+- Um fragmento que se atualiza sozinho precisa devolver seus próprios
+  atributos `hx-*`; sem isso o ciclo morre depois da primeira troca.
+- O filtro aponta `hx-get` para a **própria página**, não para uma rota de
+  fragmento: é isso que faz o histórico receber a URL real.
+- Fontes e bibliotecas são auto-hospedadas pelo mesmo motivo da CSP.
+- O JavaScript próprio cobre só o que HTMX não resolve: menu, painéis
+  recolhíveis e os gráficos Chart.js. Os gráficos redesenham no evento
+  `htmx:afterSwap`, checando o conteúdo do fragmento trocado para não
+  duplicar instâncias sobre o mesmo canvas.
+- Testes HTTP cobrem os dois caminhos sempre que a resposta diferir.
 
 ## Verificação específica
 

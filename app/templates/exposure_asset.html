@@ -5,11 +5,7 @@
 {{ exposure.filters(brokers, selected_kind, selected_broker, 'portfolio.exposure_asset') }}
 {% endblock %}
 {% block content %}
-{% if allocation_charts %}
-{{ exposure.charts(allocation_charts, 'Alocação por ativo', 'ativo') }}
-{% else %}
-{{ exposure.empty_state() }}
-{% endif %}
+{% include "partials/exposure_results.html" %}
 {% endblock %}
 {% block scripts %}
 {% if allocation_charts %}{{ exposure.chart_scripts() }}{% endif %}
