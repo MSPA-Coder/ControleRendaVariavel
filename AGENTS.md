@@ -1,6 +1,6 @@
 ﻿# Base compartilhada de engenharia
 
-<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.3" -->
+<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.4" -->
 
 ## Governança deste bloco-base
 
@@ -39,6 +39,10 @@ Mudanças aprovadas nesta base devem:
 
 ### Histórico de mudanças
 
+- **1.4** — Reconhece o truncamento com restauração das linhas semeadas pelas
+  migrações como mecanismo válido de isolamento entre testes, permitindo
+  construir o schema uma única vez por sessão sem reexecutar as migrações a
+  cada teste.
 - **1.3** — Classifica testes por risco, prioriza controles críticos e exige correção de falhas preexistentes identificadas na validação.
 - **1.2** — Exige bootstrap de bancos novos por revisões Alembic e adoção legada explícita e verificada.
 - **1.1** — Acrescenta diretrizes para HTMX e explicita o desenvolvimento
@@ -196,8 +200,13 @@ de produção por outro dialeto.
 - O schema de teste é criado com `alembic upgrade head`.
 - `create_all()` somente pode ser usado quando o teste deliberadamente não
   avaliar migrações e isso não reduzir a confiança no schema.
-- Cada teste deve ser isolado por rollback transacional, savepoint, schema ou
-  banco próprio.
+- Cada teste deve ser isolado por rollback transacional, savepoint, schema,
+  banco próprio ou truncamento das tabelas com restauração das linhas semeadas
+  pelas migrações.
+- O schema pode ser construído uma única vez por sessão de teste, desde que o
+  mecanismo de isolamento reponha o estado de dados de um banco recém-migrado
+  antes de cada teste e que testes que alterem o schema o reconstruam ao
+  terminar.
 - Testes paralelos não compartilham estado mutável.
 - Fixtures criam somente os dados necessários e não dependem da ordem de
   execução.
@@ -496,15 +505,43 @@ HTTP/HTML/JSON -> validação -> casos de uso -> domínio -> persistência
   ficar observáveis na interface e nos logs.
 - Retentativas são limitadas e não mantêm transações de banco abertas.
 
+## Preservação dos dados operacionais
+
+Os dados de produção ficam no volume Compose `postgres_data`, declarado no
+mesmo `compose.yaml` dos serviços de teste.
+
+- **Nunca** execute `docker compose down --volumes` neste repositório fora de
+  um runner descartável: a flag remove o volume operacional junto com os de
+  teste.
+- Para descartar apenas o ambiente de teste, use
+  `docker compose --profile test rm -sf test test-db`.
+- O serviço `test-db` é um PostgreSQL separado, sem volume nomeado; a suíte
+  usa `TEST_DATABASE_URL` e nunca alcança o banco operacional.
+
+## Estado atual da interface
+
+A interface é HTML semântico com CSS e JavaScript próprios, servida por
+páginas completas. **HTMX não é usado hoje**: as atualizações incrementais
+(cotações, estado do coletor) são feitas por `fetch` periódico em
+`app/static/app.js`, contra as rotas JSON de `app/routes/api.py`.
+
+A seção de HTMX da base compartilhada descreve uma opção disponível, não uma
+obrigação. Adotá-lo é uma mudança de arquitetura de front-end e exige
+autorização explícita do mantenedor, com registro do problema concreto que
+pretende resolver.
+
 ## Verificação específica
 
 Durante o desenvolvimento, execute primeiro os testes unitários das fórmulas e
 do parser RTD. Antes de concluir:
 
-1. execute toda a suíte pytest;
-2. execute Ruff e mypy;
-3. execute testes de persistência e migrações em PostgreSQL;
-4. construa a imagem Docker;
+1. reconstrua as imagens de teste (`docker compose --profile test build`) —
+   elas copiam o código-fonte e não usam bind mount, então uma execução sem
+   rebuild valida a versão anterior;
+2. execute Ruff, mypy e pip-audit (`run --rm quality`);
+3. execute toda a suíte pytest, incluindo persistência e migrações em
+   PostgreSQL (`run --rm test`);
+4. construa a imagem de produção;
 5. faça smoke test da aplicação e do health check;
 6. quando o RTD real estiver acessível, valide ao menos um ticker conhecido sem
    registrar dados financeiros sensíveis nos logs.

@@ -4,10 +4,10 @@ from datetime import date
 from decimal import Decimal
 
 from flask import render_template, request
-from sqlalchemy import Select, select
+from sqlalchemy import select
 
 from app import db
-from app.models import Broker, OptionContract, OptionPosition, Position, Side, Ticker
+from app.models import Broker, OptionContract, OptionPosition, Position, Ticker
 from app.monthly_performance import (
     MonthlyPerformancePoint,
     MonthlyPerformanceReport,
@@ -17,7 +17,15 @@ from app.monthly_performance import (
     normalize_performance_period,
 )
 from app.routes import bp
-from app.routes.helpers import benchmark_candidates, brokers, selected_filters, ticker_price_series
+from app.routes.helpers import (
+    accumulate_invested_amount,
+    accumulate_signed_quantity,
+    benchmark_candidates,
+    brokers,
+    price_series_by_ticker,
+    selected_filters,
+    ticker_price_series,
+)
 
 
 @bp.get("/performance")
@@ -33,19 +41,9 @@ def monthly_performance() -> str:
     # Custo total (quantidade × custo médio atual) por ticker de AÇÃO — usado
     # só para a curva hipotética do benchmark (build_benchmark_shadow_series
     # abaixo). Não é preenchido a partir de posições de opção: a comparação
-    # com benchmark é restrita a ações (payoff de opção é de outra natureza,
-    # ver discussão com o usuário).
+    # com benchmark é restrita a ações (payoff de opção é de outra
+    # natureza).
     invested_amount_by_ticker: dict[int, Decimal] = {}
-
-    def add_quantities(statement: Select[tuple[int, Decimal, Side, date]]) -> None:
-        for ticker_id, quantity, side, opened_on in db.session.execute(statement):
-            direction = Decimal("1") if side == Side.BUY else Decimal("-1")
-            quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
-                direction * quantity
-            )
-            earliest = opened_on_by_ticker.get(ticker_id)
-            if earliest is None or opened_on < earliest:
-                opened_on_by_ticker[ticker_id] = opened_on
 
     if portfolio in {"all", "stocks"}:
         stock_positions = select(
@@ -62,16 +60,10 @@ def monthly_performance() -> str:
         for ticker_id, quantity, side, opened_on, average_cost in db.session.execute(
             stock_positions
         ):
-            direction = Decimal("1") if side == Side.BUY else Decimal("-1")
-            quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
-                direction * quantity
+            accumulate_signed_quantity(
+                ticker_id, quantity, side, opened_on, quantities_by_ticker, opened_on_by_ticker
             )
-            earliest = opened_on_by_ticker.get(ticker_id)
-            if earliest is None or opened_on < earliest:
-                opened_on_by_ticker[ticker_id] = opened_on
-            invested_amount_by_ticker[ticker_id] = (
-                invested_amount_by_ticker.get(ticker_id, Decimal("0")) + quantity * average_cost
-            )
+            accumulate_invested_amount(ticker_id, quantity, average_cost, invested_amount_by_ticker)
 
     if portfolio in {"all", "options"}:
         option_positions = (
@@ -88,17 +80,17 @@ def monthly_performance() -> str:
             option_positions = option_positions.where(OptionPosition.position_kind == position_kind)
         if broker:
             option_positions = option_positions.where(Broker.name == broker)
-        add_quantities(option_positions)
+        for ticker_id, quantity, side, opened_on in db.session.execute(option_positions):
+            accumulate_signed_quantity(
+                ticker_id, quantity, side, opened_on, quantities_by_ticker, opened_on_by_ticker
+            )
 
     quantities_by_ticker = {
         ticker_id: quantity for ticker_id, quantity in quantities_by_ticker.items() if quantity != 0
     }
     tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}
 
-    price_series_by_ticker: dict[int, list[tuple[date, Decimal]]] = {
-        ticker_id: [(entry.recorded_date, entry.price) for entry in ticker_price_series(ticker_id)]
-        for ticker_id in quantities_by_ticker
-    }
+    series_by_ticker = price_series_by_ticker(quantities_by_ticker)
 
     # Mesmo princípio do resto do app: nunca somar moedas diferentes (ver
     # app/portfolio.py e app/routes/risk.py).
@@ -120,7 +112,7 @@ def monthly_performance() -> str:
     }
 
     reports: list[MonthlyPerformanceReport] = [
-        build_monthly_performance(currency, quantities, price_series_by_ticker, period=period)
+        build_monthly_performance(currency, quantities, series_by_ticker, period=period)
         for currency, quantities in sorted(quantities_by_currency.items())
     ]
 
@@ -145,9 +137,8 @@ def monthly_performance() -> str:
     # abaixo continua mostrando o histórico completo simulado) fica
     # restrito a "desde que a posição mais antiga da moeda foi aberta":
     # comparar contra um índice usando meses anteriores à existência real
-    # da carteira não diz nada sobre o desempenho dela (ver discussão com
-    # o usuário / práticas de mercado, ex. Sharesight "since first
-    # purchase").
+    # da carteira não diz nada sobre o desempenho dela (mesma convenção de
+    # mercado do "since first purchase").
     chart_points_by_currency: dict[str, list[MonthlyPerformancePoint]] = {
         report.currency: report.points for report in reports
     }

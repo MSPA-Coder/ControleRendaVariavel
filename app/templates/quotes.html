@@ -11,6 +11,13 @@
             <option value="{{ ticker.id }}" {{ 'selected' if ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
           {% endfor %}
         </select>
+        <label for="quote-period">Período</label>
+        <select id="quote-period" data-quote-chart-period>
+          <option value="daily">Dia</option>
+          <option value="weekly">Semana</option>
+          <option value="monthly">Mês</option>
+          <option value="yearly">Ano</option>
+        </select>
         {% if benchmark_candidates %}
         <label for="quote-benchmark">Comparar com</label>
         <select id="quote-benchmark" name="benchmark_ticker_id">
@@ -31,14 +38,6 @@
         <select data-quote-chart-type>
           <option value="line">Linhas</option>
           <option value="bar">Colunas</option>
-        </select>
-      </label>
-      <label>Período
-        <select data-quote-chart-period>
-          <option value="daily">Dia</option>
-          <option value="weekly">Semana</option>
-          <option value="monthly">Mês</option>
-          <option value="yearly">Ano</option>
         </select>
       </label>
     </div>
@@ -112,35 +111,35 @@
     </article>
 
     <article class="catalog-card">
-      <h2>Excluir cotação</h2>
-      <form class="quote-delete-form" method="post" action="{{ url_for('portfolio.delete_quote_history_by_date') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="ticker_id" value="{{ selected_ticker.id if selected_ticker else '' }}">
-        <label>Data da cotação<input type="date" name="recorded_date" max="{{ today }}" required></label>
-        <button class="button button-danger" type="submit">Excluir Cotação</button>
-      </form>
-    </article>
-
-    <article class="catalog-card quote-manual-card">
-      <h2>Adicionar cotação manualmente</h2>
+      <h2>Gerenciar cotação manual</h2>
       <p class="form-help">
         Útil para preencher lacunas do coletor automático ou para alimentar um
         ativo sem coletor, como um índice de referência (ex.: Ibovespa)
-        cadastrado como um ticker comum em Tabelas — necessário para o Beta da Fase D.
+        cadastrado como um ticker comum em Cadastros — necessário para o cálculo do Beta.
       </p>
-      <form class="catalog-create" method="post" action="{{ url_for('portfolio.create_quote_history_entry') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label>Ticker
-          <select name="ticker_id" required>
-            {% for ticker in tickers %}
-              <option value="{{ ticker.id }}" {{ 'selected' if selected_ticker and ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Data<input type="date" name="recorded_date" max="{{ today }}" required></label>
-        <label>Preço<input type="number" name="price" min="0" step="0.00000001" required></label>
-        <button class="button button-primary" type="submit">Adicionar</button>
-      </form>
+
+      <div class="quote-management-forms">
+        <form class="catalog-create" method="post" action="{{ url_for('portfolio.create_quote_history_entry') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>Ticker
+            <select name="ticker_id" required>
+              {% for ticker in tickers %}
+                <option value="{{ ticker.id }}" {{ 'selected' if selected_ticker and ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Data<input type="date" name="recorded_date" max="{{ today }}" required></label>
+          <label>Preço<input type="number" name="price" min="0" step="0.00000001" required></label>
+          <button class="button button-primary" type="submit">Adicionar</button>
+        </form>
+
+        <form class="quote-delete-form" method="post" action="{{ url_for('portfolio.delete_quote_history_by_date') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="ticker_id" value="{{ selected_ticker.id if selected_ticker else '' }}">
+          <label>Data da cotação<input type="date" name="recorded_date" max="{{ today }}" required></label>
+          <button class="button button-danger" type="submit">Excluir Cotação</button>
+        </form>
+      </div>
     </article>
   </div>
 </section>

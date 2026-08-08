@@ -18,12 +18,6 @@ def _tables_redirect(endpoint: str) -> ResponseReturnValue:
     return redirect(url_for(f"portfolio.{endpoint}"))
 
 
-@bp.get("/tables")
-def tables() -> ResponseReturnValue:
-    """Alias de compatibilidade: Cadastros agora é uma página por tabela."""
-    return redirect(url_for("portfolio.table_brokers"))
-
-
 @bp.get("/tables/brokers")
 def table_brokers() -> str:
     return render_template("table_brokers.html", brokers=broker_records())
@@ -52,6 +46,9 @@ def create_broker() -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
+    except IntegrityError:
+        db.session.rollback()
+        flash("O nome ou a sigla da corretora já está cadastrado.", "error")
     return _tables_redirect("table_brokers")
 
 
@@ -76,6 +73,9 @@ def update_broker(broker_id: int) -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
+    except IntegrityError:
+        db.session.rollback()
+        flash("O nome ou a sigla da corretora já está cadastrado.", "error")
     return _tables_redirect("table_brokers")
 
 
@@ -108,6 +108,9 @@ def create_ticker() -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
+    except IntegrityError:
+        db.session.rollback()
+        flash("Esse ticker já está cadastrado.", "error")
     return _tables_redirect("table_tickers")
 
 
@@ -133,6 +136,9 @@ def update_ticker(ticker_id: int) -> ResponseReturnValue:
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
+    except IntegrityError:
+        db.session.rollback()
+        flash("Esse ticker já está cadastrado.", "error")
     return _tables_redirect("table_tickers")
 
 

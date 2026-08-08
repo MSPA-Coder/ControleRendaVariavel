@@ -45,7 +45,7 @@ function Get-DotEnvValue {
     return $null
 }
 
-# item 3.2 do relatório de análise: backup diário do PostgreSQL.
+# Backup diário do PostgreSQL.
 # Uso: agende esta chamada no Agendador de Tarefas do Windows
 #   (ex.: diariamente às 02:00) apontando para este script.
 $postgresPassword = $env:POSTGRES_PASSWORD

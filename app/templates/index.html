@@ -17,6 +17,11 @@
     </select>
   </label>
   <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
+  <label class="group-toggle" title="Mostrar o nome da corretora uma única vez por grupo, em vez de repeti-lo em cada linha">
+    <input type="checkbox" name="group_by_broker" value="1" {{ 'checked' if group_by_broker }}>
+    <span class="group-toggle-track" aria-hidden="true"></span>
+    <span>Agrupar por corretora</span>
+  </label>
   <label class="rtd-toggle" title="Ativar ou desligar o coletor de cotações RTD">
     <input
       type="checkbox"
@@ -38,7 +43,6 @@
       aria-live="polite"
     >
       <span class="heartbeat-dot" aria-hidden="true"></span>
-      <span data-heartbeat-state>{{ collector_heartbeat.status }}</span>
       <time data-heartbeat-time>{{ collector_heartbeat.last_read_at or 'sem leitura' }}</time>
     </span>
   </label>
@@ -72,14 +76,14 @@
       {% set p = item.position %}
       {% set m = item.metrics %}
       <tr>
-        <td>{{ p.broker }}</td>
+        <td>{{ '' if group_by_broker else p.broker }}</td>
         <td><a href="{{ url_for('portfolio.edit_position', position_id=p.id) }}">{{ p.ticker }}</a></td>
         <td class="number">{{ p.quantity|number(0 if p.currency == 'BRL' else 4) }}</td>
         <td class="number">{{ p.average_cost|currency(p.currency) }}</td>
         {% if m %}
           <td class="number">{{ m.current_price|currency(p.currency) }}</td>
           <td class="number {{ m.daily_variation|sign_class }}">{{ m.daily_variation|percent }}</td>
-          <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency, 0) }}</td>
+          <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency) }}</td>
           <td class="number {{ m.return_pct|sign_class }}">{{ m.return_pct|percent }}</td>
           <td class="number {{ m.annualized_return|sign_class }}">{{ m.annualized_return|percent }}</td>
           <td class="number">{{ m.stop_gain|currency(p.currency) }}</td>
@@ -87,7 +91,7 @@
           <td class="number {{ m.breakeven|sign_class }}">{{ m.breakeven|percent }}</td>
           <td class="number">{{ m.unwind_value|currency(p.currency) }}</td>
           <td class="number">{{ item.current_weight|percent }}</td>
-          <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency, 0) }}</td>
+          <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency) }}</td>
           <td class="number">{{ item.cost_weight|percent }}</td>
           <td>{{ p.side.value }}</td><td class="number">{{ m.days }}</td>
         {% else %}
@@ -98,128 +102,65 @@
         <td><span class="status status-{{ item.quote_status }}">{{ item.quote_status }}</span></td>
       </tr>
     {% endfor %}
+    {% if group_by_broker %}
       <tr class="broker-total">
         <th colspan="3">{{ group.broker }} · {{ group.positions|length }} posição(ões)</th>
         <td class="number">{{ group.cost_total|currency(group.currency) }}</td>
         <td class="number">{{ group.current_total|currency(group.currency) }}</td>
         <td></td>
-        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency, 0) }}</td>
+        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency) }}</td>
         <td colspan="13"></td>
       </tr>
+    {% endif %}
     </tbody>
     {% else %}
     <tbody><tr><td colspan="20" class="empty">Nenhuma posição encontrada para os filtros.</td></tr></tbody>
     {% endfor %}
+    {% if not group_by_broker and portfolio.currency_totals %}
+    <tbody>
+    {% for total in portfolio.currency_totals %}
+      <tr class="broker-total">
+        <th colspan="3">Total geral · {{ total.currency }}</th>
+        <td class="number">{{ total.cost_total|currency(total.currency) }}</td>
+        <td class="number">{{ total.current_total|currency(total.currency) }}</td>
+        <td></td>
+        <td class="number {{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</td>
+        <td colspan="13"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    {% endif %}
   </table>
 </div>
 
 <section class="summary portfolio-summary" aria-label="Resumo da carteira">
   {% for total in portfolio.currency_totals %}
-    <article>
-      <span>Valor atual · {{ total.currency }}</span>
-      <strong>{{ total.current_total|currency(total.currency) }}</strong>
-    </article>
-    <article>
-      <span>Custo · {{ total.currency }}</span>
-      <strong>{{ total.cost_total|currency(total.currency) }}</strong>
-    </article>
-    <article>
-      <span>Resultado · {{ total.currency }}</span>
-      <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</strong>
-    </article>
-    <article>
-      <span>Retorno · {{ total.currency }}</span>
-      <strong class="{{ total.return_pct|sign_class }}">{{ total.return_pct|percent(2) }}</strong>
-    </article>
-    <article title="Índice Herfindahl-Hirschman: quanto menor, mais diversificada a carteira nesta moeda.">
-      <span>Concentração (HHI) · {{ total.currency }}</span>
-      <strong>{{ total.hhi|number(3) }}</strong>
-    </article>
-  {% endfor %}
-  {% if stale_rate is not none %}
-    <article title="Participação das posições cuja cotação não está online (atrasada ou ausente).">
-      <span>Cotações desatualizadas</span>
-      <strong class="{{ 'negative' if stale_rate > 0 else '' }}">{{ stale_rate|percent }}</strong>
-    </article>
-  {% endif %}
-</section>
-
-{% if portfolio.broker_groups or portfolio.market_groups %}
-<section class="exposure" aria-label="Exposição da carteira">
-  {% if portfolio.broker_groups %}
-  <div class="exposure-table">
-    <h2>Exposição por corretora</h2>
-    <table>
-      <thead>
-        <tr><th>Corretora</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
-      </thead>
-      <tbody>
-        {% for group in portfolio.broker_groups %}
-        <tr>
-          <td>{{ group.broker }}</td>
-          <td>{{ group.currency }}</td>
-          <td class="number">{{ group.current_total|currency(group.currency) }}</td>
-          <td class="number">{{ group.current_weight|percent }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-  {% if portfolio.market_groups %}
-  <div class="exposure-table">
-    <h2>Exposição por mercado</h2>
-    <table>
-      <thead>
-        <tr><th>Mercado</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
-      </thead>
-      <tbody>
-        {% for group in portfolio.market_groups %}
-        <tr>
-          <td>{{ group.market.value }}</td>
-          <td>{{ group.currency }}</td>
-          <td class="number">{{ group.current_total|currency(group.currency) }}</td>
-          <td class="number">{{ group.current_weight|percent }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-</section>
-{% endif %}
-
-{% if allocation_charts %}
-<section class="exposure" aria-label="Alocação por ativo">
-  {% for chart in allocation_charts %}
-  <div class="exposure-table">
-    <div class="chart-toolbar">
-      <h2>Alocação por ativo · {{ chart.currency }}</h2>
-      <label>Visualizacao
-        <select data-allocation-chart-type>
-          <option value="pie">Pizza</option>
-          <option value="doughnut">Rosca</option>
-          <option value="bar">Barras</option>
-        </select>
-      </label>
+  <article class="currency-card">
+    <h3>{{ total.currency }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Valor atual</span>
+        <strong>{{ total.current_total|currency(total.currency) }}</strong>
+      </article>
+      <article>
+        <span>Custo</span>
+        <strong>{{ total.cost_total|currency(total.currency) }}</strong>
+      </article>
+      <article>
+        <span>Resultado</span>
+        <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|currency(total.currency) }}</strong>
+      </article>
+      <article>
+        <span>Retorno</span>
+        <strong class="{{ total.return_pct|sign_class }}">{{ total.return_pct|percent(2) }}</strong>
+      </article>
+      <article title="Índice Herfindahl-Hirschman: quanto menor, mais diversificada a carteira nesta moeda.">
+        <span>Concentração (HHI)</span>
+        <strong>{{ total.hhi|number(3) }}</strong>
+      </article>
     </div>
-    <div class="chart-box allocation-chart"
-         data-labels='{{ chart.labels|tojson }}'
-         data-weights='{{ chart.weights|tojson }}'
-         aria-label="Gráfico de pizza de alocação por ativo em {{ chart.currency }}"></div>
-    <ul class="allocation-list" aria-label="Dados da alocacao por ativo">
-      {% for ticker in chart.labels %}
-      <li><span>{{ ticker }}</span><strong>{{ ((chart.weights[loop.index0]|float) * 100)|round(1) }}%</strong></li>
-      {% endfor %}
-    </ul>
-  </div>
+  </article>
   {% endfor %}
 </section>
-{% endif %}
-{% endblock %}
-{% block scripts %}
-{% if allocation_charts %}
-<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='allocation-chart.js') }}"></script>
-{% endif %}
+
 {% endblock %}

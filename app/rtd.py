@@ -174,15 +174,3 @@ class ExcelRtdQuoteProvider:
                 continue
             return list(values)
         raise TimeoutError(f"RTD não respondeu em {self.timeout_seconds:g}s")
-
-
-class FakeQuoteProvider:
-    def __init__(self, values: dict[int, tuple[Decimal, Decimal, str]]) -> None:
-        self.values = values
-
-    def fetch(self, instruments: list[Instrument]) -> list[QuoteValue]:
-        now = datetime.now(UTC)
-        return [
-            QuoteValue(instrument.position_id, *self.values[instrument.position_id], now)
-            for instrument in instruments
-        ]

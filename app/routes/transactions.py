@@ -128,7 +128,7 @@ def transactions() -> str:
     profit_factor = (gain / abs(loss)) if loss != 0 else None
     avg_gain = gain / Decimal(len(gains)) if gains else None
     avg_loss = abs(loss) / Decimal(len(losses)) if losses else None
-    # Payoff ratio (item 5/Fase C2): média dos ganhos sobre a média das
+    # Payoff ratio: média dos ganhos sobre a média das
     # perdas, em módulo. Só é calculável quando há ao menos uma transação
     # de cada sinal; caso contrário fica sem sentido (nunca ganhou, ou
     # nunca perdeu, então não há uma "razão" a expressar).

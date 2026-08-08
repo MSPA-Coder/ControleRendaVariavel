@@ -69,7 +69,7 @@ def test_portfolio_groups_brokers_and_never_combines_currencies() -> None:
 
 
 def test_currency_totals_expose_return_pct_and_hhi() -> None:
-    # item 4 (Nível Carteira): Rentabilidade total / Índice de concentração
+    # Rentabilidade total e índice de concentração da carteira
     # (HHI), sempre calculados por moeda — nunca somando moedas diferentes.
     portfolio = build_portfolio(
         [
@@ -110,7 +110,7 @@ def test_currency_totals_return_pct_and_hhi_are_none_without_quotes() -> None:
 
 
 def test_broker_groups_expose_weights_within_currency() -> None:
-    # item 4: "Exposição por corretora... adicionar %".
+    # Exposição por corretora, com percentual.
     portfolio = build_portfolio(
         [
             make_position("Ge", "BRL", "1", "10"),
@@ -134,7 +134,7 @@ def test_broker_groups_expose_weights_within_currency() -> None:
 
 
 def test_market_groups_aggregate_across_brokers_within_same_market_and_currency() -> None:
-    # item 4: "Exposição por mercado (B3/NYSE/NASDAQ)".
+    # Exposição por mercado (B3/NYSE/NASDAQ).
     portfolio = build_portfolio(
         [
             make_position("Ge", "BRL", "1", "10", market=Market.B3),

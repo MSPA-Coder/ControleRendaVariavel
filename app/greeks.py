@@ -8,18 +8,18 @@ from app.models import OptionType
 
 DAYS_PER_YEAR = 365.0
 # Faixa em torno do strike considerada "no dinheiro" (ATM). Fora dela, a
-# opção é classificada como ITM ou OTM conforme o tipo (item 4, Nível
+# opção é classificada como ITM ou OTM conforme o tipo (ver
 # Opções: "% ITM/ATM/OTM").
 MONEYNESS_BAND = Decimal("0.01")
 
 
 @dataclass(frozen=True, slots=True)
 class OptionGreeks:
-    """Gregas via Black-Scholes europeu (item 4, Nível Opções).
+    """Gregas via Black-Scholes europeu.
 
     A volatilidade implícita é calculada a partir do prêmio de mercado
     observado (``OptionQuote.last_price``), não de uma série histórica do
-    ativo-objeto — isso ainda não existe (ver Fase A: quote_history). Se o
+    ativo-objeto — isso ainda não existe. Se o
     prêmio não permitir resolver uma volatilidade plausível (ex.: cotação
     zerada, expirada, ou fora da faixa considerada), todos os campos
     numéricos vêm como ``None`` e só ``moneyness`` fica preenchido, que não

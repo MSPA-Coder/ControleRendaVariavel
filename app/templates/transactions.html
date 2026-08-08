@@ -81,7 +81,7 @@
   <article><span>Ganhos</span><strong class="positive">{{ gain|currency('BRL') }}</strong></article>
   <article><span>Perdas</span><strong class="negative">{{ loss|currency('BRL') }}</strong></article>
   <article><span>Resultado</span><strong class="{{ result|sign_class }}">{{ result|currency('BRL') }}</strong></article>
-  <article title="Participação de transações com resultado positivo no total, entre as já encerradas (item 4, Nível Operacional).">
+  <article title="Participação de transações com resultado positivo no total, entre as já encerradas.">
     <span>Win rate</span>
     <strong>{{ win_rate|percent if win_rate is not none else '-' }}</strong>
   </article>

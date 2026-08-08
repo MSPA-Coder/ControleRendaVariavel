@@ -7,7 +7,11 @@ import pytest
 
 from app.models import Market, Position, Side
 from app.portfolio import build_portfolio
-from app.routes.helpers import allocation_chart_data, stale_quote_rate
+from app.routes.helpers import (
+    allocation_chart_data,
+    broker_exposure_chart_data,
+    market_exposure_chart_data,
+)
 
 pytestmark = [pytest.mark.business_rule]
 
@@ -74,36 +78,39 @@ def test_allocation_chart_data_empty_when_no_positions() -> None:
     assert allocation_chart_data([]) == []
 
 
-def test_stale_quote_rate_counts_non_online_positions() -> None:
-    portfolio = build_portfolio(
+def _mixed_currency_portfolio():  # type: ignore[no-untyped-def]
+    return build_portfolio(
         [
-            make_position("Ge", "BRL", "1", "10", status="online"),
-            make_position("Xp", "BRL", "1", "10", status="stale"),
-            make_position("Av", "BRL", "1", "10", status="online"),
-            make_position("Bt", "BRL", "1", "10", status="error"),
+            make_position("Ge", "BRL", "1", "10"),
+            make_position("Xp", "BRL", "2", "10"),
+            make_position("Av", "USD", "3", "20"),
         ],
         stale_after_seconds=30,
         today=date(2026, 7, 27),
         now=datetime(2026, 7, 27, tzinfo=UTC),
     )
 
-    rate = stale_quote_rate(portfolio.positions)
 
-    assert rate == Decimal("2") / Decimal("4")
+def test_broker_exposure_chart_data_groups_by_currency_and_labels_brokers() -> None:
+    charts = broker_exposure_chart_data(_mixed_currency_portfolio().broker_groups)
+
+    by_currency = {chart["currency"]: chart for chart in charts}
+    assert set(by_currency) == {"BRL", "USD"}
+    assert set(cast(list, by_currency["BRL"]["labels"])) == {"Ge", "Xp"}
+    assert sum(Decimal(w) for w in cast(list, by_currency["BRL"]["weights"])) == Decimal("1")
 
 
-def test_stale_quote_rate_is_none_for_empty_portfolio() -> None:
-    assert stale_quote_rate([]) is None
+def test_market_exposure_chart_data_labels_markets_by_value() -> None:
+    charts = market_exposure_chart_data(_mixed_currency_portfolio().market_groups)
+
+    by_currency = {chart["currency"]: chart for chart in charts}
+    # make_position usa Market.B3 para todas, então cada moeda tem um grupo
+    # de mercado que concentra 100% dela.
+    assert cast(list, by_currency["BRL"]["labels"]) == ["B3"]
+    assert cast(list, by_currency["USD"]["labels"]) == ["B3"]
+    assert Decimal(cast(list, by_currency["USD"]["weights"])[0]) == Decimal("1")
 
 
-def test_stale_quote_rate_counts_missing_quotes_as_not_online() -> None:
-    position = make_position("Ge", "BRL", "1", "10")
-    position.quote = None  # type: ignore[attr-defined]
-    portfolio = build_portfolio(
-        [position],
-        stale_after_seconds=30,
-        today=date(2026, 7, 27),
-        now=datetime(2026, 7, 27, tzinfo=UTC),
-    )
-
-    assert stale_quote_rate(portfolio.positions) == Decimal("1")
+def test_exposure_chart_data_is_empty_without_groups() -> None:
+    assert broker_exposure_chart_data([]) == []
+    assert market_exposure_chart_data([]) == []

@@ -20,7 +20,7 @@ def _business_days_brute_force(start: date, end: date) -> int:
 
 
 def test_business_days_matches_brute_force_reference_across_many_ranges() -> None:
-    # Guards the O(1) rewrite (item 3.1 do relatório) against the original
+    # Guards the O(1) rewrite against the original
     # day-by-day loop across every weekday start and a range of span lengths,
     # including spans shorter than a full week.
     base = date(2026, 1, 5)  # a Monday

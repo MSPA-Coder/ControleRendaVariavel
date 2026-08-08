@@ -1,4 +1,4 @@
-"""KPIs de risco (Fase D do plano revisado).
+"""KPIs de risco da carteira.
 
 Segue a mesma convenção de ``app/greeks.py``: os cálculos estatísticos
 contínuos (desvio padrão, percentil, covariância) usam ``float``
@@ -194,7 +194,7 @@ def portfolio_value_series(
     require_all_tickers: bool = True,
 ) -> list[tuple[date, Decimal]]:
     """Valor da carteira ao longo do tempo, para o drawdown por carteira
-    inteira (item 4/Fase D).
+    inteira.
 
     Aproximação documentada e combinada com o usuário: assume as
     quantidades ATUAIS de cada posição constantes durante todo o

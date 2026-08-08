@@ -1,4 +1,4 @@
-"""Relatório de Performance mensal (item 6 do plano revisado: o mais
+"""Relatório de Performance mensal (o mais
 dependente de dados acumulados em ``quote_history``).
 
 Reaproveita ``app.risk.portfolio_value_series`` e, portanto, a mesma

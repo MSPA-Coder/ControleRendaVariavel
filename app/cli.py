@@ -29,7 +29,7 @@ from app.quote_history_import import (
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
-from app.routes.helpers import quote_update_targets
+from app.routes.helpers import quote_update_targets, upsert_quote_history
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
 
@@ -200,23 +200,17 @@ def poll_rtd(watch: bool) -> None:
                         underlying_value.last_price,
                         underlying_value.observed_at,
                     )
-                # Fase A: um snapshot por ticker por dia (upsert), não a cada
-                # poll — ver docstring de QuoteHistory para o porquê.
-                for ticker_id, (price, observed_at) in ticker_prices.items():
-                    history_statement = insert(QuoteHistory).values(
-                        ticker_id=ticker_id,
-                        price=price,
-                        recorded_date=observed_at.astimezone(MARKET_TIMEZONE).date(),
-                        recorded_at=observed_at,
+                # Um snapshot por ticker por dia, não a cada poll — ver a
+                # docstring de QuoteHistory para o porquê.
+                upsert_quote_history(
+                    (
+                        ticker_id,
+                        price,
+                        observed_at.astimezone(MARKET_TIMEZONE).date(),
+                        observed_at,
                     )
-                    history_statement = history_statement.on_conflict_do_update(
-                        index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
-                        set_={
-                            "price": history_statement.excluded.price,
-                            "recorded_at": history_statement.excluded.recorded_at,
-                        },
-                    )
-                    db.session.execute(history_statement)
+                    for ticker_id, (price, observed_at) in ticker_prices.items()
+                )
                 db.session.commit()
                 click.echo(
                     f"{len(values)} cotações atualizadas via {collector_mode.value} "

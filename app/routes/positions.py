@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
@@ -9,7 +10,7 @@ from flask.typing import ResponseReturnValue
 
 from app import db
 from app.models import Broker, Position, PositionKind, Side, Ticker
-from app.portfolio import build_portfolio
+from app.portfolio import PortfolioView, build_portfolio
 from app.position_closure import (
     close_open_position,
     create_open_transaction_for_position,
@@ -19,15 +20,16 @@ from app.position_closure import (
 from app.routes import bp
 from app.routes.helpers import (
     allocation_chart_data,
+    broker_exposure_chart_data,
     broker_records,
     brokers,
     investable_ticker_records,
+    market_exposure_chart_data,
     poll_interval_seconds,
     positions_query,
     quote_stale_after_seconds,
     rtd_service,
     selected_filters,
-    stale_quote_rate,
 )
 from app.validation import parse_finite_decimal
 
@@ -99,8 +101,9 @@ def _parse_form() -> PositionInput:
 @bp.get("/")
 def index() -> str:
     position_kind, broker, raw_kind = selected_filters()
+    group_by_broker = request.args.get("group_by_broker") == "1"
     portfolio = build_portfolio(
-        positions_query(position_kind, broker),
+        positions_query(position_kind, broker, group_by_broker=group_by_broker),
         stale_after_seconds=quote_stale_after_seconds(),
     )
     service = rtd_service()
@@ -116,11 +119,10 @@ def index() -> str:
         brokers=brokers(),
         selected_broker=broker or "",
         selected_kind=raw_kind,
+        group_by_broker=group_by_broker,
         poll_interval_seconds=poll_interval_seconds(),
         rtd_service_running=rtd_service_running,
         rtd_service_available=rtd_service_available,
-        allocation_charts=allocation_chart_data(portfolio.positions),
-        stale_rate=stale_quote_rate(portfolio.positions),
     )
 
 
@@ -239,3 +241,49 @@ def close_position(position_id: int) -> ResponseReturnValue:
         return redirect(url_for("portfolio.transactions"))
     flash("Posição encerrada e registrada em Transações.", "success")
     return redirect(url_for("portfolio.transactions"))
+
+
+def _render_exposure(
+    template: str, chart_data: Callable[[PortfolioView], list[dict[str, object]]]
+) -> str:
+    """Renderiza uma das páginas de Análise > Exposição.
+
+    As três páginas só diferem no template e em qual recorte da carteira
+    alimenta o gráfico; os filtros, a consulta e o contexto são idênticos.
+    """
+    position_kind, broker, raw_kind = selected_filters()
+    portfolio = build_portfolio(
+        positions_query(position_kind, broker),
+        stale_after_seconds=quote_stale_after_seconds(),
+    )
+    return render_template(
+        template,
+        portfolio=portfolio,
+        brokers=brokers(),
+        selected_broker=broker or "",
+        selected_kind=raw_kind,
+        allocation_charts=chart_data(portfolio),
+    )
+
+
+@bp.get("/analysis/exposure-asset")
+def exposure_asset() -> str:
+    return _render_exposure(
+        "exposure_asset.html", lambda portfolio: allocation_chart_data(portfolio.positions)
+    )
+
+
+@bp.get("/analysis/exposure-broker")
+def exposure_broker() -> str:
+    return _render_exposure(
+        "exposure_broker.html",
+        lambda portfolio: broker_exposure_chart_data(portfolio.broker_groups),
+    )
+
+
+@bp.get("/analysis/exposure-market")
+def exposure_market() -> str:
+    return _render_exposure(
+        "exposure_market.html",
+        lambda portfolio: market_exposure_chart_data(portfolio.market_groups),
+    )

@@ -111,11 +111,11 @@ class AppSetting(Base):
         Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL
     )
     """Taxa livre de risco anual usada nas gregas de opções (Black-Scholes).
-    Editável em Configurações; não é obtida automaticamente (ver Fase G)."""
+    Editável em Configurações; não é obtida automaticamente."""
     benchmark_ticker_id: Mapped[int | None] = mapped_column(
         ForeignKey("tickers.id", ondelete="SET NULL"), nullable=True
     )
-    """Ticker usado como referência para o Beta (Fase D). Tipicamente um
+    """Ticker usado como referência para o Beta. Tipicamente um
     índice cadastrado manualmente (ex.: Ibovespa), sem coletor RTD — ver
     ``routes.quotes`` para o lançamento manual de cotações. ``None``
     desativa o cálculo de Beta em todos os relatórios de risco."""
@@ -414,9 +414,9 @@ class OptionQuote(Base):
 class Transaction(Base):
     """Uma operação de renda variável: aberta (espelha uma ``Position`` em
     aberto) ou fechada (compra + venda, com o resultado já realizado —
-    item 5/Fase A: "registro de operações de venda (realizadas), não
+    "registro de operações de venda (realizadas), não
     apenas posições abertas"). As fechadas alimentam win rate, profit
-    factor, payoff ratio e tempo médio em posição (Fase C).
+    factor, payoff ratio e tempo médio em posição.
 
     Não é um livro-razão completo de lotes/FIFO: cada linha representa
     um ciclo completo de abertura (e, quando fechada, também de
@@ -528,7 +528,7 @@ class Transaction(Base):
 
 
 class Dividend(Base):
-    """Provento recebido (dividendo, JCP, rendimento) — item 5: relatório
+    """Provento recebido (dividendo, JCP, rendimento) — relatório
     de Proventos. Não classifica o tipo fiscal do provento; é um registro
     simples de valor recebido por ativo/corretora/data."""
 
@@ -570,8 +570,8 @@ class Dividend(Base):
 
 
 class QuoteHistory(Base):
-    """Série temporal de cotações por ativo — item 5/relatório 6, e
-    pré-requisito da Fase D (volatilidade, Sharpe, drawdown, VaR, Beta
+    """Série temporal de cotações por ativo, base dos relatórios de
+    histórico e dos KPIs de risco (volatilidade, Sharpe, drawdown, VaR, Beta
     precisam de retornos diários).
 
     Granularidade deliberadamente DIÁRIA, não a cada poll do coletor

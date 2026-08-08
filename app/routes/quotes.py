@@ -5,24 +5,23 @@ from datetime import UTC, date, datetime, time, timedelta
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import delete
-from sqlalchemy.dialects.postgresql import insert
 
 from app import db
 from app.models import QuoteHistory, Ticker
 from app.quote_history_import import (
     DailyQuote,
     QuoteHistoryImportError,
-    TickerImportTarget,
     fetch_yahoo_daily_quotes,
 )
 from app.routes import bp
 from app.routes.helpers import (
     benchmark_candidates,
+    quote_update_target_tickers,
     quote_update_targets,
     stock_ticker_records,
     ticker_position_start_date,
     ticker_price_series,
-    ticker_records,
+    upsert_quote_history,
 )
 from app.validation import parse_finite_decimal
 
@@ -65,7 +64,7 @@ def quote_history() -> str:
     # cotações abaixo continua mostrando o histórico completo) fica
     # restrito a "desde que a posição foi aberta": comparar contra um
     # índice usando cotações de antes da compra não diz nada sobre o
-    # desempenho da posição (ver discussão com o usuário / práticas de
+    # desempenho da posição (mesma convenção de
     # mercado, ex. Sharesight "since first purchase").
     chart_history = history
     chart_benchmark_history = benchmark_history
@@ -115,24 +114,7 @@ def create_quote_history_entry() -> ResponseReturnValue:
     # um horário representativo determinístico só para preencher a coluna
     # NOT NULL ``recorded_at``.
     recorded_at = datetime.combine(recorded_date, time.min, tzinfo=UTC)
-    # Mesmo upsert por (ticker, dia) usado pelo coletor RTD em app/cli.py:
-    # um segundo lançamento manual no mesmo dia substitui o anterior em
-    # vez de duplicar (a unique constraint em quote_history também impede
-    # a duplicata).
-    statement = insert(QuoteHistory).values(
-        ticker_id=ticker_id,
-        price=price,
-        recorded_date=recorded_date,
-        recorded_at=recorded_at,
-    )
-    statement = statement.on_conflict_do_update(
-        index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
-        set_={
-            "price": statement.excluded.price,
-            "recorded_at": statement.excluded.recorded_at,
-        },
-    )
-    db.session.execute(statement)
+    upsert_quote_history([(ticker_id, price, recorded_date, recorded_at)])
     db.session.commit()
     flash("Cotação histórica registrada.", "success")
     return redirect(url_for("portfolio.quote_history", ticker_id=ticker_id))
@@ -151,10 +133,7 @@ def import_quote_history() -> ResponseReturnValue:
         flash("O periodo deve terminar hoje ou antes e possuir data inicial valida.", "error")
         return redirect(url_for("portfolio.quote_history"))
 
-    targets = [
-        TickerImportTarget(ticker.id, ticker.symbol, ticker.market)
-        for ticker in ticker_records()
-    ]
+    targets = quote_update_target_tickers()
     db.session.rollback()
     imported: list[tuple[int, DailyQuote]] = []
     failures: list[str] = []
@@ -169,21 +148,10 @@ def import_quote_history() -> ResponseReturnValue:
 
     if imported:
         with db.session.begin():
-            for ticker_id, quote in imported:
-                statement = insert(QuoteHistory).values(
-                    ticker_id=ticker_id,
-                    price=quote.price,
-                    recorded_date=quote.recorded_date,
-                    recorded_at=quote.recorded_at,
-                )
-                statement = statement.on_conflict_do_update(
-                    index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
-                    set_={
-                        "price": statement.excluded.price,
-                        "recorded_at": statement.excluded.recorded_at,
-                    },
-                )
-                db.session.execute(statement)
+            upsert_quote_history(
+                (ticker_id, quote.price, quote.recorded_date, quote.recorded_at)
+                for ticker_id, quote in imported
+            )
         flash(f"{len(imported)} daily quotes updated through Yahoo Finance.", "success")
     if failures:
         flash(f"No Yahoo Finance history for: {', '.join(failures)}.", "error")
@@ -211,21 +179,10 @@ def import_position_quote_history() -> ResponseReturnValue:
         imported.extend((target.id, quote) for quote in quotes)
     if imported:
         with db.session.begin():
-            for ticker_id, quote in imported:
-                statement = insert(QuoteHistory).values(
-                    ticker_id=ticker_id,
-                    price=quote.price,
-                    recorded_date=quote.recorded_date,
-                    recorded_at=quote.recorded_at,
-                )
-                statement = statement.on_conflict_do_update(
-                    index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
-                    set_={
-                        "price": statement.excluded.price,
-                        "recorded_at": statement.excluded.recorded_at,
-                    },
-                )
-                db.session.execute(statement)
+            upsert_quote_history(
+                (ticker_id, quote.price, quote.recorded_date, quote.recorded_at)
+                for ticker_id, quote in imported
+            )
     flash(
         f"{len(imported)} historical quotes refreshed for {len(targets) - len(failures)} tickers.",
         "success",

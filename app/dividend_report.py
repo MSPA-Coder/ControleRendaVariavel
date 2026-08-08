@@ -17,12 +17,12 @@ class TickerDividendTotal:
     cost_basis: Decimal | None
     """Custo de aquisição atual do ativo (soma de quantidade × custo médio
     das posições REAIS ainda abertas nesse ticker, ver
-    ``dividends._cost_basis_by_ticker``). ``None`` quando o ativo não tem
+    ``app.routes.helpers.open_real_cost_basis_by_ticker``). ``None`` quando o ativo não tem
     posição aberta hoje — o custo de aquisição de uma posição já encerrada
     não fica registrado isoladamente por ativo em nenhum lugar do modelo,
     então ``yield_on_cost`` também fica ``None`` nesse caso."""
     yield_on_cost: Decimal | None
-    """Proventos recebidos ÷ custo de aquisição (item 5: Relatório de
+    """Proventos recebidos ÷ custo de aquisição (Relatório de
     Proventos). Ver ``cost_basis`` para quando fica indisponível."""
 
 
@@ -45,7 +45,7 @@ def build_dividend_report(
     dividends: list[Dividend],
     cost_basis_by_ticker: Mapping[int, Decimal],
 ) -> DividendReport:
-    """Agrega proventos por ativo e por mês (item 5 do plano revisado).
+    """Agrega proventos por ativo e por mês.
 
     ``cost_basis_by_ticker`` é fornecido pelo chamador (ver
     ``routes.dividends._cost_basis_by_ticker``) em vez de calculado aqui,

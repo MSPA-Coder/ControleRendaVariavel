@@ -25,6 +25,10 @@ pytestmark = [pytest.mark.interface_smoke]
         "risk.html",
         "performance.html",
         "settings.html",
+        "exposure_asset.html",
+        "exposure_broker.html",
+        "exposure_market.html",
+        "partials/exposure.html",
     ],
 )
 def test_main_templates_compile(template_name: str) -> None:

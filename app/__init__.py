@@ -79,7 +79,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_EXCEL_VISIBLE=os.getenv("RTD_EXCEL_VISIBLE", "false").lower() == "true",
         RTD_CONTROL_URL=os.getenv("RTD_CONTROL_URL", ""),
         RTD_CONTROL_TOKEN=os.getenv("RTD_CONTROL_TOKEN", ""),
-        # Security / infra (item 3.1-3.3 do relatório de análise).
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=os.getenv("TRUST_PROXY_HEADERS", "false").lower() == "true",
         RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
@@ -99,7 +98,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     if app.config["TRUST_PROXY_HEADERS"]:
         # Only trust X-Forwarded-* when actually deployed behind a reverse
-        # proxy that sets them (Caddy/nginx terminating TLS - ver 3.3).
+        # proxy that sets them (Caddy/nginx terminating TLS).
         app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
             app.wsgi_app, x_for=1, x_proto=1, x_host=1
         )
@@ -115,7 +114,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         strict_transport_security=app.config["FORCE_HTTPS"],
         # Browsers silently drop cookies marked Secure when served over plain
         # HTTP, which would break login. Only require it once FORCE_HTTPS is
-        # actually turned on (e.g. behind the Caddy/nginx TLS proxy from 3.3).
+        # actually turned on (e.g. behind a Caddy/nginx TLS proxy).
         session_cookie_secure=app.config["FORCE_HTTPS"],
         # No inline <script>/<style> is used anywhere in app/templates, so
         # the default same-origin CSP applies cleanly without 'unsafe-inline'.

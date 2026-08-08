@@ -57,6 +57,16 @@ def _submitted_settings() -> AppSetting:
     return submitted
 
 
+def _get_or_create_settings() -> AppSetting:
+    """Fetch the singleton settings row, creating it on first use."""
+    settings = db.session.get(AppSetting, 1)
+    if settings is None:
+        settings = default_collector_settings()
+        db.session.add(settings)
+        db.session.flush()
+    return settings
+
+
 def _render_settings(
     settings: AppSetting, *, operational_profile: str | None, status: int = 200
 ) -> ResponseReturnValue:
@@ -76,11 +86,7 @@ def _render_settings(
 
 @bp.route("/settings", methods=["GET", "POST"])
 def settings() -> ResponseReturnValue:
-    current_settings = db.session.get(AppSetting, 1)
-    if current_settings is None:
-        current_settings = default_collector_settings()
-        db.session.add(current_settings)
-        db.session.flush()
+    current_settings = _get_or_create_settings()
 
     if request.method == "POST":
         operational_profile: str | None = None
@@ -122,6 +128,16 @@ def settings() -> ResponseReturnValue:
                 ),
                 status=422,
             )
+
+        # `current_settings` (and the benchmark-ticker lookup above, when a
+        # benchmark was submitted) are read-only up to this point: close the
+        # transaction they opened before making the slow external call to the
+        # RTD host (a PowerShell subprocess or an HTTP request, either of which
+        # can take several seconds). AGENTS.md: "não mantenha transações
+        # abertas durante chamadas externas lentas sem necessidade". Nothing
+        # has been mutated yet, so a rollback is sufficient.
+        db.session.rollback()
+
         try:
             service = rtd_service()
             previous_profile = service.operational_profile
@@ -133,6 +149,10 @@ def settings() -> ResponseReturnValue:
             flash(f"Não foi possível alterar o perfil operacional: {exc}", "error")
             return _render_settings(_submitted_settings(), operational_profile=None, status=503)
         try:
+            # Re-fetch after the external call: the transaction opened by the
+            # earlier lookup was closed above, so `current_settings` may now be
+            # a stale/expired reference.
+            current_settings = _get_or_create_settings()
             current_settings.collector_mode = data.collector_mode
             current_settings.poll_interval_seconds = data.poll_interval_seconds
             current_settings.risk_free_rate_annual = pricing_data.risk_free_rate_annual

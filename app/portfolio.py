@@ -24,7 +24,7 @@ class PortfolioTotal:
     cost_total: Decimal
     result_total: Decimal
     return_pct: Decimal | None
-    """Σ resultado / Σ custo desta moeda (item 4, Nível Carteira).
+    """Σ resultado / Σ custo desta moeda.
 
     Deliberadamente calculado por moeda, nunca somando moedas diferentes:
     o restante do módulo (pesos, totais) já segrega tudo por moeda porque

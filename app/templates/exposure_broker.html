@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "partials/exposure.html" as exposure %}
+{% block title %}Exposição por Corretora · Controle de Renda Variável{% endblock %}
+{% block header_controls %}
+{{ exposure.filters(brokers, selected_kind, selected_broker, 'portfolio.exposure_broker') }}
+{% endblock %}
+{% block content %}
+{% if portfolio.broker_groups %}
+{% call(group) exposure.group_table(portfolio.broker_groups, 'Corretora') %}{{ group.broker }}{% endcall %}
+{% else %}
+{{ exposure.empty_state() }}
+{% endif %}
+
+{% if allocation_charts %}
+{{ exposure.charts(allocation_charts, 'Exposição por corretora', 'corretora') }}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if allocation_charts %}{{ exposure.chart_scripts() }}{% endif %}
+{% endblock %}

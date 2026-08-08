@@ -29,7 +29,7 @@ class ExpirationTotal:
 @dataclass(frozen=True, slots=True)
 class MoneynessTotal:
     moneyness: str
-    """"ITM", "ATM" ou "OTM" (item 4, Nível Opções)."""
+    """"ITM", "ATM" ou "OTM"."""
     count: int
     pct: Decimal
     """Participação no total de posições com cotação e gregas calculáveis."""
@@ -44,7 +44,7 @@ class OptionPortfolio:
     expirations: list[ExpirationTotal]
     moneyness_totals: list[MoneynessTotal]
     total_theta_daily: Decimal | None
-    """Soma do decaimento diário esperado do prêmio (item 4: "Theta decay
+    """Soma do decaimento diário esperado do prêmio ("Theta decay
     diário"), já considerando a direção de cada posição — uma opção
     vendida (V) se beneficia da passagem do tempo, então seu theta entra
     com sinal invertido em relação a uma opção comprada (C). ``None`` se

@@ -20,16 +20,6 @@ def test_each_reference_table_has_its_own_page(auth_client: FlaskClient) -> None
         assert heading in html
 
 
-def test_bare_tables_urls_redirect_to_the_default_page(auth_client: FlaskClient) -> None:
-    response = auth_client.get("/tables")
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/tables/brokers")
-
-    response = auth_client.get("/tables/options")
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/tables/options/expirations")
-
-
 def test_broker_save_returns_to_the_brokers_page(auth_client: FlaskClient) -> None:
     response = auth_client.post(
         "/tables/brokers",

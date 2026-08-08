@@ -43,9 +43,14 @@
 
   const filterForm = document.querySelector("[data-auto-submit]");
   if (filterForm) {
-    filterForm.querySelectorAll("select").forEach((select) => {
-      select.addEventListener("change", () => filterForm.requestSubmit());
-    });
+    // `data-quote-chart-period` (e outros controles puramente client-side,
+    // sem `name`) não devem recarregar a página — eles só redesenham um
+    // gráfico local; ver quote-history-chart.js.
+    filterForm
+      .querySelectorAll("select:not([data-quote-chart-period]), input[type=checkbox]:not([data-rtd-toggle])")
+      .forEach((field) => {
+        field.addEventListener("change", () => filterForm.requestSubmit());
+      });
   }
 
   const quoteManagementToggle = document.querySelector("[data-quote-management-toggle]");
@@ -157,7 +162,6 @@
   const heartbeat = document.querySelector("[data-collector-heartbeat]");
   if (heartbeat) {
     const heartbeatApi = heartbeat.dataset.heartbeatApi || "/api/collector-heartbeat";
-    const stateLabel = heartbeat.querySelector("[data-heartbeat-state]");
     const timeLabel = heartbeat.querySelector("[data-heartbeat-time]");
     const labels = {
       online: "Coletor online",
@@ -168,12 +172,12 @@
     const renderHeartbeat = ({ status, last_read_at: lastReadAt }) => {
       heartbeat.className = `collector-heartbeat is-${status}`;
       heartbeat.dataset.heartbeatStatus = status;
-      if (stateLabel) stateLabel.textContent = labels[status] || "Coletor indisponível";
+      heartbeat.title = labels[status] || "Coletor indisponível";
       if (timeLabel) {
         timeLabel.textContent = lastReadAt
-          ? `Última leitura: ${new Intl.DateTimeFormat("pt-BR", {
+          ? new Intl.DateTimeFormat("pt-BR", {
               dateStyle: "short", timeStyle: "medium",
-            }).format(new Date(lastReadAt))}`
+            }).format(new Date(lastReadAt))
           : "Sem leitura registrada";
       }
     };

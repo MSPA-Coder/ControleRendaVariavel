@@ -17,7 +17,9 @@ pytestmark = [pytest.mark.critical, pytest.mark.migration_persistence]
 _MIGRATIONS_DIR = str(Path(__file__).resolve().parents[2] / "migrations")
 
 
-def test_financial_integrity_migration_rejects_legacy_non_finite_values(app: Flask) -> None:
+def test_financial_integrity_migration_rejects_non_finite_values(
+    app: Flask, rebuild_schema: None
+) -> None:
     with app.app_context():
         alembic_downgrade(directory=_MIGRATIONS_DIR, revision="20260731_10")
         # Insere via SQL bruto, não pelo modelo ORM ``Ticker`` atual: nesta

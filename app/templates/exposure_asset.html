@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% import "partials/exposure.html" as exposure %}
+{% block title %}Alocação por Ativo · Controle de Renda Variável{% endblock %}
+{% block header_controls %}
+{{ exposure.filters(brokers, selected_kind, selected_broker, 'portfolio.exposure_asset') }}
+{% endblock %}
+{% block content %}
+{% if allocation_charts %}
+{{ exposure.charts(allocation_charts, 'Alocação por ativo', 'ativo') }}
+{% else %}
+{{ exposure.empty_state() }}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if allocation_charts %}{{ exposure.chart_scripts() }}{% endif %}
+{% endblock %}

@@ -1,48 +1,45 @@
-# Contrato da aba Ações
+# Contrato funcional: Ações
 
-Fonte analisada em 27/07/2026:
-`C:\Users\MSPA\Dropbox\Particulares\Bolsa\Trades\Trades.xlsm`, aba `Ações`.
-A planilha foi aberta somente para leitura.
+Este documento é a referência normativa das regras de ações implementadas
+pelo sistema. Ele descreve o comportamento vigente; quando o código e este
+documento divergirem, a divergência é um defeito de um dos dois e deve ser
+resolvida explicitamente (ver a ordem de precedência em `AGENTS.md`).
 
-## Estrutura observada
+A origem das regras é a aba `Ações` da planilha `Trades.xlsm`, mantida
+apenas como referência de leitura: ela não é banco de dados, dependência de
+runtime nem destino de escrita.
 
-A área usada é `A1:Y31`. Os dados ficam em três blocos principais:
+## Modelo
 
-- B3, linhas 4 a 11;
-- EUA, linhas 13 a 25;
-- lotes adicionais, linhas 29 a 31.
+Uma posição equivale a um lote. O mesmo ticker pode ter vários lotes, na
+mesma corretora ou em corretoras diferentes.
 
-As linhas vazias são apenas separadores visuais. O sistema não depende delas.
-Uma posição persistida equivale a uma linha/lote; tickers repetidos são válidos.
+| Conceito | Campo do sistema |
+|---|---|
+| corretora | `broker` |
+| ticker | `ticker` |
+| quantidade | `quantity` |
+| custo médio | `average_cost` |
+| tipo C/V | `side` |
+| início | `opened_on` |
+| delta da cotação | `quote_multiplier` |
+| modo B (bruto) ou L (líquido) | `result_mode` |
+| dias do ano | constante 365 |
 
-## Entradas
+Corretoras e tickers têm cadastros próprios. Mercado, código RTD e moeda
+pertencem ao ticker; posições apenas referenciam esses cadastros.
 
-| Célula/coluna | Significado | Campo do sistema |
-|---|---|---|
-| `C1` | delta da cotação | `quote_multiplier` |
-| `I1` | modo B ou L | `result_mode` |
-| `I2` | dias do ano | constante 365 |
-| `A` | corretora | `broker` |
-| `B` | ticker | `ticker` |
-| `C` | quantidade | `quantity` |
-| `D` | custo médio | `average_cost` |
-| `S` | tipo C/V | `side` |
-| `U` | início | `opened_on` |
+## Cotações RTD
 
-## RTD
-
-ProgID observado: `rtdtrading.rtdserver`.
+ProgID: `rtdtrading.rtdserver`.
 
 - Tópico B3: `TICKER_B_0`.
-- Tópicos EUA observados: `TICKER_Y_0` e `TICKER_N_0`.
-- `ULT`: última cotação.
+- Tópicos EUA: `TICKER_Y_0` e `TICKER_N_0`.
+- `ULT`: última cotação, usada como snapshot persistido.
 - `FEC`: fechamento anterior.
-- `EST`: status do instrumento; a planilha mostra o primeiro caractere.
-- Para estados contendo `A.L`, a fórmula original escolhe `OCP` em compras e
-  `OVD` em vendas. O primeiro release usa `ULT` como snapshot persistido; essa
-  ramificação deve ser adicionada ao adapter se houver posições nesses estados.
+- `EST`: status do instrumento; a interface mostra o primeiro caractere.
 
-## Fórmulas traduzidas
+## Fórmulas
 
 Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
 `s = 1` para compra e `-1` para venda:
@@ -64,11 +61,13 @@ Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
 | Peso de custo | `abs(Montar) / soma(abs(Montar))` |
 | Dias | `hoje - início` |
 
-Divisões por zero e anualização com zero dias produzem “não aplicável”.
+Divisões por zero e anualização com zero dias produzem "não aplicável"
+(`None`), nunca erro nem infinito.
 
-## Validação da função interna
+## Valores de referência
 
-`ResultadoOperacao` foi executada no Excel com entradas sintéticas:
+Estes casos fixam o resultado esperado da função de resultado e servem de
+oráculo para os testes unitários de domínio:
 
 | Entrada | Resultado |
 |---|---:|
@@ -77,20 +76,19 @@ Divisões por zero e anualização com zero dias produzem “não aplicável”.
 | `Ge, 100 dias, C, 100, 10, 12, B` | `200,00` |
 | `Ge, 1550 dias, C, 1300, 14,20, 11,21, L` | `-3.885,4452` |
 
-Corretora e prazo não alteraram o resultado nos casos exercitados.
+Corretora e prazo não alteram o resultado.
 
-## Decisões de implementação
+## Invariantes
 
-- Totais são derivados; não há colunas redundantes no banco.
-- Corretoras e tickers possuem cadastros próprios. Mercado, código RTD e moeda
-  pertencem ao ticker; posições apenas referenciam esses cadastros.
+- Totais são derivados das posições persistidas; não existem colunas
+  redundantes no banco.
 - Totais e pesos são separados por moeda; BRL e USD nunca são somados.
-- A grade pode ser filtrada entre posições reais e hipotéticas e por corretora.
-- As posições importadas da corretora `Av` são classificadas como hipotéticas.
+- Pesos usam como denominador a carteira visível dentro da mesma moeda,
+  mantendo denominadores independentes por moeda.
+- A grade pode ser filtrada entre posições reais e hipotéticas e por
+  corretora; o filtro vale para os totais e pesos exibidos.
+- Valores monetários e quantidades usam `Decimal`, nunca `float`.
 - O coletor reutiliza uma única sessão Excel/RTD enquanto estiver em modo
   contínuo.
-- Pesos são calculados sobre a carteira visível dentro da mesma moeda, mantendo
-  denominadores independentes para BRL e USD.
-- As posições reais da planilha não foram copiadas para código ou migração.
-  Devem ser cadastradas pela interface para manter dados pessoais fora do
-  repositório.
+- Posições reais não são versionadas: são cadastradas pela interface, para
+  manter dados pessoais fora do repositório.

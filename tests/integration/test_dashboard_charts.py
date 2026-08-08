@@ -78,18 +78,46 @@ def _seed_two_positions_one_stale() -> None:
     db.session.commit()
 
 
-def test_dashboard_renders_allocation_chart_and_stale_rate(
-    app: Flask, auth_client: FlaskClient
+@pytest.mark.parametrize(
+    ("url", "expected_labels"),
+    [
+        ("/analysis/exposure-asset", ("PETR4", "VALE3")),
+        ("/analysis/exposure-broker", ("XP",)),
+        ("/analysis/exposure-market", ("B3",)),
+    ],
+)
+def test_exposure_pages_render_their_allocation_chart(
+    app: Flask, auth_client: FlaskClient, url: str, expected_labels: tuple[str, ...]
 ) -> None:
     with app.app_context():
         _seed_two_positions_one_stale()
 
-    response = auth_client.get("/")
+    response = auth_client.get(url)
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "allocation-chart" in html
-    assert "Cotações desatualizadas" in html
-    assert "50,0%" in html  # 1 de 2 posições está stale
     assert "chart.umd.min.js" in html
     assert "allocation-chart.js" in html
+    for label in expected_labels:
+        assert label in html
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["/analysis/exposure-asset", "/analysis/exposure-broker", "/analysis/exposure-market"],
+)
+@pytest.mark.security
+def test_exposure_pages_require_authentication(client: FlaskClient, url: str) -> None:
+    assert client.get(url).status_code == 302
+
+
+def test_exposure_pages_render_without_positions(auth_client: FlaskClient) -> None:
+    """Sem posições não há pesos, então nenhum gráfico é montado — a página
+    ainda deve responder 200 com o estado vazio, não quebrar."""
+    response = auth_client.get("/analysis/exposure-asset")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Nenhuma posição encontrada" in html
+    assert "allocation-chart.js" not in html

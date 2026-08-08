@@ -11,7 +11,7 @@ MAX_RISK_FREE_RATE_ANNUAL = Decimal("1")  # 100% a.a., limite generoso de sanida
 DEFAULT_RISK_FREE_RATE_ANNUAL = Decimal("0.1075")
 """Taxa de referência inicial (ordem de grandeza da SELIC/CDI); editável em
 Configurações. Não é buscada automaticamente de nenhuma fonte externa —
-isso fica para uma integração futura (ver Fase G do roadmap)."""
+isso fica para uma integração futura."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -244,12 +244,6 @@ def delete_position(position_id: int) -> ResponseReturnValue:
     return redirect(url_for("options.index"))
 
 
-@bp.get("/tables/options")
-def tables() -> ResponseReturnValue:
-    """Alias de compatibilidade: Cadastros agora é uma página por tabela."""
-    return redirect(url_for("options.table_expirations"))
-
-
 @bp.get("/tables/options/expirations")
 def table_expirations() -> ResponseReturnValue:
     return render_template("table_expirations.html", expirations=option_expirations())

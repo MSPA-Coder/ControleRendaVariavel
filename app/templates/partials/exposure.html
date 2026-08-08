@@ -1,0 +1,84 @@
+{# Blocos compartilhados pelas três páginas de Análise > Exposição
+   (por ativo, por corretora e por mercado). Elas só diferem no recorte
+   exibido; filtros, gráfico e scripts são os mesmos. #}
+
+{% macro filters(brokers, selected_kind, selected_broker, clear_endpoint) %}
+<form class="filters header-controls" method="get" data-auto-submit>
+  <label>Posição
+    <select name="position_kind">
+      <option value="all" {{ 'selected' if selected_kind == 'all' }}>Todas</option>
+      <option value="real" {{ 'selected' if selected_kind == 'real' }}>Real</option>
+      <option value="hypothetical" {{ 'selected' if selected_kind == 'hypothetical' }}>Hipotética</option>
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="button" href="{{ url_for(clear_endpoint) }}">Limpar</a>
+</form>
+{% endmacro %}
+
+{% macro charts(allocation_charts, heading, subject) %}
+<section class="exposure" aria-label="Exposição por {{ subject }}">
+  {% for chart in allocation_charts %}
+  <div class="exposure-table">
+    <div class="chart-toolbar">
+      <h2>{{ heading }} · {{ chart.currency }}</h2>
+      <label>Visualização
+        <select data-allocation-chart-type>
+          <option value="pie">Pizza</option>
+          <option value="doughnut">Rosca</option>
+          <option value="bar">Barras</option>
+        </select>
+      </label>
+    </div>
+    <div class="chart-box allocation-chart"
+         data-labels='{{ chart.labels|tojson }}'
+         data-weights='{{ chart.weights|tojson }}'
+         aria-label="Gráfico de exposição por {{ subject }} em {{ chart.currency }}"></div>
+    <ul class="allocation-list" aria-label="Dados da exposição por {{ subject }}">
+      {% for label in chart.labels %}
+      <li><span>{{ label }}</span><strong>{{ chart.weight_values[loop.index0]|percent }}</strong></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</section>
+{% endmacro %}
+
+{% macro chart_scripts() %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='allocation-chart.js') }}"></script>
+{% endmacro %}
+
+{# Cabeçalho e colunas numéricas da tabela de grupos. O rótulo de cada
+   linha fica a cargo de quem chama (via {% call %}), porque corretora e
+   mercado o obtêm de atributos diferentes. #}
+{% macro group_table(groups, group_heading) %}
+<div class="exposure-table">
+  <table>
+    <thead>
+      <tr><th>{{ group_heading }}</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
+    </thead>
+    <tbody>
+      {% for group in groups %}
+      <tr>
+        <td>{{ caller(group) }}</td>
+        <td>{{ group.currency }}</td>
+        <td class="number">{{ group.current_total|currency(group.currency) }}</td>
+        <td class="number">{{ group.current_weight|percent }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+{% macro empty_state() %}
+<p class="form-help">Nenhuma posição encontrada para os filtros selecionados.</p>
+{% endmacro %}

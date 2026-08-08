@@ -20,8 +20,11 @@ from app.models import (
 )
 from app.routes.helpers import (
     DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS,
+    accumulate_invested_amount,
+    accumulate_signed_quantity,
     benchmark_candidates,
     investable_ticker_records,
+    open_real_cost_basis_by_ticker,
     open_real_quantities_by_ticker,
     quote_update_targets,
     ticker_has_holdings,
@@ -73,6 +76,129 @@ def test_open_real_quantities_by_ticker_applies_side_signal(app: Flask) -> None:
         db.session.commit()
 
         assert open_real_quantities_by_ticker() == {ticker.id: Decimal("60")}
+
+
+def test_accumulate_signed_quantity_nets_buy_and_sell_across_calls() -> None:
+    # Mesma matemática de sinal de open_real_quantities_by_ticker, mas
+    # extraída da rota /performance (antigo closure `add_quantities`) para
+    # ser testável linha a linha, sem banco e sem requisição HTTP.
+    quantities_by_ticker: dict[int, Decimal] = {}
+    opened_on_by_ticker: dict[int, date] = {}
+
+    accumulate_signed_quantity(
+        1, Decimal("100"), Side.BUY, date(2026, 1, 1), quantities_by_ticker, opened_on_by_ticker
+    )
+    accumulate_signed_quantity(
+        1, Decimal("40"), Side.SELL, date(2026, 1, 2), quantities_by_ticker, opened_on_by_ticker
+    )
+
+    assert quantities_by_ticker == {1: Decimal("60")}
+    assert opened_on_by_ticker == {1: date(2026, 1, 1)}
+
+
+def test_accumulate_signed_quantity_keeps_earliest_opened_on() -> None:
+    # A rota de performance combina, no mesmo acumulador, posições de
+    # ações e de opções vindas de laços separados — uma chamada com data
+    # mais recente não deve sobrescrever a data mais antiga já registrada.
+    quantities_by_ticker: dict[int, Decimal] = {}
+    opened_on_by_ticker: dict[int, date] = {}
+
+    accumulate_signed_quantity(
+        2, Decimal("10"), Side.BUY, date(2026, 3, 1), quantities_by_ticker, opened_on_by_ticker
+    )
+    accumulate_signed_quantity(
+        2, Decimal("5"), Side.BUY, date(2026, 1, 15), quantities_by_ticker, opened_on_by_ticker
+    )
+
+    assert quantities_by_ticker == {2: Decimal("15")}
+    assert opened_on_by_ticker == {2: date(2026, 1, 15)}
+
+
+def test_accumulate_signed_quantity_tracks_tickers_independently() -> None:
+    quantities_by_ticker: dict[int, Decimal] = {}
+    opened_on_by_ticker: dict[int, date] = {}
+
+    accumulate_signed_quantity(
+        1, Decimal("10"), Side.BUY, date(2026, 1, 1), quantities_by_ticker, opened_on_by_ticker
+    )
+    accumulate_signed_quantity(
+        2, Decimal("30"), Side.SELL, date(2026, 2, 1), quantities_by_ticker, opened_on_by_ticker
+    )
+
+    assert quantities_by_ticker == {1: Decimal("10"), 2: Decimal("-30")}
+    assert opened_on_by_ticker == {1: date(2026, 1, 1), 2: date(2026, 2, 1)}
+
+
+def test_accumulate_invested_amount_sums_quantity_times_average_cost() -> None:
+    # Extraída da rota /performance (curva hipotética de benchmark) e
+    # reaproveitada por open_real_cost_basis_by_ticker (base de custo dos
+    # proventos) — mesmo cálculo, testável sem banco.
+    invested_amount_by_ticker: dict[int, Decimal] = {}
+
+    accumulate_invested_amount(1, Decimal("100"), Decimal("20"), invested_amount_by_ticker)
+    accumulate_invested_amount(1, Decimal("50"), Decimal("22"), invested_amount_by_ticker)
+
+    assert invested_amount_by_ticker == {1: Decimal("2000") + Decimal("1100")}
+
+
+def test_open_real_cost_basis_by_ticker_sums_open_real_positions(app: Flask) -> None:
+    with app.app_context():
+        broker = Broker(name="XP", acronym="XP")
+        ticker = Ticker(
+            symbol="PETR4",
+            trading_name="Petrobras",
+            market=Market.B3,
+            rtd_market_code="B",
+            currency="BRL",
+        )
+        db.session.add_all([broker, ticker])
+        db.session.commit()
+        db.session.add_all(
+            [
+                Position(
+                    broker_id=broker.id,
+                    ticker_id=ticker.id,
+                    quantity=Decimal("100"),
+                    average_cost=Decimal("20"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 1),
+                    quote_multiplier=Decimal("1"),
+                    target_multiplier=Decimal("1.5"),
+                    result_mode="L",
+                    position_kind=PositionKind.REAL,
+                ),
+                Position(
+                    broker_id=broker.id,
+                    ticker_id=ticker.id,
+                    quantity=Decimal("10"),
+                    average_cost=Decimal("30"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 5),
+                    quote_multiplier=Decimal("1"),
+                    target_multiplier=Decimal("1.5"),
+                    result_mode="L",
+                    position_kind=PositionKind.REAL,
+                ),
+                # Hipotética: não é base de custo real, deve ficar fora.
+                Position(
+                    broker_id=broker.id,
+                    ticker_id=ticker.id,
+                    quantity=Decimal("999"),
+                    average_cost=Decimal("1"),
+                    side=Side.BUY,
+                    opened_on=date(2026, 1, 1),
+                    quote_multiplier=Decimal("1"),
+                    target_multiplier=Decimal("1.5"),
+                    result_mode="L",
+                    position_kind=PositionKind.HYPOTHETICAL,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        assert open_real_cost_basis_by_ticker() == {
+            ticker.id: Decimal("100") * Decimal("20") + Decimal("10") * Decimal("30")
+        }
 
 
 def _seed_ticker(symbol: str, *, is_benchmark: bool = False, currency: str = "BRL") -> Ticker:

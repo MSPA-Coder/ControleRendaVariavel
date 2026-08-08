@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
-from datetime import date, timedelta
+from collections.abc import Callable, Iterable
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from threading import Lock
 from typing import cast
 
 from flask import current_app, request
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -24,7 +25,7 @@ from app.models import (
     Side,
     Ticker,
 )
-from app.portfolio import PositionView
+from app.portfolio import BrokerGroup, MarketGroup, PositionView
 from app.quote_history_import import TickerImportTarget
 from app.rtd_service import RtdService
 
@@ -36,8 +37,16 @@ histórico) — ver ``quote_update_targets``."""
 
 
 def positions_query(
-    position_kind: PositionKind | None = None, broker: str | None = None
+    position_kind: PositionKind | None = None,
+    broker: str | None = None,
+    *,
+    group_by_broker: bool = True,
 ) -> list[Position]:
+    order_columns = (
+        (Ticker.currency, Broker.name, Ticker.symbol, Position.opened_on)
+        if group_by_broker
+        else (Ticker.currency, Ticker.symbol, Broker.name, Position.opened_on)
+    )
     statement = (
         select(Position)
         .join(Position.broker_ref)
@@ -47,7 +56,7 @@ def positions_query(
             joinedload(Position.broker_ref),
             joinedload(Position.ticker_ref),
         )
-        .order_by(Ticker.currency, Broker.name, Ticker.symbol, Position.opened_on)
+        .order_by(*order_columns)
     )
     if position_kind is not None:
         statement = statement.where(Position.position_kind == position_kind)
@@ -139,10 +148,10 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
       abertura mais antiga entre TODAS as posições existentes, para que o
       histórico do benchmark cubra qualquer comparação possível — mesmo
       sem ter, ele próprio, uma posição. É isso que evita a necessidade de
-      abrir uma posição "fantasma" só para manter a cotação atualizada
-      (ver discussão com o usuário). Sem nenhuma posição cadastrada ainda,
-      usa ``DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS`` para já deixar
-      histórico disponível antes da primeira compra.
+      abrir uma posição "fantasma" só para manter a cotação atualizada.
+      Sem nenhuma posição cadastrada ainda, usa
+      ``DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS`` para já deixar histórico
+      disponível antes da primeira compra.
     """
     position_rows = db.session.execute(
         select(
@@ -178,6 +187,46 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
     return sorted(targets.values(), key=lambda pair: pair[0].symbol)
 
 
+def quote_update_target_tickers() -> list[TickerImportTarget]:
+    """Tickers elegíveis para atualização de cotação: com posição (real ou
+    hipotética) ou marcados como referência de comparação (Ticker.is_benchmark).
+    Mesmo critério de ``quote_update_targets``, mas sem a data de início por
+    ticker — usado pela atualização "diária" que sempre usa um período
+    explícito (start_date/end_date) informado no formulário.
+    """
+    return [target for target, _ in quote_update_targets()]
+
+
+def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]]) -> None:
+    """Grava um snapshot de cotação por (ticker, dia).
+
+    ``entries`` são tuplas ``(ticker_id, preço, data, instante)``. Um segundo
+    lançamento para o mesmo ticker no mesmo dia substitui o anterior em vez
+    de duplicar — a unique constraint em ``quote_history`` também impede a
+    duplicata. É o mesmo caminho usado pelo lançamento manual, pela
+    importação diária, pela importação "desde a posição" e pelo coletor RTD.
+
+    Não faz ``commit``: quem inicia a operação de escrita é dono do limite
+    transacional.
+    """
+    for ticker_id, price, recorded_date, recorded_at in entries:
+        statement = insert(QuoteHistory).values(
+            ticker_id=ticker_id,
+            price=price,
+            recorded_date=recorded_date,
+            recorded_at=recorded_at,
+        )
+        db.session.execute(
+            statement.on_conflict_do_update(
+                index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
+                set_={
+                    "price": statement.excluded.price,
+                    "recorded_at": statement.excluded.recorded_at,
+                },
+            )
+        )
+
+
 def option_expirations() -> list[OptionExpiration]:
     statement = select(OptionExpiration).order_by(OptionExpiration.exercise_date)
     return list(db.session.scalars(statement))
@@ -199,14 +248,36 @@ def option_contracts() -> list[OptionContract]:
 
 def ticker_price_series(ticker_id: int) -> list[QuoteHistory]:
     """Série histórica de cotações de um ticker, em ordem cronológica
-    (item 5/relatório de histórico de cotações; também usada pelos KPIs de
-    risco da Fase D, que precisam dos mesmos retornos diários)."""
+    (também usada pelos KPIs de risco, que precisam dos mesmos retornos
+    diários)."""
     statement = (
         select(QuoteHistory)
         .where(QuoteHistory.ticker_id == ticker_id)
         .order_by(QuoteHistory.recorded_date)
     )
     return list(db.session.scalars(statement))
+
+
+def price_series_by_ticker(ticker_ids: Iterable[int]) -> dict[int, list[tuple[date, Decimal]]]:
+    """Séries históricas de vários tickers em uma única consulta.
+
+    Equivale a chamar ``ticker_price_series`` por ticker, mas sem emitir uma
+    query por ativo da carteira (N+1) — o relatório de performance mensal
+    precisa de todas as séries de uma vez. Tickers sem histórico aparecem
+    com lista vazia, para que quem chama não precise tratar chave ausente.
+    """
+    ids = list(ticker_ids)
+    series: dict[int, list[tuple[date, Decimal]]] = {ticker_id: [] for ticker_id in ids}
+    if not ids:
+        return series
+    rows = db.session.execute(
+        select(QuoteHistory.ticker_id, QuoteHistory.recorded_date, QuoteHistory.price)
+        .where(QuoteHistory.ticker_id.in_(ids))
+        .order_by(QuoteHistory.ticker_id, QuoteHistory.recorded_date)
+    )
+    for ticker_id, recorded_date, price in rows:
+        series[ticker_id].append((recorded_date, price))
+    return series
 
 
 def ticker_position_start_date(ticker_id: int) -> date | None:
@@ -223,7 +294,7 @@ def ticker_position_start_date(ticker_id: int) -> date | None:
 
 def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     """Quantidade líquida por ticker das posições REAIS ainda abertas.
-    Usada pelos relatórios de risco (Fase D) e de performance mensal para
+    Usada pelos relatórios de risco e de performance mensal para
     a aproximação "posições atuais constantes no passado" (ver
     ``app.risk.portfolio_value_series``)."""
     statement = select(Position.ticker_id, Position.quantity, Position.side).where(
@@ -234,6 +305,67 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
         direction = Decimal("1") if side == Side.BUY else Decimal("-1")
         totals[ticker_id] = totals.get(ticker_id, Decimal("0")) + direction * quantity
     return {ticker_id: quantity for ticker_id, quantity in totals.items() if quantity != 0}
+
+
+def accumulate_signed_quantity(
+    ticker_id: int,
+    quantity: Decimal,
+    side: Side,
+    opened_on: date,
+    quantities_by_ticker: dict[int, Decimal],
+    opened_on_by_ticker: dict[int, date],
+) -> None:
+    """Acumula, em ``quantities_by_ticker``, a quantidade líquida de uma
+    posição (positiva para compra, negativa para venda) e, em
+    ``opened_on_by_ticker``, a data de abertura mais antiga já vista para
+    o ticker. Mesma matemática de sinal de ``open_real_quantities_by_ticker``,
+    mas aplicada linha a linha para que o relatório de performance mensal
+    (``app.routes.performance``) possa combinar, no mesmo par de
+    acumuladores, posições de fontes diferentes — ações e opções, reais e
+    hipotéticas — sem duplicar a lógica de sinal em cada laço."""
+    direction = Decimal("1") if side == Side.BUY else Decimal("-1")
+    quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
+        direction * quantity
+    )
+    earliest = opened_on_by_ticker.get(ticker_id)
+    if earliest is None or opened_on < earliest:
+        opened_on_by_ticker[ticker_id] = opened_on
+
+
+def accumulate_invested_amount(
+    ticker_id: int,
+    quantity: Decimal,
+    average_cost: Decimal,
+    invested_amount_by_ticker: dict[int, Decimal],
+) -> None:
+    """Acumula, em ``invested_amount_by_ticker``, o valor investido
+    (quantidade × custo médio) de uma posição. Usada tanto pelo
+    relatório de performance mensal (curva hipotética do comparador de
+    benchmark, restrita a ações — ver ``app.routes.performance``) quanto
+    por ``open_real_cost_basis_by_ticker`` (base de custo dos
+    proventos)."""
+    invested_amount_by_ticker[ticker_id] = (
+        invested_amount_by_ticker.get(ticker_id, Decimal("0")) + quantity * average_cost
+    )
+
+
+def open_real_cost_basis_by_ticker() -> dict[int, Decimal]:
+    """Custo de aquisição atual por ticker: soma de quantidade × custo
+    médio das posições REAIS ainda abertas (base de cálculo do
+    "yield on cost" no Relatório de Proventos).
+
+    Deliberadamente não filtra por corretora nem por outros filtros de
+    página: representa a base de custo total do ativo hoje, não uma
+    fatia por corretora — um provento é um evento do ativo, não da
+    corretora que o pagou. Tickers sem posição REAL aberta simplesmente
+    não aparecem no mapeamento resultante."""
+    statement = select(Position.ticker_id, Position.quantity, Position.average_cost).where(
+        Position.position_kind == PositionKind.REAL
+    )
+    totals: dict[int, Decimal] = {}
+    for ticker_id, quantity, average_cost in db.session.execute(statement):
+        accumulate_invested_amount(ticker_id, quantity, average_cost, totals)
+    return totals
 
 
 def poll_interval_seconds() -> int:
@@ -266,30 +398,58 @@ def selected_filters() -> tuple[PositionKind | None, str | None, str]:
     return kind, broker, raw_kind
 
 
-def allocation_chart_data(views: list[PositionView]) -> list[dict[str, object]]:
-    """Dados para o gráfico de pizza de alocação por ativo, um por moeda
-    (nunca misturando moedas — mesma convenção do resto do módulo)."""
-    grouped: dict[str, list[PositionView]] = {}
-    for view in views:
-        if view.current_weight is not None:
-            grouped.setdefault(view.position.currency, []).append(view)
+def exposure_chart_data(
+    entries: Iterable[tuple[str, str, Decimal | None]],
+) -> list[dict[str, object]]:
+    """Dados para os gráficos de exposição, um bloco por moeda.
+
+    ``entries`` são triplas ``(moeda, rótulo, peso)``. Moedas nunca são
+    misturadas, seguindo a mesma convenção do resto do módulo: somar BRL e
+    USD sem taxa de câmbio produziria um número sem significado. Entradas
+    sem peso (posição sem cotação) ficam de fora do gráfico.
+
+    O formato de saída é consumido por ``allocation-chart.js`` nas três
+    páginas de Análise (por ativo, por corretora e por mercado).
+    """
+    grouped: dict[str, list[tuple[str, Decimal]]] = {}
+    for currency, label, weight in entries:
+        if weight is not None:
+            grouped.setdefault(currency, []).append((label, weight))
     return [
         {
             "currency": currency,
-            "labels": [view.position.ticker for view in group],
-            "weights": [str(view.current_weight) for view in group],
+            "labels": [label for label, _ in group],
+            # `weights` é string porque o gráfico JS a consome via `tojson`.
+            "weights": [str(weight) for _, weight in group],
+            # `weight_values` mantém o Decimal cru (fração, ex.: 0.1234) para
+            # a lista textual usar o filtro `percent` — ver invariante
+            # financeira em AGENTS.md (percentual sempre via Decimal, nunca
+            # `|float`).
+            "weight_values": [weight for _, weight in group],
         }
         for currency, group in sorted(grouped.items())
     ]
 
 
-def stale_quote_rate(views: list[PositionView]) -> Decimal | None:
-    """Fração de posições cuja cotação não está "online" (stale ou
-    ausente). Item 4, Nível Operacional: "Taxa de stale quotes"."""
-    if not views:
-        return None
-    not_online = sum(1 for view in views if view.quote_status != "online")
-    return Decimal(not_online) / Decimal(len(views))
+def allocation_chart_data(views: list[PositionView]) -> list[dict[str, object]]:
+    """Exposição por ativo."""
+    return exposure_chart_data(
+        (view.position.currency, view.position.ticker, view.current_weight) for view in views
+    )
+
+
+def broker_exposure_chart_data(broker_groups: list[BrokerGroup]) -> list[dict[str, object]]:
+    """Exposição por corretora."""
+    return exposure_chart_data(
+        (group.currency, group.broker, group.current_weight) for group in broker_groups
+    )
+
+
+def market_exposure_chart_data(market_groups: list[MarketGroup]) -> list[dict[str, object]]:
+    """Exposição por mercado."""
+    return exposure_chart_data(
+        (group.currency, group.market.value, group.current_weight) for group in market_groups
+    )
 
 
 class TTLCache[T]:

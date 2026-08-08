@@ -1,39 +1,38 @@
-# Contrato da aba Opções
+# Contrato funcional: Opções
 
-Fonte analisada em 27/07/2026:
-`C:\Users\MSPA\Dropbox\Particulares\Bolsa\Trades\Trades.xlsm`, abas `Opções` e
-`Rateio NF`. A planilha foi aberta somente para leitura.
+Este documento é a referência normativa das regras de opções implementadas
+pelo sistema, nos mesmos termos de
+[`planilha-acoes.md`](planilha-acoes.md). A origem das regras são as abas
+`Opções` e `Rateio NF` da planilha `Trades.xlsm`, mantida apenas como
+referência de leitura.
 
-O intervalo `Opções!T17:U24` foi desconsiderado conforme orientação do
-mantenedor.
+## Modelo
 
-## Entradas por posição
+Contratos e posições são entidades distintas, para permitir vários lotes do
+mesmo contrato. Cada contrato tem tipo `call` ou `put`, ticker próprio,
+ativo-objeto, strike e vencimento.
 
-| Coluna | Significado | Campo do sistema |
-|---|---|---|
-| `A` | corretora | `option_positions.broker_id` |
-| `B` | ticker do contrato | `option_contracts.ticker_id` |
-| `C` | compra/venda | `option_positions.side` |
-| `D` | quantidade | `option_positions.quantity` |
-| `E` | custo médio | `option_positions.average_cost` |
-| `G` | target | `option_positions.target_price` |
-| `T` | strike | `option_contracts.strike` |
-| `AB` | exercício | `option_expirations.exercise_date` |
-| `AE` | ativo-objeto | `option_contracts.underlying_ticker_id` |
-| `AG` | início | `option_positions.opened_on` |
-
-Cada contrato possui tipo `call` ou `put`, ticker próprio, ativo-objeto, strike
-e vencimento. Contratos e posições são entidades distintas para permitir vários
-lotes do mesmo contrato.
+| Conceito | Campo do sistema |
+|---|---|
+| corretora | `option_positions.broker_id` |
+| ticker do contrato | `option_contracts.ticker_id` |
+| compra/venda | `option_positions.side` |
+| quantidade | `option_positions.quantity` |
+| custo médio | `option_positions.average_cost` |
+| target | `option_positions.target_price` |
+| strike | `option_contracts.strike` |
+| exercício | `option_expirations.exercise_date` |
+| ativo-objeto | `option_contracts.underlying_ticker_id` |
+| início | `option_positions.opened_on` |
 
 ## Cotações
 
 - `ULT`, `FEC` e `EST` são lidos para o ticker da opção.
 - `ULT` do ativo-objeto alimenta folga de strike e breakeven.
-- Strike e exercício são persistidos no cadastro do contrato e do vencimento;
-  indisponibilidade RTD não altera esses dados cadastrais.
+- Strike e exercício são dados cadastrais do contrato e do vencimento;
+  indisponibilidade do RTD não os altera.
 
-## Fórmulas traduzidas
+## Fórmulas
 
 Para direção `s = 1` em compra e `-1` em venda:
 
@@ -51,17 +50,22 @@ Para direção `s = 1` em compra e `-1` em venda:
 - notional: `quantidade * strike` para posições vendidas;
 - dias úteis: dias de segunda a sexta após a data atual até o exercício.
 
-Divisões por zero produzem “não aplicável”.
+Divisões por zero produzem "não aplicável" (`None`).
+
+## Gregas
+
+As gregas usam Black-Scholes europeu, com a taxa livre de risco anual
+configurada em Configurações (`app_settings.risk_free_rate_annual`). A
+classificação de moneziness ("ITM", "ATM", "OTM") segue o tipo do contrato.
 
 ## Vencimentos
 
-`Rateio NF!M:O` contém o calendário com código anual de call, código anual de put
-e data de exercício. Os 24 registros observados, de `2024F/2024R` a
-`2026E/2026Q`, são carregados pela migração inicial da funcionalidade. A
-interface permite criar, alterar e excluir vencimentos posteriores.
+O calendário de vencimentos guarda código anual de call, código anual de put
+e data de exercício. Os 24 registros de `2024F/2024R` a `2026E/2026Q` são
+criados pela migração que introduz a funcionalidade; a interface permite
+criar, alterar e excluir vencimentos posteriores.
 
-## Dados importados
+## Invariantes
 
-Foram importadas seis posições reais preenchidas em `Opções!A4:AH9`, sem
-registrá-las no código ou na migração. Totais são derivados das posições e
-agrupados por vencimento.
+- Totais são derivados das posições e agrupados por vencimento.
+- Posições reais não são versionadas: são cadastradas pela interface.
