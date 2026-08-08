@@ -28,9 +28,9 @@
     <span class="group-toggle-track" aria-hidden="true"></span>
     <span>Agrupar por corretora</span>
   </label>
+</form>
   {{ collector.rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) }}
   <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
-</form>
 {% endblock %}
 {% block content %}
 {% include "partials/portfolio_results.html" %}

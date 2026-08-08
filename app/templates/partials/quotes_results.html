@@ -4,9 +4,15 @@
 {% if selected_ticker %}
   <section class="quote-history-card">
     <div class="quote-history-controls">
-      <form class="quote-ticker-filter" method="get" data-auto-submit>
+      <form class="quote-ticker-filter" method="get">
         <label for="quote-ticker">Ticker</label>
-        <select id="quote-ticker" name="ticker_id">
+        <select id="quote-ticker" name="ticker_id"
+                hx-get="{{ url_for('portfolio.quote_history') }}"
+                hx-trigger="change"
+                hx-include="closest form"
+                hx-target="#quotes-results"
+                hx-swap="outerHTML"
+                hx-push-url="true">
           {% for ticker in tickers %}
             <option value="{{ ticker.id }}" {{ 'selected' if ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
           {% endfor %}
@@ -20,7 +26,13 @@
         </select>
         {% if benchmark_candidates %}
         <label for="quote-benchmark">Comparar com</label>
-        <select id="quote-benchmark" name="benchmark_ticker_id">
+        <select id="quote-benchmark" name="benchmark_ticker_id"
+                hx-get="{{ url_for('portfolio.quote_history') }}"
+                hx-trigger="change"
+                hx-include="closest form"
+                hx-target="#quotes-results"
+                hx-swap="outerHTML"
+                hx-push-url="true">
           <option value="">Nenhum</option>
           {% for benchmark in benchmark_candidates %}
             <option value="{{ benchmark.id }}" {{ 'selected' if selected_benchmark and benchmark.id == selected_benchmark.id }}>{{ benchmark.symbol }}</option>
