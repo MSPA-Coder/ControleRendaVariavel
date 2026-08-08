@@ -9,9 +9,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  {# Versão fixada e servida localmente: a CSP é `default-src 'self'`, e a
+     base de engenharia proíbe depender de `latest` ou de CDN em produção. #}
+  <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
-<body>
+{# hx-headers é um atributo, não handler inline: envia o token CSRF em toda
+   requisição HTMX sem violar a CSP. Toda escrita continua protegida no
+   servidor; o cabeçalho HX-Request nunca é tratado como prova de origem. #}
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'>
   {% set nav_meta = {
     'portfolio.index': ('Carteira', 'Ações'),
     'options.index': ('Carteira', 'Opções'),

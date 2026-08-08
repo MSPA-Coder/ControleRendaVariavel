@@ -384,6 +384,18 @@ def quote_stale_after_seconds() -> int:
     return max(configured, floor)
 
 
+def is_htmx_request() -> bool:
+    """``True`` quando a requisição veio do HTMX.
+
+    É um sinal de **apresentação**: decide se a resposta é a página inteira
+    ou apenas o fragmento atualizado. Nunca deve ser usado como prova de
+    autenticação, autorização ou origem confiável — o cabeçalho é definido
+    pelo cliente e pode ser forjado. Autorização continua sendo aplicada no
+    servidor, do mesmo jeito para os dois tipos de requisição.
+    """
+    return request.headers.get("HX-Request") == "true"
+
+
 def rtd_service() -> RtdService:
     return cast(RtdService, current_app.extensions["rtd_service"])
 
