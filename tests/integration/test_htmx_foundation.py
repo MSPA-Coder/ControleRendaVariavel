@@ -61,3 +61,25 @@ def test_htmx_header_does_not_grant_access(client: FlaskClient) -> None:
 
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
+
+
+@pytest.mark.critical
+def test_fonts_are_self_hosted(auth_client: FlaskClient) -> None:
+    """A CSP é `default-src 'self'` e não abre exceção para fontes: enquanto
+    as famílias vinham do Google Fonts, o navegador as bloqueava e a
+    interface caía silenciosamente nas fontes do sistema. Servir da própria
+    origem é o que faz o design pretendido realmente aparecer."""
+    html = auth_client.get("/").get_data(as_text=True)
+
+    assert "fonts.googleapis.com" not in html
+    assert "fonts.gstatic.com" not in html
+    assert "fonts.css" in html
+
+    stylesheet = auth_client.get("/static/fonts.css")
+    assert stylesheet.status_code == 200
+    body = stylesheet.get_data(as_text=True)
+    assert "@font-face" in body
+    assert "https://" not in body, "nenhuma URL externa deve sobrar no CSS de fontes"
+
+    # E o arquivo referenciado precisa existir de fato.
+    assert auth_client.get("/static/vendor/fonts/inter-100-900-latin.woff2").status_code == 200
