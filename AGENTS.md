@@ -1,6 +1,6 @@
 ﻿# Base compartilhada de engenharia
 
-<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.4" -->
+<!-- SHARED-ENGINEERING-BASE:BEGIN version="1.5" -->
 
 ## Governança deste bloco-base
 
@@ -39,6 +39,10 @@ Mudanças aprovadas nesta base devem:
 
 ### Histórico de mudanças
 
+- **1.5** — Substitui o portão único de encerramento por anéis de validação
+  proporcionais ao raio da mudança, move os controles de ambiente para CI e
+  release, exige que os anéis sejam executáveis e trata a duração da suíte
+  como propriedade do projeto.
 - **1.4** — Reconhece o truncamento com restauração das linhas semeadas pelas
   migrações como mecanismo válido de isolamento entre testes, permitindo
   construir o schema uma única vez por sessão sem reexecutar as migrações a
@@ -259,10 +263,36 @@ coordenação fora do repositório.
 
 ## Estratégia de validação progressiva
 
-A validação deve equilibrar retorno rápido durante o desenvolvimento e confiança
-integral antes da conclusão.
+A validação deve ser **proporcional ao raio de alcance da mudança**, não
+uniforme. Um ajuste de marcação e uma alteração de schema não oferecem o mesmo
+risco e não devem custar o mesmo.
 
-Não execute automaticamente a suíte completa depois de cada pequena alteração.
+Organize os controles em anéis. Cada anel custa mais e protege mais, e existe
+um momento natural para cobrá-lo:
+
+| Anel | Quando | Conteúdo |
+|---|---|---|
+| 1 — edição | a cada alteração | o menor teste que reproduz ou protege o comportamento |
+| 2 — commit | antes de cada commit | lint e a suíte rápida; a suíte completa quando a mudança for de raio amplo |
+| 3 — push | antes de publicar | suíte completa, lint e análise de tipos |
+| 4 — integração | CI e release | cobertura, auditoria de dependências, imagem de produção, smoke da pilha e jornadas E2E |
+
+São de **raio amplo**, e por isso exigem a suíte completa já no anel 2:
+schema e migrações, models, dependências, configuração de empacotamento ou de
+contêiner, e a própria infraestrutura de teste. Elas podem quebrar qualquer
+coisa, então o custo de descobrir tarde é maior que o de rodar cedo.
+
+Mudanças que tocam autenticação, autorização, CSRF ou sessão sempre executam
+os controles de segurança, qualquer que seja o anel.
+
+O anel 3 é o que garante a integridade do conjunto: como ele roda a suíte
+completa antes de publicar, nenhum commit intermediário escapa da validação —
+ele apenas deixa de pagá-la a cada iteração. Por isso o anel 2 pode ser
+barato sem que isso reduza a confiança final.
+
+Os anéis devem ser **executáveis**, não apenas descritos: ofereça um comando
+por anel e, quando fizer sentido, ligue-os aos ganchos de commit e push do
+Git. Uma política que depende de memória a cada tarefa não é uma política.
 
 ### Ciclo de desenvolvimento
 
@@ -285,62 +315,57 @@ Durante esse ciclo:
 - não repita uma validação cujo código e dependências relevantes não mudaram;
 - mantenha registro dos comandos já executados durante a tarefa.
 
-### Validação completa de encerramento
+### Validação de encerramento
 
-Quando a implementação estiver estável, execute uma única validação completa com
-todos os controles aplicáveis ao projeto.
+Quando a implementação estiver estável, execute o anel 3 uma única vez, sem
+filtros parciais como caminhos específicos, `-k`, `--last-failed` ou exclusões
+de testes lentos — salvo quando a própria configuração oficial da suíte
+separar etapas complementares que também serão executadas.
 
-A validação final deve executar sem filtros parciais como caminhos específicos,
-`-k`, `--last-failed` ou exclusões de testes lentos, salvo quando a própria
-configuração oficial da suíte separar etapas complementares que também serão
-executadas.
+Uma alteração posterior invalida o anel 3 anterior, mas **não** exige repetir
+todos os anéis a cada iteração: execute primeiro o teste que falhou ou foi
+afetado, depois os testes relacionados, e repita o anel 3 uma única vez quando
+o código voltar a ficar estável.
 
-Conforme o projeto e o risco, a validação final inclui:
-
-1. suíte unitária completa;
-2. testes de integração com PostgreSQL;
-3. testes de migração;
-4. testes HTTP e E2E aplicáveis;
-5. lint;
-6. análise de tipos;
-7. cobertura;
-8. auditoria de dependências;
-9. construção da imagem de produção;
-10. smoke test da pilha Docker.
-
-Qualquer alteração posterior em código, testes, migrations, dependências ou
-configuração invalida a validação completa anterior. Nesse caso:
-
-1. execute primeiro o teste que falhou ou foi afetado;
-2. execute os testes relacionados;
-3. quando o código voltar a ficar estável, repita a validação completa uma única
-   vez.
+O anel 4 pertence à CI e ao release. Execute-o localmente apenas quando a
+mudança alcançar empacotamento, dependências ou a pilha de execução — nesses
+casos ele é parte do encerramento, não um extra.
 
 Mudanças exclusivamente documentais não exigem a suíte completa, salvo quando a
 documentação for validada ou consumida por testes, empacotamento ou automação.
 
-### Otimização segura
+### Custo da suíte
 
-- Reutilize um PostgreSQL descartável durante a mesma tarefa quando isso não
-  comprometer isolamento.
-- Aplique migrações novamente durante a iteração somente quando models ou
-  revisions mudarem.
-- Use rollback, savepoints, bancos ou schemas separados para manter testes
-  independentes.
-- Considere execução paralela somente depois que o isolamento entre workers
-  estiver garantido.
-- Meça periodicamente os testes mais lentos e corrija gargalos reais.
-- Preserve uma execução completa em ambiente limpo na CI, mesmo quando a
+Uma suíte cara empurra o time a validar de menos. Trate a duração como
+propriedade do projeto, não como fatalidade:
+
+- meça periodicamente os testes mais lentos e corrija gargalos reais;
+- verifique se o custo está nos testes ou no *setup* — repetir migrações,
+  reconstruir a aplicação ou recriar conexões a cada teste costuma dominar o
+  tempo total;
+- reutilize um PostgreSQL descartável durante a mesma tarefa quando isso não
+  comprometer isolamento;
+- aplique migrações novamente durante a iteração somente quando models ou
+  revisions mudarem;
+- use rollback, savepoints, truncamento, bancos ou schemas separados para
+  manter testes independentes;
+- adote execução paralela quando o isolamento entre workers estiver garantido,
+  por exemplo com um banco por worker;
+- preserve uma execução completa em ambiente limpo na CI, mesmo quando a
   validação local já tiver sido concluída.
-- Resultados bem-sucedidos devem ser apresentados de forma resumida; detalhes
-  completos são necessários principalmente para falhas.
+
+Falhas preexistentes encontradas em qualquer anel devem ser investigadas e
+corrigidas na mesma tarefa quando a causa estiver dentro do repositório.
+
+Resultados bem-sucedidos devem ser apresentados de forma resumida; detalhes
+completos são necessários principalmente para falhas.
 
 Ao concluir uma tarefa, informe:
 
-- testes direcionados executados;
-- validação final executada;
+- anéis executados e testes direcionados;
 - resultado;
 - controles omitidos e respectivos motivos.
+
 
 ## Segurança e interface
 
@@ -547,19 +572,32 @@ visual.
 
 ## Verificação específica
 
-Durante o desenvolvimento, execute primeiro os testes unitários das fórmulas e
-do parser RTD. Antes de concluir:
+Os anéis de validação são executáveis por `scripts/check.ps1`, que roda tudo
+em contêiner e reconstrói as imagens antes de testar — elas copiam o código,
+então sem rebuild a execução valida a versão anterior.
 
-1. reconstrua as imagens de teste (`docker compose --profile test build`) —
-   elas copiam o código-fonte e não usam bind mount, então uma execução sem
-   rebuild valida a versão anterior;
-2. execute Ruff, mypy e pip-audit (`run --rm quality`);
-3. execute toda a suíte pytest, incluindo persistência e migrações em
-   PostgreSQL (`run --rm test`);
-4. construa a imagem de produção;
-5. faça smoke test da aplicação e do health check;
-6. quando o RTD real estiver acessível, valide ao menos um ticker conhecido sem
-   registrar dados financeiros sensíveis nos logs.
+| Comando | Anel | Conteúdo | Custo |
+|---|---|---|---|
+| `.\scripts\check.ps1 quick` | 1–2 | ruff + `tests/unit` | ~15s |
+| `.\scripts\check.ps1 commit` | 2 | ruff + unitários; suíte completa se a mudança for de raio amplo | 15s a 35s |
+| `.\scripts\check.ps1 push` | 3 | ruff + mypy + suíte completa em paralelo | ~85s |
+| `.\scripts\check.ps1 all` | 4 | acima + pip-audit + cobertura + imagem de produção + smoke | ~3min |
+
+Os ganchos versionados em `.githooks` chamam os anéis 2 e 3 automaticamente
+(`git config core.hooksPath .githooks` para instalar). Pular um gancho com
+`--no-verify` é uma decisão consciente do mantenedor, não rotina.
+
+São de raio amplo neste projeto, e disparam a suíte completa já no commit:
+`app/models.py`, `migrations/`, `pyproject.toml`, `compose.yaml`, `Dockerfile`
+e `tests/conftest.py`.
+
+A suíte usa um banco PostgreSQL por worker do pytest-xdist, criado sob demanda
+a partir de `TEST_DATABASE_URL`. É isso que torna a execução paralela segura:
+nenhum worker enxerga ou trunca os dados de outro.
+
+Durante o desenvolvimento, execute primeiro os testes unitários das fórmulas e
+do parser RTD. Quando o RTD real estiver acessível, valide ao menos um ticker
+conhecido sem registrar dados financeiros sensíveis nos logs.
 
 ## Desvios aprovados da base compartilhada
 

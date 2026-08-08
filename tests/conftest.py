@@ -21,10 +21,48 @@ from app.models import User
 # container; locally it defaults to a second database on the same disposable
 # dev Postgres instance already used by `docker compose` (see README), so
 # these tests never touch the operational "investimentos" database.
-_TEST_DATABASE_URL = os.getenv(
+_BASE_TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+psycopg://investimentos:investimentos@localhost:5435/investimentos_test",
 )
+
+# Com pytest-xdist cada worker recebe um banco próprio. Compartilhar um só
+# banco quebraria o isolamento: o TRUNCATE de um worker apagaria os dados que
+# outro acabou de semear. O processo único (sem xdist) usa o banco base.
+_XDIST_WORKER = os.getenv("PYTEST_XDIST_WORKER", "")
+
+
+def _worker_database_url() -> str:
+    if not _XDIST_WORKER:
+        return _BASE_TEST_DATABASE_URL
+    base, _, name = _BASE_TEST_DATABASE_URL.rpartition("/")
+    return f"{base}/{name}_{_XDIST_WORKER}"
+
+
+_TEST_DATABASE_URL = _worker_database_url()
+
+
+def _ensure_worker_database() -> None:
+    """Cria o banco deste worker, se ainda não existir.
+
+    ``CREATE DATABASE`` não roda dentro de transação, daí o AUTOCOMMIT, e
+    precisa de outra conexão para ser emitido — usamos o banco base.
+    """
+
+    if not _XDIST_WORKER:
+        return
+    database = _TEST_DATABASE_URL.rpartition("/")[2]
+    admin = sa.create_engine(_BASE_TEST_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as connection:
+            exists = connection.scalar(
+                sa.text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": database},
+            )
+            if not exists:
+                connection.execute(sa.text(f'CREATE DATABASE "{database}"'))
+    finally:
+        admin.dispose()
 _MIGRATIONS_DIR = str(Path(__file__).resolve().parent.parent / "migrations")
 
 _BASE_TEST_CONFIG: dict[str, object] = {
@@ -97,45 +135,72 @@ def _reset_data() -> None:
     and realign the identity sequences so generated ids stay deterministic and
     never collide with a restored row.
 
+    The SQL is assembled once (``_reset_statements``) because the table list
+    cannot change during a session: rebuilding it per test meant an extra
+    round trip to ``pg_tables`` before every single test.
+
     ``alembic_version`` is deliberately preserved: wiping it would make the
     session's schema look unmigrated to any later Alembic call.
     """
 
+    truncate, setval = _reset_statements()
+    if truncate is None:
+        return
     with _db.engine.begin() as connection:
+        connection.execute(truncate)
+        for table in _seed_metadata.sorted_tables:
+            rows = _seeded_rows.get(table.name)
+            if rows:
+                connection.execute(table.insert(), rows)
+        if setval is not None:
+            connection.execute(setval)
+
+
+_reset_sql: tuple[sa.TextClause | None, sa.TextClause | None] | None = None
+
+
+def _reset_statements() -> tuple[sa.TextClause | None, sa.TextClause | None]:
+    global _reset_sql
+    if _reset_sql is not None:
+        return _reset_sql
+    with _db.engine.connect() as connection:
         table_names = connection.scalars(
             sa.text(
                 "SELECT tablename FROM pg_tables "
                 "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
             )
         ).all()
-        if not table_names:
-            return
-        targets = ", ".join(f'"{name}"' for name in table_names)
-        connection.execute(sa.text(f"TRUNCATE TABLE {targets} RESTART IDENTITY CASCADE"))
-
-        for table in _seed_metadata.sorted_tables:
-            rows = _seeded_rows.get(table.name)
-            if rows:
-                connection.execute(table.insert(), rows)
-
-        # TRUNCATE ... RESTART IDENTITY rewinds every sequence to 1, but the
-        # restored rows already occupy their ids, so the next generated id
-        # would collide. Push each sequence past the highest restored value.
-        for table_name in _seeded_rows:
-            connection.execute(
-                sa.text(
-                    "SELECT setval(pg_get_serial_sequence(:table_name, 'id'), "
-                    "COALESCE((SELECT MAX(id) FROM " + f'"{table_name}"' + "), 1)) "
-                    "WHERE pg_get_serial_sequence(:table_name, 'id') IS NOT NULL"
-                ),
-                {"table_name": table_name},
-            )
+    if not table_names:
+        _reset_sql = (None, None)
+        return _reset_sql
+    targets = ", ".join(f'"{name}"' for name in table_names)
+    truncate = sa.text(f"TRUNCATE TABLE {targets} RESTART IDENTITY CASCADE")
+    # Uma única ida ao banco realinha todas as sequências das tabelas semeadas.
+    seeded = [name for name in table_names if name in _seeded_rows]
+    setval = None
+    if seeded:
+        parts = [
+            f"SELECT setval(pg_get_serial_sequence('{name}', 'id'), "
+            f'COALESCE((SELECT MAX(id) FROM "{name}"), 1)) '
+            f"WHERE pg_get_serial_sequence('{name}', 'id') IS NOT NULL"
+            for name in seeded
+        ]
+        setval = sa.text(" UNION ALL ".join(f"({part})" for part in parts))
+    _reset_sql = (truncate, setval)
+    return _reset_sql
 
 
 @pytest.fixture(scope="session")
-def _migrated_schema() -> Iterator[None]:
-    """Create the test schema once for the whole session."""
+def _migrated_schema() -> Iterator[Flask]:
+    """Build the schema once and keep one application for the whole session.
 
+    Criar um ``Flask`` por teste custava caro: cada aplicação traz um engine
+    SQLAlchemy novo, e portanto um pool de conexões novo. Como a configuração
+    de teste é sempre a mesma, uma única aplicação atende todos os testes; os
+    que precisam de configuração diferente usam ``app_factory``.
+    """
+
+    _ensure_worker_database()
     schema_app = build_test_app()
     with schema_app.app_context():
         try:
@@ -148,21 +213,35 @@ def _migrated_schema() -> Iterator[None]:
                 f"para uma instância descartável. Detalhe: {exc}"
             )
         _capture_seeded_rows()
-        yield
+        yield schema_app
         _db.session.remove()
 
 
 @pytest.fixture()
-def app(_migrated_schema: None) -> Iterator[Flask]:
-    flask_app = build_test_app()
+def app(_migrated_schema: Flask) -> Iterator[Flask]:
+    """A aplicação compartilhada, com dados e estado mutável reiniciados.
+
+    Como a instância é reaproveitada, o que um teste altera nela precisa ser
+    desfeito: ``config`` e ``test_client_class`` são restaurados no teardown,
+    senão um teste que autentica mudaria o cliente de todos os seguintes.
+    """
+
+    flask_app = _migrated_schema
+    original_config = dict(flask_app.config)
+    original_client_class = flask_app.test_client_class
     with flask_app.app_context():
         _reset_data()
-        yield flask_app
-        _db.session.remove()
+        try:
+            yield flask_app
+        finally:
+            _db.session.remove()
+            flask_app.test_client_class = original_client_class
+            flask_app.config.clear()
+            flask_app.config.update(original_config)
 
 
 @pytest.fixture()
-def app_factory(_migrated_schema: None) -> Iterator[Callable[..., Flask]]:
+def app_factory(_migrated_schema: Flask) -> Iterator[Callable[..., Flask]]:
     """Build an app with custom configuration against the shared test schema.
 
     The data is cleared before the first app is built, so a test using this

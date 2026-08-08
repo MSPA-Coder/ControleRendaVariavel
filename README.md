@@ -182,15 +182,35 @@ As formulas e contratos funcionais estao em
 
 ## Validacao
 
-Execute todos os controles pelo perfil Docker de testes:
+A validacao e proporcional ao raio da mudanca, organizada em aneis. Use
+`scripts/check.ps1`, que roda tudo em conteiner e reconstroi as imagens antes
+de testar (elas copiam o codigo-fonte; sem rebuild a execucao valida a versao
+anterior).
 
 ```powershell
-docker compose --profile test config --quiet
+.\scripts\check.ps1 quick    # ruff + unitarios                        ~15s
+.\scripts\check.ps1 commit   # + suite completa se o raio for amplo     15-35s
+.\scripts\check.ps1 push     # ruff + mypy + suite completa             ~85s
+.\scripts\check.ps1 all      # + auditoria, cobertura, imagem e smoke   ~3min
+```
+
+Os ganchos de Git em `.githooks` chamam os niveis `commit` e `push`
+automaticamente. Para instalar em um clone novo:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+Sao de raio amplo, e por isso ja exigem a suite completa no commit:
+`app/models.py`, `migrations/`, `pyproject.toml`, `compose.yaml`, `Dockerfile`
+e `tests/conftest.py`.
+
+Para rodar um controle isolado, sem o script:
+
+```powershell
 docker compose --profile test build
 docker compose --profile test run --rm quality
-docker compose --profile test run --rm test
-docker compose up --build -d
-Invoke-WebRequest http://127.0.0.1:5003/health
+docker compose --profile test run --rm test pytest -q -n 4
 ```
 
 Para descartar os containers de teste sem tocar no volume operacional:
@@ -203,19 +223,17 @@ O servico `test` usa PostgreSQL descartavel e cria o schema exclusivamente
 por `alembic upgrade head`. O servico `quality` executa Ruff, mypy e
 pip-audit. A CI repete esse fluxo em Docker para cada push e pull request.
 
-As imagens copiam o codigo-fonte (nao ha bind mount no perfil de teste):
-depois de alterar qualquer arquivo, refaca `docker compose --profile test
-build` antes de rodar os testes, senao a execucao usa a imagem anterior.
-
 ### Isolamento e desempenho da suite
 
-O schema de teste e construido uma unica vez por sessao pytest, com
-`alembic upgrade head`. Entre os testes, apenas os *dados* sao reiniciados:
-todas as tabelas sao truncadas, as linhas semeadas pelas proprias migracoes
-sao restauradas e as sequencias sao realinhadas. Cada teste comeca do mesmo
-estado deterministico de um banco recem-migrado, sem pagar as migracoes de
-novo. Testes que migram o schema de proposito usam a fixture
-`rebuild_schema`, que o reconstroi ao terminar.
+O schema e construido uma vez por sessao pytest e a aplicacao Flask e
+compartilhada entre os testes; entre um teste e outro, apenas os *dados* sao
+reiniciados (truncamento, restauracao das linhas semeadas pelas migracoes e
+realinhamento das sequencias). Cada worker do pytest-xdist recebe um banco
+proprio, criado sob demanda, o que torna a execucao paralela segura.
+
+O efeito combinado: a suite completa saiu de 192s para ~32s com 4 workers.
+Testes que migram o schema de proposito usam a fixture `rebuild_schema`, que
+o reconstroi ao terminar.
 
 A suite nunca acessa o banco operacional: ela usa `TEST_DATABASE_URL`, que
 aponta para o servico descartavel `test-db`.

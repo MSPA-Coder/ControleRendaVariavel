@@ -1,0 +1,4 @@
+#!/bin/sh
+# Anel de push: suite completa em paralelo, ruff e mypy (~80s). E o portao
+# que garante que nenhum commit intermediario escapou da validacao.
+exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1 push

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Anel de commit: rapido por padrao (~15s), suite completa quando a mudanca
+# alcanca schema, dependencias ou a infraestrutura de teste.
+# Para pular deliberadamente: git commit --no-verify (ver AGENTS.md).
+exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1 commit

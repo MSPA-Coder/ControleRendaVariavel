@@ -28,6 +28,7 @@ dev = [
   "mypy==1.17.0",
   "pip-audit==2.9.0",
   "pytest==9.0.3",
+  "pytest-xdist==3.8.0",
   "ruff==0.12.5",
   "types-pywin32==312.0.0.20260724",
 ]
