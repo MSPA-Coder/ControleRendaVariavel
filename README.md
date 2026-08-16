@@ -205,11 +205,13 @@ As formulas e contratos funcionais estao em
 
 ## Verificacao
 
-O projeto mantém uma suíte automatizada de regressão, segurança e fumaça junto
-do Ruff no estágio `quality` da imagem; ainda não há CI, cobertura, mypy ou
-auditoria automática de dependências. Antes de alterações persistentes, gere e
-valide um backup com `scripts/backup.ps1`. A baseline Alembic cria um PostgreSQL
-novo com o schema e catalogos iniciais.
+O projeto mantém uma suíte focada de segurança e fumaça junto do Ruff no estágio
+`quality` da imagem. A CI mínima executa a mesma sequência em pushes/PRs para
+`main` e semanalmente, e o Dependabot acompanha `pip`, Docker e GitHub Actions.
+Não há cobertura, mypy, `pip-audit` dentro da imagem nem uma suíte ampla de
+regressão. Antes de alterações persistentes, gere e valide um backup
+com `scripts/backup.ps1`. A baseline Alembic cria um PostgreSQL novo com o
+schema e catalogos iniciais.
 
 ```powershell
 docker compose --profile quality run --rm quality
