@@ -116,9 +116,11 @@ docker compose --profile quality run --rm quality
 ```
 
 Ela roda Ruff e os testes de autenticação, autorização, CSRF, cabeçalhos e
-grafo de migrações. Não há CI, cobertura, mypy, `pip-audit` ou suíte ampla de
-regressão neste projeto; a exceção aprovada é compensada por essa suíte mínima,
-backup validado, bootstrap Alembic em banco vazio e smoke manual proporcional.
+grafo de migrações. A CI mínima executa essa mesma sequência em pushes/PRs para
+`main` e semanalmente, e o Dependabot acompanha `pip`, Docker e GitHub Actions.
+Não há cobertura, mypy, `pip-audit` ou suíte ampla de regressão neste projeto;
+a exceção aprovada é compensada por essa suíte mínima, backup validado,
+bootstrap Alembic em banco vazio e smoke manual proporcional.
 
 | Mudança | Validação mínima adicional |
 |---|---|
