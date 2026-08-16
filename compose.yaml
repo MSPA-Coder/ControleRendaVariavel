@@ -3,8 +3,18 @@ name: controle-renda-variavel
 services:
   db:
     image: postgres:17-alpine
+    user: postgres
     restart: unless-stopped
     mem_limit: 512m
+    read_only: true
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m
     stop_grace_period: 60s
     logging:
       driver: json-file
