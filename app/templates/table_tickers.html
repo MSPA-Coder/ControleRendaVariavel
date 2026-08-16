@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Tickers{% endblock %}
+{% block content %}
+<section class="catalog-card">
+  <h2>Tickers</h2>
+  <form class="catalog-create ticker-fields" method="post" action="{{ url_for('portfolio.create_ticker') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Ticker<input required maxlength="24" name="symbol"></label>
+    <label>Nome de pregão<input required maxlength="80" name="trading_name"></label>
+    <label>Mercado<select name="market">
+      {% for market in markets %}<option value="{{ market.value }}">{{ market.value }}</option>{% endfor %}
+    </select></label>
+    <label>Código RTD<select name="rtd_market_code">
+      {% for code in ['B', 'Y', 'N'] %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+    </select></label>
+    <label>Moeda<select name="currency">
+      {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}">{{ currency }}</option>{% endfor %}
+    </select></label>
+    <label class="ticker-benchmark-field">
+      <input type="checkbox" name="is_benchmark" value="1">
+      Referência (benchmark)
+    </label>
+    <button class="button button-primary" type="submit">Adicionar</button>
+  </form>
+  <p class="form-help">
+    Um ticker de referência (ex.: BOVA11, IBOV, USDBRL=X) aparece nos
+    comparadores de evolução de Cotações e Performance e tem sua cotação
+    diária atualizada junto com os demais ativos, mas fica fora dos
+    formulários de Posições, Transações, Proventos e Contratos de Opção —
+    não é algo que se compra ou vende na carteira.
+  </p>
+  <div class="table-wrap">
+    <table class="catalog-table ticker-table">
+      <thead><tr><th>Ticker</th><th>Nome de pregão</th><th>Mercado</th><th>Código RTD</th><th>Moeda</th><th>Referência</th><th>Ações</th></tr></thead>
+      <tbody>
+      {% for ticker in tickers %}
+        <tr>
+          <td>
+            <form id="ticker-{{ ticker.id }}" method="post" action="{{ url_for('portfolio.update_ticker', ticker_id=ticker.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input required maxlength="24" name="symbol" value="{{ ticker.symbol }}" aria-label="Ticker {{ ticker.symbol }}">
+            </form>
+          </td>
+          <td><input required maxlength="80" name="trading_name" value="{{ ticker.trading_name }}" form="ticker-{{ ticker.id }}" aria-label="Nome de pregão {{ ticker.symbol }}"></td>
+          <td><select name="market" form="ticker-{{ ticker.id }}" aria-label="Mercado de {{ ticker.symbol }}">
+            {% for market in markets %}<option value="{{ market.value }}" {{ 'selected' if ticker.market == market }}>{{ market.value }}</option>{% endfor %}
+          </select></td>
+          <td><select name="rtd_market_code" form="ticker-{{ ticker.id }}" aria-label="Código RTD de {{ ticker.symbol }}">
+            {% for code in ['B', 'Y', 'N'] %}<option value="{{ code }}" {{ 'selected' if ticker.rtd_market_code == code }}>{{ code }}</option>{% endfor %}
+          </select></td>
+          <td><select name="currency" form="ticker-{{ ticker.id }}" aria-label="Moeda de {{ ticker.symbol }}">
+            {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if ticker.currency == currency }}>{{ currency }}</option>{% endfor %}
+          </select></td>
+          <td class="ticker-benchmark-cell">
+            <input type="checkbox" name="is_benchmark" value="1" form="ticker-{{ ticker.id }}"
+                   aria-label="{{ ticker.symbol }} é referência de comparação" {{ 'checked' if ticker.is_benchmark }}>
+          </td>
+          <td class="catalog-actions">
+            <button class="button" type="submit" form="ticker-{{ ticker.id }}">Salvar</button>
+            <form method="post" action="{{ url_for('portfolio.delete_ticker', ticker_id=ticker.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="button button-danger" type="submit">Excluir</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">Nenhum ticker cadastrado.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,145 @@
+name: controle-renda-variavel
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_DB: investimentos
+      POSTGRES_USER: investimentos
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    ports:
+      - "127.0.0.1:5302:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U investimentos -d investimentos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      target: runtime
+      secrets:
+        - local_ca
+    restart: unless-stopped
+    mem_limit: 512m
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    pids_limit: 128
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      SECRET_KEY_FILE: /run/secrets/secret_key
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      RTD_CONTROL_TOKEN_FILE: /run/secrets/rtd_control_token
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: investimentos
+      POSTGRES_USER: investimentos
+      RENDA_VARIAVEL_SESSION_COOKIE_NAME: ${RENDA_VARIAVEL_SESSION_COOKIE_NAME:-controle_renda_variavel_session}
+      RTD_STALE_AFTER_SECONDS: ${RTD_STALE_AFTER_SECONDS:-30}
+      RTD_CONTROL_URL: http://host.docker.internal:8765
+      FORCE_HTTPS: ${FORCE_HTTPS:-false}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      RATELIMIT_STORAGE_URI: ${RATELIMIT_STORAGE_URI:-memory://}
+    secrets:
+      - secret_key
+      - postgres_password
+      - rtd_control_token
+    ports:
+      - "127.0.0.1:5301:5003"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5003/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  migrate:
+    build:
+      context: .
+      target: runtime
+      secrets:
+        - local_ca
+    read_only: true
+    mem_limit: 512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    pids_limit: 64
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      SECRET_KEY_FILE: /run/secrets/secret_key
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: investimentos
+      POSTGRES_USER: investimentos
+    secrets:
+      - secret_key
+      - postgres_password
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["flask", "--app", "app:create_app", "db", "upgrade"]
+
+  quality:
+    build:
+      context: .
+      target: quality
+      secrets:
+        - local_ca
+    profiles: ["quality"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+
+secrets:
+  local_ca:
+    file: .certs/local-root-ca.crt
+  secret_key:
+    file: .secrets/secret_key
+  postgres_password:
+    file: .secrets/postgres_password
+  rtd_control_token:
+    file: .secrets/rtd_control_token

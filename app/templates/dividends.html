@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Proventos{% endblock %}
+{% block header_controls %}
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for('portfolio.dividends') }}"
+      hx-trigger="change"
+      hx-target="#dividends-results"
+      hx-swap="outerHTML"
+      hx-push-url="true">
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="button" href="{{ url_for('portfolio.dividends') }}">Limpar</a>
+</form>
+<a class="button button-primary" href="{{ url_for('portfolio.new_dividend') }}">Novo provento</a>
+{% endblock %}
+{% block content %}
+{% include "partials/dividends_results.html" %}
+{% endblock %}

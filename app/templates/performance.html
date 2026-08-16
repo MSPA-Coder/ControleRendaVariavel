@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Performance mensal · Controle de Renda Variável{% endblock %}
+{% block header_controls %}
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for('portfolio.monthly_performance') }}"
+      hx-trigger="change"
+      hx-target="#performance-results"
+      hx-swap="outerHTML"
+      hx-push-url="true">
+  <label>Carteira
+    <select name="portfolio_id">
+      <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>
+      {% for portfolio in portfolios %}
+        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio_id == portfolio.id|string }}>{{ portfolio.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}<option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Instrumento
+    <select name="portfolio">
+      <option value="stocks" {{ 'selected' if selected_portfolio == 'stocks' }}>Ações</option>
+      <option value="all" {{ 'selected' if selected_portfolio == 'all' }}>Todas</option>
+      <option value="options" {{ 'selected' if selected_portfolio == 'options' }}>Opções</option>
+    </select>
+  </label>
+  <label>Período
+    <select name="period">
+      <option value="week" {{ 'selected' if selected_period == 'week' }}>Semana</option>
+      <option value="month" {{ 'selected' if selected_period == 'month' }}>Mês</option>
+      <option value="quarter" {{ 'selected' if selected_period == 'quarter' }}>Trimestre</option>
+      <option value="semester" {{ 'selected' if selected_period == 'semester' }}>Semestre</option>
+      <option value="year" {{ 'selected' if selected_period == 'year' }}>Ano</option>
+      <option value="all" {{ 'selected' if selected_period == 'all' }}>Todas</option>
+    </select>
+  </label>
+  {% if benchmark_candidates %}
+  <label>Comparar com
+    <select name="benchmark_ticker_id">
+      <option value="">Nenhum</option>
+      {% for benchmark in benchmark_candidates %}
+        <option value="{{ benchmark.id }}" {{ 'selected' if selected_benchmark and benchmark.id == selected_benchmark.id }}>{{ benchmark.symbol }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <a class="button" href="{{ url_for('portfolio.monthly_performance') }}">Limpar</a>
+</form>
+{% endblock %}
+{% block content %}
+{% include "partials/performance_results.html" %}
+{% endblock %}
+{% block scripts %}
+{% if reports %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='monthly-performance-chart.js') }}"></script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,152 @@
+{# Resultado de Proventos: relatório por ativo/ano e resumo por moeda e tipo.
+
+   Sem lista bruta separada: os dois drill-downs (`+` em "Por ativo" e em
+   "Por ano") já mostram cada lançamento individual, e editar continua
+   possível a partir de lá — uma terceira lista plana com tudo de novo só
+   duplicaria o que os cards já respondem.
+
+   Envolvido por um único wrapper para que a troca via HTMX (hx-swap
+   outerHTML) substitua os blocos juntos, mantendo-os sempre consistentes
+   com o mesmo filtro e com o mesmo estado de drill-down (ver
+   `expanded_tickers`/`expanded_years` abaixo).
+#}
+<div id="dividends-results">
+{% if report.by_ticker or report.by_year %}
+<section class="exposure dividend-report" aria-label="Relatório de proventos">
+  {% if report.by_ticker %}
+  {# Mais larga que "Por ano": ganhou uma coluna por tipo de renda (ver
+     dividend_report.TickerDividendTotal.amount_by_kind). #}
+  <div class="exposure-table">
+    <h2>Por ativo</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          {% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}
+          <th>Recebido</th>
+          <th>Custo de aquisição</th>
+          <th title="Proventos recebidos ÷ custo de aquisição das posições reais ainda abertas.">Yield on cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ticker_columns = 4 + income_kinds|length %}
+        {% for total in report.by_ticker %}
+        {% set expanded = total.ticker_id in expanded_tickers %}
+        <tr>
+          <td>
+            <button type="button" class="row-toggle"
+                    hx-get="{{ ticker_toggle_urls[total.ticker_id] }}"
+                    hx-target="#dividends-results" hx-swap="outerHTML"
+                    aria-expanded="{{ 'true' if expanded else 'false' }}"
+                    title="{{ total.entries|length }} provento(s) recebido(s)"
+                    aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os proventos de {{ total.ticker }}">{{ '−' if expanded else '+' }}</button>
+            {{ total.ticker }}
+          </td>
+          {% for kind in income_kinds %}
+          {% set recebido = total.amount_by_kind.get(kind.value) %}
+          <td class="number">{{ recebido|currency(total.currency) if recebido else '-' }}</td>
+          {% endfor %}
+          <td class="number">{{ total.total_amount|currency(total.currency) }}</td>
+          <td class="number">{{ total.cost_basis|currency(total.currency) if total.cost_basis is not none else '-' }}</td>
+          <td class="number">{{ total.yield_on_cost|percent(2) if total.yield_on_cost is not none else '-' }}</td>
+        </tr>
+        {% if expanded %}
+        <tr class="movement-detail">
+          <td colspan="{{ ticker_columns }}">
+            <table class="movements-table">
+              <thead>
+                <tr><th>Corretora</th><th>Pagamento</th><th>Tipo</th><th>Valor</th><th>Notas</th><th></th></tr>
+              </thead>
+              <tbody>
+                {% for entry in total.entries %}
+                <tr>
+                  <td>{{ entry.broker }}</td>
+                  <td>{{ entry.payment_date.strftime('%d-%b-%y') }}</td>
+                  <td>{{ entry.kind|income_kind_label }}</td>
+                  <td class="number">{{ entry.amount|currency(entry.currency) }}</td>
+                  <td>{{ entry.notes or '' }}</td>
+                  <td><a href="{{ url_for('portfolio.edit_dividend', dividend_id=entry.id) }}">editar</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if report.by_year %}
+  <div class="exposure-table">
+    <h2>Por ano</h2>
+    <table>
+      <thead><tr><th>Ano</th><th>Recebido</th></tr></thead>
+      <tbody>
+        {% for total in report.by_year %}
+        {% set token = total.year ~ '-' ~ total.currency %}
+        {% set expanded = token in expanded_years %}
+        <tr>
+          <td>
+            <button type="button" class="row-toggle"
+                    hx-get="{{ year_toggle_urls[token] }}"
+                    hx-target="#dividends-results" hx-swap="outerHTML"
+                    aria-expanded="{{ 'true' if expanded else 'false' }}"
+                    title="{{ total.months|length }} mês(es) com provento"
+                    aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os meses de {{ total.year }}">{{ '−' if expanded else '+' }}</button>
+            {{ total.year }}{{ ' · ' + total.currency if total.currency != 'BRL' }}
+          </td>
+          <td class="number">{{ total.total_amount|currency(total.currency) }}</td>
+        </tr>
+        {% if expanded %}
+        <tr class="movement-detail">
+          <td colspan="2">
+            {# `movements-table-narrow`: só 2 colunas (Mês, Recebido) não
+               precisam do min-width de 42rem de `.movements-table` — nesse
+               card estreito (1fr, ver .dividend-report), esse mínimo
+               empurrava a tabela para fora da área visível e a coluna
+               Recebido ficava fora do card. #}
+            <table class="movements-table movements-table-narrow">
+              <thead><tr><th>Mês</th><th>Recebido</th></tr></thead>
+              <tbody>
+                {% for month in total.months %}
+                <tr>
+                  <td>{{ month.month.strftime('%m/%Y') }}</td>
+                  <td class="number">{{ month.total_amount|currency(month.currency) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% else %}
+<p class="form-help">Nenhum provento registrado.</p>
+{% endif %}
+
+{% if totals_by_currency %}
+{# No final: o total por tipo de renda, na mesma ordem de coluna do card
+   "Por ativo" acima, seguido do total geral por moeda — a soma das partes
+   por último, não antes delas (mesmo critério da coluna Recebido lá em
+   cima). Todos na mesma linha, qualquer que seja a quantidade de cartões —
+   `dividend-summary` resolve isso com `grid-auto-flow: column` no CSS, sem
+   inline style: a CSP do app (`app/__init__.py`) não libera
+   `'unsafe-inline'` em `style-src`, e um `style="..."` aqui seria
+   silenciosamente ignorado pelo navegador. #}
+<section class="summary dividend-summary" aria-label="Total de proventos por tipo e por moeda">
+  {% for kind, currency, total in totals_by_kind_currency %}
+    <article><span>{{ kind|income_kind_label }} · {{ currency }}</span><strong class="positive">{{ total|currency(currency) }}</strong></article>
+  {% endfor %}
+  {% for currency, total in totals_by_currency %}
+    <article><span>Total recebido · {{ currency }}</span><strong class="positive">{{ total|currency(currency) }}</strong></article>
+  {% endfor %}
+</section>
+{% endif %}
+</div>

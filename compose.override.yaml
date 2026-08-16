@@ -1,0 +1,11 @@
+# Overrides de desenvolvimento, mesclados automaticamente pelo Docker Compose
+# quando presente (nenhuma flag extra necessária: `docker compose up` já usa
+# este arquivo além de compose.yaml) e monta o código via bind mount para
+# edição ao vivo, na mesma porta do serviço `web`.
+#
+# Uso sem bind mount (imagem imutável, como em produção): `docker compose -f compose.yaml up`.
+
+services:
+  web:
+    volumes:
+      - .:/app

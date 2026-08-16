@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Cotações - Controle de Renda Variável{% endblock %}
+{% block content %}
+{% include "partials/quotes_results.html" %}
+{% endblock %}
+{% block scripts %}
+{% if selected_ticker and history %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='quote-history-chart.js') }}"></script>
+{% endif %}
+{% endblock %}

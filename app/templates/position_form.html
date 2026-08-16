@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% set editing = position and position.id is defined %}
+{% block title %}{{ "Editar" if editing else "Nova" }} posição{% endblock %}
+{% block content %}
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position.id) if editing else url_for('portfolio.create_position') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>{{ "Editar" if editing else "Nova" }} posição</h1>
+  {% if duplicate_warning %}
+  <p class="form-warning" role="alert">
+    <strong>Lançamento idêntico ao anterior.</strong>
+    A posição já tem um lançamento com esta mesma quantidade, custo médio e data inicial.
+    Se você clicou duas vezes em Salvar, cancele — o primeiro já foi registrado. Se este é
+    mesmo um segundo aporte com os mesmos valores, confirme abaixo.
+  </p>
+  <input type="hidden" name="confirm_duplicate" value="1">
+  {% endif %}
+  {% if not editing %}
+  <p class="form-help">
+    Se já houver uma posição do mesmo ticker na mesma corretora, com o mesmo tipo e a mesma
+    natureza, este lançamento é somado a ela: a quantidade se acumula e o custo médio passa a ser
+    a média ponderada. A data inicial recua para a mais antiga das duas, e o delta da cotação, o
+    multiplicador do target e o modo de resultado da posição existente são preservados.
+  </p>
+  {% endif %}
+  {% set value = position %}
+  <label>Corretora<select required name="broker_id">
+    <option value="">Selecione</option>
+    {% for broker in brokers %}
+      <option value="{{ broker.id }}" {{ 'selected' if value and value.broker_id|int == broker.id }}>{{ broker.name }}</option>
+    {% endfor %}
+  </select></label>
+  <label>Ticker<select required name="ticker_id">
+    <option value="">Selecione</option>
+    {% for ticker in tickers %}
+      <option value="{{ ticker.id }}" {{ 'selected' if value and value.ticker_id|int == ticker.id }}>{{ ticker.symbol }} · {{ ticker.market.value }} · {{ ticker.currency }}</option>
+    {% endfor %}
+  </select></label>
+  <label>Quantidade<input required type="number" min="0" step="any" name="quantity" value="{{ value.quantity if value else '' }}"></label>
+  <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}"></label>
+  <label>Tipo<select name="side">
+    {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
+  </select></label>
+  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing else value.opened_on if value else '' }}"></label>
+  <label>Delta da cotação<input required type="number" min="0.00000001" step="any" name="quote_multiplier" value="{{ value.quote_multiplier if value else '1' }}"></label>
+  <label>Multiplicador do target<input required type="number" min="0.00000001" step="any" name="target_multiplier" value="{{ value.target_multiplier if value else '1.5' }}"></label>
+  <label>Resultado<select name="result_mode">
+    {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}
+  </select></label>
+  <label>Carteira<select required name="portfolio_id">
+    <option value="">Selecione</option>
+    {% for portfolio in portfolios %}
+      <option value="{{ portfolio.id }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>
+    {% endfor %}
+  </select></label>
+  <div class="form-actions">
+    {% if editing %}
+    {# O botao vive aqui, junto de Salvar, mas pertence ao formulario de
+       exclusao declarado abaixo: HTML nao permite formulario aninhado, e o
+       atributo `form` e o que liga um ao outro sem duplicar o card. #}
+    <button class="button button-danger" type="submit" form="delete-position"
+            formnovalidate>Excluir posição</button>
+    {% endif %}
+    <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
+    <button class="button button-primary" type="submit">
+      {{ "Confirmar mesmo assim" if duplicate_warning else "Salvar" }}
+    </button>
+  </div>
+</form>
+{% if editing %}
+<form id="delete-position" method="post" hidden
+      action="{{ url_for('portfolio.delete_position', position_id=position.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
+{% endblock %}

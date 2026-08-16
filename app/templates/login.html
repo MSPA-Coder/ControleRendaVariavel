@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Entrar · Controle de Renda Variável</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <main class="login-page">
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="flash flash-{{ category }}" role="status">{{ message }}</div>
+    {% endfor %}
+    <form class="login-form" method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h1>Controle de Renda Variável</h1>
+      <label>Usuário
+        <input type="text" name="username" value="{{ username }}" autocomplete="username" autofocus required>
+      </label>
+      <label>Senha
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit">Entrar</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

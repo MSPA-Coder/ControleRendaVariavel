@@ -1,0 +1,185 @@
+{# Resultado das opcoes. O wrapper se reagenda sozinho: os atributos
+   hx-* voltam a cada troca, e o intervalo vem do banco. Antes, o
+   navegador recarregava a pagina inteira a cada ciclo do coletor. #}
+<div id="options-results"
+     data-poll-when-visible
+     hx-get="{{ url_for('options.index', **request.args) }}"
+     hx-trigger="every {{ poll_interval_seconds }}s, poll-resumed"
+     hx-swap="outerHTML">
+<div class="table-wrap">
+  <table class="portfolio-table options-table">
+    <thead>
+      <tr>
+        <th>Corr.</th><th>Ticker</th><th>OP</th><th>Qtde</th><th>Base</th>
+        <th>Atual</th><th>Target</th><th>Var. dia</th><th>Var. total</th>
+        <th>Resultado</th><th>%</th><th>Passou</th><th>Tem</th><th>Faltam</th>
+        <th>Desmontar</th><th>Breakeven</th><th>Strike</th><th>Ativo</th>
+        <th>Folga strike</th><th>%</th><th>Folga breakeven</th><th>%</th>
+        <th>Notional</th><th>Dias úteis</th><th>Exercício</th><th>Montar</th>
+        <th>Δ</th><th>Γ</th><th>Θ/dia</th><th>Vega</th><th>Vol. impl.</th><th>M</th>
+        <th>Início</th><th>ST</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in portfolio.positions %}
+      {% set p = item.position %}
+      {% set c = p.contract %}
+      {% set m = item.metrics %}
+      {% set g = item.greeks %}
+      {% set expanded = p.id in expanded_positions %}
+      {% set has_history = p.movements|length > 1 %}
+      <tr class="instrument-status-{{ item.instrument_status_class }}">
+        <td>{{ p.broker }}</td>
+        <td>
+          {% if has_history %}
+          <button type="button" class="row-toggle"
+                  hx-get="{{ expand_urls[p.id] }}"
+                  hx-target="#options-results"
+                  hx-swap="outerHTML"
+                  aria-expanded="{{ 'true' if expanded else 'false' }}"
+                  title="{{ p.movements|length }} movimentos formaram esta posição"
+                  aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os movimentos de {{ c.ticker_ref.symbol }}">{{ '−' if expanded else '+' }}</button>
+          {% endif %}
+          <a href="{{ url_for('options.edit_position', position_id=p.id) }}">{{ c.ticker_ref.symbol }}</a>
+        </td>
+        <td>{{ p.side.value }}</td>
+        <td class="number">{{ p.quantity|quantity(c.ticker_ref.currency) }}</td>
+        <td class="number">{{ p.average_cost|currency(c.ticker_ref.currency, trim=true) }}</td>
+        {% if m %}
+          <td class="number">{{ m.current_price|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number">{{ p.target_price|currency(c.ticker_ref.currency, trim=true) if p.target_price is not none else '-' }}</td>
+          <td class="number {{ m.daily_variation|sign_class }}">{{ m.daily_variation|percent }}</td>
+          <td class="number {{ m.total_variation|sign_class }}">{{ m.total_variation|percent }}</td>
+          <td class="number {{ m.result|sign_class }}">{{ m.result|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number {{ m.return_pct|sign_class }}">{{ m.return_pct|percent }}</td>
+          <td class="number">{{ m.elapsed_pct|percent }}</td>
+          <td class="number">{{ m.elapsed_days }}</td>
+          <td class="number">{{ m.remaining_days }}</td>
+          <td class="number">{{ m.unwind_value|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number">{{ m.breakeven|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number">{{ c.strike|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td>{{ c.underlying_ticker_ref.symbol }}</td>
+          <td class="number {{ m.strike_cushion|sign_class }}">{{ m.strike_cushion|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number {{ m.strike_cushion_pct|sign_class }}">{{ m.strike_cushion_pct|percent }}</td>
+          <td class="number {{ m.breakeven_cushion|sign_class }}">{{ m.breakeven_cushion|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number {{ m.breakeven_cushion_pct|sign_class }}">{{ m.breakeven_cushion_pct|percent }}</td>
+          <td class="number">{{ m.notional|currency(c.ticker_ref.currency, trim=true) }}</td>
+          <td class="number">{{ m.business_days }}</td>
+          <td>{{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</td>
+          <td class="number">{{ m.build_value|currency(c.ticker_ref.currency, trim=true) }}</td>
+          {% if g and g.delta is not none %}
+            <td class="number">{{ g.delta|number(3, trim=true) }}</td>
+            <td class="number">{{ g.gamma|number(4, trim=true) }}</td>
+            <td class="number">{{ g.theta_daily|currency(c.ticker_ref.currency, trim=true) }}</td>
+            <td class="number">{{ g.vega|currency(c.ticker_ref.currency, trim=true) }}</td>
+            <td class="number">{{ g.implied_volatility|percent }}</td>
+          {% else %}
+            <td colspan="5" class="missing" title="Prêmio não permitiu calcular volatilidade implícita">sem gregas</td>
+          {% endif %}
+          <td><span class="status moneyness-{{ g.moneyness }}">{{ g.moneyness }}</span></td>
+          <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
+          <td class="ticker-status">
+            {% if item.instrument_status %}<span class="instrument-code instrument-{{ item.instrument_status_class }}"
+                    title="{{ item.instrument_status|instrument_status_description }}">{{ item.instrument_status|instrument_status_label }}</span>{% endif %}
+            <span class="status status-{{ item.quote_status }}">{{ item.quote_status }}</span>
+          </td>
+        {% else %}
+          <td colspan="29" class="missing">Aguardando primeira cotação RTD</td>
+        {% endif %}
+      </tr>
+      {% if expanded and has_history %}
+      <tr class="movement-detail">
+        <td colspan="34">
+          {% with movements = p.movements, position = p %}
+            {% include "partials/position_movements.html" %}
+          {% endwith %}
+        </td>
+      </tr>
+      {% endif %}
+    {% else %}
+      <tr><td colspan="34" class="empty">Nenhuma posição de opção cadastrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# Mesma estrutura dos cards da Carteira: o simbolo acompanha o rotulo, nao o
+   numero, senao ele consome a largura do card e quebra o valor em duas
+   linhas. O simbolo vem da(s) moeda(s) das posicoes somadas no card
+   (``total.currencies``, ``OptionContract.ticker_ref.currency``), nunca de
+   um "R$" fixo: opcoes hoje so existem em BRL, mas o card nao pode mentir se
+   isso mudar. O agrupamento continua por natureza apenas (real/Simulada,
+   WP5), sem separar por moeda — decisao do mantenedor de nao generalizar; se
+   mais de uma moeda aparecer no mesmo card, os simbolos correspondentes
+   aparecem lado a lado (ex.: "R$/US$") em vez de escolher uma e esconder a
+   outra. So o card da Simulada ganha titulo visivel; o(s) real(is) seguem
+   sem titulo (excecao assimetrica, mesma regra da Carteira). #}
+<section class="summary portfolio-summary" aria-label="Resumo de opções">
+{% for total in portfolio.totals %}
+  {% set symbol = total.currencies|map('currency_symbol')|join('/') %}
+  <article class="currency-card{{ ' currency-card-simulated' if total.simulated }}"
+            aria-label="{{ total.portfolio_name }}, totais em {{ total.currencies|join('/') }}{{ ' (simulada)' if total.simulated }}">
+    <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Ganhos <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="positive">{{ total.gain|number(2, trim=true) }}</strong>
+      </article>
+      <article>
+        <span>Perdas <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="negative">{{ total.loss|number(2, trim=true) }}</strong>
+      </article>
+      <article>
+        <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="{{ total.result|sign_class }}">{{ total.result|number(2, trim=true) }}</strong>
+      </article>
+      <article title="Soma do decaimento diário esperado do prêmio das posições deste card, já considerando compra/venda.">
+        <span>Theta total/dia <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="{{ total.total_theta_daily|sign_class }}">{{ total.total_theta_daily|number(2, trim=true) if total.total_theta_daily is not none else '-' }}</strong>
+      </article>
+    </div>
+  </article>
+{% endfor %}
+{% if portfolio.moneyness_totals %}
+  <article class="currency-card" aria-label="Distribuição por moneyness">
+    <div class="currency-card-grid">
+      {% for total in portfolio.moneyness_totals %}
+      <article>
+        <span>{{ total.moneyness }} · {{ total.count }} posição(ões)</span>
+        <strong>{{ total.pct|percent }}</strong>
+      </article>
+      {% endfor %}
+    </div>
+  </article>
+{% endif %}
+</section>
+
+<section class="catalog-card expiration-summary">
+  <h2>Totais por vencimento</h2>
+  <div class="table-wrap">
+    <table class="catalog-table">
+      <thead><tr><th>Vencimento</th><th>Notional prov.</th><th>Notional</th><th>Desmontar</th><th>Resultado</th></tr></thead>
+      <tbody>
+      {% for total in portfolio.expirations %}
+        <tr>
+          <td>{{ total.expiration_date.strftime('%d-%b-%y') }}</td>
+          <td class="number">{{ total.provisional_notional|currency('BRL', trim=true) }}</td>
+          <td class="number">{{ total.notional|currency('BRL', trim=true) }}</td>
+          <td class="number">{{ total.unwind|currency('BRL', trim=true) }}</td>
+          <td class="number {{ total.result|sign_class }}">{{ total.result|currency('BRL', trim=true) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">Sem totais disponíveis.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if portfolio.expirations %}
+  <div id="expiration-chart" class="chart-box"
+       data-expirations="{{ portfolio.expirations|map(attribute='expiration_date')|map('string')|list|tojson }}"
+       data-notional="{{ portfolio.expirations|map(attribute='notional')|map('string')|list|tojson }}"
+       data-unwind="{{ portfolio.expirations|map(attribute='unwind')|map('string')|list|tojson }}"
+       aria-label="Gráfico de exposição por vencimento"></div>
+  {% endif %}
+</section>
+</div>

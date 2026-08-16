@@ -1,0 +1,33 @@
+{# Extrato de uma posição: as entradas individuais que formaram a quantidade e
+   o custo médio atuais.
+
+   Espera `movements` (em ordem cronológica) e `position` no contexto — quem
+   inclui usa `{% with %}` para fixá-los. É o mesmo fragmento na Carteira
+   (linha expandida pelo `+`) e no formulário de encerramento, para que as duas
+   telas nunca mostrem o histórico de formas diferentes.
+#}
+<table class="movements-table">
+  <thead>
+    <tr>
+      <th>Data</th><th>Movimento</th><th>Qtde</th><th>Preço</th>
+      <th>Resultado</th><th>Saldo</th><th>Custo médio</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for movement in movements %}
+    <tr>
+      <td>{{ movement.occurred_on.strftime('%d-%b-%y') }}</td>
+      <td>{{ movement.kind|movement_label }}</td>
+      <td class="number">{{ movement.quantity|quantity(position.currency) }}</td>
+      <td class="number">{{ movement.price|currency(position.currency, trim=true) }}</td>
+      <td class="number {{ movement.result|sign_class }}">
+        {{ movement.result|currency(position.currency, trim=true) if movement.result is not none else '—' }}
+      </td>
+      <td class="number">{{ movement.resulting_quantity|quantity(position.currency) }}</td>
+      <td class="number">{{ movement.resulting_average_cost|currency(position.currency, trim=true) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="empty">Sem movimentos registrados.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

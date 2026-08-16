@@ -1,0 +1,104 @@
+{# Resultado de Transações: tabela e resumo de performance.
+
+   Envolvido por um único wrapper para que a troca via HTMX (hx-swap
+   outerHTML) substitua tabela e resumo juntos, mantendo os dois sempre
+   consistentes com o mesmo filtro.
+#}
+<div id="transactions-results">
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th><th>Corr.</th><th>Ticker</th><th>Tipo</th><th>Qtde</th><th>Custo médio</th>
+        <th>Saída</th><th>Resultado</th><th>Abertura</th><th>Encerramento</th>
+        <th>Dias</th><th>Carteira</th><th>Notas</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tx in transactions %}
+      <tr class="{{ 'transaction-open' if tx.status.value == 'open' }}">
+        <td><span class="tag {{ 'tag-open' if tx.status.value == 'open' else 'tag-closed' }}">{{ 'Aberta' if tx.status.value == 'open' else 'Fechada' }}</span></td>
+        <td>{{ tx.broker }}</td>
+        <td>
+          {% if tx.status.value == 'open' or tx.id in partial_close_ids %}
+            {% set edit_endpoint = 'options.edit_position' if tx.option_contract_id else 'portfolio.edit_position' %}
+            <a href="{{ url_for(edit_endpoint, position_id=tx.source_position_id) }}">{{ tx.ticker }}</a>
+          {% elif tx.option_contract_id %}
+            {# Transação de opção sem posição viva: registro histórico
+               independente, não editável pelo formulário genérico de ações
+               (ver `_option_edit_guard` em app/routes/transactions.py). #}
+            <span>{{ tx.ticker }}</span>
+          {% else %}
+            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">{{ tx.ticker }}</a>
+          {% endif %}
+          {% if tx.option_contract_id %}
+            {% set c = tx.option_contract_ref %}
+            <br><small>{{ c.option_type.value|upper }} · {{ c.strike|currency(tx.currency, trim=true) }} · {{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</small>
+          {% endif %}
+        </td>
+        <td>{{ tx.side.value }}</td>
+        <td class="number">{{ tx.quantity|quantity }}</td>
+        <td class="number">{{ tx.average_cost|currency(tx.currency) }}</td>
+        <td class="number">{{ tx.exit_price|currency(tx.currency) }}</td>
+        <td class="number {{ tx.result|sign_class }}">{{ tx.result|currency(tx.currency) }}</td>
+        <td>{{ tx.opened_on.strftime('%d-%b-%y') }}</td>
+        <td>{{ tx.closed_on.strftime('%d-%b-%y') if tx.closed_on else '—' }}</td>
+        <td class="number">{{ tx.days_held if tx.days_held is not none else '—' }}</td>
+        <td>{{ tx.portfolio_ref.name }}</td>
+        <td>{{ tx.notes or '' }}</td>
+        <td>
+          {% if tx.status.value == 'open' %}
+            {% set close_endpoint = 'options.close_position_form' if tx.option_contract_id else 'portfolio.close_position_form' %}
+            <a href="{{ url_for(close_endpoint, position_id=tx.source_position_id) }}">encerrar</a>
+          {% elif tx.id in partial_close_ids %}
+            {# Encerramento parcial: os campos espelham um movimento da posição e
+               não se editam soltos. Desfazer devolve a quantidade e apaga a linha. #}
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-button" type="submit"
+                      title="Devolve {{ tx.quantity|quantity }} para a posição e apaga esta transação">desfazer</button>
+            </form>
+          {% elif tx.option_contract_id %}
+            {# Transação de opção fechada sem posição viva: registro histórico
+               independente. Continua excluível (link genérico abaixo cobre
+               isso), só não editável pelo formulário de ações. #}
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-button" type="submit">excluir</button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="14" class="empty">Nenhuma transação registrada.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<section class="summary transactions-summary" aria-label="Resumo de transações">
+  <article><span>Ganhos</span><strong class="positive">{{ gain|currency('BRL') }}</strong></article>
+  <article><span>Perdas</span><strong class="negative">{{ loss|currency('BRL') }}</strong></article>
+  <article><span>Resultado</span><strong class="{{ result|sign_class }}">{{ result|currency('BRL') }}</strong></article>
+  <article title="Participação de transações com resultado positivo no total, entre as já encerradas.">
+    <span>Win rate</span>
+    <strong>{{ win_rate|percent if win_rate is not none else '-' }}</strong>
+  </article>
+  <article title="Ganhos totais divididos pelas perdas totais (em módulo), entre as transações encerradas. Acima de 1 indica que os ganhos superam as perdas.">
+    <span>Profit factor</span>
+    <strong>{{ profit_factor|number(2) if profit_factor is not none else '-' }}</strong>
+  </article>
+  <article title="Média dos ganhos dividida pela média das perdas (em módulo), entre as transações encerradas. Acima de 1 indica que os ganhos médios superam as perdas médias.">
+    <span>Payoff ratio</span>
+    <strong>{{ payoff_ratio|number(2) if payoff_ratio is not none else '-' }}</strong>
+  </article>
+  <article title="Média de dias entre abertura e encerramento das transações já encerradas.">
+    <span>Tempo médio em posição</span>
+    <strong>{{ avg_days_held|number(1) if avg_days_held is not none else '-' }} dias</strong>
+  </article>
+</section>
+</div>

@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Controle de Renda Variável{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='fonts.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  {# Versão fixada e servida localmente: a CSP é `default-src 'self'`, e a
+     base de engenharia proíbe depender de `latest` ou de CDN em produção. #}
+  <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+{# hx-headers é um atributo, não handler inline: envia o token CSRF em toda
+   requisição HTMX sem violar a CSP. Toda escrita continua protegida no
+   servidor; o cabeçalho HX-Request nunca é tratado como prova de origem. #}
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'>
+  {% import "partials/collector.html" as collector %}
+  {% set nav_meta = {
+    'portfolio.index': ('Carteira', 'Ações'),
+    'options.index': ('Carteira', 'Opções'),
+    'portfolio.transactions': ('Carteira', 'Transações'),
+    'portfolio.dividends': ('Carteira', 'Proventos'),
+    'portfolio.quote_history': ('Mercado', 'Cotações'),
+    'portfolio.risk_report': ('Análise', 'Risco'),
+    'portfolio.monthly_performance': ('Análise', 'Performance'),
+    'portfolio.exposure_asset': ('Análise', 'Alocação por Ativo'),
+    'portfolio.exposure_broker': ('Análise', 'Exposição por Corretora'),
+    'portfolio.exposure_market': ('Análise', 'Exposição por Mercado'),
+    'portfolio.table_portfolios': ('Cadastros', 'Carteiras'),
+    'portfolio.table_brokers': ('Cadastros', 'Corretoras'),
+    'portfolio.table_tickers': ('Cadastros', 'Tickers'),
+    'options.table_expirations': ('Cadastros', 'Vencimentos'),
+    'options.table_contracts': ('Cadastros', 'Contratos'),
+    'portfolio.settings': ('Sistema', 'Configurações'),
+  } %}
+  {% set crumb = nav_meta.get(request.endpoint, ('', '')) %}
+  <div class="app-shell">
+    <header class="navbar">
+      <div class="navbar-row">
+        <div class="logo">
+          <span class="logo-mark" aria-hidden="true">CRV</span>
+          <span class="logo-text">Renda Variável</span>
+        </div>
+
+        <div class="mega-wrap" data-group="carteira">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.index', 'options.index', 'portfolio.transactions', 'portfolio.dividends'] }}" type="button" data-nav-group="carteira" aria-controls="mega-carteira" aria-expanded="false">
+            Carteira <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="mega" id="mega-carteira" data-mega="carteira">
+            <div class="mega-inner">
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.index' }}" href="{{ url_for('portfolio.index') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16v-5M11 16V7M16 16v-9"/></svg></span>
+                <span class="t">Ações</span>
+                <span class="d">Posições de renda variável por ticker e corretora.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'options.index' }}" href="{{ url_for('options.index') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg></span>
+                <span class="t">Opções</span>
+                <span class="d">Contratos, gregas e prêmios em aberto.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.transactions' }}" href="{{ url_for('portfolio.transactions') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h13M7 7l3-3M7 7l3 3M17 17H4M17 17l-3 3M17 17l-3-3"/></svg></span>
+                <span class="t">Transações</span>
+                <span class="d">Histórico de compras e vendas lançadas.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.dividends' }}" href="{{ url_for('portfolio.dividends') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M17 6.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.7 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/></svg></span>
+                <span class="t">Proventos</span>
+                <span class="d">Dividendos e JCP recebidos.</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="mega-wrap" data-group="analise">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market'] }}" type="button" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
+            Análise <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="mega" id="mega-analise" data-mega="analise">
+            <div class="mega-inner">
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.risk_report' }}" href="{{ url_for('portfolio.risk_report') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 6.5v6C3 17 7 21 12 22c5-1 9-5 9-9.5v-6L12 2z"/></svg></span>
+                <span class="t">Risco</span>
+                <span class="d">VaR, Sharpe, Sortino e Beta da carteira.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.monthly_performance' }}" href="{{ url_for('portfolio.monthly_performance') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="12" width="3.4" height="8"/><rect x="10.3" y="7" width="3.4" height="13"/><rect x="16.6" y="3" width="3.4" height="17"/></svg></span>
+                <span class="t">Performance</span>
+                <span class="d">Resultado mensal frente ao benchmark.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.exposure_asset' }}" href="{{ url_for('portfolio.exposure_asset') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg></span>
+                <span class="t">Alocação por Ativo</span>
+                <span class="d">Distribuição de capital entre tickers.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.exposure_broker' }}" href="{{ url_for('portfolio.exposure_broker') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M9 4v16"/></svg></span>
+                <span class="t">Exposição por Corretora</span>
+                <span class="d">Distribuição de capital entre corretoras.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.exposure_market' }}" href="{{ url_for('portfolio.exposure_market') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"/><path d="M15 6h5v5"/></svg></span>
+                <span class="t">Exposição por Mercado</span>
+                <span class="d">Distribuição de capital entre mercados.</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="mega-wrap" data-group="mercado">
+          <button class="grp-btn {{ 'group-active' if request.endpoint == 'portfolio.quote_history' }}" type="button" data-nav-group="mercado" aria-controls="mega-mercado" aria-expanded="false">
+            Mercado <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="mega" id="mega-mercado" data-mega="mercado">
+            <div class="mega-inner">
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.quote_history' }}" href="{{ url_for('portfolio.quote_history') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"/><path d="M15 6h5v5"/></svg></span>
+                <span class="t">Cotações</span>
+                <span class="d">Histórico de preços e status do coletor RTD.</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="mega-wrap" data-group="cadastros">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.table_portfolios', 'portfolio.table_brokers', 'portfolio.table_tickers', 'options.table_expirations', 'options.table_contracts'] }}" type="button" data-nav-group="cadastros" aria-controls="mega-cadastros" aria-expanded="false">
+            Cadastros <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="mega" id="mega-cadastros" data-mega="cadastros">
+            <div class="mega-inner">
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.table_portfolios' }}" href="{{ url_for('portfolio.table_portfolios') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+                <span class="t">Carteiras</span>
+                <span class="d">Cadastro de carteiras e associação de tickers.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.table_brokers' }}" href="{{ url_for('portfolio.table_brokers') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M9 4v16"/></svg></span>
+                <span class="t">Corretoras</span>
+                <span class="d">Nome e sigla das corretoras cadastradas.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.table_tickers' }}" href="{{ url_for('portfolio.table_tickers') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg></span>
+                <span class="t">Tickers</span>
+                <span class="d">Ativos, mercado, código RTD e moeda.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'options.table_expirations' }}" href="{{ url_for('options.table_expirations') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="1.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+                <span class="t">Vencimentos</span>
+                <span class="d">Códigos e datas de exercício de calls e puts.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'options.table_contracts' }}" href="{{ url_for('options.table_contracts') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 13h6M9 17h6"/></svg></span>
+                <span class="t">Contratos</span>
+                <span class="d">Contratos de opções, tipo e strike.</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {# Esconder o grupo e apresentacao; o controle real esta em
+           `@requer_admin` na rota. Um operador que digite /settings recebe 403
+           mesmo sem ver este menu. #}
+        {% if current_user.is_admin %}
+        <div class="mega-wrap" data-group="sistema">
+          <button class="grp-btn {{ 'group-active' if request.endpoint == 'portfolio.settings' }}" type="button" data-nav-group="sistema" aria-controls="mega-sistema" aria-expanded="false">
+            Sistema <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="mega" id="mega-sistema" data-mega="sistema">
+            <div class="mega-inner">
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.settings' }}" href="{{ url_for('portfolio.settings') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 13.5 1-1.7-1.7-1.7-1.7 1a1.7 1.7 0 0 0-3 0l-1-1.7-1.7 1.7 1 1.7a1.7 1.7 0 0 0 0 3l-1 1.7 1.7 1.7 1.7-1a1.7 1.7 0 0 0 3 0l1.7 1 1.7-1.7-1-1.7a1.7 1.7 0 0 0 0-3Z"/></svg></span>
+                <span class="t">Configurações</span>
+                <span class="d">Coletor RTD, taxa livre de risco e conta.</span>
+              </a>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if current_user.is_authenticated %}
+        <div class="navbar-right">
+          {# O pulso do coletor mora na barra do menu, antes do nome da pagina:
+             ele acompanha a leitura de cotacoes, entao so faz sentido onde
+             cotacao e o assunto — Acoes e Cotacoes. Nas demais paginas seria
+             so uma requisicao a cada 10s sem ninguem para ler. #}
+          {% if request.endpoint in ['portfolio.index', 'portfolio.quote_history'] %}
+            {{ collector.heartbeat(collector_heartbeat) }}
+          {% endif %}
+          {% if crumb[1] %}<span class="nav-current-page">{{ crumb[1] }}</span>{% endif %}
+          <span class="avatar" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
+          <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-primary" type="submit">Sair</button></form>
+        </div>
+        {% endif %}
+      </div>
+    </header>
+    <div class="nav-scrim" data-nav-scrim hidden></div>
+
+    {% set header_controls_html %}{% block header_controls %}{% endblock %}{% endset %}
+    <div class="app-main">
+      {% if header_controls_html|trim %}
+      <header class="topbar"><nav aria-label="Barra de ferramentas">
+        {{ header_controls_html }}
+      </nav></header>
+      {% endif %}
+      <main>
+        {% for category, message in get_flashed_messages(with_categories=true) %}<div class="flash flash-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

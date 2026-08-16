@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block header_controls %}
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for('portfolio.index') }}"
+      hx-trigger="change"
+      hx-target="#portfolio-results"
+      hx-swap="outerHTML"
+      hx-push-url="true">
+  <label>Carteira
+    <select name="portfolio_id">
+      <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>
+      {% for portfolio in portfolios %}
+        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio_id == portfolio.id|string }}>{{ portfolio.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Retorno
+    <select name="return_days">
+      {% for days, label in return_periods %}
+        <option value="{{ days }}" {{ 'selected' if selected_return_days == days }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
+  <label class="group-toggle" title="Mostrar o nome da corretora uma única vez por grupo, em vez de repeti-lo em cada linha">
+    <input type="checkbox" name="group_by_broker" value="1" {{ 'checked' if group_by_broker }}>
+    <span class="group-toggle-track" aria-hidden="true"></span>
+    <span>Agrupar por corretora</span>
+  </label>
+</form>
+  {# O liga/desliga do coletor vive em Configuracoes > Coletor de cotacoes:
+     e uma configuracao do sistema, nao um filtro da carteira. #}
+  <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
+{% endblock %}
+{% block content %}
+{% include "partials/portfolio_results.html" %}
+
+{% endblock %}

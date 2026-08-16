@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block header_controls %}
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for('options.index') }}"
+      hx-trigger="change"
+      hx-target="#options-results"
+      hx-swap="outerHTML"
+      hx-push-url="true">
+  <label>Carteira
+    <select name="portfolio_id">
+      <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>
+      {% for portfolio in portfolios %}
+        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio_id == portfolio.id|string }}>{{ portfolio.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="button" href="{{ url_for('options.index') }}">Limpar</a>
+</form>
+<a class="button button-primary" href="{{ url_for('options.new_position') }}">Nova posição</a>
+{% endblock %}
+{% block title %}Opções · Controle de Renda Variável{% endblock %}
+{% block content %}
+{% include "partials/options_results.html" %}
+{% endblock %}
+{% block scripts %}
+{% if portfolio.expirations %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='expiration-chart.js') }}"></script>
+{% endif %}
+{% endblock %}

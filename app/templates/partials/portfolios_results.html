@@ -1,0 +1,143 @@
+{# Regiao trocada pelo seletor de carteira e pelos formularios de CRUD de
+   Carteiras (WP2 do plano de carteiras) em table_portfolios.html. Fica em
+   parcial para que a pagina inteira e a resposta HTMX saiam do mesmo
+   template, no mesmo padrao de partials/quotes_results.html. #}
+<div id="portfolios-results">
+{# Numa troca HTMX so este fragmento volta, entao as mensagens precisam sair
+   aqui: o `<main>` de base.html nao e re-renderizado. Na pagina inteira o
+   base.html consome as mensagens antes, e esta chamada nao acha nada — nao
+   ha risco de duplicata. #}
+{% for category, message in get_flashed_messages(with_categories=true) %}
+<div class="flash flash-{{ category }}" role="status">{{ message }}</div>
+{% endfor %}
+
+<section class="catalog-card">
+  <h2>Carteiras</h2>
+  <form class="catalog-create portfolio-fields" method="post" action="{{ url_for('portfolio.create_portfolio') }}"
+        hx-post="{{ url_for('portfolio.create_portfolio') }}"
+        hx-target="#portfolios-results" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Nome<input required maxlength="80" name="name"></label>
+    <label>Moeda<select name="currency">
+      <option value="">Nenhuma</option>
+      {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}">{{ currency }}</option>{% endfor %}
+    </select></label>
+    <label class="portfolio-simulated-field">
+      <input type="checkbox" name="simulated" value="1">
+      Simulada
+    </label>
+    <label>Descrição<input maxlength="500" name="description"></label>
+    <button class="button button-primary" type="submit">Adicionar</button>
+  </form>
+  <p class="form-help">
+    "Simulada" só pode ser escolhida ao criar a carteira: alterar isso depois
+    exigiria criar ou apagar transações em massa. Para levar uma posição de
+    uma carteira real para uma simulada (ou o contrário), mova a posição —
+    não a carteira.
+  </p>
+  <div class="table-wrap">
+    <table class="catalog-table">
+      <thead><tr><th>Nome</th><th>Moeda</th><th>Simulada</th><th>Descrição</th><th>Ações</th></tr></thead>
+      <tbody>
+      {% for portfolio in portfolios %}
+        <tr>
+          <td>
+            <form id="portfolio-{{ portfolio.id }}" method="post" action="{{ url_for('portfolio.update_portfolio', portfolio_id=portfolio.id) }}"
+                  hx-post="{{ url_for('portfolio.update_portfolio', portfolio_id=portfolio.id) }}"
+                  hx-target="#portfolios-results" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input required maxlength="80" name="name" value="{{ portfolio.name }}" aria-label="Nome da carteira {{ portfolio.name }}">
+            </form>
+          </td>
+          <td><select name="currency" form="portfolio-{{ portfolio.id }}" aria-label="Moeda de {{ portfolio.name }}">
+            <option value="" {{ 'selected' if not portfolio.currency }}>Nenhuma</option>
+            {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if portfolio.currency == currency }}>{{ currency }}</option>{% endfor %}
+          </select></td>
+          <td>
+            <span class="tag {{ 'tag-open' if portfolio.simulated else 'tag-closed' }}"
+                  title="Definida na criação; não pode ser alterada depois.">{{ 'Sim' if portfolio.simulated else 'Não' }}</span>
+          </td>
+          <td><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}"></td>
+          <td class="catalog-actions">
+            <button class="button" type="submit" form="portfolio-{{ portfolio.id }}">Salvar</button>
+            <form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
+                  hx-post="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
+                  hx-target="#portfolios-results" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="button button-danger" type="submit">Excluir</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">Nenhuma carteira cadastrada.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if portfolios %}
+<section class="catalog-card portfolio-ticker-card">
+  <h2>Tickers da carteira</h2>
+  <p class="form-help">
+    Cadastro de quais tickers podem ser lançados em cada carteira. Um mesmo
+    ticker pode estar associado a mais de uma carteira ao mesmo tempo.
+  </p>
+  <form class="portfolio-ticker-filter">
+    <label for="portfolio-ticker-select">Carteira</label>
+    <select id="portfolio-ticker-select" name="portfolio_id"
+            hx-get="{{ url_for('portfolio.table_portfolios') }}"
+            hx-trigger="change"
+            hx-include="closest form"
+            hx-target="#portfolios-results"
+            hx-swap="outerHTML"
+            hx-push-url="true">
+      {% for portfolio in portfolios %}
+        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio and portfolio.id == selected_portfolio.id }}>{{ portfolio.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if selected_portfolio %}
+  <div class="portfolio-ticker-grid">
+    <div class="table-wrap">
+      <table class="catalog-table">
+        <thead><tr><th>Ticker associado</th><th>Ações</th></tr></thead>
+        <tbody>
+        {% for ticker in associated_tickers %}
+          <tr>
+            <td>{{ ticker.symbol }}</td>
+            <td class="catalog-actions">
+              <form method="post" action="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
+                    hx-post="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
+                    hx-target="#portfolios-results" hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-danger" type="submit">Remover</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="empty">Nenhum ticker associado a {{ selected_portfolio.name }}.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if available_tickers %}
+    <form class="catalog-create portfolio-ticker-add" method="post" action="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=selected_portfolio.id) }}"
+          hx-post="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=selected_portfolio.id) }}"
+          hx-target="#portfolios-results" hx-swap="outerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Associar ticker<select required name="ticker_id">
+        <option value="">Selecione</option>
+        {% for ticker in available_tickers %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
+      </select></label>
+      <button class="button button-primary" type="submit">Associar</button>
+    </form>
+    {% else %}
+    <p class="form-help">Todos os tickers elegíveis já estão associados a {{ selected_portfolio.name }}.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+</div>
