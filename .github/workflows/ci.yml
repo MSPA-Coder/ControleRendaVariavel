@@ -89,6 +89,8 @@ jobs:
           docker run --rm --entrypoint sh "$image_id" -ec '
             test "$(id -u)" != 0
             test ! -w /app
+            test ! -w /app/app
+            test ! -w /app/migrations
             for path in /app/.secrets /app/.certs /app/.env /app/requirements-dev.txt; do
               test ! -e "$path"
             done
