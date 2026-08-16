@@ -5,6 +5,7 @@ services:
     image: postgres:17-alpine
     user: postgres
     restart: unless-stopped
+    cpus: 1.0
     mem_limit: 512m
     read_only: true
     pids_limit: 256
@@ -44,6 +45,7 @@ services:
       secrets:
         - local_ca
     restart: unless-stopped
+    cpus: 1.0
     mem_limit: 512m
     init: true
     read_only: true
@@ -99,6 +101,7 @@ services:
       secrets:
         - local_ca
     read_only: true
+    cpus: 0.5
     mem_limit: 512m
     cap_drop:
       - ALL
