@@ -7,6 +7,7 @@ correta: a falha e silenciosa e so aparece quando alguem de fora ja entrou.
 from __future__ import annotations
 
 from app import PUBLIC_ENDPOINTS
+from app.routes.auth import _local_next_url
 
 
 def _rotas_get_registradas(app):
@@ -55,3 +56,22 @@ def test_lista_de_publicos_e_curta_e_conhecida():
     # A lista e de rotas publicas, nao de protegidas: uma rota nova nasce
     # protegida. Acrescentar algo aqui deve ser decisao consciente.
     assert {"auth.login", "portfolio.health", "static"} == PUBLIC_ENDPOINTS
+
+
+def test_login_aceita_apenas_destino_local_sem_barra_invertida():
+    assert _local_next_url("/portfolio?tab=summary") == "/portfolio?tab=summary"
+    assert _local_next_url("//externo.test") is None
+    assert _local_next_url("/\\externo.test") is None
+    assert _local_next_url("/%5cexterno.test") is None
+    assert _local_next_url("/%255cexterno.test") is None
+    assert _local_next_url("/%2f%2fexterno.test") is None
+    assert _local_next_url("/%252f%252fexterno.test") is None
+    assert _local_next_url("https://externo.test") is None
+
+
+def test_login_recusa_destino_com_separador_aninhado_alem_de_tres_camadas():
+    destino = "/%5cexterno.test"
+    for _ in range(6):
+        destino = destino.replace("%", "%25")
+
+    assert _local_next_url(destino) is None

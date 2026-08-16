@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import unquote, urlsplit
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import (  # type: ignore[import-untyped]
@@ -17,6 +19,28 @@ from app.models import User
 bp = Blueprint("auth", __name__)
 
 
+def _local_next_url(value: str | None) -> str | None:
+    """Aceita somente um caminho absoluto interno, nunca uma URL de rede."""
+    if not value or not value.startswith("/"):
+        return None
+    decoded = value
+    # Cada unquote que altera a string encurta ao menos uma sequência ``%xx``;
+    # o limite pelo tamanho original termina mesmo sob aninhamento adversarial.
+    for _ in range(len(value) + 1):
+        if "\\" in decoded or decoded.startswith("//"):
+            return None
+        next_decoded = unquote(decoded)
+        if next_decoded == decoded:
+            break
+        decoded = next_decoded
+    else:
+        return None
+    parsed = urlsplit(decoded)
+    if parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
+        return None
+    return value
+
+
 @bp.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute")
 def login() -> ResponseReturnValue:
@@ -32,8 +56,8 @@ def login() -> ResponseReturnValue:
             return render_template("login.html", username=username), 401
         login_user(user, remember=True)
         flash("Login realizado com sucesso.", "success")
-        next_url = request.args.get("next")
-        if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        next_url = _local_next_url(request.args.get("next"))
+        if next_url is not None:
             return redirect(next_url)
         return redirect(url_for("portfolio.index"))
 

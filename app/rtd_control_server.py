@@ -163,7 +163,7 @@ def _bootstrap(project_dir: Path) -> str:
     docker_cli = resolve_docker_cli()
     wait_for_docker(docker_cli)
     token = read_or_create_token(secrets_dir / "rtd_control_token")
-    compose_up(docker_cli, project_dir)
+    compose_up(docker_cli)
     apply_host_environment(project_dir)
     return token
 

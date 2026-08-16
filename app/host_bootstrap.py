@@ -10,11 +10,9 @@ ser testável sem um Docker real: toda chamada de processo é injetável.
 
 from __future__ import annotations
 
-import os
-import shutil
 import subprocess
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 
 RunFunc = Callable[..., subprocess.CompletedProcess[str]]
@@ -23,26 +21,35 @@ _DEFAULT_TIMEOUT_SECONDS = 300.0
 _DEFAULT_POLL_INTERVAL_SECONDS = 5.0
 
 
-def resolve_docker_cli(
-    *,
-    which: Callable[[str], str | None] = shutil.which,
-    env: Mapping[str, str] | None = None,
-) -> Path:
-    """Localiza o executável do Docker CLI, como ``Resolve-DockerCli``."""
-    found = which("docker")
-    if found:
-        return Path(found)
-    environ = os.environ if env is None else env
-    candidates = [
-        Path(environ.get("LOCALAPPDATA", ""))
-        / "Programs" / "DockerDesktop" / "resources" / "bin" / "docker.exe",
-        Path(environ.get("ProgramFiles", ""))
-        / "Docker" / "Docker" / "resources" / "bin" / "docker.exe",
-    ]
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    raise RuntimeError("Docker CLI não encontrado. Instale ou inicie o Docker Desktop.")
+def _docker_cli_candidates() -> tuple[Path, ...]:
+    """Devolve somente os locais padrão do Docker Desktop no Windows.
+
+    O controlador RTD é iniciado por tarefa agendada e não deve herdar um
+    executável de ``PATH`` ou de variável de ambiente alterada. Os dois locais
+    cobrem a instalação por máquina e a instalação por usuário do Docker
+    Desktop, respectivamente.
+    """
+    return (
+        Path(r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"),
+        Path.home() / "AppData" / "Local" / "Programs" / "DockerDesktop" / "resources" / "bin" / "docker.exe",
+    )
+
+
+def resolve_docker_cli() -> Path:
+    """Localiza um executável canônico do Docker Desktop, sem consultar PATH."""
+    for candidate in _docker_cli_candidates():
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        if resolved.is_file():
+            return resolved
+    raise RuntimeError("Docker CLI não encontrado nos locais padrão do Docker Desktop.")
+
+
+def _project_directory() -> Path:
+    """Raiz imutável do projeto que contém este controlador do host."""
+    return Path(__file__).resolve().parent.parent
 
 
 def wait_for_docker(
@@ -71,9 +78,7 @@ def wait_for_docker(
         sleep(poll_interval_seconds)
 
 
-def compose_up(
-    docker_cli: Path, project_dir: Path, *, run: RunFunc = subprocess.run
-) -> None:
+def compose_up(docker_cli: Path, *, run: RunFunc = subprocess.run) -> None:
     """``docker compose up -d`` como rede de segurança.
 
     Com ``restart: unless-stopped`` nos serviços, os contêineres já devem
@@ -82,7 +87,7 @@ def compose_up(
     ``down`` manualmente.
     """
     result = run(
-        [str(docker_cli), "compose", "--project-directory", str(project_dir), "up", "-d"],
+        [str(docker_cli), "compose", "--project-directory", str(_project_directory()), "up", "-d"],
         capture_output=True,
         text=True,
     )
