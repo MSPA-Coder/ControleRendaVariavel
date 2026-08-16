@@ -37,9 +37,11 @@ Invoke-WebRequest http://127.0.0.1:5301/health
 
 O Compose publica a aplicação em `127.0.0.1:5301` e PostgreSQL em
 `127.0.0.1:5302`; dentro da rede Compose o banco é `db:5432`. O serviço
-`migrate` aplica Alembic antes de `web`. `compose.override.yaml` é o override
-de desenvolvimento com bind mount; para imagem imutável use
-`docker compose -f compose.yaml up`.
+`migrate` aplica Alembic antes de `web`. O comando padrão usa somente a imagem
+imutável. Desenvolvimento com bind mount é explícito e opt-in:
+`docker compose -f compose.yaml -f compose.dev.yaml up`. Nunca use esse perfil
+para validar a imagem de runtime ou para uma operação que deva permanecer
+imutável.
 
 Os dados operacionais vivem no volume `postgres_data`. Nunca execute
 `docker compose down --volumes` fora de ambiente descartável. Antes de uma
