@@ -9,19 +9,18 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 WORKDIR /app
 RUN python -m pip install --no-cache-dir "pip>=26.1.2,<27" \
     && addgroup --system app \
-    && adduser --system --ingroup app app \
-    && chown -R app:app /app
+    && adduser --system --ingroup app app
 
 FROM base AS runtime
-COPY --chown=app:app pyproject.toml README.md ./
-COPY --chown=app:app app ./app
+COPY pyproject.toml README.md ./
+COPY app ./app
 RUN --mount=type=secret,id=local_ca,required=false \
     if [ -f /run/secrets/local_ca ]; then \
       cp /run/secrets/local_ca /usr/local/share/ca-certificates/local-root-ca.crt \
       && update-ca-certificates; \
     fi \
     && pip install --no-cache-dir .
-COPY --chown=app:app migrations ./migrations
+COPY migrations ./migrations
 USER app
 EXPOSE 5003
 CMD ["gunicorn", "--bind", "0.0.0.0:5003", "--workers", "2", "--threads", "4", "--worker-class", "gthread", "--timeout", "60", "app:create_app()"]

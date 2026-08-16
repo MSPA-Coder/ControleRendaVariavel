@@ -51,6 +51,11 @@ A unica excecao e a integracao RTD baseada em
 Excel/COM, que roda no Windows porque essas APIs nao existem no container
 Linux.
 
+O comando Compose padrao usa a imagem imutavel, sem montar o codigo do host.
+Para desenvolvimento com edicao ao vivo, use explicitamente
+`docker compose -f compose.yaml -f compose.dev.yaml up`; esse perfil monta o
+diretorio de trabalho em `/app` e nao deve ser usado como validacao de runtime.
+
 ```text
 Aplicacao web (Docker) -> PostgreSQL (Docker)
            |

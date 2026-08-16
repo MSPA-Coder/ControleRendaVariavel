@@ -25,15 +25,76 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Criar CA efêmera para o build
         run: |
-          mkdir -p .certs
+          umask 077
+          mkdir -p .certs .secrets
           openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
             -keyout /tmp/local-root-ca.key \
             -out .certs/local-root-ca.crt \
             -subj "/CN=ControleRendaVariavel CI Local CA"
           rm -f /tmp/local-root-ca.key
+          printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
+          printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
+          printf '%s\n' 'ci-placeholder-not-a-real-token' > .secrets/rtd_control_token
       - name: Validar Compose
         run: docker compose config --quiet
       - name: Construir quality sem cache
         run: docker compose --profile quality build --no-cache quality
       - name: Executar quality
         run: docker compose --profile quality run --rm quality
+
+  runtime-contracts:
+    name: Contratos de runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Criar entradas efêmeras do Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p .certs .secrets
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
+            -keyout /tmp/local-root-ca.key \
+            -out .certs/local-root-ca.crt \
+            -subj "/CN=ControleRendaVariavel CI Local CA"
+          rm -f /tmp/local-root-ca.key
+          printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
+          printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
+          printf '%s\n' 'ci-placeholder-not-a-real-token' > .secrets/rtd_control_token
+      - name: Validar contrato do PostgreSQL no Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f compose.yaml config --format json > /tmp/compose.json
+          python3 - <<'PY'
+          import json
+
+          db = json.load(open("/tmp/compose.json", encoding="utf-8"))["services"]["db"]
+          assert db["user"] == "postgres"
+          assert db["read_only"] is True
+          assert db["cap_drop"] == ["ALL"]
+          assert db["security_opt"] == ["no-new-privileges:true"]
+          assert db["pids_limit"] == 256
+          assert "/tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m" in db["tmpfs"]
+          assert "/var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m" in db["tmpfs"]
+          PY
+      - name: Construir e inspecionar runtime sem cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f compose.yaml build --no-cache web
+          image_id="$(docker image inspect --format '{{.Id}}' controle-renda-variavel-web)"
+          test -n "$image_id"
+          docker run --rm --entrypoint sh "$image_id" -ec '
+            test "$(id -u)" != 0
+            test ! -w /app
+            test ! -w /app/app
+            test ! -w /app/migrations
+            for path in /app/.secrets /app/.certs /app/.env /app/requirements-dev.txt; do
+              test ! -e "$path"
+            done
+            for tool in gcc make wget; do
+              ! command -v "$tool" >/dev/null 2>&1
+            done
+          '
