@@ -3,6 +3,9 @@
 .codex/
 .docker-local/
 .env
+.env.*
+.certs/
+.secrets/
 .venv/
 __pycache__/
 **/__pycache__/
@@ -15,3 +18,5 @@ htmlcov/
 dist/
 tmp/
 backups/
+instance/
+logs/
