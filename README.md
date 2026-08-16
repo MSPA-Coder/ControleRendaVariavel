@@ -162,6 +162,17 @@ O controlador RTD no host usa os mesmos arquivos `.secrets/secret_key`,
 ausente, vazio ou ilegível encerra a inicialização; valores de `.env` permanecem
 apenas como compatibilidade durante a migração.
 
+Por segurança, o controlador só executa o `docker.exe` dos locais padrão do
+Docker Desktop e o script versionado `scripts/rtd-host.ps1`; não configure
+substitutos por `PATH` ou `RTD_AUTOMATION_SCRIPT`.
+
+Uma instalação Docker Desktop em outro caminho não é suportada: o controlador
+falha antes de executar Compose, em vez de executar um binário herdado do
+ambiente. Antes de instalar o controlador, reinstale ou mova o Docker Desktop
+para um dos caminhos suportados. Se for necessário rollback desta proteção,
+restaure a versão anterior do projeto e execute novamente `rtd-host.ps1`; não
+crie um override de ambiente para contorná-la.
+
 O coletor grava um snapshot por ticker por dia em `quote_history`, nao a
 cada leitura; a cotacao instantanea fica em `quotes`/`option_quotes`. O
 indicador de coletor no cabecalho mostra `online`, `stale`, `error` ou

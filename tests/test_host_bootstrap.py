@@ -13,36 +13,33 @@ from pathlib import Path
 import pytest
 
 from app import host_bootstrap
+from app.rtd_service import PowerShellAutomationController
 
 
 def _completed(returncode: int, stderr: str = "") -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout="", stderr=stderr)
 
 
-def test_resolve_docker_cli_usa_o_path_quando_disponivel() -> None:
-    resultado = host_bootstrap.resolve_docker_cli(which=lambda name: "/usr/bin/docker")
-
-    assert resultado == Path("/usr/bin/docker")
-
-
-def test_resolve_docker_cli_cai_para_candidato_do_docker_desktop(tmp_path: Path) -> None:
-    candidato = tmp_path / "Programs" / "DockerDesktop" / "resources" / "bin" / "docker.exe"
+def test_resolve_docker_cli_aceita_apenas_candidato_padrao(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    candidato = tmp_path / "Docker" / "Docker" / "resources" / "bin" / "docker.exe"
     candidato.parent.mkdir(parents=True)
     candidato.write_text("")
+    monkeypatch.setattr(host_bootstrap, "_docker_cli_candidates", lambda: (candidato,))
 
-    resultado = host_bootstrap.resolve_docker_cli(
-        which=lambda name: None, env={"LOCALAPPDATA": str(tmp_path), "ProgramFiles": ""}
-    )
+    resultado = host_bootstrap.resolve_docker_cli()
 
-    assert resultado == candidato
+    assert resultado == candidato.resolve()
 
 
-def test_resolve_docker_cli_sem_nenhum_candidato_levanta_erro(tmp_path: Path) -> None:
+def test_resolve_docker_cli_sem_candidato_padrao_levanta_erro(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(host_bootstrap, "_docker_cli_candidates", lambda: (tmp_path / "docker.exe",))
+
     with pytest.raises(RuntimeError):
-        host_bootstrap.resolve_docker_cli(
-            which=lambda name: None,
-            env={"LOCALAPPDATA": str(tmp_path), "ProgramFiles": str(tmp_path)},
-        )
+        host_bootstrap.resolve_docker_cli()
 
 
 def test_wait_for_docker_retorna_na_primeira_resposta_saudavel() -> None:
@@ -85,24 +82,51 @@ def test_wait_for_docker_estoura_o_timeout() -> None:
         )
 
 
-def test_compose_up_sobe_a_pilha() -> None:
+def test_compose_up_sobe_a_pilha(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     comandos: list[list[str]] = []
+    monkeypatch.setattr(host_bootstrap, "_project_directory", lambda: tmp_path)
 
     def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         comandos.append(command)
         return _completed(0)
 
-    host_bootstrap.compose_up(Path("docker"), Path("/projeto"), run=run)
+    host_bootstrap.compose_up(Path("docker"), run=run)
 
     assert comandos == [
-        ["docker", "compose", "--project-directory", "/projeto", "up", "-d"]
+        ["docker", "compose", "--project-directory", str(tmp_path), "up", "-d"]
     ]
 
 
-def test_compose_up_falha_levanta_erro_com_detalhe() -> None:
+def test_compose_up_falha_levanta_erro_com_detalhe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(host_bootstrap, "_project_directory", lambda: tmp_path)
+
     with pytest.raises(RuntimeError, match="deu ruim"):
         host_bootstrap.compose_up(
             Path("docker"),
-            Path("/projeto"),
             run=lambda *a, **k: _completed(1, stderr="deu ruim"),
         )
+
+
+def test_automacao_rtd_recusa_script_fora_do_projeto(tmp_path: Path) -> None:
+    projeto = tmp_path / "projeto"
+    esperado = projeto / "scripts" / "rtd-host.ps1"
+    esperado.parent.mkdir(parents=True)
+    esperado.write_text("# script sintético", encoding="utf-8")
+    externo = tmp_path / "externo.ps1"
+    externo.write_text("# script sintético", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="scripts/rtd-host.ps1"):
+        PowerShellAutomationController(projeto, script=externo)
+
+
+def test_automacao_rtd_aceita_apenas_script_versionado_do_projeto(tmp_path: Path) -> None:
+    projeto = tmp_path / "projeto"
+    esperado = projeto / "scripts" / "rtd-host.ps1"
+    esperado.parent.mkdir(parents=True)
+    esperado.write_text("# script sintético", encoding="utf-8")
+
+    controller = PowerShellAutomationController(projeto, script=esperado)
+
+    assert controller.script == esperado.resolve()

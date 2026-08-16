@@ -109,9 +109,10 @@ class OperationalProfileStore:
 
 class PowerShellAutomationController:
     def __init__(self, project_dir: Path, script: Path | None = None) -> None:
-        configured = os.getenv("RTD_AUTOMATION_SCRIPT", "scripts/rtd-host.ps1")
-        selected = script or Path(configured)
-        self.script = selected if selected.is_absolute() else project_dir / selected
+        expected = (project_dir.resolve() / "scripts" / "rtd-host.ps1").resolve()
+        if script is not None and script.resolve() != expected:
+            raise RuntimeError("O script de automação RTD deve ser scripts/rtd-host.ps1 do projeto.")
+        self.script = expected
 
     def _run(self, action: str) -> str:
         if not self.script.is_file():
