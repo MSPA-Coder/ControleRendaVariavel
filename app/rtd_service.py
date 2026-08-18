@@ -398,6 +398,11 @@ class RtdServiceManager:
             return False
         self._external_process_ids = self._rtd_process_ids()
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        child_environment = os.environ.copy()
+        # ``poll-rtd`` cria a fábrica Flask para acessar banco e configuração.
+        # Sem este marcador, a fábrica criaria outro RtdServiceManager em perfil
+        # production, que abriria mais um ``poll-rtd --watch`` recursivamente.
+        child_environment["RTD_COLLECTOR_PROCESS"] = "true"
         self._process = subprocess.Popen(
             [
                 sys.executable,
@@ -411,6 +416,7 @@ class RtdServiceManager:
             cwd=self.project_dir,
             stdin=subprocess.DEVNULL,
             creationflags=creationflags,
+            env=child_environment,
         )
         self._process_started_at = self._monotonic()
         self._status = "running"

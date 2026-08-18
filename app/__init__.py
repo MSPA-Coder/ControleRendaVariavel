@@ -181,7 +181,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     if control_url and control_token:
         app.extensions["rtd_service"] = RemoteRtdService(control_url, control_token)
     else:
-        app.extensions["rtd_service"] = RtdServiceManager(Path(app.root_path).parent)
+        # O subprocesso ``poll-rtd`` também cria a aplicação Flask para usar
+        # as configurações e o banco. Ele não pode iniciar outro supervisor:
+        # isso formaria uma cadeia infinita de coletores no host Windows.
+        collector_process = os.getenv("RTD_COLLECTOR_PROCESS", "").lower() == "true"
+        app.extensions["rtd_service"] = RtdServiceManager(
+            Path(app.root_path).parent,
+            background_supervision=not collector_process,
+        )
 
     from app.cli import register_commands
     from app.presentation import register_filters
