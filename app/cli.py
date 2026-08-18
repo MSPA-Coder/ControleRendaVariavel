@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -41,6 +42,17 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
     app.cli.add_command(users_group)
+
+
+def supervisor_process_is_alive(supervisor_pid: str | None) -> bool:
+    """Mantém o coletor apenas enquanto seu controlador ainda existir."""
+    if not supervisor_pid:
+        return True
+    try:
+        os.kill(int(supervisor_pid), 0)
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 @click.command("probe-rtd-direct")
@@ -88,8 +100,11 @@ def poll_rtd(watch: bool) -> None:
         )
 
     providers = CollectorProviderManager(provider_factory)
+    supervisor_pid = os.getenv("RTD_SUPERVISOR_PID")
     try:
         while True:
+            if not supervisor_process_is_alive(supervisor_pid):
+                return
             db.session.expire_all()
             settings = db.session.get(AppSetting, 1)
             if settings is None:

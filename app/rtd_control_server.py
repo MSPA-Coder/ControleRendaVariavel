@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 import secrets
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from app.host_bootstrap import compose_up, resolve_docker_cli, wait_for_docker
@@ -15,6 +17,39 @@ from app.rtd_service import OperationalProfile, RtdServiceManager
 MAX_BODY_BYTES = 1024
 MIN_TOKEN_LENGTH = 32
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1"})
+CONTROLLER_LOGGER_NAME = "controle_renda_variavel.rtd_controller"
+
+
+def controller_log_path(project_dir: Path, local_app_data: str | None = None) -> Path:
+    """Devolve um log local, fora do repositório e sem dados de cotações."""
+    base = local_app_data if local_app_data is not None else os.getenv("LOCALAPPDATA", "")
+    if base:
+        return Path(base) / "ControleRendaVariavel" / "rtd-controller.log"
+    return project_dir / ".docker-local" / "rtd-controller.log"
+
+
+def configure_controller_logger(project_dir: Path) -> logging.Logger:
+    log_path = controller_log_path(project_dir)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger(CONTROLLER_LOGGER_NAME)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not any(
+        isinstance(handler, RotatingFileHandler)
+        and Path(handler.baseFilename) == log_path.resolve()
+        for handler in logger.handlers
+    ):
+        handler = RotatingFileHandler(
+            log_path,
+            maxBytes=1_048_576,
+            backupCount=3,
+            encoding="utf-8",
+        )
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+        )
+        logger.addHandler(handler)
+    return logger
 
 
 def resolve_control_host(configured: str | None) -> str:
@@ -172,19 +207,34 @@ def main() -> None:
     if os.name != "nt":
         raise SystemExit("O controlador RTD deve ser executado no Windows.")
     project_dir = Path(__file__).resolve().parent.parent
-    token = _bootstrap(project_dir)
-
-    host = resolve_control_host(os.getenv("RTD_CONTROL_HOST"))
-    port = int(os.getenv("RTD_CONTROL_PORT", "8765"))
-    service = RtdServiceManager(project_dir, available=True)
-    server = ThreadingHTTPServer((host, port), _handler(service, token))
+    logger = configure_controller_logger(project_dir)
+    service: RtdServiceManager | None = None
+    server: ThreadingHTTPServer | None = None
     try:
+        token = _bootstrap(project_dir)
+        host = resolve_control_host(os.getenv("RTD_CONTROL_HOST"))
+        port = int(os.getenv("RTD_CONTROL_PORT", "8765"))
+        # Reserva a porta antes de ativar o supervisor. Uma segunda execução
+        # falha limpa sem criar um coletor órfão enquanto a porta já está usada.
+        service = RtdServiceManager(
+            project_dir,
+            available=True,
+            background_supervision=False,
+        )
+        server = ThreadingHTTPServer((host, port), _handler(service, token))
+        service.enable_background_supervision()
+        logger.info("Controlador RTD iniciado em %s:%s.", host, port)
         server.serve_forever()
     except KeyboardInterrupt:
-        pass
+        logger.info("Controlador RTD interrompido.")
+    except Exception:
+        logger.exception("Controlador RTD encerrado por falha.")
+        raise
     finally:
-        service.close()
-        server.server_close()
+        if service is not None:
+            service.close()
+        if server is not None:
+            server.server_close()
 
 
 if __name__ == "__main__":

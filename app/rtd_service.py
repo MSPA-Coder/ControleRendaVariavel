@@ -33,6 +33,42 @@ class Process(Protocol):
     def kill(self) -> None: ...
 
 
+def _collector_python_executable() -> str:
+    """Usa o Python de console para o CLI, mesmo sob o controlador ``pythonw``.
+
+    ``poll-rtd`` é um comando Flask e escreve seu pulso em stdout. O
+    controlador residente pode ser ``pythonw.exe`` para não criar janela, mas
+    o filho precisa de ``python.exe``; ``CREATE_NO_WINDOW`` ainda impede que
+    ele abra qualquer terminal.
+    """
+    executable = Path(sys.executable)
+    if sys.platform == "win32" and executable.name.lower() == "pythonw.exe":
+        console_executable = executable.with_name("python.exe")
+        if console_executable.is_file():
+            return str(console_executable)
+    return sys.executable
+
+
+def _collector_log_path(project_dir: Path) -> Path:
+    local_app_data = os.getenv("LOCALAPPDATA", "")
+    base = Path(local_app_data) if local_app_data else project_dir / ".docker-local"
+    return base / "ControleRendaVariavel" / "rtd-collector.log"
+
+
+def _rotate_collector_log(log_path: Path) -> None:
+    if not log_path.exists() or log_path.stat().st_size < 1_048_576:
+        return
+    for index in range(3, 0, -1):
+        source = (
+            log_path
+            if index == 1
+            else log_path.with_name(f"{log_path.stem}.{index - 1}{log_path.suffix}")
+        )
+        target = log_path.with_name(f"{log_path.stem}.{index}{log_path.suffix}")
+        if source.exists():
+            source.replace(target)
+
+
 class ProfitDetector(Protocol):
     def is_running(self) -> bool: ...
 
@@ -316,6 +352,15 @@ class RtdServiceManager:
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=5)
 
+    def enable_background_supervision(self) -> None:
+        """Ativa a supervisão após o servidor local reservar sua porta."""
+        with self._lock:
+            if self._background_supervision:
+                return
+            self._background_supervision = True
+            if self.available and self._profile == OperationalProfile.PRODUCTION:
+                self._ensure_supervisor()
+
     def supervise_once(self) -> bool:
         """Run one deterministic supervisor cycle; public to support focused tests."""
         with self._lock:
@@ -403,21 +448,29 @@ class RtdServiceManager:
         # Sem este marcador, a fábrica criaria outro RtdServiceManager em perfil
         # production, que abriria mais um ``poll-rtd --watch`` recursivamente.
         child_environment["RTD_COLLECTOR_PROCESS"] = "true"
-        self._process = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "flask",
-                "--app",
-                "app:create_app",
-                "poll-rtd",
-                "--watch",
-            ],
-            cwd=self.project_dir,
-            stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
-            env=child_environment,
-        )
+        child_environment["RTD_SUPERVISOR_PID"] = str(os.getpid())
+        child_environment["PYTHONIOENCODING"] = "utf-8"
+        log_path = _collector_log_path(self.project_dir)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_collector_log(log_path)
+        with log_path.open("a", encoding="utf-8") as output:
+            self._process = subprocess.Popen(
+                [
+                    _collector_python_executable(),
+                    "-m",
+                    "flask",
+                    "--app",
+                    "app:create_app",
+                    "poll-rtd",
+                    "--watch",
+                ],
+                cwd=self.project_dir,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                creationflags=creationflags,
+                env=child_environment,
+            )
         self._process_started_at = self._monotonic()
         self._status = "running"
         return True

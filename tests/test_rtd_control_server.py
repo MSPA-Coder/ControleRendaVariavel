@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from app.rtd_control_server import read_or_create_token
+from app.rtd_control_server import controller_log_path, read_or_create_token
 
 
 def test_read_or_create_token_gera_na_primeira_vez(tmp_path: Path) -> None:
@@ -36,3 +36,11 @@ def test_read_or_create_token_rejeita_token_curto(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError):
         read_or_create_token(caminho)
+
+
+def test_controller_log_path_usa_diretorio_local_do_usuario(tmp_path: Path) -> None:
+    local_app_data = tmp_path / "AppData" / "Local"
+
+    path = controller_log_path(tmp_path, str(local_app_data))
+
+    assert path == local_app_data / "ControleRendaVariavel" / "rtd-controller.log"

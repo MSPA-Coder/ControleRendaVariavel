@@ -139,9 +139,13 @@ py -3.12 -m venv .venv
 
 `rtd-host.ps1 -Action Install` registra, para o usuario atual e sem
 elevacao, uma tarefa agendada que sobe no logon e mantem o controlador RTD
-residente em `127.0.0.1:8765` (nunca exposto na rede). Essa e a unica
-instalacao manual; depois de instalada, a tarefa cuida do resto sozinha a
-cada logon: espera o Docker Desktop, sobe a pilha (`docker compose up -d`,
+residente em `127.0.0.1:8765` (nunca exposto na rede). A tarefa inicia
+`pythonw.exe` diretamente, sem abrir terminal; se o processo encerrar, o
+Agendador o reinicia automaticamente. Diagnosticos operacionais ficam em
+`%LOCALAPPDATA%\ControleRendaVariavel\rtd-controller.log` e
+`%LOCALAPPDATA%\ControleRendaVariavel\rtd-collector.log`, com rotacao local.
+Essa e a unica instalacao manual; depois de instalada, a tarefa cuida do
+resto sozinha a cada logon: espera o Docker Desktop, sobe a pilha (`docker compose up -d`,
 rede de seguranca — os servicos `db`/`web` ja usam
 `restart: unless-stopped` e normalmente voltam sozinhos) e serve o
 controlador. Nao ha mais `start.ps1`/`stop.ps1`: ligar e desligar o coletor

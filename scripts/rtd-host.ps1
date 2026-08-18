@@ -11,7 +11,7 @@
   gerenciado pela aba Settings da aplicacao, so decide se o coletor
   auto-inicia supervisionado -- nao se a tarefa existe. Isto e so o
   instalador; a operacao de fato (Docker, .env, servidor de controle) esta
-  em app.rtd_control_server, executado por scripts/rtd-production-runner.ps1.
+  em app.rtd_control_server, iniciado diretamente sem janela de terminal.
 #>
 [CmdletBinding()]
 param(
@@ -24,7 +24,6 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "rtd-host-common.ps1")
 
 $taskName = "ControleRendaVariavel RTD"
-$runnerPath = Join-Path $PSScriptRoot "rtd-production-runner.ps1"
 
 function Get-RtdHostTask {
     return Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -33,12 +32,14 @@ function Get-RtdHostTask {
 switch ($Action) {
     "Install" {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-        $arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runnerPath`""
-        # `$PSHOME` pode apontar para um runtime temporário quando o script é
-        # instalado por uma ferramenta hospedada. A tarefa precisa referenciar
-        # o PowerShell do Windows, que permanece disponível após a sessão.
-        $powerShellPath = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-        $scheduledAction = New-ScheduledTaskAction -Execute $powerShellPath -Argument $arguments
+        if (-not (Test-Path -LiteralPath $PythonWindowlessPath)) {
+            throw "Ambiente Python sem janela nao encontrado em $PythonWindowlessPath."
+        }
+        # A tarefa não passa por PowerShell nem abre terminal. ``pythonw.exe``
+        # mantém o controlador na sessão interativa necessária ao COM/Profit,
+        # enquanto o Agendador trata as reinicializações automáticas.
+        $scheduledAction = New-ScheduledTaskAction -Execute $PythonWindowlessPath `
+            -Argument "-m app.rtd_control_server" -WorkingDirectory $ProjectDir
         $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
         $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
