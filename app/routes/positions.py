@@ -27,9 +27,13 @@ from app.routes.helpers import (
     broker_exposure_chart_data,
     broker_records,
     brokers,
+    converted_allocation_chart_data,
+    converted_broker_exposure_chart_data,
+    converted_market_exposure_chart_data,
     exposure_group_rows,
     investable_ticker_records,
     is_htmx_request,
+    latest_usd_brl_quote,
     market_exposure_chart_data,
     poll_interval_seconds,
     portfolio_records,
@@ -447,6 +451,9 @@ def exposure_asset() -> str:
         lambda portfolio: {
             "template": "exposure_asset.html",
             "allocation_charts": allocation_chart_data(portfolio.positions),
+            "converted_chart": converted_allocation_chart_data(
+                portfolio.positions, latest_usd_brl_quote()
+            ),
             "heading": "Alocacao por ativo",
             "subject": "ativo",
         }
@@ -459,6 +466,9 @@ def exposure_broker() -> str:
         lambda portfolio: {
             "template": "exposure_broker.html",
             "allocation_charts": broker_exposure_chart_data(portfolio.broker_groups),
+            "converted_chart": converted_broker_exposure_chart_data(
+                portfolio.broker_groups, latest_usd_brl_quote()
+            ),
             "group_rows": exposure_group_rows(
                 portfolio.broker_groups, lambda group: group.broker
             ),
@@ -475,6 +485,9 @@ def exposure_market() -> str:
         lambda portfolio: {
             "template": "exposure_market.html",
             "allocation_charts": market_exposure_chart_data(portfolio.market_groups),
+            "converted_chart": converted_market_exposure_chart_data(
+                portfolio.market_groups, latest_usd_brl_quote()
+            ),
             "group_rows": exposure_group_rows(
                 portfolio.market_groups, lambda group: group.market.value
             ),

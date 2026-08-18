@@ -31,12 +31,17 @@
 </form>
 {% endmacro %}
 
-{% macro charts(allocation_charts, heading, subject) %}
+{% macro charts(allocation_charts, heading, subject, converted_chart=none) %}
 <section class="exposure" aria-label="Exposição por {{ subject }}">
-  {% for chart in allocation_charts %}
+  {% if converted_chart %}
+  {% set charts = [converted_chart] + allocation_charts %}
+  {% else %}
+  {% set charts = allocation_charts %}
+  {% endif %}
+  {% for chart in charts %}
   <div class="exposure-table">
     <div class="chart-toolbar">
-      <h2>{{ heading }} · {{ chart.currency }}</h2>
+      <h2>{{ heading }} · {{ chart.currency }}{{ ' (consolidado)' if chart.converted }}</h2>
       <label>Visualização
         <select data-allocation-chart-type>
           <option value="pie">Pizza</option>
@@ -48,10 +53,15 @@
     <div class="chart-box allocation-chart"
          data-labels='{{ chart.labels|tojson }}'
          data-weights='{{ chart.weights|tojson }}'
+         data-values='{{ chart["values"]|tojson }}'
+         data-currency="{{ chart.currency }}"
          aria-label="Gráfico de exposição por {{ subject }} em {{ chart.currency }}"></div>
+    <div class="allocation-list-heading" aria-hidden="true">
+      <span>{{ subject|capitalize }}</span><span>Valor atual</span><span>Alocação</span>
+    </div>
     <ul class="allocation-list" aria-label="Dados da exposição por {{ subject }}">
       {% for label in chart.labels %}
-      <li><span>{{ label }}</span><strong>{{ chart.weight_values[loop.index0]|percent }}</strong></li>
+      <li><span>{{ label }}</span><strong>{{ chart["value_values"][loop.index0]|currency(chart.currency) }}</strong><strong>{{ chart.weight_values[loop.index0]|percent }}</strong></li>
       {% endfor %}
     </ul>
   </div>

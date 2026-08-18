@@ -717,11 +717,11 @@ def rtd_service_state() -> tuple[bool, bool, str]:
 
 
 def exposure_chart_data(
-    entries: Iterable[tuple[str, str, Decimal | None]],
+    entries: Iterable[tuple[str, str, Decimal | None, Decimal | None]],
 ) -> list[dict[str, object]]:
     """Dados para os gráficos de exposição, um bloco por moeda.
 
-    ``entries`` são triplas ``(moeda, rótulo, peso)``. Moedas nunca são
+    ``entries`` são quádruplas ``(moeda, rótulo, peso, valor)``. Moedas nunca são
     misturadas, seguindo a mesma convenção do resto do módulo: somar BRL e
     USD sem taxa de câmbio produziria um número sem significado. Entradas
     sem peso (posição sem cotação) ficam de fora do gráfico.
@@ -729,21 +729,23 @@ def exposure_chart_data(
     O formato de saída é consumido por ``allocation-chart.js`` nas três
     páginas de Análise (por ativo, por corretora e por mercado).
     """
-    grouped: dict[str, list[tuple[str, Decimal]]] = {}
-    for currency, label, weight in entries:
-        if weight is not None:
-            grouped.setdefault(currency, []).append((label, weight))
+    grouped: dict[str, list[tuple[str, Decimal, Decimal]]] = {}
+    for currency, label, weight, value in entries:
+        if weight is not None and value is not None:
+            grouped.setdefault(currency, []).append((label, weight, value))
     return [
         {
             "currency": currency,
-            "labels": [label for label, _ in group],
+            "labels": [label for label, _, _ in group],
             # `weights` é string porque o gráfico JS a consome via `tojson`.
-            "weights": [str(weight) for _, weight in group],
+            "weights": [str(weight) for _, weight, _ in group],
             # `weight_values` mantém o Decimal cru (fração, ex.: 0.1234) para
             # a lista textual usar o filtro `percent` — ver invariante
             # financeira em AGENTS.md (percentual sempre via Decimal, nunca
             # `|float`).
-            "weight_values": [weight for _, weight in group],
+            "weight_values": [weight for _, weight, _ in group],
+            "values": [str(value) for _, _, value in group],
+            "value_values": [value for _, _, value in group],
         }
         for currency, group in sorted(grouped.items())
     ]
@@ -773,19 +775,108 @@ def exposure_group_rows(
 def allocation_chart_data(views: list[PositionView]) -> list[dict[str, object]]:
     """Exposição por ativo."""
     return exposure_chart_data(
-        (view.position.currency, view.position.ticker, view.current_weight) for view in views
+        (
+            view.position.currency,
+            view.position.ticker,
+            view.current_weight,
+            abs(view.metrics.unwind_value) if view.metrics is not None else None,
+        )
+        for view in views
     )
 
 
 def broker_exposure_chart_data(broker_groups: list[BrokerGroup]) -> list[dict[str, object]]:
     """Exposição por corretora."""
     return exposure_chart_data(
-        (group.currency, group.broker, group.current_weight) for group in broker_groups
+        (group.currency, group.broker, group.current_weight, group.current_total)
+        for group in broker_groups
     )
 
 
 def market_exposure_chart_data(market_groups: list[MarketGroup]) -> list[dict[str, object]]:
     """Exposição por mercado."""
     return exposure_chart_data(
-        (group.currency, group.market.value, group.current_weight) for group in market_groups
+        (group.currency, group.market.value, group.current_weight, group.current_total)
+        for group in market_groups
+    )
+
+
+def converted_exposure_chart_data(
+    entries: Iterable[tuple[str, str, Decimal]], usd_brl_rate: Decimal | None
+) -> dict[str, object] | None:
+    """Exposição consolidada em USD, agrupada pelo rótulo do gráfico.
+
+    A cotação de referência é BRL por USD (ticker ``USDBRL=X``). Valores em
+    BRL são divididos por ela; valores já em USD permanecem inalterados.
+    Sem a taxa ou sem mais de uma moeda, a tela mantém apenas as visões
+    separadas para não inventar uma soma entre moedas.
+    """
+    entry_list = list(entries)
+    if (
+        len({currency for currency, _, _ in entry_list}) < 2
+        or usd_brl_rate is None
+        or usd_brl_rate <= 0
+    ):
+        return None
+    values_by_label: dict[str, Decimal] = {}
+    for currency, label, raw_value in entry_list:
+        value = raw_value / usd_brl_rate if currency == "BRL" else raw_value
+        values_by_label[label] = values_by_label.get(label, Decimal("0")) + value
+    total = sum(values_by_label.values(), Decimal("0"))
+    if not total:
+        return None
+    return {
+        "currency": "USD",
+        "labels": list(values_by_label),
+        "weights": [str(value / total) for value in values_by_label.values()],
+        "weight_values": [value / total for value in values_by_label.values()],
+        "values": [str(value) for value in values_by_label.values()],
+        "value_values": list(values_by_label.values()),
+        "converted": True,
+    }
+
+
+def converted_allocation_chart_data(
+    views: list[PositionView], usd_brl_rate: Decimal | None
+) -> dict[str, object] | None:
+    return converted_exposure_chart_data(
+        (
+            (
+                view.position.currency,
+                view.position.ticker,
+                abs(view.metrics.unwind_value),
+            )
+            for view in views
+            if view.metrics is not None
+        ),
+        usd_brl_rate,
+    )
+
+
+def converted_broker_exposure_chart_data(
+    broker_groups: list[BrokerGroup], usd_brl_rate: Decimal | None
+) -> dict[str, object] | None:
+    return converted_exposure_chart_data(
+        ((group.currency, group.broker, group.current_total) for group in broker_groups),
+        usd_brl_rate,
+    )
+
+
+def converted_market_exposure_chart_data(
+    market_groups: list[MarketGroup], usd_brl_rate: Decimal | None
+) -> dict[str, object] | None:
+    return converted_exposure_chart_data(
+        ((group.currency, group.market.value, group.current_total) for group in market_groups),
+        usd_brl_rate,
+    )
+
+
+def latest_usd_brl_quote() -> Decimal | None:
+    """Última cotação manual/importada de USDBRL=X, em BRL por USD."""
+    return db.session.scalar(
+        select(QuoteHistory.price)
+        .join(Ticker, Ticker.id == QuoteHistory.ticker_id)
+        .where(Ticker.symbol == "USDBRL=X")
+        .order_by(QuoteHistory.recorded_date.desc(), QuoteHistory.recorded_at.desc())
+        .limit(1)
     )

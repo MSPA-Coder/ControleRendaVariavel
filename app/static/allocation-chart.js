@@ -9,9 +9,15 @@
   function formatPercent(value) {
     return (value * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
   }
+  function formatCurrency(value, currency) {
+    var prefix = currency === "USD" ? "US$ " : "R$ ";
+    return prefix + Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   function render(container, chartType) {
     var labels = parseData(container, "labels");
     var weights = parseData(container, "weights").map(Number);
+    var values = parseData(container, "values").map(Number);
+    var currency = container.dataset.currency || "BRL";
     if (!labels.length || !weights.some(function (weight) { return weight > 0; })) {
       container.textContent = "Sem dados de alocacao para exibir.";
       return;
@@ -32,7 +38,7 @@
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: chartType === "bar" ? { x: { ticks: { color: ink } }, y: { ticks: { color: ink, callback: formatPercent }, beginAtZero: true, max: 1 } } : {},
-        plugins: { legend: { display: chartType !== "bar", position: "right", labels: { color: ink } }, tooltip: { callbacks: { label: function (item) { return item.label + ": " + formatPercent(item.parsed); } } } }
+        plugins: { legend: { display: chartType !== "bar", position: "right", labels: { color: ink } }, tooltip: { callbacks: { label: function (item) { return item.label + ": " + formatCurrency(values[item.dataIndex], currency) + " · " + formatPercent(item.parsed); } } } }
       }
     });
   }

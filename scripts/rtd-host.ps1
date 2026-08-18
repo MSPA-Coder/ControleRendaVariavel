@@ -34,7 +34,11 @@ switch ($Action) {
     "Install" {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runnerPath`""
-        $scheduledAction = New-ScheduledTaskAction -Execute "$PSHOME\powershell.exe" -Argument $arguments
+        # `$PSHOME` pode apontar para um runtime temporário quando o script é
+        # instalado por uma ferramenta hospedada. A tarefa precisa referenciar
+        # o PowerShell do Windows, que permanece disponível após a sessão.
+        $powerShellPath = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+        $scheduledAction = New-ScheduledTaskAction -Execute $powerShellPath -Argument $arguments
         $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
         $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `

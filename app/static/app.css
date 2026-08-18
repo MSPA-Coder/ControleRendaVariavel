@@ -265,6 +265,15 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
 .portfolio-ticker-filter label { align-items: center; color: var(--muted); display: flex; gap: .4rem; }
 .portfolio-ticker-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .portfolio-ticker-add { grid-template-columns: minmax(180px, 1fr) auto; margin-bottom: 0; }
+.portfolio-ticker-browser { display: grid; gap: .65rem; margin-bottom: 1rem; }
+.portfolio-ticker-group { align-items: center; border: 1px solid var(--line); border-radius: .45rem; display: grid; gap: .65rem; grid-template-columns: 10rem 1fr; padding: .55rem .65rem; }
+.portfolio-ticker-group h3 { color: var(--navy-dark); margin: 0; }
+.portfolio-ticker-list { border: 1px solid var(--line); border-radius: .35rem; }
+.portfolio-ticker-list > summary { color: var(--navy-dark); cursor: pointer; font-weight: 750; padding: .4rem .55rem; }
+.portfolio-ticker-list[open] > summary { border-bottom: 1px solid var(--line); }
+.portfolio-ticker-list ul { display: flex; flex-wrap: wrap; gap: .45rem; list-style: none; margin: .65rem; padding: 0; }
+.portfolio-ticker-list li { background: var(--ice); border: 1px solid var(--line); border-radius: .35rem; font-weight: 700; padding: .45rem .5rem; }
+.portfolio-ticker-list .form-help { margin: .65rem; }
 .expiration-summary { margin-top: 1rem; }
 .expiration-summary { width: min(100%, 780px); }
 /* O resumo de Opcoes usa os mesmos cards da Carteira (.portfolio-summary e
@@ -372,6 +381,7 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   .topbar nav { flex-wrap: wrap; }
   .catalog-create, .ticker-fields, .expiration-fields, .contract-fields, .portfolio-fields { grid-template-columns: 1fr; }
   .portfolio-ticker-grid { grid-template-columns: 1fr; }
+  .portfolio-ticker-group { align-items: stretch; grid-template-columns: 1fr; }
   .portfolio-ticker-filter { align-items: stretch; flex-direction: column; }
 }
 
@@ -472,8 +482,11 @@ details.catalog-card > h2 { display: none; }
 .rtd-toggle .collector-heartbeat time { white-space: nowrap; }
 .quote-import-form { grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; }
 .quote-import-form select:disabled { background: #eef5f9; opacity: 1; }
-.allocation-list { display: grid; gap: .35rem; list-style: none; margin: .75rem 0 0; padding: 0; }
-.allocation-list li { border-top: 1px solid var(--line); display: flex; justify-content: space-between; padding-top: .35rem; }
+.allocation-list-heading, .allocation-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1rem; }
+.allocation-list-heading { color: var(--muted); font-size: .78rem; font-weight: 600; margin-top: .75rem; }
+.allocation-list-heading span:not(:first-child), .allocation-list li strong { text-align: right; }
+.allocation-list { display: grid; gap: .35rem; list-style: none; margin: .35rem 0 0; padding: 0; }
+.allocation-list li { border-top: 1px solid var(--line); padding-top: .35rem; }
 
 .quote-history-controls { align-items: center; background: var(--navy); display: flex; gap: .75rem; justify-content: space-between; margin: -1rem -1rem 1rem; padding: .75rem 1rem; }
 .quote-ticker-filter { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; }

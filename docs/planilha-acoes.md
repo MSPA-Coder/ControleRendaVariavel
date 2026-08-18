@@ -268,3 +268,12 @@ Corretora e prazo não alteram o resultado.
   contínuo.
 - Posições reais não são versionadas: são cadastradas pela interface, para
   manter dados pessoais fora do repositório.
+
+## Exposição
+
+Os gráficos de alocação, corretora e mercado mostram, em cada item, o valor
+atual e seu percentual, com títulos de coluna. Cada tela conserva as visões
+separadas por moeda e, quando o recorte filtrado tiver BRL e USD, acrescenta
+uma visão consolidada em USD: valores em BRL são divididos pela última cotação
+histórica do ticker de referência `USDBRL=X` (BRL por USD). Sem essa cotação,
+o sistema não mistura moedas e mantém apenas as visões separadas.
