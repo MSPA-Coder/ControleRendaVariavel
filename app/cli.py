@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -44,13 +45,43 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(users_group)
 
 
+def _windows_process_is_alive(process_id: int) -> bool:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    still_active = 259
+    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_bool, ctypes.c_ulong]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+    kernel32.GetExitCodeProcess.restype = ctypes.c_bool
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_bool
+    handle = kernel32.OpenProcess(process_query_limited_information, False, process_id)
+    if not handle:
+        return False
+    try:
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def supervisor_process_is_alive(supervisor_pid: str | None) -> bool:
     """Mantém o coletor apenas enquanto seu controlador ainda existir."""
     if not supervisor_pid:
         return True
     try:
-        os.kill(int(supervisor_pid), 0)
-    except (OSError, ValueError):
+        process_id = int(supervisor_pid)
+    except ValueError:
+        return False
+    if process_id <= 0:
+        return False
+    if os.name == "nt":
+        return _windows_process_is_alive(process_id)
+    try:
+        os.kill(process_id, 0)
+    except OSError:
         return False
     return True
 

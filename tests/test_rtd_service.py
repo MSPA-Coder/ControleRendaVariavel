@@ -111,4 +111,5 @@ def test_collector_stops_when_supervisor_process_is_gone(monkeypatch) -> None:
 
     assert supervisor_process_is_alive(None) is True
     assert supervisor_process_is_alive("not-a-pid") is False
+    assert supervisor_process_is_alive("0") is False
     assert supervisor_process_is_alive("1234") is False
