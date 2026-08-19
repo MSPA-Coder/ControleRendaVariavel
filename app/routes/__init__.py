@@ -18,6 +18,7 @@ def register_blueprints(app: Flask) -> None:
     # Importing these modules has the side effect of attaching their view
     # functions to ``bp`` (or, for options/auth, to their own blueprint).
     from app.routes import (  # noqa: F401
+        collector_agent,
         dividends,
         health,
         partials,

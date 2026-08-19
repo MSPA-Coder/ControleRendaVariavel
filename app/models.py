@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Time,
     UniqueConstraint,
     func,
     text,
@@ -133,6 +134,14 @@ class AppSetting(Base):
             name="poll_interval_seconds_range",
         ),
         CheckConstraint(
+            "agent_check_interval_seconds BETWEEN 5 AND 3600",
+            name="agent_check_interval_seconds_range",
+        ),
+        CheckConstraint(
+            "collector_schedule_start_time < collector_schedule_end_time",
+            name="collector_schedule_time_range",
+        ),
+        CheckConstraint(
             "risk_free_rate_annual BETWEEN 0 AND 1",
             name="risk_free_rate_annual_range",
         ),
@@ -152,6 +161,12 @@ class AppSetting(Base):
         Enum(CollectorMode, name="collector_mode"), default=CollectorMode.EXCEL
     )
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=2)
+    agent_check_interval_seconds: Mapped[int] = mapped_column(Integer, default=30)
+    """Intervalo do agente Windows para consultar alterações e pedidos no VPS."""
+    collector_schedule_weekdays: Mapped[str] = mapped_column(String(13), default="0,1,2,3,4")
+    """Dias da semana (0=segunda, 6=domingo) em que a coleta remota pode operar."""
+    collector_schedule_start_time: Mapped[time] = mapped_column(Time, default=time(9, 45))
+    collector_schedule_end_time: Mapped[time] = mapped_column(Time, default=time(18, 10))
     risk_free_rate_annual: Mapped[Decimal] = mapped_column(
         Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL
     )
@@ -170,6 +185,15 @@ class AppSetting(Base):
     definido manualmente pelo usuário em Configurações. ``None`` mantém o
     cálculo automático (``routes.helpers.quote_stale_after_seconds``),
     baseado no intervalo de coleta configurado."""
+    collector_refresh_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    """Pedido pendente do botão para o agente Windows executar uma leitura."""
+    collector_agent_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    collector_agent_status: Mapped[str] = mapped_column(String(16), default="waiting")
+    collector_agent_error: Mapped[str | None] = mapped_column(String(250), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

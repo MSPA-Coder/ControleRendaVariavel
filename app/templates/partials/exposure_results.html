@@ -24,7 +24,7 @@
 {% endif %}
 
 {% if allocation_charts %}
-{{ exposure.charts(allocation_charts, heading, subject) }}
+{{ exposure.charts(allocation_charts, heading, subject, converted_chart) }}
 {% elif not group_rows %}
 {{ exposure.empty_state() }}
 {% endif %}

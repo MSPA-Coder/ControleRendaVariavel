@@ -45,15 +45,15 @@
     {% if m %}
       <td class="number">{{ m.current_price|currency(p.currency, trim=true) }}</td>
       <td class="number {{ m.daily_variation|sign_class }}">{{ m.daily_variation|percent }}</td>
-      <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency, trim=true) }}</td>
+      <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency, 0) }}</td>
       <td class="number {{ m.return_pct|sign_class }}">{{ m.return_pct|percent }}</td>
       <td class="number {{ m.period_return|sign_class }}">{{ m.period_return|percent }}</td>
       <td class="number">{{ m.stop_gain|currency(p.currency, trim=true) }}</td>
       <td class="number {{ m.distance_to_target|sign_class }}">{{ m.distance_to_target|percent(2) }}</td>
       <td class="number {{ m.breakeven|sign_class }}">{{ m.breakeven|percent }}</td>
-      <td class="number">{{ m.unwind_value|currency(p.currency, trim=true) }}</td>
+      <td class="number">{{ m.unwind_value|currency(p.currency, 0) }}</td>
       <td class="number">{{ item.current_weight|percent }}</td>
-      <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency, trim=true) }}</td>
+      <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency, 0) }}</td>
       <td class="number">{{ item.cost_weight|percent }}</td>
       <td>{{ p.side.value }}</td><td class="number">{{ m.days }}</td>
     {% else %}
@@ -104,10 +104,10 @@
       {% for item in group.positions %}{{ position_row(item) }}{% endfor %}
       <tr class="broker-total">
         <th colspan="2">{{ group.broker }} · {{ group.positions|length }} posição(ões)</th>
-        <td class="number">{{ group.cost_total|currency(group.currency, trim=true) }}</td>
-        <td class="number">{{ group.current_total|currency(group.currency, trim=true) }}</td>
+        <td class="number">{{ group.cost_total|currency(group.currency, 0) }}</td>
+        <td class="number">{{ group.current_total|currency(group.currency, 0) }}</td>
         <td></td>
-        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency, trim=true) }}</td>
+        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency, 0) }}</td>
         <td colspan="13"></td>
       </tr>
       </tbody>
@@ -137,15 +137,15 @@
     <div class="currency-card-grid">
       <article>
         <span>Custo <small class="currency-symbol">{{ symbol }}</small></span>
-        <strong>{{ total.cost_total|number(2, trim=true) }}</strong>
+        <strong>{{ total.cost_total|number(0) }}</strong>
       </article>
       <article>
         <span>Valor atual <small class="currency-symbol">{{ symbol }}</small></span>
-        <strong>{{ total.current_total|number(2, trim=true) }}</strong>
+        <strong>{{ total.current_total|number(0) }}</strong>
       </article>
       <article>
         <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
-        <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|number(2, trim=true) }}</strong>
+        <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|number(0) }}</strong>
       </article>
       <article>
         <span>Retorno</span>

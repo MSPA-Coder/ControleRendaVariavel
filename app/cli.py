@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+import os
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -11,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from app import db
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_settings import default_collector_settings
+from app.collector_settings import collector_schedule_is_active, default_collector_settings
 from app.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
@@ -41,6 +43,47 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
     app.cli.add_command(users_group)
+
+
+def _windows_process_is_alive(process_id: int) -> bool:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    still_active = 259
+    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_bool, ctypes.c_ulong]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+    kernel32.GetExitCodeProcess.restype = ctypes.c_bool
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_bool
+    handle = kernel32.OpenProcess(process_query_limited_information, False, process_id)
+    if not handle:
+        return False
+    try:
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def supervisor_process_is_alive(supervisor_pid: str | None) -> bool:
+    """Mantém o coletor apenas enquanto seu controlador ainda existir."""
+    if not supervisor_pid:
+        return True
+    try:
+        process_id = int(supervisor_pid)
+    except ValueError:
+        return False
+    if process_id <= 0:
+        return False
+    if os.name == "nt":
+        return _windows_process_is_alive(process_id)
+    try:
+        os.kill(process_id, 0)
+    except OSError:
+        return False
+    return True
 
 
 @click.command("probe-rtd-direct")
@@ -88,8 +131,11 @@ def poll_rtd(watch: bool) -> None:
         )
 
     providers = CollectorProviderManager(provider_factory)
+    supervisor_pid = os.getenv("RTD_SUPERVISOR_PID")
     try:
         while True:
+            if not supervisor_process_is_alive(supervisor_pid):
+                return
             db.session.expire_all()
             settings = db.session.get(AppSetting, 1)
             if settings is None:
@@ -98,6 +144,18 @@ def poll_rtd(watch: bool) -> None:
                 db.session.commit()
             collector_mode = settings.collector_mode
             poll_interval_seconds = settings.poll_interval_seconds
+            schedule_active = collector_schedule_is_active(
+                settings.collector_schedule_weekdays,
+                settings.collector_schedule_start_time,
+                settings.collector_schedule_end_time,
+            )
+            if not schedule_active:
+                db.session.rollback()
+                providers.close()
+                if not watch:
+                    return
+                time.sleep(poll_interval_seconds)
+                continue
             positions = db.session.scalars(select(Position).order_by(Position.id)).all()
             option_positions = db.session.scalars(
                 select(OptionPosition)

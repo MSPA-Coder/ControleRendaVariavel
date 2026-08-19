@@ -99,4 +99,9 @@ if (-not (Test-Path -LiteralPath $controlTokenPath)) {
     Write-SecretFile -Path $controlTokenPath -Value (New-ControlToken)
 }
 
+$collectorAgentTokenPath = Join-Path $secretsDir "collector_agent_token"
+if (-not (Test-Path -LiteralPath $collectorAgentTokenPath)) {
+    Write-SecretFile -Path $collectorAgentTokenPath -Value (New-ControlToken)
+}
+
 Write-Output "Arquivos de segredo provisionados em .secrets. Nenhum valor foi exibido; revise permissões locais antes de iniciar a pilha."

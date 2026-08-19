@@ -78,11 +78,30 @@
 
 {% if portfolios %}
 <section class="catalog-card portfolio-ticker-card">
-  <h2>Tickers da carteira</h2>
+  <h2>Tickers por carteira</h2>
   <p class="form-help">
     Cadastro de quais tickers podem ser lançados em cada carteira. Um mesmo
     ticker pode estar associado a mais de uma carteira ao mesmo tempo.
   </p>
+  <div class="portfolio-ticker-browser" aria-label="Tickers associados por carteira">
+    {% for portfolio in portfolios %}
+    {% set tickers = associated_tickers_by_portfolio.get(portfolio.id, []) %}
+    <section class="portfolio-ticker-group">
+      <h3>{{ portfolio.name }}</h3>
+      <details class="portfolio-ticker-list" {{ 'open' if selected_portfolio and portfolio.id == selected_portfolio.id }}>
+        <summary>{{ tickers|length }} ticker(s) associado(s)</summary>
+        {% if tickers %}
+        <ul>
+          {% for ticker in tickers %}<li>{{ ticker.symbol }}</li>{% endfor %}
+        </ul>
+        {% else %}
+        <p class="form-help">Nenhum ticker associado.</p>
+        {% endif %}
+      </details>
+    </section>
+    {% endfor %}
+  </div>
+
   <form class="portfolio-ticker-filter">
     <label for="portfolio-ticker-select">Carteira</label>
     <select id="portfolio-ticker-select" name="portfolio_id"

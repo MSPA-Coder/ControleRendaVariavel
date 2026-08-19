@@ -4,21 +4,14 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from collections.abc import Callable
 from contextlib import suppress
-from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-
-
-class OperationalProfile(StrEnum):
-    TEST = "test"
-    PRODUCTION = "production"
 
 
 class Process(Protocol):
@@ -33,20 +26,43 @@ class Process(Protocol):
     def kill(self) -> None: ...
 
 
+def _collector_python_executable() -> str:
+    """Usa o Python de console para o CLI, mesmo sob o controlador ``pythonw``.
+
+    ``poll-rtd`` é um comando Flask e escreve seu pulso em stdout. O
+    controlador residente pode ser ``pythonw.exe`` para não criar janela, mas
+    o filho precisa de ``python.exe``; ``CREATE_NO_WINDOW`` ainda impede que
+    ele abra qualquer terminal.
+    """
+    executable = Path(sys.executable)
+    if sys.platform == "win32" and executable.name.lower() == "pythonw.exe":
+        console_executable = executable.with_name("python.exe")
+        if console_executable.is_file():
+            return str(console_executable)
+    return sys.executable
+
+
+def _collector_log_path(project_dir: Path) -> Path:
+    base = Path.home() / "AppData" / "Local" if os.name == "nt" else project_dir / ".docker-local"
+    return base / "ControleRendaVariavel" / "rtd-collector.log"
+
+
+def _rotate_collector_log(log_path: Path) -> None:
+    if not log_path.exists() or log_path.stat().st_size < 1_048_576:
+        return
+    for index in range(3, 0, -1):
+        source = (
+            log_path
+            if index == 1
+            else log_path.with_name(f"{log_path.stem}.{index - 1}{log_path.suffix}")
+        )
+        target = log_path.with_name(f"{log_path.stem}.{index}{log_path.suffix}")
+        if source.exists():
+            source.replace(target)
+
+
 class ProfitDetector(Protocol):
     def is_running(self) -> bool: ...
-
-
-class AutomationController(Protocol):
-    """Leitura da tarefa agendada do host — não escreve nela.
-
-    A tarefa fica sempre habilitada nos dois perfis (ver
-    ``scripts/rtd-host.ps1``); só decide se o coletor auto-inicia
-    supervisionado. `status()` alimenta ``automation_status`` para a tela,
-    sem influenciar `start`/`stop`/`set_operational_profile`.
-    """
-
-    def status(self) -> str: ...
 
 
 class RtdService(Protocol):
@@ -59,91 +75,9 @@ class RtdService(Protocol):
     @property
     def status(self) -> str: ...
 
-    @property
-    def operational_profile(self) -> OperationalProfile: ...
-
-    def set_operational_profile(self, profile: OperationalProfile) -> bool: ...
-
     def start(self) -> bool: ...
 
     def stop(self) -> bool: ...
-
-
-class OperationalProfileStore:
-    """Host-owned profile that is readable before Docker or PostgreSQL starts."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-
-    def read(self) -> OperationalProfile:
-        try:
-            value = self.path.read_text(encoding="utf-8").strip()
-        except FileNotFoundError:
-            return OperationalProfile.TEST
-        try:
-            return OperationalProfile(value)
-        except ValueError as exc:
-            raise RuntimeError(f"Perfil operacional inválido em {self.path}.") from exc
-
-    def write(self, profile: OperationalProfile) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w",
-                encoding="utf-8",
-                dir=self.path.parent,
-                prefix=f".{self.path.name}.",
-                suffix=".tmp",
-                delete=False,
-            ) as stream:
-                temporary_path = Path(stream.name)
-                stream.write(f"{profile.value}\n")
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary_path, self.path)
-        finally:
-            if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)
-
-
-class PowerShellAutomationController:
-    def __init__(self, project_dir: Path, script: Path | None = None) -> None:
-        expected = (project_dir.resolve() / "scripts" / "rtd-host.ps1").resolve()
-        if script is not None and script.resolve() != expected:
-            raise RuntimeError("O script de automação RTD deve ser scripts/rtd-host.ps1 do projeto.")
-        self.script = expected
-
-    def _run(self, action: str) -> str:
-        if not self.script.is_file():
-            raise RuntimeError(f"Script de automação RTD não encontrado: {self.script}")
-        try:
-            result = subprocess.run(
-                [
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    str(self.script),
-                    "-Action",
-                    action,
-                ],
-                check=True,
-                capture_output=True,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                text=True,
-                timeout=30,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            detail = getattr(exc, "stderr", "") or ""
-            suffix = f" ({detail.strip()})" if detail.strip() else ""
-            raise RuntimeError(f"Falha ao configurar a automação RTD{suffix}") from exc
-        return result.stdout.strip().lower()
-
-    def status(self) -> str:
-        value = self._run("Status")
-        return value if value in {"enabled", "disabled", "absent"} else "unknown"
 
 
 class WindowsProfitDetector:
@@ -175,15 +109,13 @@ class WindowsProfitDetector:
 
 
 class RtdServiceManager:
-    """Owns and, in production, supervises the Windows RTD collector process."""
+    """Owns and supervises the Windows RTD collector process."""
 
     def __init__(
         self,
         project_dir: Path,
         *,
         available: bool = sys.platform == "win32",
-        profile_store: OperationalProfileStore | None = None,
-        automation: AutomationController | None = None,
         profit_detector: ProfitDetector | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         supervisor_interval_seconds: float = 2,
@@ -194,10 +126,6 @@ class RtdServiceManager:
     ) -> None:
         self.project_dir = project_dir
         self.available = available
-        self._profile_store = profile_store or OperationalProfileStore(
-            project_dir / ".docker-local" / "operational-profile"
-        )
-        self._automation = automation or PowerShellAutomationController(project_dir)
         self._profit_detector = profit_detector or WindowsProfitDetector()
         self._monotonic = monotonic
         self._supervisor_interval_seconds = supervisor_interval_seconds
@@ -211,33 +139,14 @@ class RtdServiceManager:
         self._wake_supervisor = threading.Event()
         self._shutdown_supervisor = threading.Event()
         self._supervisor_thread: threading.Thread | None = None
-        self._profile = self._profile_store.read()
-        self._desired_running = self._profile == OperationalProfile.PRODUCTION
+        self._desired_running = True
         self._profit_seen_at: float | None = None
         self._next_start_at = 0.0
         self._failure_count = 0
         self._process_started_at: float | None = None
-        self._automation_status = "unknown"
-        self._status = (
-            "waiting_for_profit"
-            if self._profile == OperationalProfile.PRODUCTION
-            else "test_idle"
-        )
+        self._status = "waiting_for_profit"
         if self.available:
-            try:
-                self._automation_status = self._automation.status()
-            except (OSError, RuntimeError):
-                # The controller is already alive, so keep serving state and
-                # serving this session even when Task Scheduler is briefly
-                # unavailable. A later controller restart can reconcile it.
-                self._automation_status = "error"
-        if self._profile == OperationalProfile.PRODUCTION and self.available:
             self._ensure_supervisor()
-
-    @property
-    def operational_profile(self) -> OperationalProfile:
-        with self._lock:
-            return self._profile
 
     @property
     def status(self) -> str:
@@ -247,62 +156,24 @@ class RtdServiceManager:
             return self._status
 
     @property
-    def automation_status(self) -> str:
-        with self._lock:
-            return self._automation_status
-
-    @property
     def is_running(self) -> bool:
         with self._lock:
             return self._process is not None and self._process.poll() is None
-
-    def set_operational_profile(self, profile: OperationalProfile) -> bool:
-        profile = OperationalProfile(profile)
-        with self._lock:
-            if profile == self._profile:
-                return False
-
-            if profile == OperationalProfile.PRODUCTION:
-                self._profile_store.write(profile)
-                self._profile = profile
-                self._desired_running = True
-                self._status = "waiting_for_profit"
-                self._profit_seen_at = None
-                self._failure_count = 0
-                self._next_start_at = 0
-                self._ensure_supervisor()
-                self._wake_supervisor.set()
-                return True
-
-            self._desired_running = False
-            self._stop_process_locked()
-            self._profile_store.write(profile)
-            self._profile = profile
-            self._status = "test_idle"
-            self._profit_seen_at = None
-            self._wake_supervisor.set()
-            return True
 
     def start(self) -> bool:
         with self._lock:
             if not self.available:
                 raise RuntimeError("O coletor RTD só pode ser iniciado no Windows.")
             self._desired_running = True
-            if self._profile == OperationalProfile.PRODUCTION:
-                self._ensure_supervisor()
-                self._wake_supervisor.set()
-                return self._supervise_once_locked(self._monotonic())
-            return self._start_process_locked()
+            self._ensure_supervisor()
+            self._wake_supervisor.set()
+            return self._supervise_once_locked(self._monotonic())
 
     def stop(self) -> bool:
         with self._lock:
             self._desired_running = False
             stopped = self._stop_process_locked()
-            self._status = (
-                "test_idle"
-                if self._profile == OperationalProfile.TEST
-                else "production_stopped"
-            )
+            self._status = "stopped"
             self._wake_supervisor.set()
             return stopped
 
@@ -316,13 +187,22 @@ class RtdServiceManager:
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=5)
 
+    def enable_background_supervision(self) -> None:
+        """Ativa a supervisão após o servidor local reservar sua porta."""
+        with self._lock:
+            if self._background_supervision:
+                return
+            self._background_supervision = True
+            if self.available and self._desired_running:
+                self._ensure_supervisor()
+
     def supervise_once(self) -> bool:
         """Run one deterministic supervisor cycle; public to support focused tests."""
         with self._lock:
             return self._supervise_once_locked(self._monotonic())
 
     def _supervise_once_locked(self, now: float) -> bool:
-        if self._profile != OperationalProfile.PRODUCTION or not self._desired_running:
+        if not self._desired_running:
             return False
 
         profit_running = self._profit_detector.is_running()
@@ -398,20 +278,34 @@ class RtdServiceManager:
             return False
         self._external_process_ids = self._rtd_process_ids()
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        self._process = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "flask",
-                "--app",
-                "app:create_app",
-                "poll-rtd",
-                "--watch",
-            ],
-            cwd=self.project_dir,
-            stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
-        )
+        child_environment = os.environ.copy()
+        # ``poll-rtd`` cria a fábrica Flask para acessar banco e configuração.
+        # Sem este marcador, a fábrica criaria outro RtdServiceManager,
+        # que abriria mais um ``poll-rtd --watch`` recursivamente.
+        child_environment["RTD_COLLECTOR_PROCESS"] = "true"
+        child_environment["RTD_SUPERVISOR_PID"] = str(os.getpid())
+        child_environment["PYTHONIOENCODING"] = "utf-8"
+        log_path = _collector_log_path(self.project_dir)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_collector_log(log_path)
+        with log_path.open("a", encoding="utf-8") as output:
+            self._process = subprocess.Popen(
+                [
+                    _collector_python_executable(),
+                    "-m",
+                    "flask",
+                    "--app",
+                    "app:create_app",
+                    "poll-rtd",
+                    "--watch",
+                ],
+                cwd=self.project_dir,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                creationflags=creationflags,
+                env=child_environment,
+            )
         self._process_started_at = self._monotonic()
         self._status = "running"
         return True
@@ -550,21 +444,6 @@ class RemoteRtdService:
     @property
     def status(self) -> str:
         return str(self._request("/state").get("status", "unavailable"))
-
-    @property
-    def operational_profile(self) -> OperationalProfile:
-        payload = self._request("/profile")
-        try:
-            return OperationalProfile(str(payload["operational_profile"]))
-        except (KeyError, ValueError) as exc:
-            raise RuntimeError("Controlador RTD retornou perfil inválido.") from exc
-
-    def set_operational_profile(self, profile: OperationalProfile) -> bool:
-        current = self.operational_profile
-        if current == profile:
-            return False
-        self._request("/profile", {"operational_profile": profile.value})
-        return True
 
     def start(self) -> bool:
         was_running = self.is_running

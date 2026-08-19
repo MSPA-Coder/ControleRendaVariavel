@@ -196,6 +196,15 @@ def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> 
 
     associated_tickers: list[Ticker] = []
     available_tickers: list[Ticker] = []
+    associated_tickers_by_portfolio: dict[int, list[Ticker]] = {
+        portfolio.id: [] for portfolio in portfolios
+    }
+    for portfolio_id, ticker in db.session.execute(
+        select(PortfolioTicker.portfolio_id, Ticker)
+        .join(Ticker, Ticker.id == PortfolioTicker.ticker_id)
+        .order_by(PortfolioTicker.portfolio_id, Ticker.symbol)
+    ):
+        associated_tickers_by_portfolio.setdefault(portfolio_id, []).append(ticker)
     if selected_portfolio is not None:
         associated_ids = set(
             db.session.scalars(
@@ -216,6 +225,7 @@ def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> 
         "selected_portfolio": selected_portfolio,
         "associated_tickers": associated_tickers,
         "available_tickers": available_tickers,
+        "associated_tickers_by_portfolio": associated_tickers_by_portfolio,
     }
 
 

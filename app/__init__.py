@@ -46,7 +46,14 @@ limiter = Limiter(key_func=get_remote_address)
 
 # Endpoints reachable without an authenticated session. Kept intentionally
 # small: everything else in the app shows personal financial data.
-PUBLIC_ENDPOINTS = {"auth.login", "portfolio.health", "static"}
+PUBLIC_ENDPOINTS = {
+    "auth.login",
+    "portfolio.health",
+    "portfolio.collector_agent_configuration",
+    "portfolio.collector_agent_quotes",
+    "portfolio.collector_agent_failure",
+    "static",
+}
 
 # Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
 # controle em Configurações e os dois fragmentos que o HTMX rebusca.
@@ -99,6 +106,9 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_EXCEL_VISIBLE=os.getenv("RTD_EXCEL_VISIBLE", "false").lower() == "true",
         RTD_CONTROL_URL=os.getenv("RTD_CONTROL_URL", ""),
         RTD_CONTROL_TOKEN=environment_value("RTD_CONTROL_TOKEN") or "",
+        COLLECTOR_AGENT_TOKEN=environment_value("COLLECTOR_AGENT_TOKEN") or "",
+        REMOTE_COLLECTOR_ENABLED=os.getenv("REMOTE_COLLECTOR_ENABLED", "false").lower()
+        == "true",
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=os.getenv("TRUST_PROXY_HEADERS", "false").lower() == "true",
         RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
@@ -181,7 +191,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     if control_url and control_token:
         app.extensions["rtd_service"] = RemoteRtdService(control_url, control_token)
     else:
-        app.extensions["rtd_service"] = RtdServiceManager(Path(app.root_path).parent)
+        # O subprocesso ``poll-rtd`` também cria a aplicação Flask para usar
+        # as configurações e o banco. Ele não pode iniciar outro supervisor:
+        # isso formaria uma cadeia infinita de coletores no host Windows.
+        collector_process = os.getenv("RTD_COLLECTOR_PROCESS", "").lower() == "true"
+        app.extensions["rtd_service"] = RtdServiceManager(
+            Path(app.root_path).parent,
+            background_supervision=not collector_process,
+        )
 
     from app.cli import register_commands
     from app.presentation import register_filters

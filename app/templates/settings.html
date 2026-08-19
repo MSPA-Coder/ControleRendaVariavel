@@ -5,35 +5,17 @@
 {% block content %}
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <fieldset>
-    <legend>Perfil operacional</legend>
-    <label class="radio-option">
-      <input type="radio" name="operational_profile" value="test"
-             {{ 'checked' if operational_profile == 'test' }}
-             {{ 'disabled' if operational_profile is none }}>
-      <span>
-        <strong>Desenvolvimento/Testes</strong>
-        <small>Não inicia Docker, controlador ou coletor no logon. Ao executar o início manual, o RTD permanece desligado até ser ativado na aplicação.</small>
-      </span>
-    </label>
-    <label class="radio-option">
-      <input type="radio" name="operational_profile" value="production"
-             {{ 'checked' if operational_profile == 'production' }}
-             {{ 'disabled' if operational_profile is none }}>
-      <span>
-        <strong>Produção automática</strong>
-        <small>No logon, inicia a pilha e o controlador; o coletor é supervisionado e retoma quando o Profit/RTD estiver disponível.</small>
-      </span>
-    </label>
-    {% if operational_profile is none %}
-      <p class="form-help" role="status">
-        Perfil indisponível: o controlador RTD do Windows não respondeu. Nenhuma opção foi presumida.
-      </p>
-    {% endif %}
-  </fieldset>
-
-  <fieldset>
+  <fieldset class="collector-settings-card">
     <legend>Coletor de cotações</legend>
+    {% if remote_collector_enabled %}
+      <p class="form-help">
+        O agente está no Windows e conversa com este servidor por HTTPS. Ele não abre nenhuma porta no computador local.
+      </p>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit"
+                formaction="{{ url_for('portfolio.request_collector_refresh') }}">Atualizar cotações agora</button>
+      </div>
+    {% else %}
     {# O liga/desliga fala com o controlador RTD do host por conta propria
        (hx-post para a sua rota), entao o botao "Salvar" desta pagina nao
        participa: o efeito e imediato e nao ha o que confirmar. O `enabled`
@@ -41,6 +23,7 @@
     <div class="rtd-toggle-row">
       {{ collector.rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) }}
     </div>
+    {% endif %}
     <label class="radio-option">
       <input type="radio" name="collector_mode" value="excel"
              {{ 'checked' if settings.collector_mode.value == 'excel' }}>
@@ -57,33 +40,57 @@
         <small>Conecta ao servidor COM do ProfitPro sem iniciar o Excel.</small>
       </span>
     </label>
+    <div class="collector-settings-details">
+      <label>Intervalo entre leituras (segundos)
+        <input type="number" name="poll_interval_seconds"
+               min="{{ min_interval }}" max="{{ max_interval }}" step="1"
+               value="{{ settings.poll_interval_seconds }}" required>
+      </label>
+      <label>Alertar cotação desatualizada após (segundos)
+        <input type="number" name="stale_alert_seconds" min="1" max="86400" step="1"
+               value="{{ settings.stale_alert_seconds if settings.stale_alert_seconds is not none else '' }}"
+               placeholder="automático">
+      </label>
+    </div>
   </fieldset>
 
   <fieldset>
-    <legend>Intervalo entre leituras</legend>
-    <label>Intervalo entre leituras (segundos)
-      <input type="number" name="poll_interval_seconds"
-             min="{{ min_interval }}" max="{{ max_interval }}" step="1"
-             value="{{ settings.poll_interval_seconds }}" required>
+    <legend>Verificação do agente Windows</legend>
+    <label>Intervalo para verificar pedidos e configurações (segundos)
+      <input type="number" name="agent_check_interval_seconds"
+             min="{{ min_agent_check_interval }}" max="{{ max_agent_check_interval }}" step="1"
+             value="{{ settings.agent_check_interval_seconds }}" required>
     </label>
-    <p class="form-help">
-      A alteração será aplicada pelo coletor contínuo no próximo ciclo de leitura.
-    </p>
+    <p class="form-help">Define em quanto tempo o botão de atualização manual e alterações desta tela são percebidos pelo agente. Não altera o intervalo entre leituras.</p>
   </fieldset>
-
-  <fieldset>
-    <legend>Alertas</legend>
-    <label>Alertar cotação desatualizada após (segundos)
-      <input type="number" name="stale_alert_seconds" min="1" max="86400" step="1"
-             value="{{ settings.stale_alert_seconds if settings.stale_alert_seconds is not none else '' }}"
-             placeholder="automático">
-    </label>
-    <p class="form-help">
-      Deixe em branco para o cálculo automático (pelo menos duas vezes o
-      intervalo de leitura acima, mais uma margem de segurança). Com o
-      intervalo atual, o valor efetivo é de {{ effective_stale_alert_seconds }} segundos.
-    </p>
-  </fieldset>
+  <fieldset class="collector-schedule-card">
+      <legend>Agenda da coleta</legend>
+      <div class="schedule-section">
+        <span class="schedule-section-label">Dias da semana</span>
+        <div class="schedule-days">
+          {% for day, label in weekday_options %}
+          <label class="checkbox-option">
+            <input type="checkbox" name="collector_schedule_weekdays" value="{{ day }}"
+                   {{ 'checked' if day in selected_schedule_weekdays }}>
+            <span>{{ label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="schedule-section">
+        <span class="schedule-section-label">Horário da coleta</span>
+        <div class="schedule-hours">
+        <label>Início
+          <input type="time" name="collector_schedule_start_time"
+                 value="{{ settings.collector_schedule_start_time.strftime('%H:%M') }}" required>
+        </label>
+        <label>Fim
+          <input type="time" name="collector_schedule_end_time"
+                 value="{{ settings.collector_schedule_end_time.strftime('%H:%M') }}" required>
+        </label>
+        </div>
+      </div>
+    </fieldset>
 
   <fieldset>
     <legend>Precificação de opções</legend>
@@ -118,8 +125,7 @@
 
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit"
-            {{ 'disabled' if operational_profile is none }}>Salvar configurações</button>
+    <button class="button button-primary" type="submit">Salvar configurações</button>
   </div>
 </form>
 {% endblock %}
