@@ -133,6 +133,27 @@ bootstrap Alembic em banco vazio e smoke manual proporcional.
 | dependência, Dockerfile ou Compose | build limpo e subida completa da pilha |
 | RTD host | fake automatizado e, quando disponível, ticker conhecido sem dados sensíveis |
 
+## Implantação em produção
+
+O sistema roda em um VPS Oracle atrás de Nginx com TLS, em
+`https://renda-mspa.duckdns.org`, a partir de
+`/home/ubuntu/apps/controle-renda-variavel`. O agente RTD permanece no Windows
+e fala com o VPS por HTTPS — ver "Exceção RTD no host Windows".
+
+O código do servidor é espelho do `main`, em sentido único: desenvolvimento na
+máquina local, commit, push ao GitHub, e só então implantação. **Não edite
+código, não commite e não faça merge no VPS** — `~/deploy.sh renda` aborta ao
+encontrar árvore suja, e a *deploy key* do servidor é somente leitura, então um
+push de lá falharia de qualquer forma.
+
+`.secrets/` (`secret_key`, `postgres_password`, `rtd_control_token`,
+`collector_agent_token`) e `.certs/` não são versionados e vivem apenas no
+servidor; um reclone precisa restaurá-los, ou o build falha e o banco fica
+inacessível. Os dados ficam no volume
+`controle-renda-variavel_postgres_data`, fora da pasta do código: substituir o
+diretório do projeto não os afeta. Consulte `docs/deployment-vps.md` antes de
+qualquer operação no VPS.
+
 ## Evolução de versões
 
 Evolua versões deliberadamente: `pyproject.toml` declara o mínimo conhecido e
