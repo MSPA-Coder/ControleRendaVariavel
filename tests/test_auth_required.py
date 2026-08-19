@@ -55,7 +55,14 @@ def test_health_nao_e_barrado_por_sessao(app):
 def test_lista_de_publicos_e_curta_e_conhecida():
     # A lista e de rotas publicas, nao de protegidas: uma rota nova nasce
     # protegida. Acrescentar algo aqui deve ser decisao consciente.
-    assert {"auth.login", "portfolio.health", "static"} == PUBLIC_ENDPOINTS
+    assert {
+        "auth.login",
+        "portfolio.health",
+        "portfolio.collector_agent_configuration",
+        "portfolio.collector_agent_quotes",
+        "portfolio.collector_agent_failure",
+        "static",
+    } == PUBLIC_ENDPOINTS
 
 
 def test_login_aceita_apenas_destino_local_sem_barra_invertida():

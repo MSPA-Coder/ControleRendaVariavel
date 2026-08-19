@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from app import db
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_settings import default_collector_settings
+from app.collector_settings import collector_schedule_is_active, default_collector_settings
 from app.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
@@ -144,6 +144,18 @@ def poll_rtd(watch: bool) -> None:
                 db.session.commit()
             collector_mode = settings.collector_mode
             poll_interval_seconds = settings.poll_interval_seconds
+            schedule_active = collector_schedule_is_active(
+                settings.collector_schedule_weekdays,
+                settings.collector_schedule_start_time,
+                settings.collector_schedule_end_time,
+            )
+            if not schedule_active:
+                db.session.rollback()
+                providers.close()
+                if not watch:
+                    return
+                time.sleep(poll_interval_seconds)
+                continue
             positions = db.session.scalars(select(Position).order_by(Position.id)).all()
             option_positions = db.session.scalars(
                 select(OptionPosition)

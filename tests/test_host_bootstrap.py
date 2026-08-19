@@ -1,5 +1,4 @@
 """Ligar o Docker do host, sem um Docker real.
-
 ``run``, ``sleep`` e ``monotonic`` são sempre injetados: nenhum destes testes
 chama um processo de verdade, o que os mantém rápidos e portáteis para além
 do Windows onde o coletor RTD de fato roda.
@@ -13,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from app import host_bootstrap
-from app.rtd_service import PowerShellAutomationController
 
 
 def _completed(returncode: int, stderr: str = "") -> subprocess.CompletedProcess[str]:
@@ -107,26 +105,3 @@ def test_compose_up_falha_levanta_erro_com_detalhe(
             Path("docker"),
             run=lambda *a, **k: _completed(1, stderr="deu ruim"),
         )
-
-
-def test_automacao_rtd_recusa_script_fora_do_projeto(tmp_path: Path) -> None:
-    projeto = tmp_path / "projeto"
-    esperado = projeto / "scripts" / "rtd-host.ps1"
-    esperado.parent.mkdir(parents=True)
-    esperado.write_text("# script sintético", encoding="utf-8")
-    externo = tmp_path / "externo.ps1"
-    externo.write_text("# script sintético", encoding="utf-8")
-
-    with pytest.raises(RuntimeError, match="scripts/rtd-host.ps1"):
-        PowerShellAutomationController(projeto, script=externo)
-
-
-def test_automacao_rtd_aceita_apenas_script_versionado_do_projeto(tmp_path: Path) -> None:
-    projeto = tmp_path / "projeto"
-    esperado = projeto / "scripts" / "rtd-host.ps1"
-    esperado.parent.mkdir(parents=True)
-    esperado.write_text("# script sintético", encoding="utf-8")
-
-    controller = PowerShellAutomationController(projeto, script=esperado)
-
-    assert controller.script == esperado.resolve()

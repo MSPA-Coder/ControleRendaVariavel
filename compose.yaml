@@ -66,6 +66,7 @@ services:
       SECRET_KEY_FILE: /run/secrets/secret_key
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       RTD_CONTROL_TOKEN_FILE: /run/secrets/rtd_control_token
+      COLLECTOR_AGENT_TOKEN_FILE: /run/secrets/collector_agent_token
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
@@ -75,11 +76,13 @@ services:
       RTD_CONTROL_URL: http://host.docker.internal:8765
       FORCE_HTTPS: ${FORCE_HTTPS:-false}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      REMOTE_COLLECTOR_ENABLED: ${REMOTE_COLLECTOR_ENABLED:-false}
       RATELIMIT_STORAGE_URI: ${RATELIMIT_STORAGE_URI:-memory://}
     secrets:
       - secret_key
       - postgres_password
       - rtd_control_token
+      - collector_agent_token
     ports:
       - "127.0.0.1:5301:5003"
     depends_on:
@@ -89,7 +92,7 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test:
-        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5003/health', timeout=2)"]
+        ["CMD", "python", "-c", "import urllib.request; request=urllib.request.Request('http://127.0.0.1:5003/health', headers={'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -156,3 +159,5 @@ secrets:
     file: .secrets/postgres_password
   rtd_control_token:
     file: .secrets/rtd_control_token
+  collector_agent_token:
+    file: .secrets/collector_agent_token

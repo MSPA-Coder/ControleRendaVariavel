@@ -85,17 +85,44 @@ $backupPath = Join-Path $backupsDir "investimentos_$timestamp.dump"
 
 $dockerPath = Resolve-DockerCli
 Write-Output "Gerando backup em $backupPath ..."
-& $dockerPath compose --project-directory $projectDir exec -T `
-    -e PGPASSWORD=$postgresPassword `
-    db pg_dump -U investimentos -d investimentos --format=custom --file=/tmp/backup.dump
-if ($LASTEXITCODE -ne 0) {
-    throw "pg_dump falhou dentro do contêiner do banco de dados."
+# O dump atravessa stdout como bytes. `docker cp` não enxerga de forma
+# confiável arquivos criados em tmpfs pelos contêineres Linux do Docker Desktop
+# no Windows; copiar o fluxo binário evita esse ponto de falha sem expor senha
+# ou montar o volume do PostgreSQL no host.
+$process = [System.Diagnostics.Process]::new()
+$process.StartInfo.FileName = $dockerPath
+$process.StartInfo.UseShellExecute = $false
+$process.StartInfo.CreateNoWindow = $true
+$process.StartInfo.RedirectStandardOutput = $true
+$process.StartInfo.RedirectStandardError = $true
+foreach ($argument in @(
+    "compose", "--project-directory", $projectDir, "exec", "-T", "-e",
+    "PGPASSWORD=$postgresPassword", "db", "pg_dump", "-U", "investimentos",
+    "-d", "investimentos", "--format=custom"
+)) {
+    [void]$process.StartInfo.ArgumentList.Add($argument)
 }
-& $dockerPath compose --project-directory $projectDir cp "db:/tmp/backup.dump" $backupPath
-if ($LASTEXITCODE -ne 0) {
-    throw "Falha ao copiar o backup para fora do contêiner."
+if (-not $process.Start()) {
+    throw "Não foi possível iniciar pg_dump no contêiner do banco."
 }
-& $dockerPath compose --project-directory $projectDir exec -T db rm -f /tmp/backup.dump
+$destination = [System.IO.File]::Open(
+    $backupPath,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+)
+try {
+    $process.StandardOutput.BaseStream.CopyTo($destination)
+}
+finally {
+    $destination.Dispose()
+}
+$stderr = $process.StandardError.ReadToEnd()
+$process.WaitForExit()
+if ($process.ExitCode -ne 0) {
+    Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+    throw "pg_dump falhou dentro do contêiner do banco: $stderr"
+}
 
 $cutoff = (Get-Date).AddDays(-$retentionDays)
 Get-ChildItem -LiteralPath $backupsDir -Filter "investimentos_*.dump" |

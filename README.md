@@ -62,6 +62,38 @@ Aplicacao web (Docker) -> PostgreSQL (Docker)
            +-> controlador RTD local (Windows) -> Excel/Profit COM
 ```
 
+### Coletor Windows para o VPS
+
+Em produção remota, o ProfitChart continua no Windows. O VPS recebe cotações
+por HTTPS autenticado e nunca tenta abrir conexão para o computador local. A
+tela **Configurações** do sistema remoto define o intervalo de leitura, o
+intervalo de verificação, os dias e horários de funcionamento do agente e
+oferece o botão **Atualizar cotações agora**. A mesma agenda vale para ativos
+da B3 e americanos. Fora da agenda, ou se o ProfitChart estiver fechado, o
+agente não consulta o VPS; um pedido manual permanece pendente até a próxima
+janela ativa. O intervalo de verificação determina quanto tempo o agente leva
+para perceber pedidos e alterações; o último valor recebido fica em
+`%LOCALAPPDATA%\ControleRendaVariavel\remote-collector-state.json`, sem
+segredos, e é reutilizado se o VPS estiver temporariamente inacessível.
+
+Depois de publicar a aplicação no VPS, crie o segredo uma vez e copie o mesmo
+arquivo, por canal seguro, para `.secrets/collector_agent_token` no VPS. Em
+seguida, instale o agente no Windows, informando a URL HTTPS pública:
+
+```powershell
+.\scripts\provision-collector-agent-token.ps1
+.\scripts\rtd-remote-agent.ps1 -Action Install -ApiUrl https://rendavariavel-mspa.duckdns.org
+```
+
+O arquivo local `.docker-local/remote-collector.env` guarda apenas a URL e o
+caminho do segredo; é ignorado pelo Git. O log operacional fica em
+`%LOCALAPPDATA%\ControleRendaVariavel\remote-collector.log`. Para consultar ou
+remover a tarefa: `-Action Status` ou `-Action Uninstall`.
+
+Não mantenha simultaneamente o coletor local (`rtd-host.ps1`) e o agente
+remoto sobre o mesmo ProfitChart. A aplicação continua utilizável nos dois
+ambientes, mas apenas um deles deve fazer a leitura RTD de cada vez.
+
 O controlador local e opcional. Sem ele, a aplicacao permanece funcional e
 exibe o estado do coletor como indisponivel ou sem leitura; nenhuma operacao
 de cadastro depende do RTD.
@@ -187,21 +219,12 @@ cada leitura; a cotacao instantanea fica em `quotes`/`option_quotes`. O
 indicador de coletor no cabecalho mostra `online`, `stale`, `error` ou
 `waiting` conforme a ultima leitura persistida.
 
-### Perfil operacional do host
+### Inicialização do coletor local
 
-O perfil local em `.docker-local/operational-profile` e gerenciado pela aba
-Settings e so decide se o coletor **auto-inicia supervisionado**; a tarefa
-agendada em si fica sempre habilitada, nos dois perfis. Em `test`, o
-coletor comeca desligado e so liga pelo toggle da interface — o Profit pode
-ficar fechado sem gerar tentativas ou erros RTD. Em `production`, o
-supervisor espera um Profit interativo estar aberto e estavel antes de
-iniciar o coletor; quedas do coletor usam retentativas com espera
-progressiva.
-
-Ao trocar de perfil o coletor liga ou desliga imediatamente (conforme o
-supervisor), mas a pilha Docker e a tarefa agendada continuam ativas nos
-dois casos — nao ha mais um comando separado para encerra-las junto com a
-troca de perfil.
+No logon, o controlador RTD inicia e espera o ProfitChart interativo. O
+coletor só consulta o RTD dentro da agenda salva em **Configurações**; fora
+dela, permanece ocioso. O botão de ligar/desligar continua disponível na
+tela de Configurações para interromper ou retomar o coletor manualmente.
 
 ## Operacao
 
@@ -214,6 +237,9 @@ troca de perfil.
 - Para TLS atras de proxy reverso, use `FORCE_HTTPS=true` e
   `TRUST_PROXY_HEADERS=true`; os cookies de sessao e de lembranca tornam-se
   `Secure`.
+- No VPS, use também `REMOTE_COLLECTOR_ENABLED=true` e mantenha
+  `COLLECTOR_AGENT_TOKEN_FILE` como segredo do contêiner. A API privada do
+  coletor exige esse token e não aceita sessão de navegador em seu lugar.
 - O limitador usa memoria com um processo Gunicorn. Para escalar
   horizontalmente, configure `RATELIMIT_STORAGE_URI` com Redis compartilhado.
 - O backup diario pode ser agendado com `scripts/backup.ps1`; os dumps ficam

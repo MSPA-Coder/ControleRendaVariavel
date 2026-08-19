@@ -226,6 +226,24 @@ tbody tr:hover { background: #e1f0f4; }
 .radio-option small, .form-help { color: var(--muted); }
 .radio-option span { display: grid; gap: .2rem; }
 .form-help { font-size: .85rem; margin: 0; }
+.collector-settings-card { display: grid; gap: .9rem; }
+.collector-settings-details {
+  display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+.collector-schedule-card {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--accent-soft) 100%);
+  border-color: var(--accent-line); display: grid; gap: 1rem;
+}
+  .schedule-section { display: grid; gap: .5rem; }
+  .schedule-section-label { color: var(--muted); font-size: .82rem; font-weight: 700; }
+  .schedule-days { display: grid; gap: .5rem; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.schedule-days .checkbox-option {
+  align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: .5rem;
+  color: var(--ink); cursor: pointer; display: flex; font-size: .78rem; gap: .4rem; justify-content: center;
+  min-height: 2.5rem; padding: .45rem;
+}
+.schedule-days .checkbox-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.schedule-hours { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(160px, 1fr)); max-width: 440px; }
 .position-form h1, .position-form .form-help, .position-form .form-warning,
 .form-actions { grid-column: 1 / -1; }
 .form-warning {
@@ -380,6 +398,8 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   .topbar { align-items: stretch; flex-direction: column; gap: .75rem; }
   .topbar nav { flex-wrap: wrap; }
   .catalog-create, .ticker-fields, .expiration-fields, .contract-fields, .portfolio-fields { grid-template-columns: 1fr; }
+  .collector-settings-details, .schedule-hours { grid-template-columns: 1fr; }
+  .schedule-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .portfolio-ticker-grid { grid-template-columns: 1fr; }
   .portfolio-ticker-group { align-items: stretch; grid-template-columns: 1fr; }
   .portfolio-ticker-filter { align-items: stretch; flex-direction: column; }
@@ -480,8 +500,12 @@ details.catalog-card > h2 { display: none; }
 .rtd-toggle { gap: .35rem; padding: .35rem .55rem; }
 .rtd-toggle .collector-heartbeat { background: transparent; color: var(--ink); font-size: .75rem; padding: 0; }
 .rtd-toggle .collector-heartbeat time { white-space: nowrap; }
-.quote-import-form { grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; }
-.quote-import-form select:disabled { background: #eef5f9; opacity: 1; }
+.quote-card-zones, .quote-manual-form { display: grid; gap: .85rem; }
+.quote-card-zone { padding: .85rem 0; }
+.quote-card-zone + .quote-card-zone { border-top: 1px solid var(--line); }
+.quote-import-form, .quote-manual-fields { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+.quote-card-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; }
+.quote-card-actions form { margin: 0; }
 .allocation-list-heading, .allocation-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1rem; }
 .allocation-list-heading { color: var(--muted); font-size: .78rem; font-weight: 600; margin-top: .75rem; }
 .allocation-list-heading span:not(:first-child), .allocation-list li strong { text-align: right; }
@@ -495,10 +519,8 @@ details.catalog-card > h2 { display: none; }
 .quote-history-controls .button { flex: 0 0 auto; }
 .quote-management-card { margin-bottom: 1rem; }
 .quote-management-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.quote-management-forms { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.quote-manual-fields { grid-template-columns: minmax(120px, 1fr) minmax(130px, .75fr) minmax(110px, .7fr); }
 .quote-history-card { background: var(--surface); border: 1px solid var(--line); border-radius: .65rem; margin-bottom: 1rem; padding: 1rem; }
-.quote-delete-form { align-items: end; display: flex; gap: .6rem; }
-.quote-delete-form input { padding: .5rem .6rem; }
 .quote-history-card .chart-box { height: min(34vh, 290px); margin-top: 0; }
 .quote-history-browser { display: grid; gap: .65rem; margin-top: 1rem; }
 .quote-history-year { align-items: center; border: 1px solid var(--line); border-radius: .45rem; display: grid; gap: .65rem; grid-template-columns: 4rem 1fr; padding: .55rem .65rem; }
@@ -519,14 +541,13 @@ details.catalog-card > h2 { display: none; }
 .chart-toolbar label { align-items: center; display: flex; gap: .4rem; min-width: 0; }
 .chart-toolbar select { padding: .35rem .5rem; }
 
-.quote-history-refresh { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 1rem; justify-content: space-between; margin-top: .85rem; padding-top: .85rem; }
-.quote-history-refresh strong { display: block; font-size: .9rem; margin-bottom: .2rem; }
-@media (max-width: 700px) { .quote-history-refresh { align-items: stretch; flex-direction: column; } }
 @media (max-width: 700px) {
-  .quote-history-controls, .quote-delete-form { align-items: stretch; flex-direction: column; }
+  .quote-history-controls { align-items: stretch; flex-direction: column; }
   .quote-ticker-filter { align-items: stretch; flex-direction: column; }
   .quote-ticker-filter label { align-items: stretch; justify-content: space-between; }
-  .quote-management-grid, .quote-management-forms { grid-template-columns: 1fr; }
+  .quote-management-grid, .quote-import-form, .quote-manual-fields { grid-template-columns: 1fr; }
+  .quote-card-actions { align-items: stretch; flex-direction: column; }
+  .quote-card-actions .button { width: 100%; }
   .quote-history-year { align-items: stretch; grid-template-columns: 1fr; }
   .quote-history-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

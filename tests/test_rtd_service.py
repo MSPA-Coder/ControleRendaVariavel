@@ -3,10 +3,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from app import create_app
-from app import rtd_service
+from app import create_app, rtd_service
 from app.cli import supervisor_process_is_alive
-from app.rtd_service import OperationalProfileStore, RtdServiceManager
+from app.rtd_service import RtdServiceManager
 
 
 class _Process:
@@ -25,11 +24,6 @@ class _Process:
         pass
 
 
-class _Automation:
-    def status(self) -> str:
-        return "enabled"
-
-
 def test_rtd_collector_child_is_marked_to_prevent_supervisor_recursion(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -45,7 +39,6 @@ def test_rtd_collector_child_is_marked_to_prevent_supervisor_recursion(
         tmp_path,
         available=False,
         background_supervision=False,
-        profile_store=OperationalProfileStore(tmp_path / "profile"),
     )
 
     assert manager._start_process_locked() is True
@@ -73,15 +66,11 @@ def test_collector_process_does_not_start_a_local_supervisor(monkeypatch) -> Non
     assert service._background_supervision is False
 
 
-def test_supervision_starts_only_when_explicitly_enabled(tmp_path: Path) -> None:
-    profile_path = tmp_path / "profile"
-    profile_path.write_text("production\n", encoding="utf-8")
+def test_supervision_starts_when_background_supervision_is_enabled(tmp_path: Path) -> None:
     manager = RtdServiceManager(
         tmp_path,
         available=True,
         background_supervision=False,
-        profile_store=OperationalProfileStore(profile_path),
-        automation=_Automation(),
     )
     calls: list[bool] = []
     manager._ensure_supervisor = lambda: calls.append(True)  # type: ignore[method-assign]

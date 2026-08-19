@@ -6,12 +6,10 @@
 .DESCRIPTION
   scripts\rtd-host.ps1 -Action Install|Uninstall|Status
 
-  A tarefa sobe no logon do usuario atual, sem elevacao, e fica sempre
-  habilitada nos dois perfis operacionais: o perfil (test/production),
-  gerenciado pela aba Settings da aplicacao, so decide se o coletor
-  auto-inicia supervisionado -- nao se a tarefa existe. Isto e so o
-  instalador; a operacao de fato (Docker, .env, servidor de controle) esta
-  em app.rtd_control_server, iniciado diretamente sem janela de terminal.
+  A tarefa sobe no logon do usuario atual, sem elevacao. O controlador
+  aguarda o ProfitChart e a agenda configurada antes de coletar. Isto e so o
+  instalador; a operacao de fato (Docker, .env, servidor de controle) esta em
+  app.rtd_control_server, iniciado diretamente sem janela de terminal.
 #>
 [CmdletBinding()]
 param(

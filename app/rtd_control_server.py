@@ -12,7 +12,7 @@ from pathlib import Path
 
 from app.host_bootstrap import compose_up, resolve_docker_cli, wait_for_docker
 from app.host_env import apply_host_environment
-from app.rtd_service import OperationalProfile, RtdServiceManager
+from app.rtd_service import RtdServiceManager
 
 MAX_BODY_BYTES = 1024
 MIN_TOKEN_LENGTH = 32
@@ -80,35 +80,22 @@ def _handler(
             self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "Não autorizado."})
 
         def do_GET(self) -> None:
-            if self.path not in {"/state", "/profile"}:
+            if self.path != "/state":
                 self._write_json(HTTPStatus.NOT_FOUND, {"error": "Rota inexistente."})
                 return
             if not self._authorized():
                 self._reject_unauthorized()
-                return
-            if self.path == "/profile":
-                self._write_json(
-                    HTTPStatus.OK,
-                    {
-                        "operational_profile": service.operational_profile.value,
-                        "running": service.is_running,
-                        "status": service.status,
-                        "automation_status": service.automation_status,
-                    },
-                )
                 return
             self._write_json(
                 HTTPStatus.OK,
                 {
                     "running": service.is_running,
                     "status": service.status,
-                    "operational_profile": service.operational_profile.value,
-                    "automation_status": service.automation_status,
                 },
             )
 
         def do_POST(self) -> None:
-            if self.path not in {"/state", "/profile"}:
+            if self.path != "/state":
                 self._write_json(HTTPStatus.NOT_FOUND, {"error": "Rota inexistente."})
                 return
             if not self._authorized():
@@ -119,26 +106,14 @@ def _handler(
                 if length <= 0 or length > MAX_BODY_BYTES:
                     raise ValueError
                 payload = json.loads(self.rfile.read(length))
-                if self.path == "/profile":
-                    raw_profile = payload.get("operational_profile")
-                    if not isinstance(raw_profile, str):
-                        raise ValueError
-                    service.set_operational_profile(OperationalProfile(raw_profile))
-                else:
-                    enabled = payload.get("enabled")
-                    if not isinstance(enabled, bool):
-                        raise ValueError
-                    service.start() if enabled else service.stop()
+                enabled = payload.get("enabled")
+                if not isinstance(enabled, bool):
+                    raise ValueError
+                service.start() if enabled else service.stop()
             except (json.JSONDecodeError, ValueError):
                 self._write_json(
                     HTTPStatus.BAD_REQUEST,
-                    {
-                        "error": (
-                            "Informe 'operational_profile' como 'test' ou 'production'."
-                            if self.path == "/profile"
-                            else "Informe o estado booleano 'enabled'."
-                        )
-                    },
+                    {"error": "Informe o estado booleano 'enabled'."},
                 )
                 return
             except (OSError, RuntimeError) as exc:
@@ -156,8 +131,6 @@ def _handler(
                 {
                     "running": service.is_running,
                     "status": service.status,
-                    "operational_profile": service.operational_profile.value,
-                    "automation_status": service.automation_status,
                 },
             )
 

@@ -12,7 +12,6 @@ from urllib.request import Request, urlopen
 import pytest
 
 from app.rtd_control_server import _handler, resolve_control_host
-from app.rtd_service import OperationalProfile
 
 TOKEN = "token-de-teste-com-tamanho-suficiente"
 
@@ -21,8 +20,6 @@ class _ServicoFalso:
     def __init__(self) -> None:
         self.is_running = False
         self.status = "stopped"
-        self.operational_profile = OperationalProfile.TEST
-        self.automation_status = "enabled"
         self.calls: list[str] = []
 
     def start(self) -> bool:
@@ -36,12 +33,6 @@ class _ServicoFalso:
         self.is_running = False
         self.status = "stopped"
         return True
-
-    def set_operational_profile(self, profile: OperationalProfile) -> bool:
-        self.calls.append(f"profile:{profile.value}")
-        self.operational_profile = profile
-        return True
-
 
 @pytest.fixture
 def controller() -> tuple[ThreadingHTTPServer, _ServicoFalso]:
@@ -98,7 +89,6 @@ def test_controlador_autorizado_expoe_estado_e_muda_coletor(controller) -> None:
     status, state = _request(server, "/state", token=TOKEN)
     assert status == 200
     assert state["running"] is False
-    assert state["operational_profile"] == "test"
 
     status, state = _request(server, "/state", token=TOKEN, payload={"enabled": True})
     assert status == 200
