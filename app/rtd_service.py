@@ -43,8 +43,10 @@ def _collector_python_executable() -> str:
 
 
 def _collector_log_path(project_dir: Path) -> Path:
-    local_app_data = os.getenv("LOCALAPPDATA", "")
-    base = Path(local_app_data) if local_app_data else project_dir / ".docker-local"
+    if os.name == "nt":
+        base = Path.home() / "AppData" / "Local"
+    else:
+        base = project_dir / ".docker-local"
     return base / "ControleRendaVariavel" / "rtd-collector.log"
 
 

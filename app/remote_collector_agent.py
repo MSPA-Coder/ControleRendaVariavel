@@ -97,8 +97,15 @@ def _read_token(project_dir: Path, config: dict[str, str]) -> str:
     return token
 
 
+def _local_data_directory(project_dir: Path) -> Path:
+    """Diretório fixo do agente, sem aceitar caminhos por variável de ambiente."""
+    if os.name == "nt":
+        return Path.home() / "AppData" / "Local"
+    return project_dir / ".docker-local"
+
+
 def _logger(project_dir: Path) -> logging.Logger:
-    directory = Path(os.getenv("LOCALAPPDATA", project_dir / ".docker-local"))
+    directory = _local_data_directory(project_dir)
     log_path = directory / "ControleRendaVariavel" / "remote-collector.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(AGENT_LOGGER_NAME)
@@ -112,7 +119,7 @@ def _logger(project_dir: Path) -> logging.Logger:
 
 
 def _state_path(project_dir: Path) -> Path:
-    directory = Path(os.getenv("LOCALAPPDATA", project_dir / ".docker-local"))
+    directory = _local_data_directory(project_dir)
     return directory / "ControleRendaVariavel" / "remote-collector-state.json"
 
 

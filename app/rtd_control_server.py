@@ -22,10 +22,13 @@ CONTROLLER_LOGGER_NAME = "controle_renda_variavel.rtd_controller"
 
 def controller_log_path(project_dir: Path, local_app_data: str | None = None) -> Path:
     """Devolve um log local, fora do repositório e sem dados de cotações."""
-    base = local_app_data if local_app_data is not None else os.getenv("LOCALAPPDATA", "")
-    if base:
-        return Path(base) / "ControleRendaVariavel" / "rtd-controller.log"
-    return project_dir / ".docker-local" / "rtd-controller.log"
+    if local_app_data is not None:
+        base = Path(local_app_data)
+    elif os.name == "nt":
+        base = Path.home() / "AppData" / "Local"
+    else:
+        base = project_dir / ".docker-local"
+    return base / "ControleRendaVariavel" / "rtd-controller.log"
 
 
 def configure_controller_logger(project_dir: Path) -> logging.Logger:
