@@ -82,7 +82,7 @@ seguida, instale o agente no Windows, informando a URL HTTPS pública:
 
 ```powershell
 .\scripts\provision-collector-agent-token.ps1
-.\scripts\rtd-remote-agent.ps1 -Action Install -ApiUrl https://rendavariavel-mspa.duckdns.org
+.\scripts\rtd-remote-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
 ```
 
 O arquivo local `.docker-local/remote-collector.env` guarda apenas a URL e o
@@ -225,6 +225,27 @@ No logon, o controlador RTD inicia e espera o ProfitChart interativo. O
 coletor só consulta o RTD dentro da agenda salva em **Configurações**; fora
 dela, permanece ocioso. O botão de ligar/desligar continua disponível na
 tela de Configurações para interromper ou retomar o coletor manualmente.
+
+## Producao
+
+O sistema roda em um VPS Oracle (Ubuntu 24.04), publicado pelo Nginx com
+certificado Let's Encrypt em <https://renda-mspa.duckdns.org>. O contêiner
+escuta apenas em `127.0.0.1:5301`; só 80 e 443 ficam abertos na internet. O
+ProfitChart, o Excel/COM e o agente RTD continuam na máquina Windows e
+conversam com o VPS por HTTPS.
+
+O fluxo de mudança tem sentido único: **máquina de desenvolvimento → GitHub →
+VPS**. O código no servidor é um espelho do `main` e nunca a origem de uma
+alteração; a implantação é feita por `~/deploy.sh renda`, que recusa rodar se
+encontrar alteração não commitada no servidor. O repositório é privado e o VPS
+o lê por uma *deploy key* somente-leitura.
+
+Os dados ficam no volume `controle-renda-variavel_postgres_data`, fora da pasta
+do código. `.secrets/` e `.certs/` não são versionados e existem apenas no
+servidor.
+
+Detalhes de instalação, atualização e rollback estão em
+[Implantação no VPS](docs/deployment-vps.md).
 
 ## Operacao
 
