@@ -156,6 +156,15 @@ qualquer operação no VPS.
 
 ## Evolução de versões
 
+**Faixas de dependência: alargue o teto, mantenha o piso.** O Dependabot roda
+com `versioning-strategy: widen`. Quando ele propuser elevar o mínimo, aproveite
+apenas a parte que alarga o teto e recuse a que sobe o piso. O piso registra a
+compatibilidade mínima efetivamente verificada, não a versão mais nova
+disponível: elevá-lo declara uma incompatibilidade que ninguém comprovou e não
+muda nada do que é instalado, porque o pip já resolve para a versão mais nova
+permitida pela faixa.
+
+
 Evolua versões deliberadamente: `pyproject.toml` declara o mínimo conhecido e
 um teto de incompatibilidade, sem congelar patches compatíveis; toda ampliação
 de faixa registra compatibilidade, risco e rollback, reconstrói a imagem e roda
