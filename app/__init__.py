@@ -4,15 +4,15 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flask import Flask, jsonify, redirect, request, url_for
-from flask.typing import ResponseReturnValue
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from flask import Flask, request
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
 from flask_talisman import Talisman  # type: ignore[import-untyped]
-from flask_wtf.csrf import CSRFProtect  # type: ignore[import-untyped]
+from sharedauth.access import requer_login
+from sharedauth.csrf import iniciar_csrf
+from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, iniciar_limiter
+from sharedauth.session import configurar_sessao
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -37,23 +37,21 @@ class Base(DeclarativeBase):
 Base.metadata.naming_convention = convention
 db = SQLAlchemy(model_class=Base)
 migrate = Migrate()
-csrf = CSRFProtect()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
 login_manager.login_message = "Faça login para continuar."
 login_manager.login_message_category = "error"
-limiter = Limiter(key_func=get_remote_address)
 
 # Endpoints reachable without an authenticated session. Kept intentionally
 # small: everything else in the app shows personal financial data.
-PUBLIC_ENDPOINTS = {
+PUBLIC_ENDPOINTS = frozenset({
     "auth.login",
     "portfolio.health",
     "portfolio.collector_agent_configuration",
     "portfolio.collector_agent_quotes",
     "portfolio.collector_agent_failure",
     "static",
-}
+})
 
 # Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
 # controle em Configurações e os dois fragmentos que o HTMX rebusca.
@@ -90,13 +88,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             )
     app.config.from_mapping(
         SECRET_KEY=configured_secret_key,
-        SESSION_COOKIE_NAME=(
-            os.getenv(
-                "RENDA_VARIAVEL_SESSION_COOKIE_NAME",
-                "controle_renda_variavel_session",
-            ).strip()
-            or "controle_renda_variavel_session"
-        ),
         SQLALCHEMY_DATABASE_URI=configured_database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         RTD_PROG_ID=os.getenv("RTD_PROG_ID", "rtdtrading.rtdserver"),
@@ -123,9 +114,16 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             raise RuntimeError("Defina SECRET_KEY antes de iniciar a aplicação.")
     if not app.config["SQLALCHEMY_DATABASE_URI"]:
         raise RuntimeError("Defina DATABASE_URL antes de iniciar a aplicação.")
-    app.config["REMEMBER_COOKIE_SECURE"] = app.config["FORCE_HTTPS"]
-    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
-    app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+
+    configurar_sessao(
+        app,
+        nome_cookie=os.getenv(
+            "RENDA_VARIAVEL_SESSION_COOKIE_NAME",
+            "controle_renda_variavel_session",
+        ).strip()
+        or "controle_renda_variavel_session",
+        https_obrigatorio=bool(app.config["FORCE_HTTPS"]),
+    )
 
     if app.config["TRUST_PROXY_HEADERS"]:
         # Only trust X-Forwarded-* when actually deployed behind a reverse
@@ -136,9 +134,9 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     db.init_app(app)
     migrate.init_app(app, db)
-    csrf.init_app(app)
+    csrf = iniciar_csrf(app)
     login_manager.init_app(app)
-    limiter.init_app(app)
+    limiter = iniciar_limiter(app)
 
     # Registrado ANTES do Talisman de proposito. O Flask executa os
     # `after_request` na ordem inversa do registro, entao registrar primeiro faz
@@ -208,6 +206,31 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     register_commands(app)
     register_filters(app)
 
+    # `csrf`/`limiter` só existem depois de `iniciar_csrf`/`iniciar_limiter`
+    # (uma instância por `create_app()`, não singleton de módulo — evita o
+    # vazamento de isenção CSRF e o zeramento de contador de rate-limit entre
+    # apps no mesmo processo). Por isso as rotas que precisavam decorar no
+    # import de `auth.py`/`partials.py`/`collector_agent.py` são religadas
+    # aqui, depois que já estão registradas. `RouteLimit.__call__` devolve uma
+    # função *nova* — descartar o retorno em vez de reatribuir a
+    # `view_functions` deixaria o limite decorado e nunca aplicado
+    # (regressão real, já reproduzida e corrigida no MegaSena).
+    app.view_functions["auth.login"] = limiter.limit(LIMITE_LOGIN_PADRAO)(
+        app.view_functions["auth.login"]
+    )
+    for endpoint in (
+        "portfolio.collector_heartbeat_partial",
+        "portfolio.rtd_service_partial",
+    ):
+        app.view_functions[endpoint] = limiter.limit("120 per minute")(
+            app.view_functions[endpoint]
+        )
+    for endpoint in (
+        "portfolio.collector_agent_quotes",
+        "portfolio.collector_agent_failure",
+    ):
+        csrf.exempt(app.view_functions[endpoint])
+
     @app.context_processor
     def _collector_heartbeat_context() -> dict[str, object]:
         """Pulso do coletor, só onde alguma tela o mostra.
@@ -226,14 +249,12 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             )
         }
 
-    @app.before_request
-    def _require_login() -> ResponseReturnValue | None:
-        if request.endpoint is None or request.endpoint in PUBLIC_ENDPOINTS:
-            return None
-        if current_user.is_authenticated:
-            return None
-        if request.path.startswith("/api/"):
-            return jsonify(error="Autenticação necessária."), 401
-        return redirect(url_for("auth.login", next=request.full_path))
+    requer_login(
+        app,
+        endpoints_publicos=PUBLIC_ENDPOINTS,
+        endpoint_login="auth.login",
+        esta_autenticado=lambda: current_user.is_authenticated,
+        usar_hx_redirect=True,
+    )
 
     return app

@@ -14,12 +14,23 @@ RUN python -m pip install --no-cache-dir "pip>=26.1.2,<27" \
 FROM base AS runtime
 COPY pyproject.toml README.md ./
 COPY app ./app
+# `pyproject.toml` inclui `sharedauth` de um repositório Git privado
+# (github.com/MSPA-Coder/SharedAuth) -- pip precisa de `git` no PATH e de
+# credencial para HTTPS. O secret `github_token` (BuildKit, nunca vira camada
+# da imagem) autentica só para este RUN; `git config --unset` no fim da mesma
+# instrução remove o token do `.gitconfig` antes de commitar a camada.
 RUN --mount=type=secret,id=local_ca,required=false \
+    --mount=type=secret,id=github_token \
     if [ -f /run/secrets/local_ca ]; then \
       cp /run/secrets/local_ca /usr/local/share/ca-certificates/local-root-ca.crt \
       && update-ca-certificates; \
     fi \
-    && pip install --no-cache-dir .
+    && apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --global url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" \
+    && pip install --no-cache-dir . \
+    && git config --global --unset url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf
 COPY migrations ./migrations
 USER app
 EXPOSE 5003
@@ -33,11 +44,17 @@ COPY --chown=app:app app ./app
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app tests ./tests
 RUN --mount=type=secret,id=local_ca,required=false \
+    --mount=type=secret,id=github_token \
     if [ -f /run/secrets/local_ca ]; then \
       cp /run/secrets/local_ca /usr/local/share/ca-certificates/local-root-ca.crt \
       && update-ca-certificates; \
     fi \
-    && pip install --no-cache-dir ".[dev]"
+    && apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --global url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" \
+    && pip install --no-cache-dir ".[dev]" \
+    && git config --global --unset url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf
 USER app
 ENV RUFF_CACHE_DIR=/tmp/ruff-cache \
     PYTEST_ADDOPTS="-o cache_dir=/tmp/pytest-cache"

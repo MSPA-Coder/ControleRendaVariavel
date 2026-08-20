@@ -62,7 +62,8 @@
             <button class="button" type="submit" form="portfolio-{{ portfolio.id }}">Salvar</button>
             <form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
-                  hx-target="#portfolios-results" hx-swap="outerHTML">
+                  hx-target="#portfolios-results" hx-swap="outerHTML"
+                  hx-confirm="Excluir a carteira {{ portfolio.name }}?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>
@@ -129,7 +130,8 @@
             <td class="catalog-actions">
               <form method="post" action="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
                     hx-post="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
-                    hx-target="#portfolios-results" hx-swap="outerHTML">
+                    hx-target="#portfolios-results" hx-swap="outerHTML"
+                    hx-confirm="Remover {{ ticker.symbol }} de {{ selected_portfolio.name }}?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="button button-danger" type="submit">Remover</button>
               </form>

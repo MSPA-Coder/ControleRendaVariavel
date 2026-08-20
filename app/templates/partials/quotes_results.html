@@ -168,7 +168,7 @@
                   formaction="{{ url_for('portfolio.delete_quote_history_by_date') }}" formnovalidate
                   hx-post="{{ url_for('portfolio.delete_quote_history_by_date') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this">Excluir Cotação</button>
+                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?">Excluir Cotação</button>
         </div>
       </form>
     </article>

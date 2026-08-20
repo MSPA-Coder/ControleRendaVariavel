@@ -68,7 +68,8 @@
 </form>
 {% if editing %}
 <form id="delete-position" method="post" hidden
-      action="{{ url_for('portfolio.delete_position', position_id=position.id) }}">
+      action="{{ url_for('portfolio.delete_position', position_id=position.id) }}"
+      hx-boost="true" hx-confirm="Excluir esta posição?">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 {% endif %}
