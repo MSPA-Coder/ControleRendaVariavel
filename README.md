@@ -263,8 +263,9 @@ Detalhes de instalação, atualização e rollback estão em
   coletor exige esse token e não aceita sessão de navegador em seu lugar.
 - O limitador usa memoria com um processo Gunicorn. Para escalar
   horizontalmente, configure `RATELIMIT_STORAGE_URI` com Redis compartilhado.
-- O backup diario pode ser agendado com `scripts/backup.ps1`; os dumps ficam
-  em `backups/`, tambem ignorado pelo Git.
+- O backup diario roda pelo BackupRestore, projeto irmao que centraliza dump e
+  ensaio de restauracao dos quatro projetos com catalogo e verificacao
+  proprios; nao ha rotina de backup dentro deste repositorio.
 
 As formulas e contratos funcionais estao em
 [`docs/planilha-acoes.md`](docs/planilha-acoes.md) e
@@ -276,9 +277,10 @@ O projeto mantém uma suíte focada de segurança e fumaça junto do Ruff no est
 `quality` da imagem. A CI mínima executa a mesma sequência em pushes/PRs para
 `main` e semanalmente, e o Dependabot acompanha `pip`, Docker e GitHub Actions.
 Não há cobertura, mypy, `pip-audit` dentro da imagem nem uma suíte ampla de
-regressão. Antes de alterações persistentes, gere e valide um backup
-com `scripts/backup.ps1`. A baseline Alembic cria um PostgreSQL novo com o
-schema e catalogos iniciais.
+regressão. Antes de alterações persistentes, gere e valide um backup pelo
+BackupRestore (`python cli.py backup --projeto controle_renda_variavel
+--tipos banco`, no diretório do projeto irmão). A baseline Alembic cria um
+PostgreSQL novo com o schema e catalogos iniciais.
 
 ```powershell
 docker compose --profile quality run --rm quality
