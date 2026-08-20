@@ -254,7 +254,12 @@ Detalhes de instalação, atualização e rollback estão em
   disso `/settings`, que altera coletor, precificacao e benchmark — parametros
   que mudam os numeros exibidos a todos. Um operador que acesse `/settings`
   diretamente recebe 403.
-- Escritas usam CSRF; `SECRET_KEY` e obrigatoria fora dos testes.
+- Escritas usam CSRF; `SECRET_KEY` e obrigatoria fora dos testes. Sessao,
+  CSRF, limite de tentativas de login, controle de acesso e hash de senha vem
+  de [SharedAuth](https://github.com/MSPA-Coder/SharedAuth), biblioteca
+  compartilhada com os outros dois apps Flask do mantenedor (privada,
+  instalada via `pyproject.toml` fixada em tag). Os dois papeis
+  (`operador`/`admin`) continuam proprios deste projeto.
 - Para TLS atras de proxy reverso, use `FORCE_HTTPS=true` e
   `TRUST_PROXY_HEADERS=true`; os cookies de sessao e de lembranca tornam-se
   `Secure`.
