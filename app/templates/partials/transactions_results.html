@@ -54,7 +54,8 @@
             {# Encerramento parcial: os campos espelham um movimento da posição e
                não se editam soltos. Desfazer devolve a quantidade e apaga a linha. #}
             <form class="inline-form" method="post"
-                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}">
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
+                  hx-boost="true" hx-confirm="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada.">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="link-button" type="submit"
                       title="Devolve {{ tx.quantity|quantity }} para a posição e apaga esta transação">desfazer</button>
@@ -64,7 +65,8 @@
                independente. Continua excluível (link genérico abaixo cobre
                isso), só não editável pelo formulário de ações. #}
             <form class="inline-form" method="post"
-                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}">
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
+                  hx-boost="true" hx-confirm="Excluir esta transação?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="link-button" type="submit">excluir</button>
             </form>

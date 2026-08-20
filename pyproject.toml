@@ -20,6 +20,11 @@ dependencies = [
   "gunicorn>=23.0.0,<24",
   "psycopg[binary]>=3.2.13,<4",
   "pydantic>=2.13.4,<3",
+  # Sessão, CSRF, rate-limit no login, controle de acesso e hash de senha
+  # compartilhados com os outros apps Flask do mantenedor -- ver
+  # PLANO_UNIFICAR_AUTENTICACAO.md no repositório _manutencao. Tag fixada
+  # manualmente; nunca aponta para branch.
+  "sharedauth @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.1.1",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +37,11 @@ rtd = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+# `sharedauth` é referência direta a um repositório Git (não um índice PyPI) --
+# Hatchling recusa isso por padrão, exige este opt-in explícito.
+[tool.hatch.metadata]
+allow-direct-references = true
 
 # A secao [tool.ruff] e comum aos quatro projetos do mantenedor; so
 # `target-version` e `known-first-party` variam, porque dependem da versao de

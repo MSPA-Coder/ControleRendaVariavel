@@ -13,7 +13,7 @@ from flask_login import (  # type: ignore[import-untyped]
 from sqlalchemy import select
 from werkzeug.wrappers import Response
 
-from app import db, limiter
+from app import db
 from app.models import User
 
 bp = Blueprint("auth", __name__)
@@ -42,7 +42,6 @@ def _local_next_url(value: str | None) -> str | None:
 
 
 @bp.route("/login", methods=["GET", "POST"])
-@limiter.limit("10 per minute")
 def login() -> ResponseReturnValue:
     if current_user.is_authenticated:
         return redirect(url_for("portfolio.index"))

@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
-from app import csrf, db
+from app import db
 from app.domain import MARKET_TIMEZONE
 from app.models import AppSetting, OptionContract, OptionPosition, OptionQuote, Position, Quote
 from app.routes import bp
@@ -146,7 +146,6 @@ def collector_agent_configuration():
 
 
 @bp.post("/api/collector/quotes")
-@csrf.exempt
 def collector_agent_quotes():
     _require_agent_token()
     payload = _json_body()
@@ -266,7 +265,6 @@ def collector_agent_quotes():
 
 
 @bp.post("/api/collector/failure")
-@csrf.exempt
 def collector_agent_failure():
     _require_agent_token()
     payload = _json_body()

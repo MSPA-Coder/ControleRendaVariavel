@@ -7,6 +7,7 @@ from decimal import Decimal
 
 import click
 from flask import Flask, current_app
+from sharedauth.passwords import SenhaMuitoCurtaError, validar_tamanho
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
@@ -368,8 +369,14 @@ def create_admin(username: str, password: str, role: str) -> None:
     username = username.strip()
     if not username:
         raise click.ClickException("Informe um nome de usuário.")
-    if len(password) < 8:
-        raise click.ClickException("A senha deve ter ao menos 8 caracteres.")
+    try:
+        validar_tamanho(password)
+    except SenhaMuitoCurtaError as erro:
+        # `gerar_hash` (chamado por `User.set_password`) levanta a mesma
+        # exceção, mas ela não é um `click.ClickException` -- sem esta
+        # checagem antecipada o operador veria um traceback cru em vez da
+        # mensagem limpa.
+        raise click.ClickException(str(erro)) from erro
 
     user = db.session.scalar(select(User).where(User.username == username))
     if user is None:

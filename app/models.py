@@ -5,6 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from flask_login import UserMixin  # type: ignore[import-untyped]
+from sharedauth.passwords import conferir_hash, gerar_hash
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -22,7 +23,6 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import Base
 from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
@@ -111,10 +111,10 @@ class User(Base, UserMixin):  # type: ignore[misc]
     )
 
     def set_password(self, password: str) -> None:
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = gerar_hash(password)
 
     def check_password(self, password: str) -> bool:
-        return check_password_hash(self.password_hash, password)
+        return conferir_hash(self.password_hash, password)
 
     @property
     def is_active(self) -> bool:

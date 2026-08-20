@@ -16,7 +16,6 @@ from contextlib import suppress
 from flask import render_template, request
 from flask.typing import ResponseReturnValue
 
-from app import limiter
 from app.collector_heartbeat import collector_heartbeat
 from app.routes import bp
 from app.routes.helpers import quote_stale_after_seconds, rtd_service, rtd_service_state
@@ -45,13 +44,11 @@ def _render_rtd_toggle() -> str:
 
 
 @bp.get("/partials/collector-heartbeat")
-@limiter.limit("120 per minute")
 def collector_heartbeat_partial() -> ResponseReturnValue:
     return _render_heartbeat()
 
 
 @bp.route("/partials/rtd-service", methods=["GET", "POST"])
-@limiter.limit("120 per minute")
 def rtd_service_partial() -> ResponseReturnValue:
     """Lê e, no POST, alterna o coletor RTD.
 
