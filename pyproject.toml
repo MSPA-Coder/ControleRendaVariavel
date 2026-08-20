@@ -15,16 +15,25 @@ dependencies = [
   "Flask-Login>=0.6.3,<1",
   "Flask-Migrate>=4.1.0,<5",
   "Flask-SQLAlchemy>=3.1.1,<4",
-  "Flask-Talisman>=1.1.0,<2",
   "Flask-WTF>=1.2.2,<2",
   "gunicorn>=23.0.0,<24",
   "psycopg[binary]>=3.2.13,<4",
   "pydantic>=2.13.4,<3",
-  # Sessão, CSRF, rate-limit no login, controle de acesso e hash de senha
-  # compartilhados com os outros apps Flask do mantenedor -- ver
-  # PLANO_UNIFICAR_AUTENTICACAO.md no repositório _manutencao. Tag fixada
-  # manualmente; nunca aponta para branch.
-  "sharedauth @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.1.1",
+  # Flask-Talisman saiu daqui: a política efetiva dele era idêntica à que os
+  # outros apps escreviam à mão, e agora vem de `sharedauth.security`. O
+  # redirecionamento HTTPS e o HSTS que ele também fazia já são do nginx, e o
+  # cookie `Secure` é de `sharedauth.session`. Não sobrou função.
+  #
+  # Sessão, CSRF, rate-limit no login, controle de acesso, hash de senha,
+  # cabeçalhos de segurança, formatação em pt-BR e rota de saúde
+  # compartilhados com os outros apps do mantenedor -- ver
+  # PLANO_UNIFICAR_AUTENTICACAO.md e PLANO_EQUALIZAR_BASE_COMPARTILHADA.md no
+  # repositório _manutencao. Tag fixada manualmente; nunca aponta para branch.
+  #
+  # O extra `[flask]` é obrigatório a partir da v0.2.0: o núcleo do pacote
+  # deixou de depender de Flask (para o ControleBancario, que é Django, poder
+  # instalar só a parte de Python puro) e sem o extra o Flask não vem junto.
+  "sharedauth[flask] @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.2.0",
 ]
 
 [project.optional-dependencies]

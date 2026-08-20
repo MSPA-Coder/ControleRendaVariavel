@@ -8,10 +8,10 @@ from flask import Flask, request
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
-from flask_talisman import Talisman  # type: ignore[import-untyped]
 from sharedauth.access import requer_login
 from sharedauth.csrf import iniciar_csrf
 from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, iniciar_limiter
+from sharedauth.security import registrar_cabecalhos
 from sharedauth.session import configurar_sessao
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -138,49 +138,25 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     login_manager.init_app(app)
     limiter = iniciar_limiter(app)
 
-    # Registrado ANTES do Talisman de proposito. O Flask executa os
-    # `after_request` na ordem inversa do registro, entao registrar primeiro faz
-    # este rodar por ultimo — que e o necessario para sobrescrever o
-    # `Permissions-Policy` que o Talisman escreve.
-    @app.after_request
-    def _cabecalhos_defensivos(response):
-        # Conjunto comum aos quatro projetos do mantenedor; o Talisman cobre
-        # CSP, frame options, referrer e HSTS, e estes completam o conjunto.
-        # Manter igual em todos e o que permite auditar um e confiar nos demais.
-        #
-        # O Talisman escreve `browsing-topics=()` sozinho; mante-lo deixaria
-        # camera, microfone e localizacao sem restricao declarada.
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=(), browsing-topics=()"
-        )
-        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
-        return response
-
-    Talisman(
-        app,
-        force_https=app.config["FORCE_HTTPS"],
-        strict_transport_security=app.config["FORCE_HTTPS"],
-        # Browsers silently drop cookies marked Secure when served over plain
-        # HTTP, which would break login. Only require it once FORCE_HTTPS is
-        # actually turned on (e.g. behind a Caddy/nginx TLS proxy).
-        session_cookie_secure=app.config["FORCE_HTTPS"],
-        # No inline <script>/<style> is used anywhere in app/templates, so
-        # the default same-origin CSP applies cleanly without 'unsafe-inline'.
-        content_security_policy={
-            "default-src": "'self'",
-            "object-src": "'none'",
-            "base-uri": "'self'",
-            "form-action": "'self'",
-            "frame-ancestors": "'none'",
-        },
-        frame_options="DENY",
-        # `same-origin`, nao `no-referrer`: sob `no-referrer` o navegador
-        # serializa o cabecalho `Origin` como `null` tambem em POST de mesma
-        # origem (Fetch spec), e qualquer verificacao de CSRF que consulte
-        # `Origin` passa a recusar a requisicao com o token correto.
-        referrer_policy="same-origin",
-    )
+    # Cabecalhos defensivos e CSP, do mesmo lugar que os outros apps.
+    #
+    # Isto substitui o Flask-Talisman, que saiu desta aplicacao. A politica
+    # efetiva dele era identica, diretiva por diretiva, a que os outros
+    # projetos escreviam a mao -- o que ele nao declarava caia em
+    # `default-src 'self'` e dava no mesmo. O resto do que ele fazia ja tinha
+    # dono: `deploy/nginx/controle-renda-variavel.conf` redireciona 80->443 e
+    # emite o HSTS, e o cookie `Secure` vem de `configurar_sessao` acima.
+    #
+    # Some junto a inversao de ordem de registro que este arquivo dependia:
+    # o handler proprio precisava ser registrado ANTES do Talisman para rodar
+    # DEPOIS dele (o Flask executa os `after_request` na ordem inversa) e
+    # conseguir sobrescrever o `Permissions-Policy` que o Talisman escrevia.
+    # Era correto e funcionava, mas era conhecimento que morava num
+    # comentario -- agora ha um registro so, sem ordem implicita.
+    #
+    # Sem `imagens_data_uri`: esta aplicacao nao tem favicon embutido nem
+    # nenhuma imagem em `data:`.
+    registrar_cabecalhos(app)
 
     from app.rtd_service import RemoteRtdService, RtdServiceManager
 

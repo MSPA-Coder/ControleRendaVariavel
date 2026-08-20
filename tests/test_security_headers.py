@@ -25,12 +25,28 @@ def test_cabecalho_defensivo_presente(client, cabecalho, valor):
 
 
 def test_permissions_policy_restringe_dispositivos(client):
-    # O Talisman escreve o seu proprio Permissions-Policy; o handler da
-    # aplicacao roda depois e sobrescreve. Se a ordem de registro mudar, este
-    # teste e o que percebe.
+    # Ate a saida do Flask-Talisman havia dois escritores para este cabecalho,
+    # e o resultado dependia da ordem de registro dos `after_request` (que o
+    # Flask executa invertida). Agora ha um so, vindo de `sharedauth.security`.
+    # `browsing-topics` sobreviveu ao Talisman: e mais restritivo que nao
+    # declarar, entao subiu para o conjunto comum dos quatro projetos.
     politica = client.get("/login").headers.get("Permissions-Policy", "")
-    for recurso in ("camera=()", "microphone=()", "geolocation=()"):
+    for recurso in (
+        "camera=()",
+        "microphone=()",
+        "geolocation=()",
+        "browsing-topics=()",
+    ):
         assert recurso in politica
+
+
+def test_csp_fecha_img_src_sem_data_uri(client):
+    # Esta aplicacao nao tem favicon embutido nem imagem em `data:`. A folga
+    # que MegaSena e ControleBancario precisam nao vale para ca -- consolidar
+    # as quatro politicas nao pode virar a uniao delas.
+    csp = client.get("/login").headers.get("Content-Security-Policy", "")
+    assert "img-src 'self'" in csp
+    assert "data:" not in csp
 
 
 def test_csp_presente_e_fechada_na_propria_origem(client):
