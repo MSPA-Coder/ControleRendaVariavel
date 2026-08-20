@@ -44,11 +44,14 @@ para validar a imagem de runtime ou para uma operação que deva permanecer
 imutável.
 
 Os dados operacionais vivem no volume `postgres_data`. Nunca execute
-`docker compose down --volumes` fora de ambiente descartável. Antes de uma
-alteração persistente, gere e valide backup com `scripts/backup.ps1`; ele
-produz dumps em `backups/` e retém os últimos 30 dias. Restaurar, adoção de
-banco legado, transformação de dados ou exclusão em massa exigem plano,
-backup validado e autorização explícita.
+`docker compose down --volumes` fora de ambiente descartável. O backup diário
+e a retenção são do BackupRestore, projeto irmão (catálogo, verificação e
+ensaio de restauração próprios); este repositório não tem rotina de backup.
+Antes de uma alteração persistente, gere e valide backup com
+`python cli.py backup --projeto controle_renda_variavel --tipos banco` no
+diretório do BackupRestore. Restaurar, adoção de banco legado, transformação
+de dados ou exclusão em massa exigem plano, backup validado e autorização
+explícita.
 
 ## Segurança, dados e Docker
 
