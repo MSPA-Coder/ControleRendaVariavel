@@ -143,7 +143,7 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f compose.yaml build --no-cache web
-          image_id="$(docker image inspect --format '{{.Id}}' controle-renda-variavel-web)"
+          image_id="$(docker image inspect --format '{{.Id}}' controle-renda-variavel:local)"
           test -n "$image_id"
           docker run --rm --entrypoint sh "$image_id" -ec '
             test "$(id -u)" != 0
