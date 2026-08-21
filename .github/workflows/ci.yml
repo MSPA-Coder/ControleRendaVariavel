@@ -64,6 +64,42 @@ jobs:
       - name: Auditar dependencias instaladas (CVE conhecido)
         run: docker compose --profile quality run --rm quality pip-audit --progress-spinner=off --cache-dir /tmp/pip-audit-cache
 
+      - name: Construir a imagem servida
+        run: docker compose build web
+
+      # O `pip-audit` acima cobre as dependencias Python. Esta varredura cobre o
+      # que ele nao ve: os pacotes do sistema operacional da imagem base.
+      #
+      # RODA COMO CONTEINER, NAO COMO ACTION. A politica de Actions deste
+      # repositorio e `selected` com apenas `github_owned_allowed` -- action de
+      # terceiro e barrada antes de o workflow rodar, e o sintoma e
+      # `startup_failure` sem log. Conformar-se a politica e melhor que
+      # afrouxa-la para caber uma ferramenta.
+      #
+      # `docker save` + `--input` em vez de montar /var/run/docker.sock: montar
+      # o socket do Docker e dar root na pratica, que foi exatamente o motivo
+      # de o `autoheal` ter sido recusado no VPS. Nao vale reabrir aqui.
+      #
+      # Imagem fixada por digest do indice multi-arquitetura, pelo mesmo motivo
+      # que as actions sao fixadas por SHA.
+      #
+      # `--ignore-unfixed` de proposito: CVE de pacote de sistema sem correcao
+      # publicada nao e acionavel. Reprovar por ele travaria PR sem relacao
+      # nenhuma com o assunto e ensinaria a ignorar o vermelho.
+      - name: Varredura de vulnerabilidade da imagem servida
+        run: |
+          set -euo pipefail
+          docker save controle-renda-variavel:local -o "$RUNNER_TEMP/imagem.tar"
+          docker run --rm \
+            -v "$RUNNER_TEMP:/varredura:ro" \
+            aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 \
+            image --input /varredura/imagem.tar \
+                  --scanners vuln \
+                  --severity HIGH,CRITICAL \
+                  --ignore-unfixed \
+                  --exit-code 1 \
+                  --format table
+
   runtime-contracts:
     name: Contratos de runtime
     runs-on: ubuntu-24.04
@@ -107,7 +143,7 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f compose.yaml build --no-cache web
-          image_id="$(docker image inspect --format '{{.Id}}' controle-renda-variavel-web)"
+          image_id="$(docker image inspect --format '{{.Id}}' controle-renda-variavel:local)"
           test -n "$image_id"
           docker run --rm --entrypoint sh "$image_id" -ec '
             test "$(id -u)" != 0
