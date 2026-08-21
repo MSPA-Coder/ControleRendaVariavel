@@ -163,7 +163,7 @@ secrets:
   # baixar a dependência Git privada. Nunca vira variável de ambiente do
   # runtime nem fica na imagem final. Mesmo token já usado no MegaSena.
   github_token:
-    file: .secrets/github_token
+    file: .secrets/github_token.txt
   secret_key:
     file: .secrets/secret_key
   postgres_password:

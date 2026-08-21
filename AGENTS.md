@@ -57,10 +57,13 @@ explícita.
 
 - Autenticação é padrão; somente login, health e estáticos podem ser públicos.
   Autorização é sempre verificada no servidor e toda escrita usa CSRF. Sessão,
-  CSRF, limite de tentativas de login, controle de acesso e hash de senha vêm
-  de [SharedAuth](https://github.com/MSPA-Coder/SharedAuth), biblioteca
-  compartilhada com os outros dois apps Flask do mantenedor (ver README.md);
-  não reimplemente esse mecanismo localmente.
+  CSRF, limite de tentativas de login, controle de acesso, hash de senha,
+  cabeçalhos de segurança e CSP, formatação de números em pt-BR e a rota
+  `/health` vêm de [SharedAuth](https://github.com/MSPA-Coder/SharedAuth),
+  biblioteca compartilhada com os outros apps do mantenedor (ver README.md);
+  não reimplemente esse mecanismo localmente. `_number` em `presentation.py`
+  é adaptador fino sobre ela — os filtros Jinja e as regras de casas decimais
+  é que são deste projeto.
 - `SECRET_KEY` e credenciais do banco vêm de arquivos de segredo (`*_FILE` no
   contêiner e `.secrets/` no host), não têm fallback permissivo e não podem
   aparecer em código, imagem, logs, documentação, diffs ou commits. `.env` é
