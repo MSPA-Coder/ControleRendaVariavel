@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from flask import Flask
+from sharedauth.formatting import numero
 
 from app.domain import MARKET_TIMEZONE
 from app.instrument_status import (
@@ -46,15 +47,19 @@ ambíguo numa tela de investimentos."""
 def _number(value: Decimal, decimals: int, trim: bool = False) -> str:
     """Formata no padrão brasileiro (milhar com ponto, decimal com vírgula).
 
+    A conta mora em ``sharedauth.formatting``: esta rotina era idêntica,
+    caractere por caractere, à do ControleBancario — as duas tinham sido
+    escritas separadamente e coincidiram até no truque de usar ``\\x00`` como
+    marcador para trocar os separadores sem passar duas vezes pelo mesmo
+    caractere.
+
     ``trim`` omite a parte decimal quando ela é inteiramente zero. É o que as
     telas de Ações e Opções usam: um ",00" repetido em cada coluna de dinheiro
     só consome largura em uma tabela que já é larga demais. As telas onde o
     alinhamento de casas decimais importa mais que a largura continuam sem
     ele.
     """
-    if trim and value == value.to_integral_value():
-        decimals = 0
-    return f"{value:,.{decimals}f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+    return numero(value, casas=decimals, remover_decimal_zero=trim)
 
 
 def register_filters(app: Flask) -> None:
