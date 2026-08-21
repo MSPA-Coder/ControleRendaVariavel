@@ -1,3 +1,13 @@
+// O HTMX injeta um <style> proprio no carregamento para o indicador de
+// requisicao (`htmx.config.includeIndicatorStyles`, `true` por padrao). Esta
+// aplicacao nao usa `hx-indicator` nem a classe `htmx-indicator` em lugar
+// nenhum, entao esse estilo e peso morto -- e como vem sem nonce, viola
+// `style-src 'self'` e aparece como erro no console a cada pagina.
+//
+// Roda antes de DOMContentLoaded (ambos os scripts sao `defer`, executados na
+// ordem do documento), que e quando o HTMX de fato le o config.
+htmx.config.includeIndicatorStyles = false;
+
 (() => {
   const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");
