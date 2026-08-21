@@ -39,6 +39,12 @@ services:
       retries: 10
 
   web:
+    # Nome fixo em vez do derivado do diretorio. Sem isto o Compose batiza a
+    # imagem a partir do nome da pasta, que muda conforme onde o repositorio
+    # foi clonado -- no CI seria um nome, no VPS outro. A varredura de
+    # vulnerabilidade precisa apontar para uma imagem por NOME, e nome que
+    # depende do caminho do checkout nao serve de alvo.
+    image: controle-renda-variavel:local
     build:
       context: .
       target: runtime
@@ -101,6 +107,9 @@ services:
       start_interval: 1s
 
   migrate:
+    # Mesma imagem do `web` (ver comentario la em cima): os dois constroem o
+    # mesmo estagio `runtime`, e nomear igual evita construir duas vezes.
+    image: controle-renda-variavel:local
     build:
       context: .
       target: runtime

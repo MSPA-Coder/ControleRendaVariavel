@@ -64,6 +64,28 @@ jobs:
       - name: Auditar dependencias instaladas (CVE conhecido)
         run: docker compose --profile quality run --rm quality pip-audit --progress-spinner=off --cache-dir /tmp/pip-audit-cache
 
+      - name: Construir a imagem servida
+        run: docker compose build web
+
+      # O `pip-audit` acima cobre as dependencias Python. Esta varredura cobre o
+      # que ele nao ve: os pacotes do sistema operacional da imagem base.
+      #
+      # `ignore-unfixed: true` de proposito. CVE de pacote de sistema sem
+      # correcao publicada nao e acionavel: reprovar por ele travaria PR sem
+      # relacao nenhuma com o assunto e ensinaria a ignorar o vermelho, que e o
+      # oposto do que uma varredura serve para fazer.
+      #
+      # O alvo e um nome FIXO (`image:` no compose). O nome derivado do
+      # diretorio muda conforme onde o repositorio foi clonado e nao serviria.
+      - name: Varredura de vulnerabilidade da imagem servida
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: controle-renda-variavel:local
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
   runtime-contracts:
     name: Contratos de runtime
     runs-on: ubuntu-24.04
