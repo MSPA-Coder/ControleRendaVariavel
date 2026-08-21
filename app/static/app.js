@@ -92,4 +92,36 @@ htmx.config.includeIndicatorStyles = false;
       quoteManagementCard.focus({ preventScroll: true });
     }
   });
+
+  // D4: trocar a carteira de uma posicao para a Simulada, ao editar, apaga o
+  // extrato de movimentos e a transacao aberta espelhada (ver
+  // `discard_simulation_history` em app/position_closure.py e
+  // app/option_position_closure.py). Editar posicao e operacao rotineira e
+  // reversivel -- nao merece confirmacao sempre --, mas essa combinacao
+  // especifica destroi historico sem avisar. Por isso a pergunta e
+  // condicional: so quando a carteira escolhida no <select> for a Simulada E
+  // a posicao ja tiver mais que a abertura no extrato (o mesmo limiar que
+  // close_position_form.html usa pra decidir se mostra o extrato -- uma
+  // abertura sozinha e recriada identica se a posicao voltar de uma carteira
+  // real, entao nesse caso nao ha nada de fato a perder).
+  //
+  // hx-confirm nao se aplica aqui: position_form.html/option_form.html sao
+  // <form method="post"> comuns, sem HTMX. onsubmit inline tambem nao
+  // funcionaria -- a CSP do projeto e `default-src 'self'` sem
+  // `unsafe-inline`, entao um atributo onsubmit e bloqueado pelo navegador
+  // antes mesmo de rodar. O listener fica delegado no documento; se este
+  // arquivo nao carregar, o formulario continua submetendo normal, so sem o
+  // aviso -- nunca engole o clique em silencio.
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-confirm-simulated-switch]");
+    if (!form) return;
+    const movementCount = Number(form.dataset.positionMovementCount || "0");
+    if (movementCount <= 1) return;
+    const portfolioSelect = form.querySelector('select[name="portfolio_id"]');
+    const chosen = portfolioSelect && portfolioSelect.selectedOptions[0];
+    if (!chosen || chosen.dataset.simulated !== "true") return;
+    const message =
+      "Trocar para a carteira Simulada apaga o extrato de movimentos desta posição e não pode ser desfeito. Continuar?";
+    if (!window.confirm(message)) event.preventDefault();
+  });
 })();

@@ -2,7 +2,10 @@
 {% set editing = position and position.id is defined %}
 {% block title %}{{ "Editar" if editing else "Nova" }} opção{% endblock %}
 {% block content %}
-<form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position.id) if editing else url_for('options.create_position') }}">
+<form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position.id) if editing else url_for('options.create_position') }}"
+      {# D4: mesma guarda de `position_form.html`, para opcoes -- trocar a
+         carteira para a Simulada ao editar apaga o extrato inteiro. #}
+      {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ position.movements|length }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>{{ "Editar" if editing else "Nova" }} posição de opção</h1>
   {% if duplicate_warning %}
@@ -45,7 +48,7 @@
   </select></label>
   <label>Carteira<select required name="portfolio_id">
     <option value="">Selecione</option>
-    {% for portfolio in portfolios %}<option value="{{ portfolio.id }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>{% endfor %}
+    {% for portfolio in portfolios %}<option value="{{ portfolio.id }}" data-simulated="{{ 'true' if portfolio.simulated else 'false' }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>{% endfor %}
   </select></label>
   <div class="form-actions">
     <a class="button" href="{{ url_for('options.index') }}">Cancelar</a>

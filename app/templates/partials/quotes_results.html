@@ -122,10 +122,16 @@
          e trocada — o painel nao fecha e o grafico nao se perde. #}
       <div class="quote-card-zones">
         <div class="quote-card-zone">
+          {# O botao que dispara este form fica fora dele (`form="quote-import-form"`
+             mais abaixo), mas quem faz a requisicao HTMX e este elemento aqui --
+             e nele, nao no botao, que `hx-confirm` precisa estar: o HTMX busca
+             o atributo subindo a partir do elemento que tem `hx-post`, e o
+             botao externo nao e ancestral dele. #}
           <form id="quote-import-form" class="quote-import-form" method="post"
                 action="{{ url_for('portfolio.import_quote_history') }}"
                 hx-post="{{ url_for('portfolio.import_quote_history') }}"
-                hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="#quote-period-submit">
+                hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="#quote-period-submit"
+                hx-confirm="Atualizar sobrescreve as cotações já registradas neste período — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Data inicial<input type="date" name="start_date" value="{{ default_import_start }}" max="{{ today }}" required></label>
             <label>Data final<input type="date" name="end_date" value="{{ default_import_end }}" max="{{ today }}" required></label>
@@ -135,7 +141,8 @@
           <button id="quote-period-submit" class="button button-primary" type="submit" form="quote-import-form">Atualizar Cotações do Período</button>
           <form method="post" action="{{ url_for('portfolio.import_position_quote_history') }}"
                 hx-post="{{ url_for('portfolio.import_position_quote_history') }}"
-                hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="find button">
+                hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="find button"
+                hx-confirm="Atualizar sobrescreve as cotações já registradas desde a abertura de cada posição — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="button button-primary" type="submit">Atualizar Cotações desde a abertura da posição</button>
           </form>
