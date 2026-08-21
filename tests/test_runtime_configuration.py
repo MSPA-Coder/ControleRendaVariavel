@@ -54,3 +54,11 @@ def test_producao_resolve_segredos_de_arquivo_para_o_banco_do_container(
         "postgresql+psycopg://investimentos:senha%2Fde-arquivo@db:5432/investimentos"
     )
     assert app.config["RTD_CONTROL_TOKEN"] == "token-de-arquivo-com-tamanho-suficiente"
+
+
+def test_engine_usa_pool_pre_ping() -> None:
+    """Sem isto, uma conexao morta pelo reinicio do Postgres devolve 500 até
+    o pool reciclar sozinho -- ver comentário em `app/__init__.py`."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL})
+
+    assert app.config["SQLALCHEMY_ENGINE_OPTIONS"] == {"pool_pre_ping": True}

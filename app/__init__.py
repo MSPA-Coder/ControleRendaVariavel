@@ -90,6 +90,13 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         SECRET_KEY=configured_secret_key,
         SQLALCHEMY_DATABASE_URI=configured_database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # pool_pre_ping: sem isto, uma conexao que sobrou morta no pool depois
+        # de o Postgres reiniciar (deploy, OOM, manutencao) so e descartada
+        # quando o SQLAlchemy tenta usa-la de verdade -- e a requisicao que
+        # pegou essa conexao leva 500 ate o pool reciclar sozinho. Com o ping,
+        # o SQLAlchemy testa a conexao antes de emprestar do pool e troca por
+        # uma nova em silencio. Mesma chave usada no MegaSena.
+        SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
         RTD_PROG_ID=os.getenv("RTD_PROG_ID", "rtdtrading.rtdserver"),
         RTD_REFRESH_SECONDS=float(os.getenv("RTD_REFRESH_SECONDS", "2")),
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),

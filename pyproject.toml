@@ -38,7 +38,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # Instaladas apenas no estagio `quality` da imagem, nunca no `runtime`.
-dev = ["ruff>=0.12.5,<1", "pytest>=8.3.5,<10"]
+# `pip-audit`: auditoria de CVE das dependências instaladas. Piso na minor
+# atual, teto na próxima major — política de faixa do mantenedor.
+dev = ["ruff>=0.12.5,<1", "pytest>=8.3.5,<10", "pip-audit>=2.10,<3"]
 rtd = [
   "comtypes>=1.4.16,<2; sys_platform == 'win32'",
   "pywin32>=311,<400; sys_platform == 'win32'",
