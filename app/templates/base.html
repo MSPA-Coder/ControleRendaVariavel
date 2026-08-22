@@ -7,9 +7,11 @@
   <title>{% block title %}Controle de Renda Variável{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='fonts.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('sharedauth_ui.static', filename='sharedauth-ui.css') }}">
   {# Versão fixada e servida localmente: a CSP é `default-src 'self'`, e a
      base de engenharia proíbe depender de `latest` ou de CDN em produção. #}
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('sharedauth_ui.static', filename='sharedauth-ui.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 {# hx-headers é um atributo, não handler inline: envia o token CSRF em toda
@@ -205,7 +207,7 @@
       </nav></header>
       {% endif %}
       <main>
-        {% for category, message in get_flashed_messages(with_categories=true) %}<div class="flash flash-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+        {% include "partials/flash_toast.html" %}
         {% block content %}{% endblock %}
       </main>
     </div>

@@ -55,7 +55,8 @@
                não se editam soltos. Desfazer devolve a quantidade e apaga a linha. #}
             <form class="inline-form" method="post"
                   action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
-                  hx-boost="true" hx-confirm="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada.">
+                  hx-boost="true" hx-confirm="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada."
+                  data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="link-button" type="submit"
                       title="Devolve {{ tx.quantity|quantity }} para a posição e apaga esta transação">desfazer</button>
@@ -66,7 +67,8 @@
                isso), só não editável pelo formulário de ações. #}
             <form class="inline-form" method="post"
                   action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
-                  hx-boost="true" hx-confirm="Excluir esta transação?">
+                  hx-boost="true" hx-confirm="Excluir esta transação?"
+                  data-sa-titulo="Excluir transação" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="link-button" type="submit">excluir</button>
             </form>

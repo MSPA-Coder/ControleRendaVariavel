@@ -49,7 +49,8 @@
           <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}"></td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="contract-{{ contract.id }}">Salvar</button>
-            <form method="post" action="{{ url_for('options.delete_contract', contract_id=contract.id) }}" hx-boost="true" hx-confirm="Excluir este contrato de {{ contract.ticker_ref.symbol }}?">
+            <form method="post" action="{{ url_for('options.delete_contract', contract_id=contract.id) }}" hx-boost="true" hx-confirm="Excluir este contrato de {{ contract.ticker_ref.symbol }}?"
+                  data-sa-titulo="Excluir contrato" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>

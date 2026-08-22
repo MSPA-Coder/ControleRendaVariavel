@@ -3,13 +3,13 @@
    parcial para que a pagina inteira e a resposta HTMX saiam do mesmo
    template, no mesmo padrao de partials/quotes_results.html. #}
 <div id="portfolios-results">
-{# Numa troca HTMX so este fragmento volta, entao as mensagens precisam sair
-   aqui: o `<main>` de base.html nao e re-renderizado. Na pagina inteira o
-   base.html consome as mensagens antes, e esta chamada nao acha nada — nao
-   ha risco de duplicata. #}
-{% for category, message in get_flashed_messages(with_categories=true) %}
-<div class="flash flash-{{ category }}" role="status">{{ message }}</div>
-{% endfor %}
+{# Numa troca HTMX so este fragmento volta, entao o toast precisa sair aqui:
+   o `<main>` de base.html nao e re-renderizado, e e ele quem inclui
+   partials/flash_toast.html na pagina inteira. Na pagina inteira essa
+   inclusao daqui nao acha mensagem nenhuma (get_flashed_messages ja foi
+   consumida por base.html) — nao ha risco de duplicata nem de toast
+   duplicado. #}
+{% include "partials/flash_toast.html" %}
 
 <section class="catalog-card">
   <h2>Carteiras</h2>
@@ -63,7 +63,8 @@
             <form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-target="#portfolios-results" hx-swap="outerHTML"
-                  hx-confirm="Excluir a carteira {{ portfolio.name }}?">
+                  hx-confirm="Excluir a carteira {{ portfolio.name }}?"
+                  data-sa-titulo="Excluir carteira" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>
@@ -131,7 +132,8 @@
               <form method="post" action="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
                     hx-post="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
                     hx-target="#portfolios-results" hx-swap="outerHTML"
-                    hx-confirm="Remover {{ ticker.symbol }} de {{ selected_portfolio.name }}?">
+                    hx-confirm="Remover {{ ticker.symbol }} de {{ selected_portfolio.name }}?"
+                    data-sa-titulo="Desassociar ticker" data-sa-severidade="warning">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="button button-danger" type="submit">Remover</button>
               </form>

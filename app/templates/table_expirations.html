@@ -26,7 +26,8 @@
           <td><input required type="date" name="exercise_date" value="{{ expiration.exercise_date.isoformat() }}" form="expiration-{{ expiration.id }}" aria-label="Exercício {{ expiration.call_code }}"></td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="expiration-{{ expiration.id }}">Salvar</button>
-            <form method="post" action="{{ url_for('options.delete_expiration', expiration_id=expiration.id) }}" hx-boost="true" hx-confirm="Excluir o vencimento {{ expiration.call_code }}?">
+            <form method="post" action="{{ url_for('options.delete_expiration', expiration_id=expiration.id) }}" hx-boost="true" hx-confirm="Excluir o vencimento {{ expiration.call_code }}?"
+                  data-sa-titulo="Excluir vencimento" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>

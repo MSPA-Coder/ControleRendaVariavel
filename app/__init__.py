@@ -10,9 +10,11 @@ from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
 from sharedauth.access import requer_login
 from sharedauth.csrf import iniciar_csrf
+from sharedauth.messages import registrar_mensagens
 from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, iniciar_limiter
 from sharedauth.security import registrar_cabecalhos
 from sharedauth.session import configurar_sessao
+from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -51,6 +53,14 @@ PUBLIC_ENDPOINTS = frozenset({
     "portfolio.collector_agent_quotes",
     "portfolio.collector_agent_failure",
     "static",
+    # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
+    # tela de login é a única página fora da sessão que precisa de um
+    # estático do sharedauth, e sem isto `requer_login` bloquearia o
+    # próprio arquivo que renderiza "Usuário ou senha inválidos." — a
+    # mensagem apareceria sem estilo nenhum. `sharedauth_ui.static` (o
+    # modal/toast) não entra aqui: só é referenciado em base.html, que já
+    # não é servido sem sessão.
+    "sharedauth.static",
 })
 
 # Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
@@ -164,6 +174,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     # Sem `imagens_data_uri`: esta aplicacao nao tem favicon embutido nem
     # nenhuma imagem em `data:`.
     registrar_cabecalhos(app)
+
+    # Componente comum de confirmação/aviso (modal + toast, CSS e JS puro) e
+    # o banner de `flash()` com ícone por categoria. Os dois penduram um
+    # Blueprint cada um; registrar aqui, junto do resto do sharedauth, é o
+    # que deixa `sharedauth_ui.static` e `sharedauth.static`/`sharedauth/...`
+    # resolvíveis nos templates.
+    registrar_ui(app)
+    registrar_mensagens(app)
 
     from app.rtd_service import RemoteRtdService, RtdServiceManager
 
