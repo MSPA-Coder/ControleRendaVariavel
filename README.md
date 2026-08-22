@@ -94,6 +94,17 @@ Não mantenha simultaneamente o coletor local (`rtd-host.ps1`) e o agente
 remoto sobre o mesmo ProfitChart. A aplicação continua utilizável nos dois
 ambientes, mas apenas um deles deve fazer a leitura RTD de cada vez.
 
+Desde 2026-08-22 a metade da regra que cabe ao servidor é **cumprida pelo
+código**: com `REMOTE_COLLECTOR_ENABLED=true`, a aplicação não instancia
+cliente de controlador local nenhum, mesmo que `RTD_CONTROL_URL` e o segredo
+`rtd_control_token` estejam presentes — e no VPS os dois estão, porque a URL é
+fixa em `compose.yaml` e o segredo é montado. Antes disso o servidor remoto
+gastava uma resolução de nome condenada a cada leitura de estado, sem que nada
+aparecesse na tela. A outra metade continua sendo sua: **não instale as duas
+tarefas agendadas no Windows**, porque quem lê o ProfitChart é o processo do
+host, e disso o servidor não sabe. Use `rtd-host.ps1 -Action Status` e
+`rtd-remote-agent.ps1 -Action Status` para conferir qual está instalada.
+
 O controlador local e opcional. Sem ele, a aplicacao permanece funcional e
 exibe o estado do coletor como indisponivel ou sem leitura; nenhuma operacao
 de cadastro depende do RTD.
