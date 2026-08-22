@@ -58,9 +58,12 @@ diretorio de trabalho em `/app` e nao deve ser usado como validacao de runtime.
 
 ```text
 Aplicacao web (Docker) -> PostgreSQL (Docker)
-           |
-           +-> controlador RTD local (Windows) -> Excel/Profit COM
+           ^
+           +-- agente RTD no Windows (HTTPS de saida) -> Excel/Profit COM
 ```
+
+A seta aponta para dentro de proposito: quem inicia a conexao e sempre o
+Windows. O servidor nunca tenta alcancar o computador local.
 
 ### Coletor Windows para o VPS
 
@@ -90,24 +93,18 @@ caminho do segredo; é ignorado pelo Git. O log operacional fica em
 `%LOCALAPPDATA%\ControleRendaVariavel\remote-collector.log`. Para consultar ou
 remover a tarefa: `-Action Status` ou `-Action Uninstall`.
 
-Não mantenha simultaneamente o coletor local (`rtd-host.ps1`) e o agente
-remoto sobre o mesmo ProfitChart. A aplicação continua utilizável nos dois
-ambientes, mas apenas um deles deve fazer a leitura RTD de cada vez.
+Este é o **único** mecanismo de coleta desde 2026-08-22. Existiu um segundo,
+o *controlador local*: um servidor HTTP no host Windows que a aplicação
+comandava por `host.docker.internal`. Ele fazia sentido enquanto a aplicação
+rodava em Docker no próprio Windows; a migração para o VPS o tornou
+redundante, e mantê-lo custava mais do que valia — as duas tarefas agendadas
+chegaram a conviver, contra a regra que este arquivo enunciava, e a aplicação
+remota instanciava o cliente de um controlador inexistente. Removido inteiro:
+`rtd-host.ps1`, `app/rtd_control_server.py`, `app/host_bootstrap.py`,
+`app/host_env.py` e `RemoteRtdService`.
 
-Desde 2026-08-22 a metade da regra que cabe ao servidor é **cumprida pelo
-código**: com `REMOTE_COLLECTOR_ENABLED=true`, a aplicação não instancia
-cliente de controlador local nenhum, mesmo que `RTD_CONTROL_URL` e o segredo
-`rtd_control_token` estejam presentes — e no VPS os dois estão, porque a URL é
-fixa em `compose.yaml` e o segredo é montado. Antes disso o servidor remoto
-gastava uma resolução de nome condenada a cada leitura de estado, sem que nada
-aparecesse na tela. A outra metade continua sendo sua: **não instale as duas
-tarefas agendadas no Windows**, porque quem lê o ProfitChart é o processo do
-host, e disso o servidor não sabe. Use `rtd-host.ps1 -Action Status` e
-`rtd-remote-agent.ps1 -Action Status` para conferir qual está instalada.
-
-O controlador local e opcional. Sem ele, a aplicacao permanece funcional e
-exibe o estado do coletor como indisponivel ou sem leitura; nenhuma operacao
-de cadastro depende do RTD.
+Sem o agente, a aplicação continua funcional e exibe o coletor como
+indisponível; nenhuma operação de cadastro depende de RTD.
 
 ## Inicio rapido
 
@@ -165,77 +162,40 @@ Executados dentro do container (`docker compose exec web flask --app app:create_
 | `import-position-history` | Importa historico de cotacoes desde a abertura de cada posicao |
 
 `poll-rtd` e `probe-rtd-direct` dependem de Excel/COM e so podem executar no
-ambiente Python do host Windows. A operacao normal do coletor e supervisionada
-pelo controlador RTD e acionada pela aba Settings; nao execute esses comandos
-no container `web`.
+ambiente Python do host Windows -- sao ferramentas de diagnostico. A operacao
+normal e do agente remoto (`app.remote_collector_agent`), com a agenda e o
+botao de atualizacao na aba Configuracoes. Nao execute esses comandos no
+container `web`.
 
 ## RTD no Windows (opcional)
 
 Quando for necessaria a cotacao em tempo real pelo Excel/Profit, prepare um
-ambiente Python local somente para o controlador e coletor COM:
+ambiente Python local somente para o agente e o coletor COM, e instale a
+tarefa agendada conforme "Coletor Windows para o VPS", acima:
 
 ```powershell
-py -3.12 -m venv .venv
+py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[rtd]"
-.\scripts\rtd-host.ps1 -Action Install
 ```
-
-`rtd-host.ps1 -Action Install` registra, para o usuario atual e sem
-elevacao, uma tarefa agendada que sobe no logon e mantem o controlador RTD
-residente em `127.0.0.1:8765` (nunca exposto na rede). A tarefa inicia
-`pythonw.exe` diretamente, sem abrir terminal; se o processo encerrar, o
-Agendador o reinicia automaticamente. Diagnosticos operacionais ficam em
-`%LOCALAPPDATA%\ControleRendaVariavel\rtd-controller.log` e
-`%LOCALAPPDATA%\ControleRendaVariavel\rtd-collector.log`, com rotacao local.
-Essa e a unica instalacao manual; depois de instalada, a tarefa cuida do
-resto sozinha a cada logon: espera o Docker Desktop, sobe a pilha (`docker compose up -d`,
-rede de seguranca — os servicos `db`/`web` ja usam
-`restart: unless-stopped` e normalmente voltam sozinhos) e serve o
-controlador. Nao ha mais `start.ps1`/`stop.ps1`: ligar e desligar o coletor
-e feito pelo toggle da aba Settings, com a aplicacao ja no ar.
-
-```powershell
-.\scripts\rtd-host.ps1 -Action Uninstall
-.\scripts\rtd-host.ps1 -Action Status
-```
-
-Depois de instalar, valide um ciclo completo de logoff/logon: nenhum teste
-automatizado cobre a tarefa agendada em si, só o código que ela invoca.
-Confirme que o Docker sobe, `/health` responde e o indicador do coletor sai
-de `waiting`.
 
 O Profit deve estar aberto, autenticado e com RTD habilitado. O coletor
 mantem uma instancia privada do Excel e nunca grava em `Trades.xlsm`.
 
-O controlador RTD no host usa os mesmos arquivos `.secrets/secret_key`,
-`.secrets/postgres_password` e `.secrets/rtd_control_token`; também aceita caminhos explícitos por
-`SECRET_KEY_FILE`, `POSTGRES_PASSWORD_FILE`, `DATABASE_URL_FILE` e
-`RTD_CONTROL_TOKEN_FILE` quando a operação usa um cofre externo. Arquivo
-ausente, vazio ou ilegível encerra a inicialização; valores de `.env` permanecem
-apenas como compatibilidade durante a migração.
+O agente usa `.secrets/collector_agent_token`, e aceita caminho explicito por
+`COLLECTOR_AGENT_TOKEN_FILE` quando a operacao usa um cofre externo. Arquivo
+ausente, vazio ou ilegivel encerra a inicializacao.
 
-Por segurança, o controlador só executa o `docker.exe` dos locais padrão do
-Docker Desktop e o script versionado `scripts/rtd-host.ps1`; não configure
-substitutos por `PATH` ou `RTD_AUTOMATION_SCRIPT`.
-
-Uma instalação Docker Desktop em outro caminho não é suportada: o controlador
-falha antes de executar Compose, em vez de executar um binário herdado do
-ambiente. Antes de instalar o controlador, reinstale ou mova o Docker Desktop
-para um dos caminhos suportados. Se for necessário rollback desta proteção,
-restaure a versão anterior do projeto e execute novamente `rtd-host.ps1`; não
-crie um override de ambiente para contorná-la.
+Depois de instalar, valide um ciclo completo de logoff/logon: **nenhum teste
+automatizado cobre a tarefa agendada em si**, so o codigo que ela invoca.
+Confirme que o indicador do coletor sai de `waiting`.
 
 O coletor grava um snapshot por ticker por dia em `quote_history`, nao a
 cada leitura; a cotacao instantanea fica em `quotes`/`option_quotes`. O
 indicador de coletor no cabecalho mostra `online`, `stale`, `error` ou
 `waiting` conforme a ultima leitura persistida.
 
-### Inicialização do coletor local
-
-No logon, o controlador RTD inicia e espera o ProfitChart interativo. O
-coletor só consulta o RTD dentro da agenda salva em **Configurações**; fora
-dela, permanece ocioso. O botão de ligar/desligar continua disponível na
-tela de Configurações para interromper ou retomar o coletor manualmente.
+O agente so consulta o RTD dentro da agenda salva em **Configuracoes**; fora
+dela, permanece ocioso.
 
 ## Producao
 

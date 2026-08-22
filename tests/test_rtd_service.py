@@ -24,6 +24,26 @@ class _Process:
         pass
 
 
+def test_hidden_console_kwargs_explicitly_hides_windows_subprocesses(monkeypatch) -> None:
+    class _StartupInfo:
+        def __init__(self) -> None:
+            self.dwFlags = 0
+            self.wShowWindow = -1
+
+    monkeypatch.setattr(rtd_service.sys, "platform", "win32")
+    monkeypatch.setattr(rtd_service.subprocess, "CREATE_NO_WINDOW", 8, raising=False)
+    monkeypatch.setattr(rtd_service.subprocess, "STARTF_USESHOWWINDOW", 1, raising=False)
+    monkeypatch.setattr(rtd_service.subprocess, "SW_HIDE", 0, raising=False)
+    monkeypatch.setattr(rtd_service.subprocess, "STARTUPINFO", _StartupInfo, raising=False)
+
+    options = rtd_service._hidden_console_kwargs()
+
+    startupinfo = options["startupinfo"]
+    assert options["creationflags"] == 8
+    assert startupinfo.dwFlags == 1
+    assert startupinfo.wShowWindow == 0
+
+
 def test_rtd_collector_child_is_marked_to_prevent_supervisor_recursion(
     monkeypatch, tmp_path: Path
 ) -> None:

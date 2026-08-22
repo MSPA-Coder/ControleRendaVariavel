@@ -112,8 +112,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
         RTD_EXCEL_VISIBLE=os.getenv("RTD_EXCEL_VISIBLE", "false").lower() == "true",
-        RTD_CONTROL_URL=os.getenv("RTD_CONTROL_URL", ""),
-        RTD_CONTROL_TOKEN=environment_value("RTD_CONTROL_TOKEN") or "",
         COLLECTOR_AGENT_TOKEN=environment_value("COLLECTOR_AGENT_TOKEN") or "",
         REMOTE_COLLECTOR_ENABLED=os.getenv("REMOTE_COLLECTOR_ENABLED", "false").lower()
         == "true",
@@ -183,35 +181,24 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     registrar_ui(app)
     registrar_mensagens(app)
 
-    from app.rtd_service import RemoteRtdService, RtdServiceManager
+    # Um unico mecanismo de coleta desde 2026-08-22: o agente Windows que
+    # entrega cotacoes ao servidor por HTTPS (`app.remote_collector_agent`).
+    # O modo de controlador local -- um servidor HTTP no host Windows que esta
+    # aplicacao comandava por `host.docker.internal` -- foi removido: ficou
+    # redundante quando a aplicacao foi para o VPS, e mante-lo custava mais que
+    # valia (ver AGENTS.md).
+    #
+    # `RtdServiceManager` continua sendo quem responde o estado do coletor para
+    # a tela. Com o agente remoto ligado ele nasce indisponivel de proposito:
+    # quem le RTD e o processo do host, nao esta aplicacao.
+    from app.rtd_service import RtdServiceManager
 
-    # O README manda nao manter o coletor local e o agente remoto sobre o mesmo
-    # ProfitChart. Ate 2026-08-22 isso era so uma frase em prosa, e o VPS
-    # desobedecia sem que ninguem visse: `RTD_CONTROL_URL` esta FIXO em
-    # `compose.yaml` apontando para `host.docker.internal:8765` (um conceito de
-    # Docker Desktop, que nao resolve num Linux) e o segredo
-    # `rtd_control_token` esta montado la. As duas condicoes verdadeiras, a
-    # aplicacao remota instanciava o cliente de um controlador que nao existe e
-    # gastava uma resolucao de nome condenada a cada leitura de estado.
-    #
-    # Nao aparecia na tela porque `settings.html` ja escolhe o bloco certo por
-    # `remote_collector_enabled` -- a interface estava certa e o objeto por
-    # baixo, errado. Agora a exclusao mutua e do codigo: com o agente remoto
-    # ligado, esta aplicacao nao fala com controlador local nenhum.
-    #
-    # O gerenciador indisponivel devolve exatamente o mesmo que a chamada HTTP
-    # falhando devolvia (`is_running=False`, `available=False`,
-    # `status="unavailable"`), entao nada muda para quem le o estado.
-    control_url = str(app.config["RTD_CONTROL_URL"])
-    control_token = str(app.config["RTD_CONTROL_TOKEN"])
     if app.config["REMOTE_COLLECTOR_ENABLED"]:
         app.extensions["rtd_service"] = RtdServiceManager(
             Path(app.root_path).parent,
             available=False,
             background_supervision=False,
         )
-    elif control_url and control_token:
-        app.extensions["rtd_service"] = RemoteRtdService(control_url, control_token)
     else:
         # O subprocesso ``poll-rtd`` também cria a aplicação Flask para usar
         # as configurações e o banco. Ele não pode iniciar outro supervisor:
@@ -221,11 +208,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # grande: `available` do gerenciador vale `sys.platform == "win32"`,
         # entao no Windows CADA `create_app()` da suite subia uma thread que
         # sonda o ProfitChart por `powershell.exe` a cada 2 segundos, com
-        # timeout de 5. Com uma centena de testes criando aplicacao, a suite
-        # deixava dezenas de processos PowerShell vivos e travava. No CI
-        # (Linux) `available` e falso e nada disso aparecia -- verde la,
-        # inexecutavel aqui, que e a pior combinacao para quem precisa
-        # verificar antes de commitar.
+        # timeout de 5. No CI (Linux) `available` e falso e nada disso
+        # aparecia -- verde la, inexecutavel aqui.
         supervisionar = not collector_process and not app.config["TESTING"]
         app.extensions["rtd_service"] = RtdServiceManager(
             Path(app.root_path).parent,

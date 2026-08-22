@@ -34,7 +34,6 @@ jobs:
           rm -f /tmp/local-root-ca.key
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
-          printf '%s\n' 'ci-placeholder-not-a-real-token' > .secrets/rtd_control_token
           printf '%s' "${{ secrets.SHAREDAUTH_READ_TOKEN }}" > .secrets/github_token.txt
       - name: Validar Compose
         run: docker compose config --quiet
@@ -119,7 +118,6 @@ jobs:
           rm -f /tmp/local-root-ca.key
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
-          printf '%s\n' 'ci-placeholder-not-a-real-token' > .secrets/rtd_control_token
           printf '%s' "${{ secrets.SHAREDAUTH_READ_TOKEN }}" > .secrets/github_token.txt
       - name: Validar contrato do PostgreSQL no Compose
         shell: bash

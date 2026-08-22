@@ -29,9 +29,9 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 ```
 
 1. Crie `.env.vps` a partir de `.env.vps.example`.
-2. Crie `.secrets/secret_key`, `.secrets/postgres_password`,
-   `.secrets/rtd_control_token` e `.secrets/collector_agent_token`. O último
-   arquivo deve ser uma cópia segura do mesmo arquivo Windows. No Docker
+2. Crie `.secrets/secret_key`, `.secrets/postgres_password` e
+   `.secrets/collector_agent_token`. O último arquivo deve ser uma cópia
+   segura do mesmo arquivo Windows. No Docker
    Compose não-Swarm, deixe o diretório `.secrets` com modo `700` e os
    arquivos com `644`: PostgreSQL e Flask usam usuários Linux diferentes e
    ambos precisam ler a senha do banco; o diretório continua privado ao
