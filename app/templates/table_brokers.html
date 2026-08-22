@@ -24,7 +24,8 @@
           <td><input required maxlength="40" name="acronym" value="{{ broker.acronym }}" form="broker-{{ broker.id }}" aria-label="Sigla da corretora {{ broker.name }}"></td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="broker-{{ broker.id }}">Salvar</button>
-            <form method="post" action="{{ url_for('portfolio.delete_broker', broker_id=broker.id) }}" hx-boost="true" hx-confirm="Excluir a corretora {{ broker.name }}?">
+            <form method="post" action="{{ url_for('portfolio.delete_broker', broker_id=broker.id) }}" hx-boost="true" hx-confirm="Excluir a corretora {{ broker.name }}?"
+                  data-sa-titulo="Excluir corretora" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>

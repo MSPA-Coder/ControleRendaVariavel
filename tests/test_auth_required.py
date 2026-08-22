@@ -62,6 +62,15 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         "portfolio.collector_agent_quotes",
         "portfolio.collector_agent_failure",
         "static",
+        # CSS do banner de mensagem, que `login.html` usa. Sem isto o
+        # `requer_login` bloquearia o próprio arquivo que estiliza "Usuário ou
+        # senha inválidos" e a mensagem apareceria sem cor nenhuma.
+        #
+        # `sharedauth_ui.static` (modal e toast) NÃO entra: só é referenciado em
+        # `base.html`, e `login.html` não o estende. Deixar de fora é
+        # deliberado, não esquecimento -- superfície pública é o que esta lista
+        # existe para manter curta.
+        "sharedauth.static",
     } == PUBLIC_ENDPOINTS
 
 

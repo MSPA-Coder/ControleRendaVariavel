@@ -388,9 +388,6 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
 .moneyness-ATM { background: #fff4d6; color: #795800; }
 .moneyness-OTM { background: #e7edf1; color: var(--muted); }
 .options-table { min-width: 2600px; }
-.flash { border-radius: .4rem; margin: 0 0 1rem; padding: .75rem; }
-.flash-error { background: #fde8e7; }
-.flash-success { background: #dff3eb; }
 @media (max-width: 700px) {
   main { padding: .75rem; }
   .summary, .position-form, .settings-form { grid-template-columns: 1fr; }

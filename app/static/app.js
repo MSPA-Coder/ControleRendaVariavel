@@ -106,22 +106,42 @@ htmx.config.includeIndicatorStyles = false;
   // real, entao nesse caso nao ha nada de fato a perder).
   //
   // hx-confirm nao se aplica aqui: position_form.html/option_form.html sao
-  // <form method="post"> comuns, sem HTMX. onsubmit inline tambem nao
-  // funcionaria -- a CSP do projeto e `default-src 'self'` sem
-  // `unsafe-inline`, entao um atributo onsubmit e bloqueado pelo navegador
-  // antes mesmo de rodar. O listener fica delegado no documento; se este
-  // arquivo nao carregar, o formulario continua submetendo normal, so sem o
-  // aviso -- nunca engole o clique em silencio.
+  // <form method="post"> comuns, sem HTMX -- o componente comum so intercepta
+  // `htmx:confirm`. onsubmit inline tambem nao funcionaria -- a CSP do
+  // projeto e `default-src 'self'` sem `unsafe-inline`, entao um atributo
+  // onsubmit e bloqueado pelo navegador antes mesmo de rodar. Por isso o
+  // caminho e o mesmo `window.sharedauth.confirmar()` programatico que o
+  // componente expoe pra decisao condicional (ver o docstring de
+  // sharedauth-ui.js): promessa, nao `window.confirm()` sincrono, entao o
+  // submit tem de ser adiado ate ela resolver.
+  //
+  // O listener fica delegado no documento; se sharedauth-ui.js nao carregar
+  // (ou carregar depois, numa ordem inesperada), `window.sharedauth` fica
+  // indefinido e a guarda abaixo deixa o formulario submeter normal, sem
+  // pergunta -- nunca trava o clique em silencio esperando uma Promise que
+  // nunca chega.
   document.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-confirm-simulated-switch]");
     if (!form) return;
+    if (form.dataset.saSimuladaConfirmada === "1") return; // segunda passagem, ja confirmada
     const movementCount = Number(form.dataset.positionMovementCount || "0");
     if (movementCount <= 1) return;
     const portfolioSelect = form.querySelector('select[name="portfolio_id"]');
     const chosen = portfolioSelect && portfolioSelect.selectedOptions[0];
     if (!chosen || chosen.dataset.simulated !== "true") return;
-    const message =
-      "Trocar para a carteira Simulada apaga o extrato de movimentos desta posição e não pode ser desfeito. Continuar?";
-    if (!window.confirm(message)) event.preventDefault();
+    if (!window.sharedauth || !window.sharedauth.confirmar) return; // ver comentario acima
+    event.preventDefault();
+    window.sharedauth
+      .confirmar({
+        titulo: "Trocar para carteira Simulada",
+        mensagem:
+          "Trocar para a carteira Simulada apaga o extrato de movimentos desta posição e não pode ser desfeito. Continuar?",
+        severidade: "error",
+      })
+      .then((ok) => {
+        if (!ok) return;
+        form.dataset.saSimuladaConfirmada = "1";
+        form.requestSubmit();
+      });
   });
 })();

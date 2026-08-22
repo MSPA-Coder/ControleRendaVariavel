@@ -1,0 +1,29 @@
+{#- Ponte entre `flash()` e o toast do componente comum (`sharedauth-ui.js`).
+
+    Resultado de ação (criar, editar, excluir, encerrar, atualizar cotações...)
+    é sempre flash() nesta aplicação, e vira toast: a página de destino já
+    mostra o dado atualizado, então a mensagem só precisa confirmar que deu
+    certo, sem ocupar espaço fixo na página. O que precisa FICAR na tela --
+    hoje, só o login, que explica por que a pessoa está vendo aquela página --
+    usa o banner de `sharedauth/flash_messages.html` em vez deste parcial.
+
+    `data-sa-avisos` é lido por `sharedauth-ui.js` tanto em DOMContentLoaded
+    (carregamento de página inteira) quanto em `htmx:afterSwap` (fragmento
+    trocado por HTMX) -- por isso este parcial é incluído tanto em base.html
+    quanto nos dois fragmentos que respondem HTMX sem passar por base.html
+    (partials/quotes_results.html e partials/portfolios_results.html; ver o
+    comentário em cada um). Nas demais páginas o formulário sempre estende
+    base.html, então incluir aqui já cobre o caso HTMX delas também.
+
+    Severidade cai na mesma regra do banner: uma categoria fora das quatro
+    conhecidas vira "info" em vez de quebrar a página. -#}
+{%- set avisos = [] -%}
+{%- for categoria, mensagem in get_flashed_messages(with_categories=true) -%}
+  {%- set _ = avisos.append({
+    "mensagem": mensagem,
+    "severidade": categoria if categoria in ("success", "error", "warning", "info") else "info",
+  }) -%}
+{%- endfor -%}
+{%- if avisos -%}
+<div hidden data-sa-avisos='{{ avisos|tojson }}'></div>
+{%- endif -%}

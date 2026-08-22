@@ -57,7 +57,8 @@
           </td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="ticker-{{ ticker.id }}">Salvar</button>
-            <form method="post" action="{{ url_for('portfolio.delete_ticker', ticker_id=ticker.id) }}" hx-boost="true" hx-confirm="Excluir o ticker {{ ticker.symbol }}?">
+            <form method="post" action="{{ url_for('portfolio.delete_ticker', ticker_id=ticker.id) }}" hx-boost="true" hx-confirm="Excluir o ticker {{ ticker.symbol }}?"
+                  data-sa-titulo="Excluir ticker" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>

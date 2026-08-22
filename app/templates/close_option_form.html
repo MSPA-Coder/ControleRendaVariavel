@@ -3,7 +3,8 @@
 {% block content %}
 <form class="position-form" method="post" action="{{ url_for('options.close_position', position_id=position.id) }}"
       hx-boost="true"
-      hx-confirm="Encerrar apaga o extrato de movimentos desta posição de opção — e a posição inteira, se for o valor total — e não pode ser desfeito. Continuar?">
+      hx-confirm="Encerrar apaga o extrato de movimentos desta posição de opção — e a posição inteira, se for o valor total — e não pode ser desfeito. Continuar?"
+      data-sa-titulo="Encerrar posição" data-sa-severidade="error">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>Encerrar {{ position.contract.ticker_ref.symbol }} · {{ position.broker }}</h1>
   <p class="form-help">

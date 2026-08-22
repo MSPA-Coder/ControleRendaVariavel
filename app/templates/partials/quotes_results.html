@@ -2,13 +2,13 @@
    quotes.html. Fica em parcial para que a pagina e a resposta HTMX saiam do
    mesmo template. #}
 <div id="quotes-results">
-{# Numa troca HTMX so este fragmento volta, entao as mensagens precisam sair
-   aqui: o `<main>` de base.html nao e re-renderizado. Na pagina inteira o
-   base.html consome as mensagens antes, e esta chamada nao acha nada — nao
-   ha risco de duplicata. #}
-{% for category, message in get_flashed_messages(with_categories=true) %}
-<div class="flash flash-{{ category }}" role="status">{{ message }}</div>
-{% endfor %}
+{# Numa troca HTMX so este fragmento volta, entao o toast precisa sair aqui:
+   o `<main>` de base.html nao e re-renderizado, e e ele quem inclui
+   partials/flash_toast.html na pagina inteira. Na pagina inteira essa
+   inclusao daqui nao acha mensagem nenhuma (get_flashed_messages ja foi
+   consumida por base.html) — nao ha risco de duplicata nem de toast
+   duplicado. #}
+{% include "partials/flash_toast.html" %}
 {% if selected_ticker %}
   <section class="quote-history-card">
     <div class="quote-history-controls">
@@ -131,7 +131,8 @@
                 action="{{ url_for('portfolio.import_quote_history') }}"
                 hx-post="{{ url_for('portfolio.import_quote_history') }}"
                 hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="#quote-period-submit"
-                hx-confirm="Atualizar sobrescreve as cotações já registradas neste período — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?">
+                hx-confirm="Atualizar sobrescreve as cotações já registradas neste período — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?"
+                data-sa-titulo="Atualizar cotações" data-sa-severidade="error">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Data inicial<input type="date" name="start_date" value="{{ default_import_start }}" max="{{ today }}" required></label>
             <label>Data final<input type="date" name="end_date" value="{{ default_import_end }}" max="{{ today }}" required></label>
@@ -142,7 +143,8 @@
           <form method="post" action="{{ url_for('portfolio.import_position_quote_history') }}"
                 hx-post="{{ url_for('portfolio.import_position_quote_history') }}"
                 hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="find button"
-                hx-confirm="Atualizar sobrescreve as cotações já registradas desde a abertura de cada posição — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?">
+                hx-confirm="Atualizar sobrescreve as cotações já registradas desde a abertura de cada posição — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?"
+                data-sa-titulo="Atualizar cotações" data-sa-severidade="error">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="button button-primary" type="submit">Atualizar Cotações desde a abertura da posição</button>
           </form>
@@ -175,7 +177,8 @@
                   formaction="{{ url_for('portfolio.delete_quote_history_by_date') }}" formnovalidate
                   hx-post="{{ url_for('portfolio.delete_quote_history_by_date') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?">Excluir Cotação</button>
+                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?"
+                  data-sa-titulo="Excluir cotação" data-sa-severidade="error">Excluir Cotação</button>
         </div>
       </form>
     </article>

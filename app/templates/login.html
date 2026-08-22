@@ -6,15 +6,20 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Entrar · Controle de Renda Variável</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  {# Só o CSS de mensagens, não o pacote de interface inteiro: login não tem
+     confirmação nem toast, e o banner funciona sozinho com este arquivo (ver
+     o comentário em sharedauth/messages/static/flash_messages.css). A
+     paleta continua sendo a deste app -- as cores do banner são as do
+     próprio arquivo, as mesmas (quase) que `.flash-error`/`.flash-success`
+     já usavam antes desta migração. #}
+  <link rel="stylesheet" href="{{ url_for('sharedauth.static', filename='flash_messages.css') }}">
 </head>
 <body>
   <main class="login-page">
-    {% for category, message in get_flashed_messages(with_categories=true) %}
-      <div class="flash flash-{{ category }}" role="status">{{ message }}</div>
-    {% endfor %}
     <form class="login-form" method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <h1>Controle de Renda Variável</h1>
+      {% include "sharedauth/flash_messages.html" %}
       <label>Usuário
         <input type="text" name="username" value="{{ username }}" autocomplete="username" autofocus required>
       </label>
