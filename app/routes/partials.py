@@ -59,9 +59,8 @@ def rtd_service_partial() -> ResponseReturnValue:
     if request.method == "POST":
         service = rtd_service()
         enabled = request.form.get("enabled") is not None
-        # O fragmento devolvido abaixo já mostra o estado real (e o controle
-        # desabilitado), que é a forma de reportar a falha do controlador
-        # externo sem derrubar a página.
+        # O fragmento devolvido abaixo mostra o estado real e mantém o controle
+        # desabilitado quando o coletor falha, sem derrubar a página.
         with suppress(OSError, RuntimeError):
             service.start() if enabled else service.stop()
     return _render_rtd_toggle()

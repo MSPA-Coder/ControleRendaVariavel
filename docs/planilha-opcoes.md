@@ -61,9 +61,7 @@ classificação de moneziness ("ITM", "ATM", "OTM") segue o tipo do contrato.
 ## Vencimentos
 
 O calendário de vencimentos guarda código anual de call, código anual de put
-e data de exercício. Os 24 registros de `2024F/2024R` a `2026E/2026Q` são
-criados pela migração que introduz a funcionalidade; a interface permite
-criar, alterar e excluir vencimentos posteriores.
+e data de exercício. A interface permite criar, alterar e excluir vencimentos.
 
 ## Invariantes
 

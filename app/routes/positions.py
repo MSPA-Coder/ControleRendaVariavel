@@ -250,7 +250,7 @@ def create_position() -> ResponseReturnValue:
             duplicate_warning=True,
         ), 409
     try:
-        # Carteira Simulada não funde uma segunda entrada (WP5): rejeita em
+        # Carteira Simulada não funde uma segunda entrada: rejeita em
         # vez de tratar como aporte. `duplicate_entry` acima não pega esse
         # caso porque uma posição simulada nunca tem movimento algum no
         # extrato, então nunca é vista como "idêntica ao anterior".
@@ -320,7 +320,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
     # dela daqui pra baixo (aqui, em `record_position_adjustment` e em
     # `sync_open_transaction_for_position`).
     db.session.expire(position, ["portfolio_ref"])
-    # Troca de carteira entre a Simulada e uma real (D4): ao entrar na
+    # Troca de carteira entre a Simulada e uma real: ao entrar na
     # Simulada, apaga a linha aberta e o extrato — as duas funções abaixo só
     # sabem adicionar, nunca apagar. Ao sair da Simulada não há nada
     # dedicado a fazer: o extrato está vazio e a linha aberta não existe, e é
@@ -423,7 +423,7 @@ def _render_exposure(
     """
     portfolio_id, broker, selected_portfolio_id = selected_filters()
     # Exposição continua excluindo a carteira Simulada incondicionalmente
-    # (decisão D3): o filtro de Carteira aqui só oferece carteiras reais
+    # o filtro de Carteira aqui só oferece carteiras reais
     # (ver `real_portfolio_records`), mas a exclusão fica explícita na
     # consulta também, para o caso de uma URL manual apontar para a Simulada.
     portfolio = build_portfolio(

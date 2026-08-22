@@ -153,24 +153,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     login_manager.init_app(app)
     limiter = iniciar_limiter(app)
 
-    # Cabecalhos defensivos e CSP, do mesmo lugar que os outros apps.
-    #
-    # Isto substitui o Flask-Talisman, que saiu desta aplicacao. A politica
-    # efetiva dele era identica, diretiva por diretiva, a que os outros
-    # projetos escreviam a mao -- o que ele nao declarava caia em
-    # `default-src 'self'` e dava no mesmo. O resto do que ele fazia ja tinha
-    # dono: `deploy/nginx/controle-renda-variavel.conf` redireciona 80->443 e
-    # emite o HSTS, e o cookie `Secure` vem de `configurar_sessao` acima.
-    #
-    # Some junto a inversao de ordem de registro que este arquivo dependia:
-    # o handler proprio precisava ser registrado ANTES do Talisman para rodar
-    # DEPOIS dele (o Flask executa os `after_request` na ordem inversa) e
-    # conseguir sobrescrever o `Permissions-Policy` que o Talisman escrevia.
-    # Era correto e funcionava, mas era conhecimento que morava num
-    # comentario -- agora ha um registro so, sem ordem implicita.
-    #
-    # Sem `imagens_data_uri`: esta aplicacao nao tem favicon embutido nem
-    # nenhuma imagem em `data:`.
+    # SharedAuth aplica os cabecalhos defensivos e a CSP. A aplicação não usa
+    # imagens `data:`, por isso não habilita `imagens_data_uri`.
     registrar_cabecalhos(app)
 
     # Componente comum de confirmação/aviso (modal + toast, CSS e JS puro) e
@@ -181,16 +165,9 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     registrar_ui(app)
     registrar_mensagens(app)
 
-    # Um unico mecanismo de coleta desde 2026-08-22: o agente Windows que
-    # entrega cotacoes ao servidor por HTTPS (`app.remote_collector_agent`).
-    # O modo de controlador local -- um servidor HTTP no host Windows que esta
-    # aplicacao comandava por `host.docker.internal` -- foi removido: ficou
-    # redundante quando a aplicacao foi para o VPS, e mante-lo custava mais que
-    # valia (ver AGENTS.md).
-    #
-    # `RtdServiceManager` continua sendo quem responde o estado do coletor para
-    # a tela. Com o agente remoto ligado ele nasce indisponivel de proposito:
-    # quem le RTD e o processo do host, nao esta aplicacao.
+    # O agente Windows entrega cotacoes por HTTPS. `RtdServiceManager` fornece
+    # o estado exibido na tela; com o agente remoto habilitado, o estado nasce
+    # indisponivel ate que o servidor receba o pulso do agente.
     from app.rtd_service import RtdServiceManager
 
     if app.config["REMOTE_COLLECTOR_ENABLED"]:
@@ -204,12 +181,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # as configurações e o banco. Ele não pode iniciar outro supervisor:
         # isso formaria uma cadeia infinita de coletores no host Windows.
         collector_process = os.getenv("RTD_COLLECTOR_PROCESS", "").lower() == "true"
-        # `TESTING` desliga o supervisor pelo mesmo motivo, e o efeito e
-        # grande: `available` do gerenciador vale `sys.platform == "win32"`,
-        # entao no Windows CADA `create_app()` da suite subia uma thread que
-        # sonda o ProfitChart por `powershell.exe` a cada 2 segundos, com
-        # timeout de 5. No CI (Linux) `available` e falso e nada disso
-        # aparecia -- verde la, inexecutavel aqui.
+        # `TESTING` também desliga a supervisão para que criar a aplicação em
+        # testes no Windows não inicie threads nem sondagens do ProfitChart.
         supervisionar = not collector_process and not app.config["TESTING"]
         app.extensions["rtd_service"] = RtdServiceManager(
             Path(app.root_path).parent,

@@ -1,9 +1,8 @@
 """Matemática pura de ``app.holdings_history`` — sem app, sem banco, sem
 fixtures: cálculo de domínio se testa com números conferidos à mão.
 
-O caso que mais importa aqui é o aumento no meio do histórico — é o motivo
-de o módulo existir (ver o docstring de ``app.holdings_history``). Quantidade
-histórica errada faz o aporte aparecer como retorno;
+O caso central é o aumento no meio do histórico. Quantidade histórica errada
+faz o aporte aparecer como retorno;
 ``test_aumento_no_meio_nao_vira_retorno`` é a regressão que protege
 exatamente isso.
 

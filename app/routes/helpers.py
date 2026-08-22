@@ -55,9 +55,8 @@ def real_portfolio_records() -> list[Portfolio]:
     """Carteiras não-simuladas, em ordem alfabética.
 
     Opções do filtro de Carteira em Performance e Exposição (Análise), que
-    nunca oferecem a carteira Simulada: essas páginas continuam excluindo-a
-    incondicionalmente (decisão D3 do plano de carteiras), então não faz
-    sentido oferecê-la como escolha."""
+    nunca oferecem a carteira Simulada, pois essas páginas a excluem
+    incondicionalmente."""
     return list(
         db.session.scalars(
             select(Portfolio).where(Portfolio.simulated.is_(False)).order_by(Portfolio.name)
@@ -72,7 +71,7 @@ def selected_filters() -> tuple[int | None, str | None, str]:
     Ponto único de entrada do filtro: ``positions_query`` (Carteira/Ações e
     as páginas de Exposição) e a página de Transações partem todos daqui.
     Performance usa o mesmo valor bruto, mas adiciona por conta própria a
-    exclusão incondicional da carteira Simulada (D3) — ver
+    exclusão incondicional da carteira Simulada — ver
     ``real_portfolio_records``.
 
     Sem parâmetro `portfolio_id`, ou com um valor que não corresponde ao id
@@ -126,7 +125,7 @@ def positions_query(
         #
         # `exclude_simulated` força a exclusão mesmo com uma carteira
         # simulada escolhida na URL: é o que as páginas de Exposição
-        # (Análise) usam, onde ela nunca entra (decisão D3). O resultado
+        # (Análise) usam, onde ela nunca entra. O resultado
         # fica vazio nesse caso, o que é seguro.
         statement = statement.join(Position.portfolio_ref).where(Portfolio.simulated.is_(False))
     if broker:
@@ -196,8 +195,8 @@ def portfolio_ticker_has_positions(portfolio_id: int, ticker_id: int) -> bool:
     """``True`` se existe posição (ação ou opção) desse ticker especificamente
     nessa carteira.
 
-    Usado por ``app.routes.tables.remove_portfolio_ticker`` (CRUD de
-    carteiras, WP2) para impedir remover a associação ``PortfolioTicker``
+    Usado por ``app.routes.tables.remove_portfolio_ticker`` para impedir
+    remover a associação ``PortfolioTicker``
     enquanto a posição existir — diferente de ``ticker_has_holdings``, que
     verifica o ticker em qualquer carteira, aqui o par (carteira, ticker)
     precisa coincidir. Para opções, o ticker considerado é o da própria opção
@@ -483,7 +482,7 @@ def position_movement_events(
     TWR encadeado (ver "Performance mensal" em ``docs/planilha-acoes.md``).
 
     Os filtros são os mesmos de ``app.routes.performance`` — carteira,
-    corretora e exclusão incondicional da carteira Simulada (decisão D3) —
+    corretora e exclusão incondicional da carteira Simulada —
     replicados aqui porque a rota não acessa persistência diretamente.
     Posição simulada já não gera ``PositionMovement``/``OptionPositionMovement``
     (``discard_simulation_history``), então a exclusão de
@@ -705,9 +704,8 @@ def rtd_service() -> RtdService:
 def rtd_service_state() -> tuple[bool, bool, str]:
     """``(ligado, disponível, status)`` do coletor, tolerante a host offline.
 
-    O controlador RTD é um sistema externo: quando não responde, a tela mostra
-    o coletor como indisponível em vez de quebrar. Nenhuma operação de
-    cadastro depende dele.
+    Quando o coletor não responde, a tela o mostra como indisponível em vez de
+    quebrar. Nenhuma operação de cadastro depende dele.
     """
     service = rtd_service()
     try:

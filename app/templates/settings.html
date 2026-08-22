@@ -16,7 +16,7 @@
                 formaction="{{ url_for('portfolio.request_collector_refresh') }}">Atualizar cotações agora</button>
       </div>
     {% else %}
-    {# O liga/desliga fala com o controlador RTD do host por conta propria
+    {# O liga/desliga fala com o gerenciador RTD por conta propria
        (hx-post para a sua rota), entao o botao "Salvar" desta pagina nao
        participa: o efeito e imediato e nao ha o que confirmar. O `enabled`
        viaja junto num envio do formulario, e o handler o ignora. #}

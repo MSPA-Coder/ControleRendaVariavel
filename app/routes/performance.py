@@ -54,7 +54,7 @@ def monthly_performance() -> str:
         portfolio = "stocks"
 
     # Performance continua excluindo a carteira Simulada incondicionalmente
-    # (decisao D3), qualquer que seja o filtro de Carteira escolhido — a
+    # qualquer que seja o filtro de Carteira escolhido — a
     # garantia vem de dentro de `position_movement_events`. Ver
     # `real_portfolio_records`, que tambem restringe as opcoes do seletor a
     # carteiras reais.

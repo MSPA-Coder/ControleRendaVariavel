@@ -129,7 +129,7 @@ def build_option_portfolio(
     # "Totais por vencimento" e moneyness excluem a carteira Simulada
     # (decisão do mantenedor): são leituras de exposição/risco por contrato,
     # e dinheiro simulado não pode se ler como exposição real — mesmo
-    # motivo de D3 (Risco, Performance e exposição já excluem
+    # mesmo critério de Risco, Performance e exposição, que já excluem
     # incondicionalmente) e do card de totalização por natureza abaixo (ver
     # docstring de ``OptionPortfolioTotal``).
     grouped: dict[date, list[OptionMetrics]] = {}
@@ -176,7 +176,7 @@ def build_option_portfolio(
         return Decimal("1") if view.position.side.value == "C" else Decimal("-1")
 
     # Ganhos, perdas, resultado e theta somam por natureza (real ou
-    # simulada — WP5), nunca juntos: dinheiro simulado não pode se ler
+    # simulada), nunca juntos: dinheiro simulado não pode se ler
     # como patrimônio real no card de totalização. O bucket nasce na
     # primeira posição vista daquela natureza, então uma carteira sem
     # nenhuma posição simulada simplesmente não ganha um segundo card (mesmo

@@ -1,24 +1,7 @@
-"""Existe um mecanismo de coleta, e so um.
+"""Garante que o agente Windows seja o único mecanismo de coleta RTD.
 
-Historico curto, porque explica o que este arquivo protege:
-
-- ate 18/08 havia dois modos. O **controlador local** era um servidor HTTP no
-  host Windows que esta aplicacao comandava por `host.docker.internal`; o
-  **agente remoto** e o processo Windows que entrega cotacoes ao servidor por
-  HTTPS e nunca aceita conexao de fora.
-- a migracao para o VPS tornou o primeiro redundante, mas nao o removeu. As
-  duas tarefas agendadas ficaram instaladas juntas, contra a regra que o
-  proprio README enunciava, e a antiga passou a falhar a cada logon.
-- pior: `compose.yaml` fixava `RTD_CONTROL_URL` e o segredo estava montado no
-  VPS, entao a aplicacao remota instanciava o cliente de um controlador que
-  nao existe -- gastando uma resolucao de nome condenada a cada leitura de
-  estado. Nao aparecia na tela, porque `settings.html` ja escolhia o bloco
-  certo: a interface estava certa e o objeto por baixo, errado.
-- em 2026-08-22 o modo antigo foi removido inteiro.
-
-O que resta e uma invariante simples, e o teste existe para que ela continue
-simples: **nenhum caminho de `create_app` produz um cliente HTTP de coletor.**
-Quem le RTD e o processo do host; esta aplicacao so recebe.
+Nenhum caminho de ``create_app`` produz um cliente HTTP de coletor. O processo
+do host lê o RTD e entrega as cotações; a aplicação apenas as recebe.
 """
 
 from __future__ import annotations
@@ -58,8 +41,7 @@ def test_o_servico_existe_sempre():
 
 def test_com_agente_remoto_o_estado_e_indisponivel():
     # Com o agente ligado, quem coleta e o processo do host. A aplicacao
-    # reporta indisponivel de proposito -- e o mesmo trio que a chamada HTTP
-    # ao controlador devolvia quando falhava, entao a tela nao mudou.
+    # reporta indisponivel ate receber o pulso do agente.
     servico = _app(REMOTE_COLLECTOR_ENABLED=True).extensions["rtd_service"]
 
     assert servico.available is False
@@ -79,10 +61,9 @@ def test_a_suite_nao_supervisiona_o_profitchart():
     assert servico._background_supervision is False
 
 
-def test_nao_ha_configuracao_de_controlador_local():
-    # A URL vinha fixa de `compose.yaml` e o token de um segredo montado. Os
-    # dois sairam; se voltarem, e porque alguem restaurou o modo antigo sem
-    # decidir qual processo le o ProfitChart.
+def test_nao_ha_configuracao_de_conexao_ativa_com_o_host():
+    # A aplicacao nao se conecta ao host Windows; apenas o agente inicia
+    # conexoes e entrega as cotacoes ao servidor.
     config = _app().config
 
     assert "RTD_CONTROL_URL" not in config

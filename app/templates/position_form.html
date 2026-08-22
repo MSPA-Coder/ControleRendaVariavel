@@ -3,7 +3,7 @@
 {% block title %}{{ "Editar" if editing else "Nova" }} posição{% endblock %}
 {% block content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position.id) if editing else url_for('portfolio.create_position') }}"
-      {# D4: trocar a carteira para a Simulada ao editar apaga o extrato
+      {# Trocar a carteira para a Simulada ao editar apaga o extrato
          inteiro (ver `discard_simulation_history`). Os dois atributos abaixo
          so existem quando ha o que perder de fato; `static/app.js` decide,
          no submit, se pergunta ou deixa passar. #}

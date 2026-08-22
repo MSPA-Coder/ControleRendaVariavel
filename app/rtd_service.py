@@ -25,12 +25,12 @@ class Process(Protocol):
 
 
 def _collector_python_executable() -> str:
-    """Usa o Python de console para o CLI, mesmo sob o controlador ``pythonw``.
+    """Usa o Python de console para o CLI, mesmo sob ``pythonw``.
 
     ``poll-rtd`` é um comando Flask e escreve seu pulso em stdout. O
-    controlador residente pode ser ``pythonw.exe`` para não criar janela, mas
-    o filho precisa de ``python.exe``; ``CREATE_NO_WINDOW`` ainda impede que
-    ele abra qualquer terminal.
+    supervisor pode usar ``pythonw.exe`` para não criar janela, mas o processo
+    filho precisa de ``python.exe``; ``CREATE_NO_WINDOW`` ainda impede que ele
+    abra qualquer terminal.
     """
     executable = Path(sys.executable)
     if sys.platform == "win32" and executable.name.lower() == "pythonw.exe":

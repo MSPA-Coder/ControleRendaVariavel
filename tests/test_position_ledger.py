@@ -1,10 +1,8 @@
 """Preservação do extrato ao encerrar uma posição.
 
-Encerrar apaga a posição, e o extrato ia junto em cascata. Depois que o
-relatório de performance passou a reconstruir a série a partir do extrato,
-isso virou viés de sobrevivência: a posição encerrada sumia do histórico
-inteiro e o retorno passava a medir só quem ficou na carteira — justamente
-o erro que melhora o número de graça.
+Encerrar apaga a posição e seu extrato em cascata. O arquivo preserva os
+lançamentos necessários para que a performance inclua posições encerradas e
+não sofra viés de sobrevivência.
 
 Estes testes exercitam ``app.position_ledger`` sem banco: a função recebe os
 lançamentos já lidos e devolve as linhas a gravar. A sessão é substituída por

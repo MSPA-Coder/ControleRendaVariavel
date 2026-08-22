@@ -179,7 +179,7 @@ def delete_ticker(ticker_id: int) -> ResponseReturnValue:
 
 
 def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> dict[str, object]:
-    """Contexto da tela de Carteiras (WP2 do plano de carteiras).
+    """Contexto da tela de Carteiras.
 
     Extraído da listagem porque os formulários de CRUD e de associação de
     tickers também o montam: eles respondem ao HTMX com esta mesma região já
@@ -308,10 +308,10 @@ def _requested_simulated_change(portfolio: Portfolio) -> bool:
 @bp.post("/tables/portfolios/<int:portfolio_id>")
 def update_portfolio(portfolio_id: int) -> ResponseReturnValue:
     """``simulated`` não é lido do formulário de edição: é fixado na criação
-    e não pode ser alterado depois (ver ``PortfolioUpdateInput`` e a seção
-    "Regras de negócio" do WP2) — trocar de real para simulada, ou o
+    e não pode ser alterado depois (ver ``PortfolioUpdateInput``): trocar de
+    real para simulada, ou o
     contrário, exigiria criar ou apagar transações em massa. Uma posição
-    pode trocar de carteira livremente (D4); a carteira em si, não.
+    pode trocar de carteira livremente; a carteira em si, não.
 
     O formulário legítimo nunca envia ``simulated``; uma tentativa direta
     (POST manual) é recusada com 422 explícito, em vez de ser ignorada em

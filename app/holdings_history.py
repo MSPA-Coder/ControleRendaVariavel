@@ -1,18 +1,11 @@
 """Histórico de posição e fluxo, para o TWR (Time-Weighted Return) da carteira.
 
-``app.risk.portfolio_value_series`` assume as quantidades ATUAIS constantes
-em todo o histórico simulado — aproximação documentada lá, mas que fica
-errada sempre que uma posição recebeu um aumento: o relatório mostra
-patrimônio que nunca existiu, e um aporte no meio do caminho é tratado como
-se sempre tivesse feito parte da carteira.
-
-Corrigir a quantidade para o valor histórico de cada data resolve o
-patrimônio, mas abre um problema novo: sem tratar o fluxo, o PRÓPRIO aporte
-vira "retorno" no mês em que aconteceu — o patrimônio salta, e nada mais
-mudou. As duas correções são inseparáveis, e é por isso que este módulo
-produz as duas coisas juntas — quantidade histórica (``QuantityTimeline``) e
-fluxo líquido por data (``PortfolioFlowPoint.net_flow``) — em vez de só a
-primeira.
+O relatório precisa da quantidade vigente em cada data e do fluxo dos
+aportes; usar a quantidade atual em toda a série cria patrimônio inexistente,
+enquanto ignorar o fluxo transforma aporte em retorno. Por isso este módulo
+produz as duas informações juntas: quantidade histórica
+(``QuantityTimeline``) e fluxo líquido por data
+(``PortfolioFlowPoint.net_flow``).
 
 O modelo, em quatro peças:
 

@@ -248,7 +248,7 @@ class Ticker(Base):
 
 class Portfolio(Base):
     """Uma carteira: BRL, USD ou Simulada, além de quaisquer outras que o
-    usuário cadastrar (CRUD em ``app.routes.portfolios``, WP2).
+    usuário cadastrar por ``app.routes.portfolios``.
 
     É dona da posição (``Position.portfolio_id`` / ``OptionPosition.portfolio_id``
     / ``Transaction.portfolio_id``, FK obrigatória): decide, sem ambiguidade,
@@ -259,8 +259,8 @@ class Portfolio(Base):
 
     ``simulated=True`` marca a carteira Simulada (ou qualquer outra carteira
     de teste que venha a existir): posições nela ficam fora de Risco,
-    Performance e exposição (D3 do plano de carteiras) e, a partir do WP5,
-    não geram transação. ``currency`` é ``None`` para carteiras simuladas —
+    Performance e exposição e não geram transação. ``currency`` é ``None``
+    para carteiras simuladas —
     elas não representam dinheiro real e podem misturar tickers de moedas
     diferentes."""
 
@@ -282,8 +282,9 @@ class Portfolio(Base):
 
 
 class PortfolioTicker(Base):
-    """Associação N:N entre carteiras e tickers (CRUD do pedido 2 do plano de
-    carteiras): quais tickers **podem** ser lançados em qual carteira. Não
+    """Associação N:N que define os tickers permitidos em cada carteira.
+
+    Não
     confundir com ``Position.portfolio_id``, que diz em qual carteira uma
     posição específica **está** (ver docstring de ``Portfolio``)."""
 
@@ -393,7 +394,7 @@ class Position(Base):
     @property
     def simulated(self) -> bool:
         """``True`` quando a posição está na carteira Simulada
-        (``portfolio_ref.simulated``). Usada pelas guardas do WP5 (sem
+        (``portfolio_ref.simulated``). Usada pelas guardas de carteiras simuladas (sem
         merge, sem extrato, sem encerramento) e pelo agrupamento dos totais
         de ``app.portfolio.build_portfolio`` por (moeda, simulada)."""
         return self.portfolio_ref.simulated
@@ -689,8 +690,7 @@ class OptionPosition(Base):
         """A moeda de uma posição de opção vem do ticker do **contrato**
         (``OptionContract.ticker_id``), nunca do ativo-objeto
         (``underlying_ticker_id``): é o contrato que tem preço e é negociado,
-        não o subjacente (ver WP4b em
-        ``docs/plano-carteiras-e-transacoes-opcoes.md``)."""
+        não o subjacente."""
         return self.contract.ticker_ref.currency
 
     @property
@@ -893,7 +893,7 @@ class Transaction(Base):
         # ``OptionPosition`` têm sequências de id independentes, então o
         # mesmo inteiro pode identificar as duas ao mesmo tempo; um índice
         # único só sobre ``source_position_id`` faria a segunda linha aberta
-        # colidir com a primeira por pura coincidência de id (ver WP4b).
+        # colidir com a primeira por pura coincidência de id.
         Index(
             "uq_transactions_open_source_position_stock",
             "source_position_id",

@@ -17,9 +17,9 @@ corretoras diferentes, em carteiras diferentes, ou uma compra e uma venda na
 mesma corretora, mas não dois lotes da mesma exposição na mesma carteira.
 
 Toda posição pertence a exatamente uma carteira (`Position.portfolio_id`);
-é a carteira, não mais um sinalizador na posição, que decide se aquele lote
-é dinheiro real ou apenas um teste. Um ticker pode estar associado a mais de
-uma carteira ao mesmo tempo (`portfolio_tickers`, o cadastro N:N usado ao
+é a carteira que decide se aquele lote é dinheiro real ou apenas um teste. Um
+ticker pode estar associado a mais de uma carteira ao mesmo tempo
+(`portfolio_tickers`, o cadastro N:N usado ao
 lançar uma posição nova); a carteira da posição já existente, porém, não é
 ambígua.
 
@@ -146,8 +146,8 @@ descarta o provento.
 O comparador de índice/benchmark (`build_benchmark_shadow_series`) usa a
 mesma lista de fluxos reais, acumulando cotas (`cotas += F(d) /
 preço_benchmark(d)`) em vez de ancorar num único aporte inicial — aporte e
-retirada entram na data certa, incluindo retirada (`invested_amount <= 0`
-deixou de ser ignorado). O risco por carteira (`app/risk.py`,
+retirada entram na data certa, inclusive quando `invested_amount <= 0`. O risco
+por carteira (`app/risk.py`,
 `app/routes/risk.py`) usa o mesmo índice TWR como base do drawdown.
 
 ### Limitações aceitas
@@ -168,8 +168,8 @@ deixou de ser ignorado). O risco por carteira (`app/risk.py`,
   foi feita, não a do fato corrigido. Corrigir hoje um erro antigo move a
   quantidade histórica só a partir de hoje; o patrimônio dos meses
   intermediários continua refletindo o valor anterior à correção.
-- **Custo médio e `opened_on` continuam imprecisos onde foram cadastrados em
-  lote.** O relatório de performance não depende mais deles, mas Carteira,
+- **Custo médio e `opened_on` podem ser imprecisos quando cadastrados em
+  lote.** O relatório de performance não depende deles, mas Carteira,
   Transações e o resultado realizado dependem.
 
 ## Cotações RTD

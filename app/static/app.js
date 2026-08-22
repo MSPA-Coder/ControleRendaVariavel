@@ -93,7 +93,7 @@ htmx.config.includeIndicatorStyles = false;
     }
   });
 
-  // D4: trocar a carteira de uma posicao para a Simulada, ao editar, apaga o
+  // Trocar a carteira de uma posicao para a Simulada, ao editar, apaga o
   // extrato de movimentos e a transacao aberta espelhada (ver
   // `discard_simulation_history` em app/position_closure.py e
   // app/option_position_closure.py). Editar posicao e operacao rotineira e

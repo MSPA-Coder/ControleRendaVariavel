@@ -69,7 +69,7 @@ def _windows_process_is_alive(process_id: int) -> bool:
 
 
 def supervisor_process_is_alive(supervisor_pid: str | None) -> bool:
-    """Mantém o coletor apenas enquanto seu controlador ainda existir."""
+    """Mantém o coletor apenas enquanto seu processo supervisor existir."""
     if not supervisor_pid:
         return True
     try:

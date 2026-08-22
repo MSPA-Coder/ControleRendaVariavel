@@ -3,12 +3,10 @@ encerramento (total ou parcial).
 
 Espelha ``app.position_closure`` (ações) trocando ``Position`` por
 ``OptionPosition``, ``PositionMovement`` por ``OptionPositionMovement`` e
-``ticker_id`` por ``contract_id`` — ver a tabela de diferenças estruturais em
-``docs/plano-carteiras-e-transacoes-opcoes.md`` (seção 2) e o WP4b. O
-algoritmo em si (custo médio ponderado, replay do extrato, divisão de
-quantidade num encerramento parcial) é o mesmo dos dois instrumentos e vive
-em ``app.domain`` (extraído no WP4a); só a persistência muda entre os dois
-módulos.
+``ticker_id`` por ``contract_id``. O algoritmo em si (custo médio ponderado,
+replay do extrato e divisão de quantidade num encerramento parcial) é o mesmo
+dos dois instrumentos e vive em ``app.domain``; só a persistência muda entre
+os dois módulos.
 
 Três registros andam juntos e são mantidos em dia aqui, nunca nas rotas:
 
@@ -100,7 +98,7 @@ def _open_transaction_for(option_position_id: int) -> Transaction | None:
             # ``Position`` e ``OptionPosition`` têm sequências de id
             # independentes: sem este filtro, uma posição de ação com o
             # mesmo id numérico faria esta consulta encontrar duas linhas
-            # ou a linha errada (ver WP4b).
+            # ou a linha errada.
             Transaction.option_contract_id.is_not(None),
         )
     )
@@ -110,10 +108,10 @@ def sync_open_transaction_for_position(position: OptionPosition) -> None:
     """Mantém a linha aberta espelhada em dia após uma edição da posição.
     Cria a linha se, por algum motivo, ela ainda não existir.
 
-    Posição simulada não tem transação nenhuma (WP5): não faz nada (ver
+    Posição simulada não tem transação: não faz nada (ver
     ``position_closure.sync_open_transaction_for_position``, o mesmo
-    mecanismo para ações, inclusive para a transição simulada -> real de
-    D4: a linha "nasce" aqui porque nenhuma existia antes)."""
+    mecanismo para ações, inclusive para a transição simulada -> real: a linha
+    "nasce" aqui porque nenhuma existia antes)."""
 
     if position.simulated:
         return
@@ -260,7 +258,7 @@ def _mergeable_statement(candidate: OptionPosition) -> Select[tuple[OptionPositi
     (não apenas o mesmo ativo-objeto — strike e vencimento diferentes nunca
     se fundem), mesma corretora, mesmo tipo (compra ou venda) e mesma
     carteira. É o análogo de ``position_closure._mergeable_statement``
-    trocando ticker por contrato (regra de merge do WP4b).
+    trocando ticker por contrato.
     """
 
     return (
@@ -322,7 +320,7 @@ def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition,
 
     existing = _mergeable_position(candidate)
     if existing is not None and _is_simulated(candidate.portfolio_id):
-        # A carteira Simulada não tem "aumento" (regra derivada do WP5): uma
+        # A carteira Simulada não tem "aumento": uma
         # segunda entrada para a mesma exposição é recusada, nunca fundida.
         raise ValueError(SIMULATED_MERGE_REJECTED)
     if existing is None:
@@ -367,8 +365,8 @@ def record_position_adjustment(
     ``position_closure.record_position_adjustment``, o mesmo mecanismo para
     ações).
 
-    Posição simulada não tem extrato (WP5): não faz nada. O descarte do
-    extrato ao entrar na Simulada (D4) é responsabilidade de
+    Posição simulada não tem extrato: não faz nada. O descarte do extrato ao
+    entrar na Simulada é responsabilidade de
     ``discard_simulation_history``, chamada à parte pela rota."""
 
     if position.simulated:
@@ -406,9 +404,7 @@ def record_position_adjustment(
 
 
 def discard_simulation_history(position: OptionPosition) -> None:
-    """Mesma ideia de ``position_closure.discard_simulation_history``, para
-    opções: aplica a consequência de D4 quando a posição entra na carteira
-    Simulada, apagando a linha aberta e o extrato inteiro."""
+    """Apaga a linha aberta e o extrato ao entrar na carteira Simulada."""
 
     delete_open_transaction_for_position(position.id)
     for movement in list(position.movements):
@@ -427,7 +423,7 @@ def close_open_position(
     Mesma mecânica de ``position_closure.close_open_position``: reaproveita a
     linha ``status=OPEN`` já existente em ``transactions`` num encerramento
     total, e insere uma linha fechada nova + reduz o saldo num parcial. A
-    carteira Simulada não permite encerramento nenhum (WP5) — ver a mesma
+    carteira Simulada não permite encerramento — ver a mesma
     guarda em ``position_closure.close_open_position``.
     """
 

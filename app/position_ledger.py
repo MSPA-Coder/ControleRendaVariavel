@@ -1,12 +1,9 @@
 """Preservação do extrato de uma posição que está sendo encerrada.
 
 ``app.position_closure`` e ``app.option_position_closure`` apagam a posição
-ao encerrá-la por inteiro, e o extrato vai junto em cascata. Desde que o
-relatório de performance passou a reconstruir a série a partir do extrato
-(ver ``app.holdings_history``), esse apagamento tinha um efeito indesejado:
-a posição encerrada sumia do histórico inteiro, e o retorno passava a medir
-apenas os ativos que sobreviveram na carteira — viés de sobrevivência, que
-tende a melhorar o número justamente onde ele deveria doer.
+ao encerrá-la por inteiro, e o extrato vai junto em cascata. O relatório de
+performance precisa preservar esses lançamentos para incluir posições
+encerradas e evitar viés de sobrevivência.
 
 Este módulo copia o que a série precisa para ``PositionLedgerArchive`` antes
 da exclusão. Fica separado dos dois módulos de encerramento porque a cópia é

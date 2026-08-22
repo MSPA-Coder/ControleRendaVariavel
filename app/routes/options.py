@@ -270,7 +270,7 @@ def create_position() -> ResponseReturnValue:
             duplicate_warning=True,
         ), 409
     try:
-        # Carteira Simulada não funde uma segunda entrada (WP5) — mesma
+        # Carteira Simulada não funde uma segunda entrada — mesma
         # guarda de ``routes.positions.create_position``, para ações.
         position, merged = create_or_merge_position(candidate)
     except ValueError as exc:
@@ -326,7 +326,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
     # Relacionamento em cache não percebe sozinho a troca de FK — mesmo
     # motivo de ``routes.positions.update_position``, para ações.
     db.session.expire(position, ["portfolio_ref"])
-    # Troca de carteira entre a Simulada e uma real (D4) — mesmo mecanismo de
+    # Troca de carteira entre a Simulada e uma real — mesmo mecanismo de
     # ``routes.positions.update_position``, para ações.
     if position.simulated and not was_simulated:
         discard_simulation_history(position)

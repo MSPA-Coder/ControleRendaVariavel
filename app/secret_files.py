@@ -1,8 +1,8 @@
 """Leitura segura de segredos concedidos por arquivo.
 
-Compose monta segredos em ``/run/secrets``; no controlador RTD do Windows os
-mesmos valores ficam em ``.secrets`` fora do Git. O conteúdo nunca é registrado
-nem incluído nas exceções deste módulo.
+Compose monta segredos em ``/run/secrets``; o agente RTD no Windows lê os
+valores de ``.secrets`` fora do Git. O conteúdo nunca é registrado nem incluído
+nas exceções deste módulo.
 """
 
 from __future__ import annotations

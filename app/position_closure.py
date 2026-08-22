@@ -96,7 +96,7 @@ def _open_transaction_for(position_id: int) -> Transaction | None:
             # ``Position`` e ``OptionPosition`` têm sequências de id
             # independentes: sem este filtro, uma posição de opção com o
             # mesmo id numérico faria esta consulta encontrar duas linhas
-            # (``MultipleResultsFound``) ou a linha errada (ver WP4b).
+            # (``MultipleResultsFound``) ou a linha errada.
             Transaction.ticker_id.is_not(None),
         )
     )
@@ -104,14 +104,11 @@ def _open_transaction_for(position_id: int) -> Transaction | None:
 
 def sync_open_transaction_for_position(position: Position) -> None:
     """Mantém a linha aberta espelhada em dia após uma edição da posição.
-    Cria a linha se, por algum motivo, ela ainda não existir (ex.: posições
-    de antes desta migração que não tenham sido backfilled).
+    Cria a linha se, por algum motivo, ela ainda não existir.
 
-    Posição simulada não tem transação nenhuma (WP5): não faz nada. É
-    também o que faz uma posição migrar de simulada para real "nascer"
-    aberta em Transações — nenhuma linha existia antes, então o ramo
-    "cria se não existir" abaixo cobre a troca de carteira (D4) sem
-    precisar de um caminho dedicado."""
+    Posição simulada não tem transação. Ao trocar uma posição simulada para uma
+    carteira real, o ramo "cria se não existir" abre a transação sem exigir um
+    caminho dedicado."""
 
     if position.simulated:
         return
@@ -333,7 +330,7 @@ def create_or_merge_position(candidate: Position) -> tuple[Position, bool]:
 
     existing = _mergeable_position(candidate)
     if existing is not None and _is_simulated(candidate.portfolio_id):
-        # A carteira Simulada não tem "aumento" (regra derivada do WP5): uma
+        # A carteira Simulada não tem "aumento": uma
         # segunda entrada para a mesma exposição é recusada, nunca fundida.
         raise ValueError(SIMULATED_MERGE_REJECTED)
     if existing is None:
@@ -382,9 +379,9 @@ def record_position_adjustment(
     falsificaria o passado: a diferença vira um movimento de ajuste, e o
     extrato continua explicando o estado atual.
 
-    Posição simulada não tem extrato (WP5): não faz nada. Cobre tanto a
+    Posição simulada não tem extrato: não faz nada. Cobre tanto a
     edição comum de uma posição já simulada quanto a transição real ->
-    simulada (D4) — o extrato existente é descartado à parte, por
+    simulada — o extrato existente é descartado à parte, por
     ``discard_simulation_history``, porque esta função só adiciona
     movimentos, nunca apaga.
     """
@@ -424,7 +421,7 @@ def record_position_adjustment(
 
 
 def discard_simulation_history(position: Position) -> None:
-    """Aplica a consequência mecânica de D4 quando uma posição entra na
+    """Descarta o histórico quando uma posição entra na
     carteira Simulada: apaga a linha ``status=OPEN`` que a espelhava em
     Transações e descarta o extrato inteiro — a carteira Simulada não tem
     nenhum dos dois.
@@ -464,8 +461,7 @@ def close_open_position(
     muda: vender parte da posição realiza resultado, não altera o que foi pago
     pelo que restou.
 
-    A carteira Simulada não permite encerramento nenhum (WP5, regra
-    derivada de "só criar, editar e excluir"): a validação roda **depois**
+    A carteira Simulada não permite encerramento: a validação roda **depois**
     do ``FOR UPDATE`` (para travar antes de decidir) e faz ``rollback`` antes
     de propagar, liberando o lock sem deixar nada pela metade — mesmo
     padrão de erro que ``plan_position_closure`` já usa aqui embaixo.

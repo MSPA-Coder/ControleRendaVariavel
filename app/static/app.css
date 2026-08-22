@@ -61,7 +61,7 @@ main { padding: 1.1rem; }
 .portfolio-summary span { font-size: .75rem; }
 .portfolio-summary strong { font-size: 1.05rem; }
 .currency-card { display: flex; flex-direction: column; }
-/* Excecao assimetrica do WP5: so o card da carteira Simulada leva titulo e
+/* So o card da carteira Simulada leva titulo e
    um acento tracejado — os cards reais continuam sem titulo (ver
    partials/portfolio_results.html e partials/options_results.html). O
    tracejado reforca que aquele dinheiro e simulado, nao patrimonio real. */

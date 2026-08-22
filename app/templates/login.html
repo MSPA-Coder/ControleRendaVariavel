@@ -9,9 +9,8 @@
   {# Só o CSS de mensagens, não o pacote de interface inteiro: login não tem
      confirmação nem toast, e o banner funciona sozinho com este arquivo (ver
      o comentário em sharedauth/messages/static/flash_messages.css). A
-     paleta continua sendo a deste app -- as cores do banner são as do
-     próprio arquivo, as mesmas (quase) que `.flash-error`/`.flash-success`
-     já usavam antes desta migração. #}
+     paleta continua sendo a deste app; as cores do banner são definidas no
+     próprio arquivo. #}
   <link rel="stylesheet" href="{{ url_for('sharedauth.static', filename='flash_messages.css') }}">
 </head>
 <body>

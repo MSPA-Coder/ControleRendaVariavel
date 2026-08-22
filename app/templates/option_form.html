@@ -3,7 +3,7 @@
 {% block title %}{{ "Editar" if editing else "Nova" }} opção{% endblock %}
 {% block content %}
 <form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position.id) if editing else url_for('options.create_position') }}"
-      {# D4: mesma guarda de `position_form.html`, para opcoes -- trocar a
+      {# Mesma guarda de `position_form.html`, para opcoes -- trocar a
          carteira para a Simulada ao editar apaga o extrato inteiro. #}
       {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ position.movements|length }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

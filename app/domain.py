@@ -152,7 +152,7 @@ def calculate_position(
 # (``OptionPosition``/``OptionPositionMovement``): só a persistência muda.
 # As funções abaixo isolam esse algoritmo sem depender de sessão, Flask ou
 # modelo ORM, para que ``app.position_closure`` (ações) e seu equivalente de
-# opções (WP4b) possam chamar a mesma lógica em vez de duplicá-la.
+# opções possam chamar a mesma lógica em vez de duplicá-la.
 
 
 @dataclass(frozen=True, slots=True)

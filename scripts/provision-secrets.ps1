@@ -1,11 +1,11 @@
 <#!
 .SYNOPSIS
-  Migra os segredos atuais de .env para arquivos locais consumidos pelo Compose.
+  Provisiona arquivos locais de segredo consumidos pelo Compose a partir de .env.
 
 .DESCRIPTION
   Cria .secrets\secret_key e .secrets\postgres_password sem alterar .env,
   banco, contêineres ou valores existentes. Não imprime conteúdos. Por padrão,
-  recusa sobrescrever arquivos para que a migração seja revisável; use -Force
+  recusa sobrescrever arquivos para preservar valores existentes; use -Force
   somente ao rotacionar deliberadamente o arquivo a partir de .env.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]

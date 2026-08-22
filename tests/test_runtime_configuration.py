@@ -53,10 +53,7 @@ def test_producao_resolve_segredos_de_arquivo_para_o_banco_do_container(
     assert app.config["SQLALCHEMY_DATABASE_URI"] == (
         "postgresql+psycopg://investimentos:senha%2Fde-arquivo@db:5432/investimentos"
     )
-    # Era `RTD_CONTROL_TOKEN` ate 2026-08-22, quando o modo de controlador
-    # local saiu. A asercao mudou de token, e nao sumiu: o que ela protege e a
-    # resolucao de segredo por arquivo `_FILE`, que continua valendo para o
-    # token do agente remoto -- e que e o unico segredo de coletor que resta.
+    # O token do agente segue o mesmo contrato `_FILE` dos demais segredos.
     assert app.config["COLLECTOR_AGENT_TOKEN"] == "token-de-arquivo-com-tamanho-suficiente"
 
 

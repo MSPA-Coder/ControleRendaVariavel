@@ -100,7 +100,7 @@ def test_supervision_starts_when_background_supervision_is_enabled(tmp_path: Pat
     assert calls == [True]
 
 
-def test_collector_uses_console_python_when_controller_uses_pythonw(
+def test_collector_uses_console_python_when_supervisor_uses_pythonw(
     monkeypatch, tmp_path: Path
 ) -> None:
     windowless = tmp_path / "pythonw.exe"
