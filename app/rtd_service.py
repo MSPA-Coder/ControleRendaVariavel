@@ -9,9 +9,7 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from typing import Protocol, cast
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from typing import Protocol
 
 
 class Process(Protocol):
@@ -80,6 +78,23 @@ class RtdService(Protocol):
     def stop(self) -> bool: ...
 
 
+def _hidden_console_kwargs() -> dict[str, object]:
+    """Impede que subprocessos de console pisquem na área de trabalho Windows."""
+    if sys.platform != "win32":
+        return {}
+    options: dict[str, object] = {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    }
+    startup_info_factory = getattr(subprocess, "STARTUPINFO", None)
+    if startup_info_factory is None:
+        return options
+    startup_info = startup_info_factory()
+    startup_info.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+    startup_info.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+    options["startupinfo"] = startup_info
+    return options
+
+
 class WindowsProfitDetector:
     """Detects the interactive Profit process without attempting COM activation."""
 
@@ -99,9 +114,9 @@ class WindowsProfitDetector:
                 ],
                 check=True,
                 capture_output=True,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 text=True,
                 timeout=5,
+                **_hidden_console_kwargs(),
             )
             return int(result.stdout.strip() or "0") > 0
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
@@ -277,7 +292,6 @@ class RtdServiceManager:
         if self._process is not None and self._process.poll() is None:
             return False
         self._external_process_ids = self._rtd_process_ids()
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         child_environment = os.environ.copy()
         # ``poll-rtd`` cria a fábrica Flask para acessar banco e configuração.
         # Sem este marcador, a fábrica criaria outro RtdServiceManager,
@@ -303,8 +317,8 @@ class RtdServiceManager:
                 stdin=subprocess.DEVNULL,
                 stdout=output,
                 stderr=subprocess.STDOUT,
-                creationflags=creationflags,
                 env=child_environment,
+                **_hidden_console_kwargs(),
             )
         self._process_started_at = self._monotonic()
         self._status = "running"
@@ -342,8 +356,8 @@ class RtdServiceManager:
             command,
             check=False,
             capture_output=True,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             timeout=5,
+            **_hidden_console_kwargs(),
         )
 
     @staticmethod
@@ -363,9 +377,9 @@ class RtdServiceManager:
                 ["powershell.exe", "-NoProfile", "-Command", command],
                 check=True,
                 capture_output=True,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 text=True,
                 timeout=5,
+                **_hidden_console_kwargs(),
             )
             values = json.loads(result.stdout or "[]")
         except (OSError, subprocess.SubprocessError, ValueError):
@@ -391,66 +405,6 @@ class RtdServiceManager:
                     f"Stop-Process -Id {ids} -Force -ErrorAction SilentlyContinue",
                 ],
                 check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 timeout=5,
+                **_hidden_console_kwargs(),
             )
-
-
-class RemoteRtdService:
-    """Controls the Windows RTD collector through the authenticated host helper."""
-
-    def __init__(self, base_url: str, token: str, *, timeout_seconds: float = 2) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.token = token
-        self.timeout_seconds = timeout_seconds
-
-    def _request(self, path: str, payload: dict[str, object] | None = None) -> dict[str, object]:
-        data = None if payload is None else json.dumps(payload).encode()
-        request = Request(
-            f"{self.base_url}{path}",
-            data=data,
-            method="GET" if data is None else "POST",
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-            },
-        )
-        try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
-                return cast(dict[str, object], json.load(response))
-        except HTTPError as exc:
-            try:
-                error_payload = json.load(exc)
-                message = str(error_payload.get("error", ""))
-            except (AttributeError, OSError, ValueError):
-                message = ""
-            raise RuntimeError(message or "Controlador RTD do Windows indisponível.") from exc
-        except (URLError, OSError, ValueError) as exc:
-            raise RuntimeError("Controlador RTD do Windows indisponível.") from exc
-
-    @property
-    def available(self) -> bool:
-        try:
-            self._request("/state")
-        except RuntimeError:
-            return False
-        return True
-
-    @property
-    def is_running(self) -> bool:
-        return bool(self._request("/state").get("running"))
-
-    @property
-    def status(self) -> str:
-        return str(self._request("/state").get("status", "unavailable"))
-
-    def start(self) -> bool:
-        was_running = self.is_running
-        self._request("/state", {"enabled": True})
-        return not was_running
-
-    def stop(self) -> bool:
-        was_running = self.is_running
-        self._request("/state", {"enabled": False})
-        return was_running

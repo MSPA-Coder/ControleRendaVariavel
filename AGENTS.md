@@ -110,22 +110,21 @@ Excel/COM não roda no contêiner Linux. Por autorização explícita, somente o
 coletor RTD pode usar o ambiente Python isolado do host Windows. Todo o
 restante continua em Docker.
 
-Há **dois** modos, e apenas um deve ler o ProfitChart de cada vez:
+Há **um** mecanismo, e é assim de propósito: o agente
+(`scripts/rtd-remote-agent.ps1` → `app.remote_collector_agent`) entrega
+cotações por HTTPS autenticado, e o servidor **nunca** abre conexão para o
+computador local. Ligado por `REMOTE_COLLECTOR_ENABLED`.
 
-- **Agente remoto** (`scripts/rtd-remote-agent.ps1` →
-  `app.remote_collector_agent`) — o modo de produção desde a migração para o
-  VPS. O Windows entrega cotações por HTTPS autenticado e o servidor **nunca**
-  abre conexão para o computador local. Ligado por `REMOTE_COLLECTOR_ENABLED`.
-- **Controlador local** (`scripts/rtd-host.ps1` → `app.rtd_control_server`) —
-  para a aplicação rodando em Docker no próprio Windows. Escuta só em
-  `127.0.0.1:8765` e a aplicação fala com ele por `host.docker.internal`, que
-  **só existe no Docker Desktop** — num Linux o nome não resolve.
+Existiu um segundo, o *controlador local* (`rtd-host.ps1` →
+`app.rtd_control_server`), para a aplicação em Docker no próprio Windows. A
+migração para o VPS o tornou redundante e ele foi **removido em 2026-08-22**,
+junto com `app/host_bootstrap.py`, `app/host_env.py`, `RemoteRtdService` e a
+configuração `RTD_CONTROL_*`. Se for reintroduzido, a primeira pergunta é qual
+dos dois processos lê o ProfitChart — foi conviverem sem essa decisão que
+produziu duas tarefas agendadas brigando pelo mesmo Excel.
 
-Com `REMOTE_COLLECTOR_ENABLED=true`, `create_app` não instancia cliente de
-controlador local mesmo com `RTD_CONTROL_URL` e o segredo presentes — e no VPS
-ambos estão, porque a URL é fixa em `compose.yaml` e o segredo é montado. A
-exclusão entre as duas TAREFAS AGENDADAS do Windows continua manual: quem lê o
-ProfitChart é o processo do host, e disso o servidor não sabe.
+`RtdServiceManager` é quem responde o estado do coletor para a tela. Com o
+agente remoto ligado ele nasce indisponível: quem lê RTD é o processo do host.
 
 RTD é adaptador externo: normalize e valide valores antes do domínio, exponha
 estado/atraso sem sobrescrever a última cotação válida, use timeout e

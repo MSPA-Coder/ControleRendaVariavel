@@ -94,11 +94,6 @@ if ($PSCmdlet.ShouldProcess($secretsDir, "criar diretório de segredos local")) 
 Write-SecretFile -Path $secretKeyPath -Value $secretKey
 Write-SecretFile -Path $postgresPasswordPath -Value $postgresPassword
 
-$controlTokenPath = Join-Path $secretsDir "rtd_control_token"
-if (-not (Test-Path -LiteralPath $controlTokenPath)) {
-    Write-SecretFile -Path $controlTokenPath -Value (New-ControlToken)
-}
-
 $collectorAgentTokenPath = Join-Path $secretsDir "collector_agent_token"
 if (-not (Test-Path -LiteralPath $collectorAgentTokenPath)) {
     Write-SecretFile -Path $collectorAgentTokenPath -Value (New-ControlToken)
