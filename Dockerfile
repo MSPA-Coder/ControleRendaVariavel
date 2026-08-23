@@ -30,7 +30,7 @@ RUN apt-get update \
     && adduser --system --ingroup app app
 
 FROM base AS runtime
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md alembic.ini ./
 COPY app ./app
 # `pyproject.toml` inclui `sharedauth` de um repositório Git privado
 # (github.com/MSPA-Coder/SharedAuth) -- pip precisa de `git` no PATH e de
@@ -69,7 +69,7 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5003", "--workers", "2", "--threads", "4", "
 # quality: Ruff e a suite minima de seguranca. Nunca e a imagem servida --
 # `compose.yaml` usa `runtime` para web e migrate.
 FROM base AS quality
-COPY --chown=app:app pyproject.toml README.md ./
+COPY --chown=app:app pyproject.toml README.md alembic.ini ./
 COPY --chown=app:app app ./app
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app tests ./tests
