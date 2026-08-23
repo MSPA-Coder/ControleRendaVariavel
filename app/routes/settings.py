@@ -31,6 +31,7 @@ from app.routes.helpers import (
     rtd_service_state,
     ticker_records,
 )
+from app.themes import DEFAULT_THEME, THEME_OPTIONS, parse_theme
 
 _WEEKDAY_OPTIONS = (
     (0, "Segunda-feira"),
@@ -46,6 +47,12 @@ _WEEKDAY_OPTIONS = (
 def _submitted_settings() -> AppSetting:
     """Re-render an invalid submission without changing persisted settings."""
     submitted = default_collector_settings()
+    raw_theme = request.form.get("theme", DEFAULT_THEME).strip().lower()
+    submitted.theme = (
+        raw_theme
+        if raw_theme in {theme_id for theme_id, _, _ in THEME_OPTIONS}
+        else DEFAULT_THEME
+    )
     raw_mode = request.form.get("collector_mode", "")
     if raw_mode in {mode.value for mode in CollectorMode}:
         submitted.collector_mode = CollectorMode(raw_mode)
@@ -116,6 +123,7 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
                 if value.isdigit()
             },
             tickers=ticker_records(),
+            theme_options=THEME_OPTIONS,
             rtd_service_running=running,
             rtd_service_available=available,
             rtd_service_status=rtd_status,
@@ -141,6 +149,7 @@ def settings() -> ResponseReturnValue:
             schedule = parse_collector_schedule(
                 request.form, request.form.getlist("collector_schedule_weekdays")
             )
+            theme = parse_theme(request.form)
             raw_benchmark_id = request.form.get("benchmark_ticker_id", "").strip()
             benchmark_ticker_id = int(raw_benchmark_id) if raw_benchmark_id else None
             if benchmark_ticker_id is not None and (
@@ -168,6 +177,7 @@ def settings() -> ResponseReturnValue:
         try:
             current_settings = _get_or_create_settings()
             current_settings.collector_mode = data.collector_mode
+            current_settings.theme = theme
             current_settings.poll_interval_seconds = data.poll_interval_seconds
             current_settings.agent_check_interval_seconds = agent_check_interval_seconds
             (

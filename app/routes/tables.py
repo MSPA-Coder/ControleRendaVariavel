@@ -205,6 +205,18 @@ def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> 
         .order_by(PortfolioTicker.portfolio_id, Ticker.symbol)
     ):
         associated_tickers_by_portfolio.setdefault(portfolio_id, []).append(ticker)
+    # Cada carteira tem seu próprio botão de inclusão; portanto, a lista de
+    # opções disponíveis também precisa ser separada por carteira.
+    eligible = investable_ticker_records()
+    available_tickers_by_portfolio = {
+        portfolio.id: [
+            ticker
+            for ticker in eligible
+            if ticker.id
+            not in {associated.id for associated in associated_tickers_by_portfolio[portfolio.id]}
+        ]
+        for portfolio in portfolios
+    }
     if selected_portfolio is not None:
         associated_ids = set(
             db.session.scalars(
@@ -216,7 +228,6 @@ def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> 
         # Só tickers investíveis (exclui referências de comparação, como o
         # próprio CRUD de posições) fazem sentido como conteúdo de uma
         # carteira — ver ``investable_ticker_records``.
-        eligible = investable_ticker_records()
         associated_tickers = [ticker for ticker in eligible if ticker.id in associated_ids]
         available_tickers = [ticker for ticker in eligible if ticker.id not in associated_ids]
 
@@ -226,6 +237,7 @@ def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> 
         "associated_tickers": associated_tickers,
         "available_tickers": available_tickers,
         "associated_tickers_by_portfolio": associated_tickers_by_portfolio,
+        "available_tickers_by_portfolio": available_tickers_by_portfolio,
     }
 
 

@@ -106,6 +106,18 @@
   </fieldset>
 
   <fieldset>
+    <legend>Aparência</legend>
+    <label>Tema da aplicação
+      <select name="theme">
+        {% for theme_id, theme_name, theme_description in theme_options %}
+          <option value="{{ theme_id }}" {{ 'selected' if settings.theme == theme_id }}>{{ theme_name }} — {{ theme_description }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="form-help">A paleta é aplicada ao menu, formulários, tabelas, indicadores e gráficos.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>Risco</legend>
     <label>Ticker de referência para o Beta
       <select name="benchmark_ticker_id">

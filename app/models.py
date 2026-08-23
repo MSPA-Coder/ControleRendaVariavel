@@ -26,6 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app import Base
 from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.themes import DEFAULT_THEME
 
 
 class Market(StrEnum):
@@ -154,9 +155,14 @@ class AppSetting(Base):
             "stale_alert_seconds IS NULL OR stale_alert_seconds BETWEEN 1 AND 86400",
             name="stale_alert_seconds_range",
         ),
+        CheckConstraint(
+            "theme IN ('institutional', 'dracula', 'nord', 'catppuccin', 'solarized')",
+            name="theme_valid",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    theme: Mapped[str] = mapped_column(String(24), default=DEFAULT_THEME, server_default=DEFAULT_THEME)
     collector_mode: Mapped[CollectorMode] = mapped_column(
         Enum(CollectorMode, name="collector_mode"), default=CollectorMode.EXCEL
     )

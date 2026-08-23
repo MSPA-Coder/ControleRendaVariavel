@@ -80,6 +80,18 @@ htmx.config.includeIndicatorStyles = false;
   });
 
   document.addEventListener("click", (event) => {
+    const portfoliosToggle = event.target.closest("[data-portfolios-toggle]");
+    if (portfoliosToggle) {
+      const portfoliosCard = document.getElementById("portfolios-management-card");
+      if (!portfoliosCard) return;
+      const isOpen = portfoliosCard.hidden;
+      portfoliosCard.hidden = !isOpen;
+      portfoliosToggle.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) {
+        portfoliosCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      return;
+    }
     const quoteManagementToggle = event.target.closest("[data-quote-management-toggle]");
     if (!quoteManagementToggle) return;
     const quoteManagementCard = document.getElementById("quote-management-card");

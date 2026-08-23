@@ -13,6 +13,8 @@
   --accent-line: #bfe1ce;
   --positive: #0b6e4f;
   --negative: #c23b3b;
+  --danger-surface: #fff1f0;
+  --danger-line: #f0b8b2;
   --radius: 10px;
   /* Aliases legados: mantêm os componentes existentes consistentes com a nova paleta. */
   --navy: #12211c;
@@ -21,6 +23,45 @@
   --accent-dark: #084f39;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 87.5%;
+}
+
+/* Paletas inspiradas nas especificações open source de Dracula, Nord,
+   Catppuccin e Solarized. Todas permanecem em variáveis locais para que a
+   aplicação continue sem dependência de CDN e os gráficos acompanhem o tema. */
+html[data-theme="dracula"] {
+  color-scheme: dark;
+  --bg: #21222c; --surface: #282a36; --surface-muted: #343746; --line: #44475a;
+  --ink: #f8f8f2; --muted: #bd93f9; --muted-2: #6272a4; --accent: #bd93f9;
+  --accent-soft: #343746; --accent-line: #6272a4; --positive: #50fa7b; --negative: #ff5555;
+  --danger-surface: #442b36; --danger-line: #ff5555; --navy: #191a21;
+  --navy-dark: #191a21; --ice: #343746; --accent-dark: #8be9fd;
+}
+
+html[data-theme="nord"] {
+  color-scheme: dark;
+  --bg: #2e3440; --surface: #3b4252; --surface-muted: #434c5e; --line: #4c566a;
+  --ink: #eceff4; --muted: #d8dee9; --muted-2: #81a1c1; --accent: #88c0d0;
+  --accent-soft: #434c5e; --accent-line: #5e81ac; --positive: #a3be8c; --negative: #bf616a;
+  --danger-surface: #4b3038; --danger-line: #bf616a; --navy: #2e3440;
+  --navy-dark: #242933; --ice: #434c5e; --accent-dark: #8fbcbb;
+}
+
+html[data-theme="catppuccin"] {
+  color-scheme: dark;
+  --bg: #1e1e2e; --surface: #313244; --surface-muted: #45475a; --line: #585b70;
+  --ink: #cdd6f4; --muted: #a6adc8; --muted-2: #7f849c; --accent: #cba6f7;
+  --accent-soft: #45475a; --accent-line: #b4befe; --positive: #a6e3a1; --negative: #f38ba8;
+  --danger-surface: #49303e; --danger-line: #f38ba8; --navy: #181825;
+  --navy-dark: #11111b; --ice: #45475a; --accent-dark: #89dceb;
+}
+
+html[data-theme="solarized"] {
+  color-scheme: dark;
+  --bg: #002b36; --surface: #073642; --surface-muted: #094352; --line: #586e75;
+  --ink: #fdf6e3; --muted: #93a1a1; --muted-2: #839496; --accent: #2aa198;
+  --accent-soft: #094352; --accent-line: #2aa198; --positive: #859900; --negative: #dc322f;
+  --danger-surface: #4a2a2c; --danger-line: #dc322f; --navy: #002b36;
+  --navy-dark: #001e26; --ice: #094352; --accent-dark: #b58900;
 }
 
 * { box-sizing: border-box; }
@@ -39,7 +80,7 @@ main { padding: 1.1rem; }
   cursor: pointer; display: inline-block; font: inherit; padding: .55rem .85rem; text-decoration: none;
 }
 .button-primary { background: var(--accent); border-color: var(--accent); color: white; }
-.button-danger { background: #fff1f0; border-color: #f0b8b2; color: #9f1c14; }
+.button-danger { background: var(--danger-surface); border-color: var(--danger-line); color: var(--negative); }
 .summary { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1rem; }
 .summary article { background: var(--surface); border: 1px solid var(--line); border-radius: .65rem; padding: 1rem; }
 .summary span { color: var(--muted); display: block; font-size: .82rem; margin-bottom: .25rem; }
@@ -279,18 +320,27 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
 .contract-fields { grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; }
 .portfolio-fields { grid-template-columns: 1.4fr .6fr auto 1.6fr auto; }
 .portfolio-simulated-field { align-items: center; display: flex; flex-direction: row-reverse; gap: .4rem; justify-content: flex-end; }
-.portfolio-ticker-filter { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
-.portfolio-ticker-filter label { align-items: center; color: var(--muted); display: flex; gap: .4rem; }
-.portfolio-ticker-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.portfolio-ticker-add { grid-template-columns: minmax(180px, 1fr) auto; margin-bottom: 0; }
+.portfolio-ticker-card-heading { align-items: center; display: flex; gap: .75rem; justify-content: space-between; }
+.portfolio-ticker-card-heading h2 { margin-bottom: 0; }
+.portfolio-create-form { grid-template-columns: 15rem 8rem auto 15rem auto; justify-content: start; width: fit-content; }
 .portfolio-ticker-browser { display: grid; gap: .65rem; margin-bottom: 1rem; }
 .portfolio-ticker-group { align-items: center; border: 1px solid var(--line); border-radius: .45rem; display: grid; gap: .65rem; grid-template-columns: 10rem 1fr; padding: .55rem .65rem; }
 .portfolio-ticker-group h3 { color: var(--navy-dark); margin: 0; }
-.portfolio-ticker-list { border: 1px solid var(--line); border-radius: .35rem; }
+.portfolio-ticker-group-heading { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
+.portfolio-ticker-list-row { align-items: flex-start; display: flex; gap: .45rem; min-width: 0; }
+.portfolio-ticker-add-details { position: relative; }
+.portfolio-ticker-add-button { cursor: pointer; list-style: none; white-space: nowrap; }
+.portfolio-ticker-add-button::-webkit-details-marker { display: none; }
+.portfolio-ticker-add-form { align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: .45rem; display: grid; gap: .55rem; grid-template-columns: minmax(150px, 1fr) auto; padding: .65rem; position: absolute; right: 0; top: 2.1rem; width: min(22rem, 75vw); z-index: 2; }
+.portfolio-ticker-add-empty { background: var(--surface); border: 1px solid var(--line); border-radius: .45rem; margin: .45rem 0 0; padding: .55rem .65rem; position: absolute; right: 0; top: 1.7rem; white-space: nowrap; z-index: 2; }
+.portfolio-ticker-list { border: 1px solid var(--line); border-radius: .35rem; flex: 1; min-width: 0; }
 .portfolio-ticker-list > summary { color: var(--navy-dark); cursor: pointer; font-weight: 750; padding: .4rem .55rem; }
 .portfolio-ticker-list[open] > summary { border-bottom: 1px solid var(--line); }
 .portfolio-ticker-list ul { display: flex; flex-wrap: wrap; gap: .45rem; list-style: none; margin: .65rem; padding: 0; }
-.portfolio-ticker-list li { background: var(--ice); border: 1px solid var(--line); border-radius: .35rem; font-weight: 700; padding: .45rem .5rem; }
+.portfolio-ticker-list li { align-items: center; background: var(--ice); border: 1px solid var(--line); border-radius: .35rem; display: flex; font-weight: 700; gap: .4rem; padding: .35rem .45rem .35rem .5rem; }
+.portfolio-ticker-minus { background: none; border: 0; color: var(--negative); cursor: pointer; font: inherit; font-size: 1.1rem; font-weight: 750; line-height: 1; padding: 0; }
+.portfolio-ticker-minus:hover { color: var(--navy-dark); }
+.portfolio-ticker-minus:focus-visible { outline: 3px solid #63b3c8; }
 .portfolio-ticker-list .form-help { margin: .65rem; }
 .expiration-summary { margin-top: 1rem; }
 .expiration-summary { width: min(100%, 780px); }
@@ -397,9 +447,10 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   .catalog-create, .ticker-fields, .expiration-fields, .contract-fields, .portfolio-fields { grid-template-columns: 1fr; }
   .collector-settings-details, .schedule-hours { grid-template-columns: 1fr; }
   .schedule-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .portfolio-ticker-grid { grid-template-columns: 1fr; }
   .portfolio-ticker-group { align-items: stretch; grid-template-columns: 1fr; }
-  .portfolio-ticker-filter { align-items: stretch; flex-direction: column; }
+  .portfolio-ticker-add-form { width: min(22rem, 90vw); }
+  .portfolio-ticker-card-heading { align-items: flex-start; flex-direction: column; }
+  .portfolio-create-form { grid-template-columns: 1fr; width: 100%; }
 }
 
 .topbar { gap: 1.25rem; }
