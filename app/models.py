@@ -156,7 +156,7 @@ class AppSetting(Base):
             name="stale_alert_seconds_range",
         ),
         CheckConstraint(
-            "theme IN ('institutional', 'dracula', 'nord', 'catppuccin', 'solarized')",
+            "theme IN ('light', 'dark', 'solarized_light', 'solarized_dark', 'dracula', 'nord', 'monokai', 'gray', 'soft_light', 'soft_dark', 'corporate_blue', 'emerald', 'institutional')",
             name="theme_valid",
         ),
     )

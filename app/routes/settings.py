@@ -31,7 +31,14 @@ from app.routes.helpers import (
     rtd_service_state,
     ticker_records,
 )
-from app.themes import DEFAULT_THEME, THEME_OPTIONS, parse_theme
+from app.themes import (
+    DEFAULT_THEME,
+    THEME_DESCRIPTIONS,
+    THEME_OPTIONS,
+    get_theme_options_dict,
+    normalize_theme,
+    parse_theme,
+)
 
 _WEEKDAY_OPTIONS = (
     (0, "Segunda-feira"),
@@ -123,7 +130,9 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
                 if value.isdigit()
             },
             tickers=ticker_records(),
-            theme_options=THEME_OPTIONS,
+            theme_options=get_theme_options_dict(),
+            theme_descriptions=THEME_DESCRIPTIONS,
+            current_theme=settings.theme,
             rtd_service_running=running,
             rtd_service_available=available,
             rtd_service_status=rtd_status,
