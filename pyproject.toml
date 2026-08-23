@@ -16,7 +16,7 @@ dependencies = [
   "Flask-Migrate>=4.1.0,<5",
   "Flask-SQLAlchemy>=3.1.1,<4",
   "Flask-WTF>=1.2.2,<2",
-  "gunicorn>=23.0.0,<24",
+  "gunicorn>=23.0.0,<27",
   "psycopg[binary]>=3.2.13,<4",
   "pydantic>=2.13.4,<3",
   # Sessão, CSRF, rate-limit no login, controle de acesso, hash de senha,
