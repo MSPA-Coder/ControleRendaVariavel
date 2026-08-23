@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Static Site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Criar diretório _site
+        run: mkdir -p _site
+      
+      - name: Copiar arquivos estáticos para _site
+        run: |
+          cp -r app/static/* _site/ 2>/dev/null || true
+          cp README.md _site/ 2>/dev/null || true
+          cp docs/*.md _site/ 2>/dev/null || true
+          echo "<!DOCTYPE html><html><head><title>Controle Renda Variável</title></head><body><h1>Controle de Renda Variável</h1><p>Documentação e recursos estáticos.</p></body></html>" > _site/index.html
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

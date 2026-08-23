@@ -1,85 +1,12 @@
-# ---------------------------------------------------------------------------
-# Nucleo comum aos quatro projetos. Mantenha esta secao em sincronia; o que for
-# especifico deste projeto vai no fim do arquivo.
-# ---------------------------------------------------------------------------
+```
+# Dependencies
+node_modules/
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
+# Editors
+.vscode/
 
-# Ambientes virtuais
-.venv/
-venv/
-env/
-ENV/
-
-# Caches de ferramentas
-.cache/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-.coverage.*
-htmlcov/
-
-# Empacotamento
-build/
-dist/
-*.egg
-*.egg-info/
-
-# Segredos e certificados
+# Environment
 .env
-.env.*
-!.env.example
-!.env.docker.example
-.certs/
-.secrets/
-
-# Dados locais: nunca versionados, nem mesmo vazios
-backups/
-instance/
-logs/*
-!logs/.gitkeep
-*.db
-*.db-journal
-*.sqlite
-*.sqlite3
-
-# Ferramentas de agente
-.codex/
-.agents/
-.claude/
-
-# Editor: a configuracao compartilhada e versionada, o resto nao
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/extensions.json
-!.vscode/launch.json
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# Sistema operacional
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# ---------------------------------------------------------------------------
-# Especifico do ControleRendaVariavel
-# ---------------------------------------------------------------------------
-
-# Estado do servidor RTD no host Windows: env e logs do coletor de cotacoes,
-# especificos desta maquina.
-.docker-local/
-tmp/
-
-# Planilhas exportadas da carteira, regeneraveis pela propria aplicacao.
-sheet-acoes.json
-sheet-acoes.pdf
+.env.local
+*.env.*
+```
