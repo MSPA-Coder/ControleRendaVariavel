@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {# Import proprio: o de base.html nao alcanca os blocos filhos. #}
 {% import "partials/collector.html" as collector %}
 {% block title %}Configurações · Controle de Renda Variável{% endblock %}
@@ -103,6 +103,21 @@
       Não é buscada automaticamente de nenhuma fonte externa — ajuste conforme
       a SELIC/CDI vigente.
     </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Aparência</legend>
+    <div class="theme-grid">
+      {% for theme_value, theme_label in theme_options.items() %}
+      <label class="theme-option {% if current_theme == theme_value %}active{% endif %}">
+        <input type="radio" name="theme" value="{{ theme_value }}" aria-label="Tema {{ theme_label }}" {% if current_theme == theme_value %}checked{% endif %}>
+        <div class="theme-preview preview-{{ theme_value }}"></div>
+        <span class="theme-name">{{ theme_label }}</span>
+        <span class="theme-desc">{{ theme_descriptions[theme_value] }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="form-help">A paleta é aplicada ao menu, formulários, tabelas, indicadores e gráficos.</p>
   </fieldset>
 
   <fieldset>

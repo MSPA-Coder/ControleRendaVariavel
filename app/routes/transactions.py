@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -68,6 +68,66 @@ class TransactionInput:
     result_mode: str
     portfolio_id: int
     notes: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionPerformance:
+    """Indicadores das transações encerradas em uma única moeda.
+
+    Resultado monetário não pode ser somado entre BRL e USD sem uma taxa de
+    câmbio. Os indicadores derivados desses valores (profit factor e payoff)
+    também precisam permanecer dentro do mesmo agrupamento.
+    """
+
+    currency: str
+    gain: Decimal
+    loss: Decimal
+    result: Decimal
+    win_rate: Decimal | None
+    profit_factor: Decimal | None
+    payoff_ratio: Decimal | None
+    avg_days_held: Decimal | None
+
+
+def _transaction_performance_by_currency(
+    records: list[Transaction],
+) -> list[TransactionPerformance]:
+    """Calcula o resumo de transações encerradas, separado por moeda."""
+    closed_by_currency: dict[str, list[Transaction]] = {}
+    for transaction in records:
+        if transaction.status == TransactionStatus.CLOSED:
+            closed_by_currency.setdefault(transaction.currency, []).append(transaction)
+
+    summaries: list[TransactionPerformance] = []
+    for currency in sorted(closed_by_currency):
+        closed_records = closed_by_currency[currency]
+        gains = [tx.result for tx in closed_records if tx.result is not None and tx.result > 0]
+        losses = [tx.result for tx in closed_records if tx.result is not None and tx.result < 0]
+        gain = sum(gains, Decimal("0"))
+        loss = sum(losses, Decimal("0"))
+        wins = len(gains)
+        win_rate = Decimal(wins) / Decimal(len(closed_records)) if closed_records else None
+        profit_factor = (gain / abs(loss)) if loss != 0 else None
+        avg_gain = gain / Decimal(len(gains)) if gains else None
+        avg_loss = abs(loss) / Decimal(len(losses)) if losses else None
+        payoff_ratio = (avg_gain / avg_loss) if avg_gain is not None and avg_loss else None
+        days_held = [tx.days_held for tx in closed_records if tx.days_held is not None]
+        avg_days_held = (
+            Decimal(sum(days_held)) / Decimal(len(days_held)) if days_held else None
+        )
+        summaries.append(
+            TransactionPerformance(
+                currency=currency,
+                gain=gain,
+                loss=loss,
+                result=gain + loss,
+                win_rate=win_rate,
+                profit_factor=profit_factor,
+                payoff_ratio=payoff_ratio,
+                avg_days_held=avg_days_held,
+            )
+        )
+    return summaries
 
 
 def _parse_form() -> TransactionInput:
@@ -198,26 +258,9 @@ def transactions_results_context() -> dict[str, object]:
     # KPIs de performance só fazem sentido para transações já encerradas —
     # linhas abertas (status=OPEN) não têm resultado realizado ainda, então
     # ficam de fora dessas contas independentemente do filtro de status
-    # escolhido acima (que afeta só o que aparece na tabela).
-    closed_records = [tx for tx in records if tx.status == TransactionStatus.CLOSED]
-    gains = [tx.result for tx in closed_records if tx.result is not None and tx.result > 0]
-    losses = [tx.result for tx in closed_records if tx.result is not None and tx.result < 0]
-    gain = sum(gains, Decimal("0"))
-    loss = sum(losses, Decimal("0"))
-    wins = len(gains)
-    win_rate = Decimal(wins) / Decimal(len(closed_records)) if closed_records else None
-    profit_factor = (gain / abs(loss)) if loss != 0 else None
-    avg_gain = gain / Decimal(len(gains)) if gains else None
-    avg_loss = abs(loss) / Decimal(len(losses)) if losses else None
-    # Payoff ratio: média dos ganhos sobre a média das
-    # perdas, em módulo. Só é calculável quando há ao menos uma transação
-    # de cada sinal; caso contrário fica sem sentido (nunca ganhou, ou
-    # nunca perdeu, então não há uma "razão" a expressar).
-    payoff_ratio = (avg_gain / avg_loss) if avg_gain is not None and avg_loss else None
-    days_held = [tx.days_held for tx in closed_records if tx.days_held is not None]
-    avg_days_held = (
-        Decimal(sum(days_held)) / Decimal(len(days_held)) if days_held else None
-    )
+    # escolhido acima (que afeta só o que aparece na tabela). Cada resumo é
+    # separado por moeda: BRL e USD não são somáveis sem uma taxa de câmbio.
+    performance_by_currency = _transaction_performance_by_currency(records)
     return {
         "transactions": records,
         "partial_close_ids": partial_close_ids,
@@ -226,13 +269,7 @@ def transactions_results_context() -> dict[str, object]:
         "portfolios": portfolio_records(),
         "selected_status": status_raw,
         "transaction_statuses": TransactionStatus,
-        "gain": gain,
-        "loss": loss,
-        "result": gain + loss,
-        "win_rate": win_rate,
-        "profit_factor": profit_factor,
-        "payoff_ratio": payoff_ratio,
-        "avg_days_held": avg_days_held,
+        "performance_by_currency": performance_by_currency,
     }
 
 

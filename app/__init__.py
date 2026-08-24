@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -239,6 +239,21 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
                 stale_after_seconds=app.config["RTD_STALE_AFTER_SECONDS"]
             )
         }
+
+    @app.context_processor
+    def _theme_context() -> dict[str, str]:
+        """Disponibiliza o tema persistido para a casca de todas as telas."""
+        from app.themes import DEFAULT_THEME, THEME_IDS
+
+        # A tela de login é pública e deve continuar renderizando mesmo nos
+        # testes/ambientes em que o banco ainda não foi iniciado.
+        if not current_user.is_authenticated:
+            return {"app_theme": DEFAULT_THEME}
+        from app.models import AppSetting
+
+        settings = db.session.get(AppSetting, 1)
+        theme = settings.theme if settings and settings.theme in THEME_IDS else DEFAULT_THEME
+        return {"app_theme": theme}
 
     requer_login(
         app,
