@@ -36,7 +36,6 @@ from app.themes import (
     THEME_DESCRIPTIONS,
     THEME_OPTIONS,
     get_theme_options_dict,
-    normalize_theme,
     parse_theme,
 )
 
