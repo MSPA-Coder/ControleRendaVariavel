@@ -1,4 +1,4 @@
-{# Resultado de Transações: tabela e resumo de performance.
+﻿{# Resultado de Transações: tabela e resumo de performance.
 
    Envolvido por um único wrapper para que a troca via HTMX (hx-swap
    outerHTML) substitua tabela e resumo juntos, mantendo os dois sempre
@@ -37,7 +37,7 @@
           {% endif %}
         </td>
         <td>{{ tx.side.value }}</td>
-        <td class="number">{{ tx.quantity|quantity }}</td>
+        <td class="number">{{ tx.quantity|quantity(tx.currency) }}</td>
         <td class="number">{{ tx.average_cost|currency(tx.currency) }}</td>
         <td class="number">{{ tx.exit_price|currency(tx.currency) }}</td>
         <td class="number {{ tx.result|sign_class }}">{{ tx.result|currency(tx.currency) }}</td>
@@ -84,25 +84,29 @@
   </table>
 </div>
 
-<section class="summary transactions-summary" aria-label="Resumo de transações">
-  <article><span>Ganhos</span><strong class="positive">{{ gain|currency('BRL') }}</strong></article>
-  <article><span>Perdas</span><strong class="negative">{{ loss|currency('BRL') }}</strong></article>
-  <article><span>Resultado</span><strong class="{{ result|sign_class }}">{{ result|currency('BRL') }}</strong></article>
+{% if performance_by_currency %}
+<section class="summary transactions-summary" aria-label="Resumo de transações por moeda">
+  {% for summary in performance_by_currency %}
+  <article><span>Ganhos · {{ summary.currency }}</span><strong class="positive">{{ summary.gain|currency(summary.currency) }}</strong></article>
+  <article><span>Perdas · {{ summary.currency }}</span><strong class="negative">{{ summary.loss|currency(summary.currency) }}</strong></article>
+  <article><span>Resultado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}">{{ summary.result|currency(summary.currency) }}</strong></article>
   <article title="Participação de transações com resultado positivo no total, entre as já encerradas.">
-    <span>Win rate</span>
-    <strong>{{ win_rate|percent if win_rate is not none else '-' }}</strong>
+    <span>Win rate · {{ summary.currency }}</span>
+    <strong>{{ summary.win_rate|percent if summary.win_rate is not none else '-' }}</strong>
   </article>
-  <article title="Ganhos totais divididos pelas perdas totais (em módulo), entre as transações encerradas. Acima de 1 indica que os ganhos superam as perdas.">
-    <span>Profit factor</span>
-    <strong>{{ profit_factor|number(2) if profit_factor is not none else '-' }}</strong>
+  <article title="Ganhos totais divididos pelas perdas totais (em módulo), entre as transações encerradas na mesma moeda. Acima de 1 indica que os ganhos superam as perdas.">
+    <span>Profit factor · {{ summary.currency }}</span>
+    <strong>{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '-' }}</strong>
   </article>
-  <article title="Média dos ganhos dividida pela média das perdas (em módulo), entre as transações encerradas. Acima de 1 indica que os ganhos médios superam as perdas médias.">
-    <span>Payoff ratio</span>
-    <strong>{{ payoff_ratio|number(2) if payoff_ratio is not none else '-' }}</strong>
+  <article title="Média dos ganhos dividida pela média das perdas (em módulo), entre as transações encerradas na mesma moeda.">
+    <span>Payoff ratio · {{ summary.currency }}</span>
+    <strong>{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '-' }}</strong>
   </article>
-  <article title="Média de dias entre abertura e encerramento das transações já encerradas.">
-    <span>Tempo médio em posição</span>
-    <strong>{{ avg_days_held|number(1) if avg_days_held is not none else '-' }} dias</strong>
+  <article title="Média de dias entre abertura e encerramento das transações já encerradas na mesma moeda.">
+    <span>Tempo médio em posição · {{ summary.currency }}</span>
+    <strong>{{ summary.avg_days_held|number(1) if summary.avg_days_held is not none else '-' }} dias</strong>
   </article>
+  {% endfor %}
 </section>
+{% endif %}
 </div>

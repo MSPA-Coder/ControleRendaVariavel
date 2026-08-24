@@ -1,4 +1,4 @@
-{# Regiao trocada pelo seletor de carteira e pelos formularios de CRUD de
+﻿{# Regiao trocada pelo seletor de carteira e pelos formularios de CRUD de
    Carteiras em table_portfolios.html. Fica em
    parcial para que a pagina inteira e a resposta HTMX saiam do mesmo
    template, no mesmo padrao de partials/quotes_results.html. #}
@@ -11,9 +11,9 @@
    duplicado. #}
 {% include "partials/flash_toast.html" %}
 
-<section class="catalog-card">
+<section id="portfolios-management-card" class="catalog-card" hidden>
   <h2>Carteiras</h2>
-  <form class="catalog-create portfolio-fields" method="post" action="{{ url_for('portfolio.create_portfolio') }}"
+  <form class="catalog-create portfolio-fields portfolio-create-form" method="post" action="{{ url_for('portfolio.create_portfolio') }}"
         hx-post="{{ url_for('portfolio.create_portfolio') }}"
         hx-target="#portfolios-results" hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -78,89 +78,73 @@
   </div>
 </section>
 
-{% if portfolios %}
 <section class="catalog-card portfolio-ticker-card">
-  <h2>Tickers por carteira</h2>
+  <div class="portfolio-ticker-card-heading">
+    <h2>Tickers por carteira</h2>
+    <button class="button button-primary" type="button" data-portfolios-toggle
+            aria-controls="portfolios-management-card" aria-expanded="false">Adicionar carteira</button>
+  </div>
   <p class="form-help">
-    Cadastro de quais tickers podem ser lançados em cada carteira. Um mesmo
-    ticker pode estar associado a mais de uma carteira ao mesmo tempo.
+    Tickers associados podem ser incluídos ou removidos individualmente. Um
+    mesmo ticker pode estar associado a mais de uma carteira.
   </p>
   <div class="portfolio-ticker-browser" aria-label="Tickers associados por carteira">
     {% for portfolio in portfolios %}
     {% set tickers = associated_tickers_by_portfolio.get(portfolio.id, []) %}
+    {% set available = available_tickers_by_portfolio.get(portfolio.id, []) %}
     <section class="portfolio-ticker-group">
-      <h3>{{ portfolio.name }}</h3>
-      <details class="portfolio-ticker-list" {{ 'open' if selected_portfolio and portfolio.id == selected_portfolio.id }}>
-        <summary>{{ tickers|length }} ticker(s) associado(s)</summary>
+      <div class="portfolio-ticker-group-heading">
+        <h3>{{ portfolio.name }}</h3>
+      </div>
+      <div class="portfolio-ticker-list-row">
+        <details class="portfolio-ticker-list" {{ 'open' if selected_portfolio and portfolio.id == selected_portfolio.id }}>
+          <summary>{{ tickers|length }} ticker(s) associado(s)</summary>
         {% if tickers %}
         <ul>
-          {% for ticker in tickers %}<li>{{ ticker.symbol }}</li>{% endfor %}
+          {% for ticker in tickers %}
+          <li>
+            <span>{{ ticker.symbol }}</span>
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=portfolio.id, ticker_id=ticker.id) }}"
+                  hx-post="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=portfolio.id, ticker_id=ticker.id) }}"
+                  hx-target="#portfolios-results" hx-swap="outerHTML"
+                  hx-confirm="Remover {{ ticker.symbol }} de {{ portfolio.name }}?"
+                  data-sa-titulo="Desassociar ticker" data-sa-severidade="warning">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="portfolio-ticker-minus" type="submit"
+                      title="Remover {{ ticker.symbol }} de {{ portfolio.name }}"
+                      aria-label="Remover {{ ticker.symbol }} de {{ portfolio.name }}">−</button>
+            </form>
+          </li>
+          {% endfor %}
         </ul>
         {% else %}
         <p class="form-help">Nenhum ticker associado.</p>
         {% endif %}
-      </details>
+        </details>
+        <details class="portfolio-ticker-add-details">
+          <summary class="button button-primary portfolio-ticker-add-button"
+                    title="Adicionar ticker a {{ portfolio.name }}"
+                    aria-label="Adicionar ticker a {{ portfolio.name }}">Adicionar</summary>
+          {% if available %}
+          <form class="portfolio-ticker-add-form" method="post"
+                action="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=portfolio.id) }}"
+                hx-post="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=portfolio.id) }}"
+                hx-target="#portfolios-results" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Ticker<select required name="ticker_id">
+              <option value="">Selecione</option>
+              {% for ticker in available %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
+            </select></label>
+            <button class="button button-primary" type="submit">Adicionar</button>
+          </form>
+          {% else %}
+          <p class="form-help portfolio-ticker-add-empty">Todos os tickers elegíveis já estão associados.</p>
+          {% endif %}
+        </details>
+      </div>
     </section>
     {% endfor %}
   </div>
-
-  <form class="portfolio-ticker-filter">
-    <label for="portfolio-ticker-select">Carteira</label>
-    <select id="portfolio-ticker-select" name="portfolio_id"
-            hx-get="{{ url_for('portfolio.table_portfolios') }}"
-            hx-trigger="change"
-            hx-include="closest form"
-            hx-target="#portfolios-results"
-            hx-swap="outerHTML"
-            hx-push-url="true">
-      {% for portfolio in portfolios %}
-        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio and portfolio.id == selected_portfolio.id }}>{{ portfolio.name }}</option>
-      {% endfor %}
-    </select>
-  </form>
-
-  {% if selected_portfolio %}
-  <div class="portfolio-ticker-grid">
-    <div class="table-wrap">
-      <table class="catalog-table">
-        <thead><tr><th>Ticker associado</th><th>Ações</th></tr></thead>
-        <tbody>
-        {% for ticker in associated_tickers %}
-          <tr>
-            <td>{{ ticker.symbol }}</td>
-            <td class="catalog-actions">
-              <form method="post" action="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
-                    hx-post="{{ url_for('portfolio.remove_portfolio_ticker', portfolio_id=selected_portfolio.id, ticker_id=ticker.id) }}"
-                    hx-target="#portfolios-results" hx-swap="outerHTML"
-                    hx-confirm="Remover {{ ticker.symbol }} de {{ selected_portfolio.name }}?"
-                    data-sa-titulo="Desassociar ticker" data-sa-severidade="warning">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="button button-danger" type="submit">Remover</button>
-              </form>
-            </td>
-          </tr>
-        {% else %}
-          <tr><td colspan="2" class="empty">Nenhum ticker associado a {{ selected_portfolio.name }}.</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if available_tickers %}
-    <form class="catalog-create portfolio-ticker-add" method="post" action="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=selected_portfolio.id) }}"
-          hx-post="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=selected_portfolio.id) }}"
-          hx-target="#portfolios-results" hx-swap="outerHTML">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>Associar ticker<select required name="ticker_id">
-        <option value="">Selecione</option>
-        {% for ticker in available_tickers %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
-      </select></label>
-      <button class="button button-primary" type="submit">Associar</button>
-    </form>
-    {% else %}
-    <p class="form-help">Todos os tickers elegíveis já estão associados a {{ selected_portfolio.name }}.</p>
-    {% endif %}
-  </div>
-  {% endif %}
 </section>
-{% endif %}
 </div>
