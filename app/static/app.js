@@ -1,4 +1,4 @@
-﻿// O HTMX injeta um <style> proprio no carregamento para o indicador de
+// O HTMX injeta um <style> proprio no carregamento para o indicador de
 // requisicao (`htmx.config.includeIndicatorStyles`, `true` por padrao). Esta
 // aplicacao nao usa `hx-indicator` nem a classe `htmx-indicator` em lugar
 // nenhum, entao esse estilo e peso morto -- e como vem sem nonce, viola
@@ -80,6 +80,22 @@ htmx.config.includeIndicatorStyles = false;
   });
 
   document.addEventListener("click", (event) => {
+    // Preview instantaneo do tema: marca visualmente a opcao clicada e
+    // aplica o data-theme na hora, sem esperar o submit do formulario. O
+    // valor so e persistido quando "Salvar configuracoes" for enviado --
+    // isto e so o retorno visual do clique no seletor.
+    const themeOption = event.target.closest(".theme-option");
+    if (themeOption) {
+      const input = themeOption.querySelector('input[type="radio"]');
+      if (input) {
+        document.querySelectorAll(".theme-option").forEach((option) => {
+          option.classList.remove("active");
+        });
+        themeOption.classList.add("active");
+        document.documentElement.setAttribute("data-theme", input.value);
+      }
+    }
+
     const portfoliosToggle = event.target.closest("[data-portfolios-toggle]");
     if (portfoliosToggle) {
       const portfoliosCard = document.getElementById("portfolios-management-card");

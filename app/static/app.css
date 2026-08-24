@@ -397,13 +397,27 @@ tbody tr:hover { background: #e1f0f4; }
 }
   .schedule-section { display: grid; gap: .5rem; }
   .schedule-section-label { color: var(--muted); font-size: .82rem; font-weight: 700; }
-  .schedule-days { display: grid; gap: .5rem; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .schedule-days { display: flex; flex-wrap: wrap; gap: .6rem; }
 .schedule-days .checkbox-option {
-  align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: .5rem;
-  color: var(--ink); cursor: pointer; display: flex; font-size: .78rem; gap: .4rem; justify-content: center;
-  min-height: 2.5rem; padding: .45rem;
+  align-items: center; background: var(--surface); border: 1.5px solid var(--line); border-radius: .7rem;
+  color: var(--ink); cursor: pointer; display: flex; font-size: .82rem; font-weight: 500; gap: .5rem;
+  justify-content: center; min-height: 2.75rem; padding: .5rem 1rem; text-align: center;
+  transition: border-color .15s, box-shadow .15s, color .15s;
 }
-.schedule-days .checkbox-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.schedule-days .checkbox-option:hover { border-color: var(--accent); }
+.schedule-days .checkbox-option input[type="checkbox"] {
+  appearance: none; background: var(--surface); border: 2px solid var(--muted-2); border-radius: .3rem;
+  cursor: pointer; display: inline-block; flex: 0 0 auto; height: 1.05rem; margin: 0; position: relative; width: 1.05rem;
+}
+.schedule-days .checkbox-option input[type="checkbox"]::after {
+  border: solid #fff; border-width: 0 2px 2px 0; content: ""; height: .5rem; left: .28rem;
+  opacity: 0; position: absolute; top: .05rem; transform: rotate(45deg); width: .27rem;
+}
+.schedule-days .checkbox-option input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.schedule-days .checkbox-option input[type="checkbox"]:checked::after { opacity: 1; }
+.schedule-days .checkbox-option:has(input:checked) {
+  border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--accent-dark); font-weight: 600;
+}
 .schedule-hours { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(160px, 1fr)); max-width: 440px; }
 .position-form h1, .position-form .form-help, .position-form .form-warning,
 .form-actions { grid-column: 1 / -1; }
@@ -566,7 +580,7 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   .topbar nav { flex-wrap: wrap; }
   .catalog-create, .ticker-fields, .expiration-fields, .contract-fields, .portfolio-fields { grid-template-columns: 1fr; }
   .collector-settings-details, .schedule-hours { grid-template-columns: 1fr; }
-  .schedule-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-days .checkbox-option { flex: 1 1 calc(50% - .6rem); }
   .portfolio-ticker-group { align-items: stretch; grid-template-columns: 1fr; }
   .portfolio-ticker-add-form { width: min(22rem, 90vw); }
   .portfolio-ticker-card-heading { align-items: flex-start; flex-direction: column; }

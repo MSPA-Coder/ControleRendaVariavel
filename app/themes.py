@@ -1,15 +1,16 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Mapping
 
 DEFAULT_THEME = "light"
 
-# Paletas reconhecidas por projetos open source amplamente adotados no GitHub.
-# As cores de cada tema são implementadas localmente em app.css para manter
-# CSP, disponibilidade offline e a identidade dos componentes do aplicativo.
-# Baseado no sistema de temas do projeto controlebancario (Django).
-# Padronizado entre projetos Flask e Django para compartilhamento em biblioteca.
+# Paletas reconhecidas por projetos open source amplamente adotados no GitHub,
+# mais o verde institucional original do projeto (primeiro tema, anterior a
+# esta expansao). As cores de cada tema sao implementadas localmente em
+# app.css para manter CSP, disponibilidade offline e a identidade dos
+# componentes do aplicativo.
 THEME_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    ("institutional", "Institutional", "Verde institucional original"),
     ("light", "Light", "Claro e neutro"),
     ("dark", "Dark", "Escuro e focado"),
     ("solarized_light", "Solarized Light", "Claro suave"),
@@ -27,6 +28,7 @@ THEME_IDS = frozenset(theme_id for theme_id, _, _ in THEME_OPTIONS)
 
 # Descrições detalhadas para cada tema (sem ícones/emojis para interface mais prática)
 THEME_DESCRIPTIONS = {
+    "institutional": "Verde institucional original",
     "light": "Claro e neutro",
     "dark": "Escuro e focado",
     "solarized_light": "Claro suave",
