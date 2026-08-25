@@ -58,9 +58,9 @@
                   data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="link-button" type="submit"
-                       data-sa-confirmar="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada."
-                       data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error"
-                       title="Devolve {{ tx.quantity|quantity }} para a posição e apaga esta transação">desfazer</button>
+                      data-sa-confirmar="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada."
+                      data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error"
+                      title="Desfaz esta transação e apaga o registro">desfazer</button>
             </form>
           {% elif tx.option_contract_id %}
             {# Transação de opção fechada sem posição viva: registro histórico

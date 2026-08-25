@@ -20,7 +20,7 @@
 {%- set avisos = [] -%}
 {%- for categoria, mensagem in get_flashed_messages(with_categories=true) -%}
   {%- set _ = avisos.append({
-    "mensagem": mensagem,
+    "mensagem": mensagem|privacy_text,
     "severidade": categoria if categoria in ("success", "error", "warning", "info") else "info",
   }) -%}
 {%- endfor -%}

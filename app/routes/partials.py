@@ -16,6 +16,7 @@ from contextlib import suppress
 from flask import render_template, request
 from flask.typing import ResponseReturnValue
 
+from app.authorization import requer_admin
 from app.collector_heartbeat import collector_heartbeat
 from app.routes import bp
 from app.routes.helpers import quote_stale_after_seconds, rtd_service, rtd_service_state
@@ -49,6 +50,7 @@ def collector_heartbeat_partial() -> ResponseReturnValue:
 
 
 @bp.route("/partials/rtd-service", methods=["GET", "POST"])
+@requer_admin
 def rtd_service_partial() -> ResponseReturnValue:
     """Lê e, no POST, alterna o coletor RTD.
 

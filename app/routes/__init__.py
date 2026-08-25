@@ -24,6 +24,7 @@ def register_blueprints(app: Flask) -> None:
         partials,
         performance,
         positions,
+        privacy,
         quotes,
         risk,
         settings,
@@ -32,7 +33,9 @@ def register_blueprints(app: Flask) -> None:
     )
     from app.routes.auth import bp as auth_bp
     from app.routes.options import bp as options_bp
+    from app.routes.users import bp as users_bp
 
     app.register_blueprint(bp)
     app.register_blueprint(options_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(users_bp)
