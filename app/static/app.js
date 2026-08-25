@@ -8,7 +8,24 @@
 // ordem do documento), que e quando o HTMX de fato le o config.
 htmx.config.includeIndicatorStyles = false;
 
+const sensitiveInputNames = new Set([
+  "quantity", "price", "average_cost", "target_price", "exit_price", "strike",
+  "premium", "amount", "value", "risk_free_rate", "risk_free_rate_annual", "initial_balance",
+  "quote_multiplier", "target_multiplier",
+]);
+
+function initializeValuesPrivacy(root = document) {
+  root.querySelectorAll("input[name]").forEach((input) => {
+    if (sensitiveInputNames.has(input.name)) input.dataset.sensitiveInput = "true";
+  });
+}
+
 (() => {
+  initializeValuesPrivacy();
+  document.addEventListener("htmx:afterSwap", (event) => {
+    initializeValuesPrivacy(event.target || document);
+  });
+
   const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");
 

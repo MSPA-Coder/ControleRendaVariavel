@@ -11,6 +11,7 @@ from app.instrument_status import (
     INSTRUMENT_STATUS_DESCRIPTIONS,
     INSTRUMENT_STATUS_LABELS,
 )
+from app.privacy import mask_text, mask_value
 
 COLLECTOR_STATUS_LABELS = {
     "online": "Coletor online",
@@ -63,9 +64,13 @@ def _number(value: Decimal, decimals: int, trim: bool = False) -> str:
 
 
 def register_filters(app: Flask) -> None:
+    @app.template_filter("privacy_text")
+    def privacy_text(value: str) -> str:
+        return mask_text(value)
+
     @app.template_filter("money")
     def money(value: Decimal | None) -> str:
-        return "-" if value is None else f"R$ {_number(value, 2)}"
+        return "-" if value is None else mask_value(f"R$ {_number(value, 2)}")
 
     @app.template_filter("currency")
     def currency(
@@ -74,7 +79,7 @@ def register_filters(app: Flask) -> None:
         if value is None:
             return "-"
         prefix = "R$" if code == "BRL" else "US$"
-        return f"{prefix} {_number(value, decimals, trim)}"
+        return mask_value(f"{prefix} {_number(value, decimals, trim)}")
 
     @app.template_filter("currency_symbol")
     def currency_symbol(code: str) -> str:
@@ -95,20 +100,20 @@ def register_filters(app: Flask) -> None:
         juntas — o formato preserva as casas que o próprio ``Decimal`` carrega.
         """
         if currency is not None:
-            return _number(value, 0 if currency == "BRL" else 4, trim=True)
+            return mask_value(_number(value, 0 if currency == "BRL" else 4, trim=True))
         exponent = value.as_tuple().exponent
         decimals = max(0, -exponent) if isinstance(exponent, int) else 0
-        return _number(value, min(decimals, 8))
+        return mask_value(_number(value, min(decimals, 8)))
 
     @app.template_filter("number")
     def number(value: Decimal | None, decimals: int = 2, trim: bool = False) -> str:
-        return "-" if value is None else _number(value, decimals, trim)
+        return "-" if value is None else mask_value(_number(value, decimals, trim))
 
     @app.template_filter("percent")
     def percent(value: Decimal | None, decimals: int = 1) -> str:
         if value is None:
             return "-"
-        return f"{_number(value * 100, decimals)}%"
+        return mask_value(f"{_number(value * 100, decimals)}%")
 
     @app.template_filter("instrument_status_label")
     def instrument_status_label(status: str | None) -> str:

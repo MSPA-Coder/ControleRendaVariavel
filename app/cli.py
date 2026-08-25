@@ -7,7 +7,6 @@ from decimal import Decimal
 
 import click
 from flask import Flask, current_app
-from sharedauth.passwords import SenhaMuitoCurtaError, validar_tamanho
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
@@ -37,6 +36,7 @@ from app.quote_history_import import (
 from app.routes.helpers import quote_update_targets, upsert_quote_history
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
+from app.user_management import UserManagementError, set_active, upsert_from_cli
 
 
 def register_commands(app: Flask) -> None:
@@ -366,30 +366,11 @@ def create_admin(username: str, password: str, role: str) -> None:
     scripts de provisionamento não interativos; evite deixar a senha em
     histórico de shell nesse caso.)
     """
-    username = username.strip()
-    if not username:
-        raise click.ClickException("Informe um nome de usuário.")
     try:
-        validar_tamanho(password)
-    except SenhaMuitoCurtaError as erro:
-        # `gerar_hash` (chamado por `User.set_password`) levanta a mesma
-        # exceção, mas ela não é um `click.ClickException` -- sem esta
-        # checagem antecipada o operador veria um traceback cru em vez da
-        # mensagem limpa.
+        user = upsert_from_cli(username, role, password)
+    except UserManagementError as erro:
         raise click.ClickException(str(erro)) from erro
-
-    user = db.session.scalar(select(User).where(User.username == username))
-    if user is None:
-        user = User(username=username)
-        db.session.add(user)
-        action = "criado"
-    else:
-        action = "atualizado"
-    user.set_password(password)
-    user.is_active_user = True
-    user.role = role
-    db.session.commit()
-    click.echo(f"Usuário '{username}' {action} com sucesso (papel: {role}).")
+    click.echo(f"Usuário '{user.username}' atualizado/criado com sucesso (papel: {user.role}).")
 
 
 @users_group.command("deactivate")
@@ -399,6 +380,8 @@ def deactivate_user(username: str) -> None:
     user = db.session.scalar(select(User).where(User.username == username.strip()))
     if user is None:
         raise click.ClickException(f"Usuário '{username}' não encontrado.")
-    user.is_active_user = False
-    db.session.commit()
+    try:
+        set_active(user.id, False)
+    except UserManagementError as erro:
+        raise click.ClickException(str(erro)) from erro
     click.echo(f"Usuário '{username}' desativado.")

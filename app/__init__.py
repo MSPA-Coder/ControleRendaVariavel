@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flask import Flask, request
+from flask import Flask, request, session
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
@@ -78,7 +78,8 @@ HEARTBEAT_ENDPOINTS = {
 def _load_user(user_id: str) -> User | None:
     from app.models import User
 
-    return db.session.get(User, int(user_id))
+    user = db.session.get(User, int(user_id))
+    return user if user is not None and user.is_active_user else None
 
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
@@ -254,6 +255,10 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         settings = db.session.get(AppSetting, 1)
         theme = settings.theme if settings and settings.theme in THEME_IDS else DEFAULT_THEME
         return {"app_theme": theme}
+
+    @app.context_processor
+    def _privacy_context() -> dict[str, bool]:
+        return {"values_hidden": bool(session.get("values_hidden", False))}
 
     requer_login(
         app,

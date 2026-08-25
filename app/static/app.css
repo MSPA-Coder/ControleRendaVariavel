@@ -765,6 +765,29 @@ details.catalog-card > h2 { display: none; }
 .grp-btn.open svg { transform: rotate(180deg); }
 
 .navbar-right { align-items: center; display: flex; gap: .6rem; margin-left: auto; }
+.privacy-toggle-form { display: inline-flex; margin: 0; }
+.privacy-toggle {
+  align-items: center; background: transparent; border: 1px solid var(--line); border-radius: .45rem;
+  color: var(--muted); cursor: pointer; display: inline-flex; justify-content: center; line-height: 1; padding: .35rem;
+}
+.privacy-toggle:hover, .privacy-toggle:focus-visible { background: var(--accent-soft); color: var(--accent); }
+.privacy-toggle svg { fill: none; height: 1.15rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 1.15rem; }
+html[data-values-hidden="true"] .number,
+html[data-values-hidden="true"] [data-sensitive-value="true"] {
+  color: transparent !important; text-shadow: none !important;
+}
+html[data-values-hidden="true"] .number::after,
+html[data-values-hidden="true"] [data-sensitive-value="true"]::after {
+  color: var(--muted); content: "****"; letter-spacing: .06em;
+}
+html[data-values-hidden="true"] input[data-sensitive-input="true"] { -webkit-text-security: disc; }
+html[data-values-hidden="true"] .chart-box { position: relative; }
+html[data-values-hidden="true"] .chart-box canvas { filter: blur(6px); opacity: .38; pointer-events: none; }
+html[data-values-hidden="true"] .chart-box::after {
+  background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; color: var(--muted);
+  content: "Valores ocultos"; font-size: .78rem; font-weight: 700; left: 50%; padding: .32rem .58rem;
+  pointer-events: none; position: absolute; top: 50%; transform: translate(-50%, -50%); z-index: 1;
+}
 .header-controls > .collector-heartbeat { background: var(--surface-muted); border: 1px solid var(--line); color: var(--ink); }
 /* Na barra do menu o pulso fica ao lado do nome da pagina: mesmo tamanho de
    chip, em tom neutro para que o destaque continue sendo a pagina atual. */
