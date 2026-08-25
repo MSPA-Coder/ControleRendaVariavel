@@ -11,12 +11,14 @@
    duplicado. #}
 {% include "partials/flash_toast.html" %}
 
-<section id="portfolios-management-card" class="catalog-card" hidden>
+<section id="portfolios-management-card" class="catalog-card"
+         {{ '' if portfolios_management_open else 'hidden' }}>
   <h2>Carteiras</h2>
   <form class="catalog-create portfolio-fields portfolio-create-form" method="post" action="{{ url_for('portfolio.create_portfolio') }}"
         hx-post="{{ url_for('portfolio.create_portfolio') }}"
-        hx-target="#portfolios-results" hx-swap="outerHTML">
+        hx-target="#portfolios-results" hx-swap="outerHTML" hx-confirm="Criar esta carteira?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="portfolios_management_open" value="1">
     <label>Nome<input required maxlength="80" name="name"></label>
     <label>Moeda<select name="currency">
       <option value="">Nenhuma</option>
@@ -44,8 +46,10 @@
           <td>
             <form id="portfolio-{{ portfolio.id }}" method="post" action="{{ url_for('portfolio.update_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.update_portfolio', portfolio_id=portfolio.id) }}"
-                  hx-target="#portfolios-results" hx-swap="outerHTML">
+                  hx-target="#portfolios-results" hx-swap="outerHTML"
+                  hx-confirm="Salvar as alterações da carteira {{ portfolio.name }}?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="portfolios_management_open" value="1">
               <input required maxlength="80" name="name" value="{{ portfolio.name }}" aria-label="Nome da carteira {{ portfolio.name }}">
             </form>
           </td>
@@ -66,6 +70,7 @@
                   hx-confirm="Excluir a carteira {{ portfolio.name }}?"
                   data-sa-titulo="Excluir carteira" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="portfolios_management_open" value="1">
               <button class="button button-danger" type="submit">Excluir</button>
             </form>
           </td>
@@ -111,6 +116,7 @@
                   hx-confirm="Remover {{ ticker.symbol }} de {{ portfolio.name }}?"
                   data-sa-titulo="Desassociar ticker" data-sa-severidade="warning">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="portfolios_management_open" value="1">
               <button class="portfolio-ticker-minus" type="submit"
                       title="Remover {{ ticker.symbol }} de {{ portfolio.name }}"
                       aria-label="Remover {{ ticker.symbol }} de {{ portfolio.name }}">−</button>
@@ -130,8 +136,10 @@
           <form class="portfolio-ticker-add-form" method="post"
                 action="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=portfolio.id) }}"
                 hx-post="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=portfolio.id) }}"
-                hx-target="#portfolios-results" hx-swap="outerHTML">
+                hx-target="#portfolios-results" hx-swap="outerHTML"
+                hx-confirm="Associar este ticker à carteira?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="portfolios_management_open" value="1">
             <label>Ticker<select required name="ticker_id">
               <option value="">Selecione</option>
               {% for ticker in available %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}

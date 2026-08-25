@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% set editing = position and position.id is defined %}
+{% set editing = edit_mode if edit_mode is defined else (position and position.id is defined) %}
 {% block title %}{{ "Editar" if editing else "Nova" }} posição{% endblock %}
 {% block content %}
-<form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position.id) if editing else url_for('portfolio.create_position') }}"
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('portfolio.create_position') }}"
       {# Trocar a carteira para a Simulada ao editar apaga o extrato
          inteiro (ver `discard_simulation_history`). Os dois atributos abaixo
          so existem quando ha o que perder de fato; `static/app.js` decide,
          no submit, se pergunta ou deixa passar. #}
-      {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ position.movements|length }}"{% endif %}>
+      {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ movement_count|default(0) }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>{{ "Editar" if editing else "Nova" }} posição</h1>
   {% if duplicate_warning %}
@@ -45,7 +45,7 @@
   <label>Tipo<select name="side">
     {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
   </select></label>
-  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing else value.opened_on if value else '' }}"></label>
+  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
   <label>Delta da cotação<input required type="number" min="0.00000001" step="any" name="quote_multiplier" value="{{ value.quote_multiplier if value else '1' }}"></label>
   <label>Multiplicador do target<input required type="number" min="0.00000001" step="any" name="target_multiplier" value="{{ value.target_multiplier if value else '1.5' }}"></label>
   <label>Resultado<select name="result_mode">
@@ -63,19 +63,20 @@
        exclusao declarado abaixo: HTML nao permite formulario aninhado, e o
        atributo `form` e o que liga um ao outro sem duplicar o card. #}
     <button class="button button-danger" type="submit" form="delete-position"
-            formnovalidate>Excluir posição</button>
+            formnovalidate data-sa-confirmar="Excluir esta posição?"
+            data-sa-titulo="Excluir posição" data-sa-severidade="error">Excluir posição</button>
     {% endif %}
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">
+    <button class="button button-primary" type="submit"
+            data-sa-confirmar="Salvar as alterações desta posição?"
+            data-sa-titulo="Salvar posição" data-sa-severidade="warning">
       {{ "Confirmar mesmo assim" if duplicate_warning else "Salvar" }}
     </button>
   </div>
 </form>
 {% if editing %}
 <form id="delete-position" method="post" hidden
-      action="{{ url_for('portfolio.delete_position', position_id=position.id) }}"
-      hx-boost="true" hx-confirm="Excluir esta posição?"
-      data-sa-titulo="Excluir posição" data-sa-severidade="error">
+      action="{{ url_for('portfolio.delete_position', position_id=position_id if edit_mode is defined else position.id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 {% endif %}

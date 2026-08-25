@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% set editing = position and position.id is defined %}
+{% set editing = edit_mode if edit_mode is defined else (position and position.id is defined) %}
 {% block title %}{{ "Editar" if editing else "Nova" }} opção{% endblock %}
 {% block content %}
-<form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position.id) if editing else url_for('options.create_position') }}"
+<form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('options.create_position') }}"
       {# Mesma guarda de `position_form.html`, para opcoes -- trocar a
          carteira para a Simulada ao editar apaga o extrato inteiro. #}
-      {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ position.movements|length }}"{% endif %}>
+      {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ movement_count|default(0) }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>{{ "Editar" if editing else "Nova" }} posição de opção</h1>
   {% if duplicate_warning %}
@@ -42,7 +42,7 @@
   <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ value.quantity if value else '' }}"></label>
   <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}"></label>
   <label>Target<input type="number" min="0" step="any" name="target_price" value="{{ value.target_price if value and value.target_price is not none else '' }}"></label>
-  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing else value.opened_on if value else '' }}"></label>
+  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
   <label>Resultado<select name="result_mode">
     {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}
   </select></label>
@@ -52,17 +52,20 @@
   </select></label>
   <div class="form-actions">
     <a class="button" href="{{ url_for('options.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">
+    <button class="button button-primary" type="submit"
+            data-sa-confirmar="Salvar as alterações desta posição de opção?"
+            data-sa-titulo="Salvar posição" data-sa-severidade="warning">
       {{ "Confirmar mesmo assim" if duplicate_warning else "Salvar" }}
     </button>
   </div>
 </form>
 {% if editing %}
-<form class="delete-form" method="post" action="{{ url_for('options.delete_position', position_id=position.id) }}"
-      hx-boost="true" hx-confirm="Excluir esta posição de opção?"
+<form class="delete-form" method="post" action="{{ url_for('options.delete_position', position_id=position_id if edit_mode is defined else position.id) }}"
       data-sa-titulo="Excluir posição" data-sa-severidade="error">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button class="button button-danger" type="submit">Excluir posição</button>
+  <button class="button button-danger" type="submit"
+          data-sa-confirmar="Excluir esta posição de opção?"
+          data-sa-titulo="Excluir posição" data-sa-severidade="error">Excluir posição</button>
 </form>
 {% endif %}
 {% endblock %}

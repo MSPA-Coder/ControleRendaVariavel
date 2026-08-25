@@ -13,7 +13,9 @@
       </p>
       <div class="form-actions">
         <button class="button button-primary" type="submit"
-                formaction="{{ url_for('portfolio.request_collector_refresh') }}">Atualizar cotações agora</button>
+                formaction="{{ url_for('portfolio.request_collector_refresh') }}"
+                data-sa-confirmar="Solicitar uma atualização das cotações agora?"
+                data-sa-titulo="Atualizar cotações" data-sa-severidade="warning">Atualizar cotações agora</button>
       </div>
     {% else %}
     {# O liga/desliga fala com o gerenciador RTD por conta propria
@@ -140,7 +142,9 @@
 
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">Salvar configurações</button>
+    <button class="button button-primary" type="submit"
+            data-sa-confirmar="Salvar estas configurações?"
+            data-sa-titulo="Salvar configurações" data-sa-severidade="warning">Salvar configurações</button>
   </div>
 </form>
 {% endblock %}

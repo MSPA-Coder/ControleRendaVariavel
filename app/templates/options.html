@@ -31,8 +31,6 @@
 {% include "partials/options_results.html" %}
 {% endblock %}
 {% block scripts %}
-{% if portfolio.expirations %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='expiration-chart.js') }}"></script>
-{% endif %}
 {% endblock %}

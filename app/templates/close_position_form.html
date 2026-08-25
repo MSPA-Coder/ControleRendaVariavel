@@ -2,17 +2,11 @@
 {% block title %}Encerrar posição{% endblock %}
 {% block content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.close_position', position_id=position.id) }}"
-      hx-boost="true"
-      hx-confirm="Encerrar apaga o extrato de movimentos desta posição — e a posição inteira, se for o valor total — e não pode ser desfeito. Continuar?"
       data-sa-titulo="Encerrar posição" data-sa-severidade="error">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>Encerrar {{ position.ticker }} · {{ position.broker }}</h1>
   <p class="form-help">
-    {# `hx-boost` no form acima se espalha para os links dentro dele, e junto viria
-       o `hx-confirm` do encerramento — um clique de navegação comum passaria a
-       exigir a mesma confirmação da ação destrutiva. `hx-boost="false"` tira este
-       link (e o de Cancelar, mais abaixo) de baixo do boost. #}
-    Isso registra o resultado realizado em <a hx-boost="false" href="{{ url_for('portfolio.transactions') }}">Transações</a>.
+    Isso registra o resultado realizado em <a href="{{ url_for('portfolio.transactions') }}">Transações</a>.
     Encerrando a quantidade inteira, a posição sai da carteira; encerrando uma parte, o saldo
     continua aberto com o mesmo custo médio e o extrato da posição guarda a parcela realizada.
     Essa ação não pode ser desfeita diretamente — se for engano, registre a transação inversa manualmente.
@@ -25,8 +19,10 @@
   <label>Preço de saída<input required type="number" min="0" step="any" name="exit_price" value="{{ default_price }}"></label>
   <label>Data de encerramento<input required type="date" name="closed_on" value="{{ default_date }}"></label>
   <div class="form-actions">
-    <a class="button" hx-boost="false" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">Encerrar posição</button>
+    <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
+    <button class="button button-primary" type="submit"
+            data-sa-confirmar="Encerrar apaga o extrato de movimentos desta posição — e a posição inteira, se for o valor total — e não pode ser desfeito. Continuar?"
+            data-sa-titulo="Encerrar posição" data-sa-severidade="error">Encerrar posição</button>
   </div>
 </form>
 {% if movements|length > 1 %}

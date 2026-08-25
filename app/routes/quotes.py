@@ -101,7 +101,9 @@ def _int_or_none(raw: str | None) -> int | None:
         return None
 
 
-def _quote_management_response(ticker_id: int | None) -> ResponseReturnValue:
+def _quote_management_response(
+    ticker_id: int | None, benchmark_id: int | None = None
+) -> ResponseReturnValue:
     """Resposta dos formularios de "Gerenciar Cotacoes".
 
     No HTMX devolve a regiao ja atualizada, com o painel de gerenciamento
@@ -109,16 +111,23 @@ def _quote_management_response(ticker_id: int | None) -> ResponseReturnValue:
     selecionado, o zoom e a rolagem. Sem HTMX o redirect de sempre continua
     valendo, entao a tela funciona igual com JavaScript desligado.
     """
+    if ticker_id is None:
+        ticker_id = _int_or_none(request.form.get("ticker_id"))
+    if benchmark_id is None:
+        benchmark_id = _int_or_none(request.form.get("benchmark_ticker_id"))
     if is_htmx_request():
         return render_template(
             "partials/quotes_results.html",
             **_quote_history_context(
-                ticker_id=ticker_id, benchmark_id=None, management_open=True
+                ticker_id=ticker_id, benchmark_id=benchmark_id, management_open=True
             ),
         )
-    if ticker_id is None:
-        return redirect(url_for("portfolio.quote_history"))
-    return redirect(url_for("portfolio.quote_history", ticker_id=ticker_id))
+    query: dict[str, int] = {}
+    if ticker_id is not None:
+        query["ticker_id"] = ticker_id
+    if benchmark_id is not None:
+        query["benchmark_ticker_id"] = benchmark_id
+    return redirect(url_for("portfolio.quote_history", **query))
 
 
 @bp.get("/quotes")

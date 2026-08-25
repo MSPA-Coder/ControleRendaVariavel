@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% set editing = dividend and dividend.id is defined %}
+{% set editing = edit_mode if edit_mode is defined else (dividend and dividend.id is defined) %}
 {% block title %}{{ "Editar" if editing else "Nova" }} renda{% endblock %}
 {% block content %}
-<form class="position-form" method="post" action="{{ url_for('portfolio.update_dividend', dividend_id=dividend.id) if editing else url_for('portfolio.create_dividend') }}">
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_dividend', dividend_id=dividend_id if edit_mode is defined else dividend.id) if editing else url_for('portfolio.create_dividend') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>{{ "Editar" if editing else "Nova" }} renda</h1>
   {% set value = dividend %}
@@ -26,19 +26,22 @@
     {% endfor %}
   </select></label>
   <label>Valor recebido<input required type="number" min="0" step="any" name="amount" value="{{ value.amount if value else '' }}"></label>
-  <label>Data de pagamento<input required type="date" name="payment_date" value="{{ value.payment_date.isoformat() if editing else value.payment_date if value else '' }}"></label>
+  <label>Data de pagamento<input required type="date" name="payment_date" value="{{ value.payment_date.isoformat() if editing and value.payment_date is defined and value.payment_date is not string else value.payment_date|default('', true) if value else '' }}"></label>
   <label>Notas (opcional)<input type="text" maxlength="500" name="notes" value="{{ value.notes if value and value.notes else '' }}"></label>
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.dividends') }}">Cancelar</a>
-    <button class="button button-primary" type="submit">Salvar</button>
+    <button class="button button-primary" type="submit"
+            data-sa-confirmar="Salvar esta renda?"
+            data-sa-titulo="Salvar renda" data-sa-severidade="warning">Salvar</button>
   </div>
 </form>
 {% if editing %}
-<form class="delete-form" method="post" action="{{ url_for('portfolio.delete_dividend', dividend_id=dividend.id) }}"
-      hx-boost="true" hx-confirm="Excluir esta renda?"
+<form class="delete-form" method="post" action="{{ url_for('portfolio.delete_dividend', dividend_id=dividend_id if edit_mode is defined else dividend.id) }}"
       data-sa-titulo="Excluir renda" data-sa-severidade="error">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button class="button button-danger" type="submit">Excluir renda</button>
+  <button class="button button-danger" type="submit"
+          data-sa-confirmar="Excluir esta renda?"
+          data-sa-titulo="Excluir renda" data-sa-severidade="error">Excluir renda</button>
 </form>
 {% endif %}
 {% endblock %}

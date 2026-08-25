@@ -178,7 +178,9 @@ def delete_ticker(ticker_id: int) -> ResponseReturnValue:
     return _tables_redirect("table_tickers")
 
 
-def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> dict[str, object]:
+def _portfolios_results_context(
+    *, selected_portfolio_id: int | None = None, management_open: bool = False
+) -> dict[str, object]:
     """Contexto da tela de Carteiras.
 
     Extraído da listagem porque os formulários de CRUD e de associação de
@@ -238,6 +240,7 @@ def _portfolios_results_context(*, selected_portfolio_id: int | None = None) -> 
         "available_tickers": available_tickers,
         "associated_tickers_by_portfolio": associated_tickers_by_portfolio,
         "available_tickers_by_portfolio": available_tickers_by_portfolio,
+        "portfolios_management_open": management_open,
     }
 
 
@@ -253,7 +256,11 @@ def _portfolios_response(
     seguido, e um erro de validação precisa do código de status na própria
     resposta (mesmo padrão de ``app.routes.settings._render_settings``, que
     resolve o mesmo problema para um formulário de página inteira)."""
-    context = _portfolios_results_context(selected_portfolio_id=selected_portfolio_id)
+    management_open = request.form.get("portfolios_management_open") == "1"
+    context = _portfolios_results_context(
+        selected_portfolio_id=selected_portfolio_id,
+        management_open=management_open,
+    )
     if is_htmx_request() or status is not None:
         return render_template("partials/portfolios_results.html", **context), status or 200
     if selected_portfolio_id is None:

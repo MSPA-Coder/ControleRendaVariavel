@@ -286,6 +286,7 @@ def edit_position(position_id: int) -> str:
     return render_template(
         "position_form.html",
         position=position,
+        movement_count=len(position.movements),
         brokers=broker_records(),
         tickers=investable_ticker_records(),
         sides=Side,
@@ -303,6 +304,9 @@ def update_position(position_id: int) -> ResponseReturnValue:
         return render_template(
             "position_form.html",
             position=request.form,
+            edit_mode=True,
+            position_id=position_id,
+            movement_count=len(position.movements),
             brokers=broker_records(),
             tickers=investable_ticker_records(),
             sides=Side,

@@ -21,7 +21,9 @@
       {% for expiration in expirations %}<option value="{{ expiration.id }}">{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
     </select></label>
     <label>Strike<input required type="number" min="0" step="any" name="strike"></label>
-    <button class="button button-primary" type="submit">Adicionar</button>
+    <button class="button button-primary" type="submit"
+            data-sa-confirmar="Adicionar este contrato de opção?"
+            data-sa-titulo="Adicionar contrato" data-sa-severidade="warning">Adicionar</button>
   </form>
   <div class="table-wrap">
     <table class="catalog-table">
@@ -48,11 +50,15 @@
           </select></td>
           <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}"></td>
           <td class="catalog-actions">
-            <button class="button" type="submit" form="contract-{{ contract.id }}">Salvar</button>
-            <form method="post" action="{{ url_for('options.delete_contract', contract_id=contract.id) }}" hx-boost="true" hx-confirm="Excluir este contrato de {{ contract.ticker_ref.symbol }}?"
+            <button class="button" type="submit" form="contract-{{ contract.id }}"
+                    data-sa-confirmar="Salvar as alterações do contrato de {{ contract.ticker_ref.symbol }}?"
+                    data-sa-titulo="Salvar contrato" data-sa-severidade="warning">Salvar</button>
+            <form method="post" action="{{ url_for('options.delete_contract', contract_id=contract.id) }}"
                   data-sa-titulo="Excluir contrato" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="button button-danger" type="submit">Excluir</button>
+              <button class="button button-danger" type="submit"
+                      data-sa-confirmar="Excluir este contrato de {{ contract.ticker_ref.symbol }}?"
+                      data-sa-titulo="Excluir contrato" data-sa-severidade="error">Excluir</button>
             </form>
           </td>
         </tr>

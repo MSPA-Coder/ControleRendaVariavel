@@ -134,6 +134,8 @@
                 hx-confirm="Atualizar sobrescreve as cotações já registradas neste período — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?"
                 data-sa-titulo="Atualizar cotações" data-sa-severidade="error">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ticker_id" value="{{ selected_ticker.id if selected_ticker else '' }}">
+            <input type="hidden" name="benchmark_ticker_id" value="{{ selected_benchmark.id if selected_benchmark else '' }}">
             <label>Data inicial<input type="date" name="start_date" value="{{ default_import_start }}" max="{{ today }}" required></label>
             <label>Data final<input type="date" name="end_date" value="{{ default_import_end }}" max="{{ today }}" required></label>
           </form>
@@ -146,6 +148,8 @@
                 hx-confirm="Atualizar sobrescreve as cotações já registradas desde a abertura de cada posição — inclusive lançamentos manuais — com os preços do Yahoo Finance. Continuar?"
                 data-sa-titulo="Atualizar cotações" data-sa-severidade="error">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ticker_id" value="{{ selected_ticker.id if selected_ticker else '' }}">
+            <input type="hidden" name="benchmark_ticker_id" value="{{ selected_benchmark.id if selected_benchmark else '' }}">
             <button class="button button-primary" type="submit">Atualizar Cotações desde a abertura da posição</button>
           </form>
         </div>
@@ -157,6 +161,7 @@
       <form class="quote-manual-form" method="post"
             action="{{ url_for('portfolio.create_quote_history_entry') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="benchmark_ticker_id" value="{{ selected_benchmark.id if selected_benchmark else '' }}">
         <div class="quote-card-zone quote-manual-fields">
           <label>Ticker
             <select name="ticker_id" required>
@@ -172,13 +177,12 @@
           <button class="button button-primary" type="submit"
                   hx-post="{{ url_for('portfolio.create_quote_history_entry') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this">Incluir / Alterar Cotação</button>
+                  hx-disabled-elt="this" hx-confirm="Incluir ou alterar a cotação desta data?">Incluir / Alterar Cotação</button>
           <button class="button button-danger" type="submit"
                   formaction="{{ url_for('portfolio.delete_quote_history_by_date') }}" formnovalidate
                   hx-post="{{ url_for('portfolio.delete_quote_history_by_date') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?"
-                  data-sa-titulo="Excluir cotação" data-sa-severidade="error">Excluir Cotação</button>
+                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?">Excluir Cotação</button>
         </div>
       </form>
     </article>
