@@ -145,9 +145,23 @@ htmx.config.includeIndicatorStyles = false;
   //
   // O listener fica delegado no documento; se sharedauth-ui.js nao carregar
   // (ou carregar depois, numa ordem inesperada), `window.sharedauth` fica
-  // indefinido e a guarda abaixo deixa o formulario submeter normal, sem
-  // pergunta -- nunca trava o clique em silencio esperando uma Promise que
-  // nunca chega.
+  // indefinido. Nesse caso a operação destrutiva deve falhar fechada: deixar
+  // submeter sem confirmação seria exatamente o caminho que esta guarda
+  // deveria impedir.
+  const showConfirmationUnavailable = (form) => {
+    let warning = form.querySelector("[data-confirmation-unavailable]");
+    if (!warning) {
+      warning = document.createElement("p");
+      warning.className = "form-warning";
+      warning.setAttribute("role", "alert");
+      warning.dataset.confirmationUnavailable = "true";
+      warning.textContent =
+        "Não foi possível abrir a confirmação de segurança. A operação não foi enviada; recarregue a página e tente novamente.";
+      form.prepend(warning);
+    }
+    warning.focus({ preventScroll: false });
+  };
+
   document.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-confirm-simulated-switch]");
     if (!form) return;
@@ -157,7 +171,11 @@ htmx.config.includeIndicatorStyles = false;
     const portfolioSelect = form.querySelector('select[name="portfolio_id"]');
     const chosen = portfolioSelect && portfolioSelect.selectedOptions[0];
     if (!chosen || chosen.dataset.simulated !== "true") return;
-    if (!window.sharedauth || !window.sharedauth.confirmar) return; // ver comentario acima
+    if (!window.sharedauth || !window.sharedauth.confirmar) {
+      event.preventDefault();
+      showConfirmationUnavailable(form);
+      return;
+    }
     event.preventDefault();
     window.sharedauth
       .confirmar({

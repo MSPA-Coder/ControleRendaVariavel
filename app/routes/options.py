@@ -300,9 +300,11 @@ def create_position() -> ResponseReturnValue:
 
 @bp.get("/options/positions/<int:position_id>/edit")
 def edit_position(position_id: int) -> str:
+    position = db.get_or_404(OptionPosition, position_id)
     return render_template(
         "option_form.html",
-        position=db.get_or_404(OptionPosition, position_id),
+        position=position,
+        movement_count=len(position.movements),
         brokers=_brokers(),
         contracts=_contracts(),
         sides=Side,
@@ -317,7 +319,17 @@ def update_position(position_id: int) -> ResponseReturnValue:
         data = _parse_position()
     except ValueError as exc:
         flash(str(exc), "error")
-        return redirect(url_for("options.edit_position", position_id=position_id))
+        return render_template(
+            "option_form.html",
+            position=request.form,
+            edit_mode=True,
+            position_id=position_id,
+            movement_count=len(position.movements),
+            brokers=_brokers(),
+            contracts=_contracts(),
+            sides=Side,
+            portfolios=portfolio_records(),
+        ), 422
     previous_quantity = position.quantity
     previous_average_cost = position.average_cost
     was_simulated = position.simulated

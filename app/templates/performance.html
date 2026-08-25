@@ -55,8 +55,6 @@
 {% include "partials/performance_results.html" %}
 {% endblock %}
 {% block scripts %}
-{% if reports %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='monthly-performance-chart.js') }}"></script>
-{% endif %}
 {% endblock %}

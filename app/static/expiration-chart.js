@@ -27,12 +27,14 @@
   function renderExpirationChart() {
     var container = document.getElementById("expiration-chart");
     if (!container || typeof Chart === "undefined") return;
+    if (container.dataset.chartInitialized === "true") return;
 
     var expirations = parseData(container, "expirations");
     var notional = parseData(container, "notional").map(Number);
     var unwind = parseData(container, "unwind").map(Number);
     if (!expirations.length) return;
 
+    container.dataset.chartInitialized = "true";
     var canvas = document.createElement("canvas");
     canvas.setAttribute("role", "img");
     canvas.setAttribute(
@@ -97,4 +99,5 @@
   } else {
     renderExpirationChart();
   }
+  document.addEventListener("htmx:afterSwap", renderExpirationChart);
 })();

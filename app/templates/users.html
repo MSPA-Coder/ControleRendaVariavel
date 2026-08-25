@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Usuários · Controle de Renda Variável{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Sistema</p>
+    <h1>Usuários</h1>
+    <p class="form-help">Contas e permissões desta aplicação. Os dados financeiros permanecem compartilhados.</p>
+  </div>
+</section>
+
+<section class="catalog-card">
+  <h2>Criar usuário</h2>
+  <form class="catalog-create" method="post" action="{{ url_for('users.create') }}"
+        hx-post="{{ url_for('users.create') }}" hx-target="#users-results" hx-swap="outerHTML"
+        hx-confirm="Criar este usuário?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Usuário<input required maxlength="80" name="username" autocomplete="username"></label>
+    <label>Papel<select name="role" required>
+      {% for role in valid_roles %}<option value="{{ role }}">{{ role|capitalize }}</option>{% endfor %}
+    </select></label>
+    <label>Senha<input required minlength="8" type="password" name="password" autocomplete="new-password"></label>
+    <label>Confirmar senha<input required minlength="8" type="password" name="password_confirmation" autocomplete="new-password"></label>
+    <button class="button button-primary" type="submit">Criar</button>
+  </form>
+</section>
+
+{% include "partials/users_results.html" %}
+{% endblock %}

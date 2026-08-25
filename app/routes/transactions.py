@@ -405,6 +405,8 @@ def update_transaction(transaction_id: int) -> ResponseReturnValue:
         return render_template(
             "transaction_form.html",
             transaction=request.form,
+            edit_mode=True,
+            transaction_id=transaction_id,
             brokers=broker_records(),
             tickers=investable_ticker_records(),
             sides=Side,

@@ -8,5 +8,5 @@
 {% include "partials/exposure_results.html" %}
 {% endblock %}
 {% block scripts %}
-{% if allocation_charts %}{{ exposure.chart_scripts() }}{% endif %}
+{{ exposure.chart_scripts() }}
 {% endblock %}

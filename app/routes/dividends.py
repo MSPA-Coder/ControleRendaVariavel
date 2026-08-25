@@ -217,6 +217,8 @@ def update_dividend(dividend_id: int) -> ResponseReturnValue:
         return render_template(
             "dividend_form.html",
             dividend=request.form,
+            edit_mode=True,
+            dividend_id=dividend_id,
             brokers=broker_records(),
             tickers=investable_ticker_records(),
             income_kinds=list(IncomeKind),
