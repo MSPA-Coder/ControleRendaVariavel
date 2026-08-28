@@ -64,7 +64,7 @@ RUN set -eu; \
 
 USER app
 EXPOSE 5003
-CMD ["gunicorn", "--bind", "0.0.0.0:5003", "--workers", "2", "--threads", "4", "--worker-class", "gthread", "--timeout", "60", "app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5003", "--workers", "2", "--threads", "4", "--worker-class", "gthread", "--timeout", "60", "--no-control-socket", "app:create_app()"]
 
 # quality: Ruff e a suite minima de seguranca. Nunca e a imagem servida --
 # `compose.yaml` usa `runtime` para web e migrate.

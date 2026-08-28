@@ -8,7 +8,7 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from flask.typing import ResponseReturnValue
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import db
+from app import db, esquecer_tema_da_sessao
 from app.authorization import requer_admin
 from app.collector_settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
@@ -186,6 +186,10 @@ def settings() -> ResponseReturnValue:
             current_settings = _get_or_create_settings()
             current_settings.collector_mode = data.collector_mode
             current_settings.theme = theme
+            # O tema fica guardado na sessão para não custar uma consulta por
+            # render (ver `_theme_context`); trocá-lo aqui exige descartar o
+            # valor guardado, senão a pessoa continuaria vendo o tema antigo.
+            esquecer_tema_da_sessao()
             current_settings.poll_interval_seconds = data.poll_interval_seconds
             current_settings.agent_check_interval_seconds = agent_check_interval_seconds
             (

@@ -63,6 +63,21 @@ PUBLIC_ENDPOINTS = frozenset({
     "sharedauth.static",
 })
 
+#: Onde o tema persistido fica guardado entre requisições. Ver
+#: `_theme_context`: sem esse cache, descobrir o tema custava uma consulta em
+#: todo render autenticado.
+CHAVE_TEMA_NA_SESSAO = "app_theme"
+
+
+def esquecer_tema_da_sessao() -> None:
+    """Descarta o tema guardado, para a próxima página reler do banco.
+
+    Chamada por quem grava o tema em Configurações. Sem isso, a pessoa
+    trocaria o tema e continuaria vendo o antigo até a sessão terminar.
+    """
+    session.pop(CHAVE_TEMA_NA_SESSAO, None)
+
+
 # Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
 # controle em Configurações e os dois fragmentos que o HTMX rebusca.
 HEARTBEAT_ENDPOINTS = {
@@ -259,17 +274,34 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     @app.context_processor
     def _theme_context() -> dict[str, str]:
-        """Disponibiliza o tema persistido para a casca de todas as telas."""
+        """Disponibiliza o tema persistido para a casca de todas as telas.
+
+        O valor fica na sessão depois da primeira leitura. Sem isso, esta
+        função custava UMA CONSULTA POR RENDER AUTENTICADO -- em toda página,
+        sempre -- para buscar um valor que quase nunca muda. É o mesmo
+        cuidado que `_collector_heartbeat_context`, logo acima, já toma ao se
+        restringir aos cinco endpoints que de fato mostram o pulso.
+
+        Quem grava o tema em Configurações limpa a chave da sessão
+        (`esquecer_tema_da_sessao`), então a troca aparece na próxima página
+        sem esperar a sessão expirar.
+        """
         from app.themes import DEFAULT_THEME, THEME_IDS
 
         # A tela de login é pública e deve continuar renderizando mesmo nos
         # testes/ambientes em que o banco ainda não foi iniciado.
         if not current_user.is_authenticated:
             return {"app_theme": DEFAULT_THEME}
+
+        em_cache = session.get(CHAVE_TEMA_NA_SESSAO)
+        if em_cache in THEME_IDS:
+            return {"app_theme": em_cache}
+
         from app.models import AppSetting
 
         settings = db.session.get(AppSetting, 1)
         theme = settings.theme if settings and settings.theme in THEME_IDS else DEFAULT_THEME
+        session[CHAVE_TEMA_NA_SESSAO] = theme
         return {"app_theme": theme}
 
     @app.context_processor
