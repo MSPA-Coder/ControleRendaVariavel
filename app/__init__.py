@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -9,16 +9,17 @@ from flask_login import LoginManager, current_user  # type: ignore[import-untype
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
 from sharedauth.access import requer_login
+from sharedauth.config import ler_flag, montar_url_postgres
 from sharedauth.csrf import iniciar_csrf
 from sharedauth.messages import registrar_mensagens
-from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, iniciar_limiter
+from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, aplicar_limite, iniciar_limiter
 from sharedauth.security import registrar_cabecalhos
 from sharedauth.session import configurar_sessao
 from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app.secret_files import build_postgres_url, environment_value
+from app.secret_files import environment_value
 
 if TYPE_CHECKING:
     from app.models import User
@@ -78,24 +79,38 @@ HEARTBEAT_ENDPOINTS = {
 def _load_user(user_id: str) -> User | None:
     from app.models import User
 
-    user = db.session.get(User, int(user_id))
+    # `int()` sem guarda derruba a requisição com 500 quando o identificador do
+    # cookie não é numérico. O cookie é assinado, então não é um caminho de
+    # ataque -- mas um cookie de formato antigo vira erro em vez de sessão
+    # recusada. Mesma guarda do MegaSena.
+    try:
+        user = db.session.get(User, int(user_id))
+    except (TypeError, ValueError):
+        return None
     return user if user is not None and user.is_active_user else None
 
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
-    force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
+    # `estrito=False` preserva o comportamento deste app: valor irreconhecível
+    # cai no padrão em vez de impedir a subida. `FORCE_HTTPS` e
+    # `TRUST_PROXY_HEADERS` são propriedades da implantação, e um typo aqui não
+    # deve derrubar o serviço -- ele apenas não liga a folga.
+    force_https = ler_flag("FORCE_HTTPS", estrito=False)
     configured_secret_key = environment_value("SECRET_KEY")
     configured_database_url = environment_value("DATABASE_URL")
     if not configured_database_url:
         postgres_password = environment_value("POSTGRES_PASSWORD")
         if postgres_password:
-            configured_database_url = build_postgres_url(
-                postgres_password,
+            # `montar_url_postgres` substitui o `build_postgres_url` local:
+            # mesmo escape com `quote(..., safe="")`, mais validação de porta e
+            # de componente vazio, e agora compartilhado com os outros apps.
+            configured_database_url = montar_url_postgres(
+                usuario=os.getenv("POSTGRES_USER", "investimentos"),
+                senha=postgres_password,
                 host=os.getenv("POSTGRES_HOST", "127.0.0.1"),
-                port=os.getenv("POSTGRES_PORT", "5302"),
-                database=os.getenv("POSTGRES_DB", "investimentos"),
-                username=os.getenv("POSTGRES_USER", "investimentos"),
+                banco=os.getenv("POSTGRES_DB", "investimentos"),
+                porta=os.getenv("POSTGRES_PORT", "5302"),
             )
     app.config.from_mapping(
         SECRET_KEY=configured_secret_key,
@@ -112,14 +127,13 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_REFRESH_SECONDS=float(os.getenv("RTD_REFRESH_SECONDS", "2")),
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
-        RTD_EXCEL_VISIBLE=os.getenv("RTD_EXCEL_VISIBLE", "false").lower() == "true",
+        RTD_EXCEL_VISIBLE=ler_flag("RTD_EXCEL_VISIBLE", estrito=False),
         COLLECTOR_AGENT_TOKEN=environment_value("COLLECTOR_AGENT_TOKEN") or "",
-        REMOTE_COLLECTOR_ENABLED=os.getenv("REMOTE_COLLECTOR_ENABLED", "false").lower()
-        == "true",
+        REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
-        TRUST_PROXY_HEADERS=os.getenv("TRUST_PROXY_HEADERS", "false").lower() == "true",
+        TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),
         RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
-        RATELIMIT_ENABLED=os.getenv("RATELIMIT_ENABLED", "true").lower() == "true",
+        RATELIMIT_ENABLED=ler_flag("RATELIMIT_ENABLED", padrao=True, estrito=False),
     )
     if config:
         app.config.update(config)
@@ -139,6 +153,12 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         ).strip()
         or "controle_renda_variavel_session",
         https_obrigatorio=bool(app.config["FORCE_HTTPS"]),
+        # `login_user(..., remember=True)` em `routes/auth.py` é o padrão deste
+        # app. Sem `duracao_lembrete_horas` valeria o padrão do Flask-Login --
+        # 365 dias -- num sistema com posição, custo e provento pessoais. Doze
+        # horas alinha com o ConfortoTermico.
+        duracao_horas=12,
+        duracao_lembrete_horas=12,
     )
 
     if app.config["TRUST_PROXY_HEADERS"]:
@@ -207,16 +227,13 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     # função *nova* — descartar o retorno em vez de reatribuir a
     # `view_functions` deixaria o limite decorado e nunca aplicado
     # (regressão real, já reproduzida e corrigida no MegaSena).
-    app.view_functions["auth.login"] = limiter.limit(LIMITE_LOGIN_PADRAO)(
-        app.view_functions["auth.login"]
+    aplicar_limite(app, limiter, "auth.login", LIMITE_LOGIN_PADRAO)
+    aplicar_limite(
+        app,
+        limiter,
+        ("portfolio.collector_heartbeat_partial", "portfolio.rtd_service_partial"),
+        "120 per minute",
     )
-    for endpoint in (
-        "portfolio.collector_heartbeat_partial",
-        "portfolio.rtd_service_partial",
-    ):
-        app.view_functions[endpoint] = limiter.limit("120 per minute")(
-            app.view_functions[endpoint]
-        )
     for endpoint in (
         "portfolio.collector_agent_quotes",
         "portfolio.collector_agent_failure",

@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from urllib.parse import quote
 
 
 def read_secret_file(name: str, path: str | Path) -> str:
@@ -48,18 +47,3 @@ def project_secret_value(
     if default_path.is_file():
         return read_secret_file(name, default_path)
     return None
-
-
-def build_postgres_url(
-    password: str,
-    *,
-    host: str,
-    port: str,
-    database: str,
-    username: str,
-) -> str:
-    """Monta URL PostgreSQL sem exigir que ela própria vire um segredo."""
-    return (
-        f"postgresql+psycopg://{quote(username, safe='')}:{quote(password, safe='')}"
-        f"@{host}:{port}/{database}"
-    )
