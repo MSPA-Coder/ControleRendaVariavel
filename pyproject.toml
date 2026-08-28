@@ -27,7 +27,7 @@ dependencies = [
   # O extra `[flask]` é obrigatório a partir da v0.2.0: o núcleo do pacote
   # deixou de depender de Flask (para o ControleBancario, que é Django, poder
   # instalar só a parte de Python puro) e sem o extra o Flask não vem junto.
-  "sharedauth[flask] @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.4.0",
+  "sharedauth[flask] @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.5.0",
 ]
 
 [project.optional-dependencies]

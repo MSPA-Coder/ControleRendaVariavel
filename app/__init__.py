@@ -13,13 +13,12 @@ from sharedauth.config import ler_flag, montar_url_postgres
 from sharedauth.csrf import iniciar_csrf
 from sharedauth.messages import registrar_mensagens
 from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, aplicar_limite, iniciar_limiter
+from sharedauth.secrets import resolver_segredo
 from sharedauth.security import registrar_cabecalhos
 from sharedauth.session import configurar_sessao
 from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
-
-from app.secret_files import environment_value
 
 if TYPE_CHECKING:
     from app.models import User
@@ -97,10 +96,10 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     # `TRUST_PROXY_HEADERS` são propriedades da implantação, e um typo aqui não
     # deve derrubar o serviço -- ele apenas não liga a folga.
     force_https = ler_flag("FORCE_HTTPS", estrito=False)
-    configured_secret_key = environment_value("SECRET_KEY")
-    configured_database_url = environment_value("DATABASE_URL")
+    configured_secret_key = resolver_segredo("SECRET_KEY")
+    configured_database_url = resolver_segredo("DATABASE_URL")
     if not configured_database_url:
-        postgres_password = environment_value("POSTGRES_PASSWORD")
+        postgres_password = resolver_segredo("POSTGRES_PASSWORD")
         if postgres_password:
             # `montar_url_postgres` substitui o `build_postgres_url` local:
             # mesmo escape com `quote(..., safe="")`, mais validação de porta e
@@ -128,7 +127,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
         RTD_EXCEL_VISIBLE=ler_flag("RTD_EXCEL_VISIBLE", estrito=False),
-        COLLECTOR_AGENT_TOKEN=environment_value("COLLECTOR_AGENT_TOKEN") or "",
+        COLLECTOR_AGENT_TOKEN=resolver_segredo("COLLECTOR_AGENT_TOKEN") or "",
         REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),
