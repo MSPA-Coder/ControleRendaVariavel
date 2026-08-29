@@ -1,11 +1,28 @@
 {% extends "base.html" %}
+{#- `hx-replace-url`, e nao `hx-push-url`, em todos os formularios de filtro
+    desta aplicacao.
+
+    O gatilho e `change`: cada mexida num select dispara uma requisicao. Com
+    `push`, cada uma dessas mexidas virava uma entrada no historico, e o botao
+    "voltar" passava a desfazer filtro por filtro em vez de sair da tela --
+    ajustar tres filtros exigia tres cliques em "voltar" para chegar onde se
+    estava antes.
+
+    `replace` troca a entrada atual: a URL continua refletindo o filtro (F5,
+    favorito e link continuam funcionando), e o historico volta a ter uma
+    entrada por tela.
+
+    O estado de "linha aberta" (`expanded`, `expanded_tickers`,
+    `expanded_years`) NAO passa por aqui e nunca chegou a barra de enderecos:
+    os botoes de `+` sao `hx-get` fora deste formulario, e `hx-push-url` do
+    htmx e resolvido por ancestral. -#}
 {% block header_controls %}
 <form class="filters header-controls" method="get"
       hx-get="{{ url_for('portfolio.index') }}"
       hx-trigger="change"
       hx-target="#portfolio-results"
       hx-swap="outerHTML"
-      hx-push-url="true">
+      hx-replace-url="true">
   <label>Carteira
     <select name="portfolio_id">
       <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -9,16 +9,16 @@ from flask_login import LoginManager, current_user  # type: ignore[import-untype
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
 from sharedauth.access import requer_login
+from sharedauth.config import ler_flag, montar_url_postgres
 from sharedauth.csrf import iniciar_csrf
 from sharedauth.messages import registrar_mensagens
-from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, iniciar_limiter
+from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, aplicar_limite, iniciar_limiter
+from sharedauth.secrets import resolver_segredo
 from sharedauth.security import registrar_cabecalhos
 from sharedauth.session import configurar_sessao
 from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
-
-from app.secret_files import build_postgres_url, environment_value
 
 if TYPE_CHECKING:
     from app.models import User
@@ -63,6 +63,21 @@ PUBLIC_ENDPOINTS = frozenset({
     "sharedauth.static",
 })
 
+#: Onde o tema persistido fica guardado entre requisições. Ver
+#: `_theme_context`: sem esse cache, descobrir o tema custava uma consulta em
+#: todo render autenticado.
+CHAVE_TEMA_NA_SESSAO = "app_theme"
+
+
+def esquecer_tema_da_sessao() -> None:
+    """Descarta o tema guardado, para a próxima página reler do banco.
+
+    Chamada por quem grava o tema em Configurações. Sem isso, a pessoa
+    trocaria o tema e continuaria vendo o antigo até a sessão terminar.
+    """
+    session.pop(CHAVE_TEMA_NA_SESSAO, None)
+
+
 # Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
 # controle em Configurações e os dois fragmentos que o HTMX rebusca.
 HEARTBEAT_ENDPOINTS = {
@@ -78,24 +93,38 @@ HEARTBEAT_ENDPOINTS = {
 def _load_user(user_id: str) -> User | None:
     from app.models import User
 
-    user = db.session.get(User, int(user_id))
+    # `int()` sem guarda derruba a requisição com 500 quando o identificador do
+    # cookie não é numérico. O cookie é assinado, então não é um caminho de
+    # ataque -- mas um cookie de formato antigo vira erro em vez de sessão
+    # recusada. Mesma guarda do MegaSena.
+    try:
+        user = db.session.get(User, int(user_id))
+    except (TypeError, ValueError):
+        return None
     return user if user is not None and user.is_active_user else None
 
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
-    force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
-    configured_secret_key = environment_value("SECRET_KEY")
-    configured_database_url = environment_value("DATABASE_URL")
+    # `estrito=False` preserva o comportamento deste app: valor irreconhecível
+    # cai no padrão em vez de impedir a subida. `FORCE_HTTPS` e
+    # `TRUST_PROXY_HEADERS` são propriedades da implantação, e um typo aqui não
+    # deve derrubar o serviço -- ele apenas não liga a folga.
+    force_https = ler_flag("FORCE_HTTPS", estrito=False)
+    configured_secret_key = resolver_segredo("SECRET_KEY")
+    configured_database_url = resolver_segredo("DATABASE_URL")
     if not configured_database_url:
-        postgres_password = environment_value("POSTGRES_PASSWORD")
+        postgres_password = resolver_segredo("POSTGRES_PASSWORD")
         if postgres_password:
-            configured_database_url = build_postgres_url(
-                postgres_password,
+            # `montar_url_postgres` substitui o `build_postgres_url` local:
+            # mesmo escape com `quote(..., safe="")`, mais validação de porta e
+            # de componente vazio, e agora compartilhado com os outros apps.
+            configured_database_url = montar_url_postgres(
+                usuario=os.getenv("POSTGRES_USER", "investimentos"),
+                senha=postgres_password,
                 host=os.getenv("POSTGRES_HOST", "127.0.0.1"),
-                port=os.getenv("POSTGRES_PORT", "5302"),
-                database=os.getenv("POSTGRES_DB", "investimentos"),
-                username=os.getenv("POSTGRES_USER", "investimentos"),
+                banco=os.getenv("POSTGRES_DB", "investimentos"),
+                porta=os.getenv("POSTGRES_PORT", "5302"),
             )
     app.config.from_mapping(
         SECRET_KEY=configured_secret_key,
@@ -112,14 +141,13 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_REFRESH_SECONDS=float(os.getenv("RTD_REFRESH_SECONDS", "2")),
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
-        RTD_EXCEL_VISIBLE=os.getenv("RTD_EXCEL_VISIBLE", "false").lower() == "true",
-        COLLECTOR_AGENT_TOKEN=environment_value("COLLECTOR_AGENT_TOKEN") or "",
-        REMOTE_COLLECTOR_ENABLED=os.getenv("REMOTE_COLLECTOR_ENABLED", "false").lower()
-        == "true",
+        RTD_EXCEL_VISIBLE=ler_flag("RTD_EXCEL_VISIBLE", estrito=False),
+        COLLECTOR_AGENT_TOKEN=resolver_segredo("COLLECTOR_AGENT_TOKEN") or "",
+        REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
-        TRUST_PROXY_HEADERS=os.getenv("TRUST_PROXY_HEADERS", "false").lower() == "true",
+        TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),
         RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
-        RATELIMIT_ENABLED=os.getenv("RATELIMIT_ENABLED", "true").lower() == "true",
+        RATELIMIT_ENABLED=ler_flag("RATELIMIT_ENABLED", padrao=True, estrito=False),
     )
     if config:
         app.config.update(config)
@@ -139,6 +167,12 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         ).strip()
         or "controle_renda_variavel_session",
         https_obrigatorio=bool(app.config["FORCE_HTTPS"]),
+        # `login_user(..., remember=True)` em `routes/auth.py` é o padrão deste
+        # app. Sem `duracao_lembrete_horas` valeria o padrão do Flask-Login --
+        # 365 dias -- num sistema com posição, custo e provento pessoais. Doze
+        # horas alinha com o ConfortoTermico.
+        duracao_horas=12,
+        duracao_lembrete_horas=12,
     )
 
     if app.config["TRUST_PROXY_HEADERS"]:
@@ -207,16 +241,13 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     # função *nova* — descartar o retorno em vez de reatribuir a
     # `view_functions` deixaria o limite decorado e nunca aplicado
     # (regressão real, já reproduzida e corrigida no MegaSena).
-    app.view_functions["auth.login"] = limiter.limit(LIMITE_LOGIN_PADRAO)(
-        app.view_functions["auth.login"]
+    aplicar_limite(app, limiter, "auth.login", LIMITE_LOGIN_PADRAO)
+    aplicar_limite(
+        app,
+        limiter,
+        ("portfolio.collector_heartbeat_partial", "portfolio.rtd_service_partial"),
+        "120 per minute",
     )
-    for endpoint in (
-        "portfolio.collector_heartbeat_partial",
-        "portfolio.rtd_service_partial",
-    ):
-        app.view_functions[endpoint] = limiter.limit("120 per minute")(
-            app.view_functions[endpoint]
-        )
     for endpoint in (
         "portfolio.collector_agent_quotes",
         "portfolio.collector_agent_failure",
@@ -243,22 +274,67 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     @app.context_processor
     def _theme_context() -> dict[str, str]:
-        """Disponibiliza o tema persistido para a casca de todas as telas."""
+        """Disponibiliza o tema persistido para a casca de todas as telas.
+
+        O valor fica na sessão depois da primeira leitura. Sem isso, esta
+        função custava UMA CONSULTA POR RENDER AUTENTICADO -- em toda página,
+        sempre -- para buscar um valor que quase nunca muda. É o mesmo
+        cuidado que `_collector_heartbeat_context`, logo acima, já toma ao se
+        restringir aos cinco endpoints que de fato mostram o pulso.
+
+        Quem grava o tema em Configurações limpa a chave da sessão
+        (`esquecer_tema_da_sessao`), então a troca aparece na próxima página
+        sem esperar a sessão expirar.
+        """
         from app.themes import DEFAULT_THEME, THEME_IDS
 
         # A tela de login é pública e deve continuar renderizando mesmo nos
         # testes/ambientes em que o banco ainda não foi iniciado.
         if not current_user.is_authenticated:
             return {"app_theme": DEFAULT_THEME}
+
+        em_cache = session.get(CHAVE_TEMA_NA_SESSAO)
+        if em_cache in THEME_IDS:
+            return {"app_theme": em_cache}
+
         from app.models import AppSetting
 
         settings = db.session.get(AppSetting, 1)
         theme = settings.theme if settings and settings.theme in THEME_IDS else DEFAULT_THEME
+        session[CHAVE_TEMA_NA_SESSAO] = theme
         return {"app_theme": theme}
 
     @app.context_processor
     def _privacy_context() -> dict[str, bool]:
         return {"values_hidden": bool(session.get("values_hidden", False))}
+
+    @app.after_request
+    def _canonizar_url(resposta):
+        """Limpa a barra de endereços das telas atualizadas por HTMX.
+
+        Um formulário HTML serializa todos os seus campos, então a Carteira sem
+        filtro nenhum chegava à barra como
+        `/?portfolio_id=all&broker=&return_days=365` -- nada ali foi escolhido
+        por ninguém. `HX-Replace-Url` entrega o endereço equivalente sem esse
+        ruído, e o navegador troca a barra sem recarregar nada.
+
+        `setdefault`: uma rota que já decidiu o próprio `HX-Replace-Url` (ou
+        que use `HX-Redirect`) continua mandando.
+
+        Só respostas 200 de GET: num 4xx/5xx a barra não deve passar a apontar
+        para um endereço que não foi servido.
+        """
+        if request.method != "GET" or resposta.status_code != 200:
+            return resposta
+        if request.headers.get("HX-Request", "").lower() != "true":
+            return resposta
+
+        from app.url_limpa import url_canonica
+
+        destino = url_canonica()
+        if destino is not None:
+            resposta.headers.setdefault("HX-Replace-Url", destino)
+        return resposta
 
     requer_login(
         app,

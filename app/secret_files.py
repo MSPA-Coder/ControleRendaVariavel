@@ -1,38 +1,28 @@
-"""Leitura segura de segredos concedidos por arquivo.
+"""Segredo concedido por arquivo no host, fora do contrato do Compose.
 
-Compose monta segredos em ``/run/secrets``; o agente RTD no Windows lê os
-valores de ``.secrets`` fora do Git. O conteúdo nunca é registrado nem incluído
-nas exceções deste módulo.
+O caso do Compose — ``NOME_FILE`` antes de ``NOME``, recusa de ausente e vazio
+— mora em :mod:`sharedauth.secrets` e é compartilhado com os outros três
+aplicativos. O que resta aqui é o que **só este projeto** tem: o agente RTD
+roda no Windows, fora de contêiner, e lê os valores de ``.secrets/`` na raiz do
+projeto.
+
+Um consumidor único não justifica mover para a biblioteca — mesmo critério que
+manteve a autorização por titular fora dela.
+
+O conteúdo nunca é registrado nem incluído nas exceções.
 """
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from pathlib import Path
-from urllib.parse import quote
+
+from sharedauth.secrets import ler_arquivo_de_segredo
 
 
 def read_secret_file(name: str, path: str | Path) -> str:
     """Lê um segredo sem aceitar arquivo ausente ou vazio."""
-    try:
-        value = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
-    except OSError as exc:
-        raise RuntimeError(f"Não foi possível ler {name}_FILE.") from exc
-    if not value:
-        raise RuntimeError(f"{name}_FILE não pode estar vazio.")
-    return value
-
-
-def environment_value(name: str, environ: Mapping[str, str] | None = None) -> str | None:
-    """Resolve ``NOME_FILE`` antes de ``NOME`` sem expor o conteúdo."""
-    values = os.environ if environ is None else environ
-    file_path = values.get(f"{name}_FILE")
-    if file_path is not None:
-        if not file_path:
-            raise RuntimeError(f"{name}_FILE não pode estar vazio.")
-        return read_secret_file(name, file_path)
-    return values.get(name)
+    return ler_arquivo_de_segredo(f"{name}_FILE", path)
 
 
 def project_secret_value(
@@ -48,18 +38,3 @@ def project_secret_value(
     if default_path.is_file():
         return read_secret_file(name, default_path)
     return None
-
-
-def build_postgres_url(
-    password: str,
-    *,
-    host: str,
-    port: str,
-    database: str,
-    username: str,
-) -> str:
-    """Monta URL PostgreSQL sem exigir que ela própria vire um segredo."""
-    return (
-        f"postgresql+psycopg://{quote(username, safe='')}:{quote(password, safe='')}"
-        f"@{host}:{port}/{database}"
-    )

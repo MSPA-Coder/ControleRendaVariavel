@@ -139,8 +139,12 @@ Para detalhes de segredos, Nginx, publicação e verificações operacionais, ve
 Execute a verificação do projeto no estágio `quality`:
 
 ```powershell
-docker compose --profile quality run --rm quality
+docker compose --profile quality run --build --rm quality
 ```
+
+`--build` é necessário: o serviço `quality` não monta o código do host, e
+`docker compose run` só reconstrói quando a imagem não existe — sem ele, o
+comando passa em verde sobre a versão anterior do código.
 
 Para mudanças de runtime, também reconstrua a imagem e confira `/health`. Para
 alterações apenas documentais, valide o Compose, links, caminhos, buscas
@@ -149,6 +153,8 @@ residuais e `git diff --check`.
 ## Documentação viva
 
 - [Guia de engenharia](AGENTS.md)
+- [Arquitetura](docs/architecture.md)
+- [Desenvolvimento e validação](docs/development.md)
 - [Contrato funcional de ações](docs/planilha-acoes.md)
 - [Contrato funcional de opções](docs/planilha-opcoes.md)
 - [Implantação no VPS](docs/deployment-vps.md)
