@@ -308,6 +308,34 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     def _privacy_context() -> dict[str, bool]:
         return {"values_hidden": bool(session.get("values_hidden", False))}
 
+    @app.after_request
+    def _canonizar_url(resposta):
+        """Limpa a barra de endereços das telas atualizadas por HTMX.
+
+        Um formulário HTML serializa todos os seus campos, então a Carteira sem
+        filtro nenhum chegava à barra como
+        `/?portfolio_id=all&broker=&return_days=365` -- nada ali foi escolhido
+        por ninguém. `HX-Replace-Url` entrega o endereço equivalente sem esse
+        ruído, e o navegador troca a barra sem recarregar nada.
+
+        `setdefault`: uma rota que já decidiu o próprio `HX-Replace-Url` (ou
+        que use `HX-Redirect`) continua mandando.
+
+        Só respostas 200 de GET: num 4xx/5xx a barra não deve passar a apontar
+        para um endereço que não foi servido.
+        """
+        if request.method != "GET" or resposta.status_code != 200:
+            return resposta
+        if request.headers.get("HX-Request", "").lower() != "true":
+            return resposta
+
+        from app.url_limpa import url_canonica
+
+        destino = url_canonica()
+        if destino is not None:
+            resposta.headers.setdefault("HX-Replace-Url", destino)
+        return resposta
+
     requer_login(
         app,
         endpoints_publicos=PUBLIC_ENDPOINTS,
