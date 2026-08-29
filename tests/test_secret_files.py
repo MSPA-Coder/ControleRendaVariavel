@@ -1,35 +1,17 @@
-"""Segredos por arquivo falham fechados e não precisam entrar no ambiente."""
+"""O que resta de segredo por arquivo neste projeto: o caminho do host.
+
+A resolução `NOME_FILE` antes de `NOME` migrou para `sharedauth.secrets`, e é
+testada lá (`test_arquivo_tem_precedencia_sobre_a_variavel_direta`,
+`test_arquivo_vazio_e_recusado`, `test_arquivo_ausente_e_recusado`). O que
+sobra aqui é a busca em `.secrets/` na raiz do projeto, que só este projeto
+faz — o agente RTD roda no Windows, fora de contêiner.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from app.secret_files import environment_value, project_secret_value
-
-
-def test_environment_value_prefere_arquivo_ao_valor_do_ambiente(tmp_path: Path) -> None:
-    path = tmp_path / "secret_key"
-    path.write_text("do-arquivo\n", encoding="utf-8")
-
-    assert environment_value(
-        "SECRET_KEY", {"SECRET_KEY": "do-ambiente", "SECRET_KEY_FILE": str(path)}
-    ) == "do-arquivo"
-
-
-@pytest.mark.parametrize("content", ["", "\n"])
-def test_environment_value_recusa_arquivo_vazio(tmp_path: Path, content: str) -> None:
-    path = tmp_path / "secret_key"
-    path.write_text(content, encoding="utf-8")
-
-    with pytest.raises(RuntimeError, match="SECRET_KEY_FILE"):
-        environment_value("SECRET_KEY", {"SECRET_KEY_FILE": str(path)})
-
-
-def test_environment_value_recusa_arquivo_ausente(tmp_path: Path) -> None:
-    with pytest.raises(RuntimeError, match="POSTGRES_PASSWORD_FILE"):
-        environment_value("POSTGRES_PASSWORD", {"POSTGRES_PASSWORD_FILE": str(tmp_path / "none")})
+from app.secret_files import project_secret_value
 
 
 def test_project_secret_value_encontra_o_caminho_padrao(tmp_path: Path) -> None:
