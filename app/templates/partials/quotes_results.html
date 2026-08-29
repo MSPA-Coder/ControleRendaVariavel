@@ -20,7 +20,7 @@
                 hx-include="closest form"
                 hx-target="#quotes-results"
                 hx-swap="outerHTML"
-                hx-push-url="true">
+                hx-replace-url="true">
           {% for ticker in tickers %}
             <option value="{{ ticker.id }}" {{ 'selected' if ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
           {% endfor %}
@@ -53,7 +53,7 @@
                 hx-include="closest form"
                 hx-target="#quotes-results"
                 hx-swap="outerHTML"
-                hx-push-url="true">
+                hx-replace-url="true">
           <option value="">Nenhum</option>
           {% for benchmark in benchmark_candidates %}
             <option value="{{ benchmark.id }}" {{ 'selected' if selected_benchmark and benchmark.id == selected_benchmark.id }}>{{ benchmark.symbol }}</option>
