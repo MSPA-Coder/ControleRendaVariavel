@@ -224,9 +224,15 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             background_supervision=supervisionar,
         )
 
+    from app.auditoria import registrar_escritas_financeiras
     from app.cli import register_commands
     from app.presentation import register_filters
     from app.routes import register_blueprints
+
+    # Trilha de auditoria (S7). Autenticacao e gestao de contas registram
+    # explicitamente, onde a acao tem nome; as escritas financeiras entram por
+    # evento, para que uma rota nova nao nasca sem registro.
+    registrar_escritas_financeiras()
 
     register_blueprints(app)
     register_commands(app)

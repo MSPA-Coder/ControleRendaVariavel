@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app import db
+from app.auditoria import registrar
 from app.models import ROLE_ADMIN, VALID_ROLES, User
 
 _ADMIN_MUTATION_LOCK = "controle-renda-variavel:user-management"
@@ -110,6 +111,13 @@ def create_user(username: str, role: str, password: str, confirmation: str) -> U
     user = User(username=data.username, role=data.role, is_active_user=True)
     user.set_password(password)
     db.session.add(user)
+    # `flush` antes de registrar: a trilha guarda o id, que so existe depois
+    # que o INSERT chega ao banco. Continua na mesma transacao do `_commit`.
+    db.session.flush()
+    registrar(
+        "usuario", "criar", entidade_id=user.id,
+        detalhes={"username": data.username, "papel": data.role},
+    )
     _commit()
     return user
 
@@ -137,6 +145,11 @@ def upsert_from_cli(username: str, role: str, password: str) -> User:
     user.set_password(password)
     user.is_active_user = True
     user.role = data.role
+    db.session.flush()
+    registrar(
+        "usuario", "criar", entidade_id=user.id,
+        detalhes={"username": data.username, "papel": data.role, "origem": "cli"},
+    )
     _commit()
     return user
 
@@ -155,8 +168,13 @@ def update_user(user_id: int, username: str, role: str) -> User:
         or (not user.is_active_user and _active_admin_count() == 0)
     ):
         raise LastAdminError("Não é possível rebaixar o último administrador ativo.")
+    antes = {"username": user.username, "papel": user.role}
     user.username = data.username
     user.role = data.role
+    registrar(
+        "usuario", "atualizar", entidade_id=user.id,
+        detalhes={"de": antes, "para": {"username": data.username, "papel": data.role}},
+    )
     _commit()
     return user
 
@@ -166,6 +184,12 @@ def reset_password(user_id: int, password: str, confirmation: str) -> User:
     _lock_admin_mutations()
     user = _locked_user(user_id)
     user.set_password(password)
+    # A senha nao entra nos detalhes, nem redigida: nao ha pergunta que ela
+    # responda e ha muitas que ela abre.
+    registrar(
+        "usuario", "redefinir_senha", entidade_id=user.id,
+        detalhes={"username": user.username},
+    )
     _commit()
     return user
 
@@ -176,6 +200,10 @@ def set_active(user_id: int, active: bool) -> User:
     if not active and user.is_active_user and user.role == ROLE_ADMIN and _active_admin_count() <= 1:
         raise LastAdminError("Não é possível desativar o último administrador ativo.")
     user.is_active_user = active
+    registrar(
+        "usuario", "ativar" if active else "desativar", entidade_id=user.id,
+        detalhes={"username": user.username},
+    )
     _commit()
     return user
 

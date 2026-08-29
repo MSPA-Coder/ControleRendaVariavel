@@ -22,6 +22,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app import Base
@@ -1087,3 +1088,37 @@ class QuoteHistory(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     ticker_ref: Mapped[Ticker] = relationship()
+
+
+class AuditLog(Base):
+    """Trilha de auditoria: quem fez o quê, quando e de onde.
+
+    Só estado e acesso -- entrada, saída, gestão de contas e as escritas que
+    alteram a carteira. Consulta não entra; ver o docstring de
+    `app/auditoria.py`.
+
+    `user_id` é `SET NULL` e não `CASCADE`: apagar uma conta não pode apagar o
+    registro do que ela fez. É o oposto do que o resto do schema faz, e é
+    deliberado -- uma trilha que some junto com o autor não serve para nada.
+    """
+
+    __tablename__ = "audit_log"
+    __table_args__ = (
+        Index("ix_audit_log_entity", "entity", "entity_id"),
+        Index("ix_audit_log_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    entity: Mapped[str] = mapped_column(String(80))
+    entity_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    action: Mapped[str] = mapped_column(String(40))
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+    user_ref: Mapped[User | None] = relationship()
