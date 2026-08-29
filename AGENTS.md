@@ -10,6 +10,10 @@ A planilha `Trades.xlsm` é somente referência funcional de leitura.
 Antes de mudar código, leia este arquivo, `README.md`, `pyproject.toml`,
 `compose.yaml`, as migrações relevantes e o contrato afetado:
 
+- `docs/architecture.md` para a forma interna: camadas, módulos, contrato HTMX,
+  coleta de cotações e limites de transação;
+- `docs/development.md` para ambiente, o que a suíte cobre e o que ela
+  deliberadamente não cobre, e validação proporcional;
 - `docs/planilha-acoes.md` para ações, performance, risco e RTD;
 - `docs/planilha-opcoes.md` para opções;
 - `docs/deployment-vps.md` para operação no VPS.
@@ -28,7 +32,7 @@ instale ferramentas do projeto no host. Comandos usuais:
 ```powershell
 docker compose up --build -d
 docker compose down
-docker compose --profile quality run --rm quality
+docker compose --profile quality run --build --rm quality
 docker compose exec web flask --app app:create_app <comando>
 Invoke-WebRequest http://127.0.0.1:5301/health
 ```
@@ -119,8 +123,12 @@ desenvolvimento sem COM usam provedores determinísticos.
 A interface de validação do projeto é:
 
 ```powershell
-docker compose --profile quality run --rm quality
+docker compose --profile quality run --build --rm quality
 ```
+
+O `--build` faz parte do comando, não é refinamento: o serviço não monta o
+código do host e `docker compose run` reutiliza a imagem existente sem
+reconstruí-la. Sem ele, a validação roda o código anterior e passa.
 
 Registre o que foi executado e omitido. Além do comando acima:
 
