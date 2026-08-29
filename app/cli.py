@@ -40,6 +40,7 @@ from app.user_management import UserManagementError, set_active, upsert_from_cli
 
 
 def register_commands(app: Flask) -> None:
+    app.cli.add_command(auditoria)
     app.cli.add_command(poll_rtd)
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
@@ -85,6 +86,49 @@ def supervisor_process_is_alive(supervisor_pid: str | None) -> bool:
     except OSError:
         return False
     return True
+
+
+@click.command("auditoria")
+@click.option("--limite", default=50, show_default=True, help="Quantas linhas mostrar.")
+@click.option("--entidade", default=None, help="Filtra por entidade (ex.: sessao, usuario).")
+@click.option("--acao", default=None, help="Filtra por acao (ex.: login_recusado).")
+@click.option("--usuario", default=None, help="Filtra pelo nome de quem agiu.")
+def auditoria(limite: int, entidade: str | None, acao: str | None, usuario: str | None) -> None:
+    """Consulta a trilha de auditoria.
+
+    Nao ha tela para isto de proposito: a trilha e consultada raramente e sob
+    suspeita, e uma tela nova seria funcionalidade nova -- que nao era o pedido.
+    A CLI ja existe, ja roda dentro do conteiner e ja e como as contas sao
+    provisionadas.
+    """
+    from sqlalchemy import select
+
+    from app import db
+    from app.models import AuditLog, User
+
+    consulta = select(AuditLog).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+    if entidade:
+        consulta = consulta.where(AuditLog.entity == entidade)
+    if acao:
+        consulta = consulta.where(AuditLog.action == acao)
+    if usuario:
+        consulta = consulta.join(User, AuditLog.user_id == User.id).where(
+            User.username == usuario
+        )
+
+    linhas = list(db.session.scalars(consulta.limit(limite)))
+    if not linhas:
+        click.echo("Nenhum registro para esse filtro.")
+        return
+
+    for linha in reversed(linhas):
+        autor = linha.user_ref.username if linha.user_ref else "-"
+        alvo = f"{linha.entity}#{linha.entity_id}" if linha.entity_id else linha.entity
+        quando = linha.created_at.astimezone(MARKET_TIMEZONE).strftime("%d/%m/%Y %H:%M:%S")
+        detalhes = f"  {linha.details}" if linha.details else ""
+        click.echo(f"{quando}  {autor:<16} {linha.action:<16} {alvo}{detalhes}")
+    click.echo("")
+    click.echo(f"{len(linhas)} registro(s).")
 
 
 @click.command("probe-rtd-direct")
