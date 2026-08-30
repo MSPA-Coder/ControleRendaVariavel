@@ -6,8 +6,33 @@ correta: a falha e silenciosa e so aparece quando alguem de fora ja entrou.
 
 from __future__ import annotations
 
+import re
+
 from app import PUBLIC_ENDPOINTS
 from app.routes.auth import _local_next_url
+
+#: Substitui `<int:id>`, `<path:filename>` e afins por um valor navegavel.
+_PARAMETRO = re.compile(r"<(?:(?P<tipo>[^:<>]+):)?[^<>]+>")
+
+
+def _url_plausivel(regra) -> str:
+    """URL concreta para uma rota, com ou sem parametro.
+
+    Rotas com parametro ja foram puladas aqui, com o argumento de que "as sem
+    parametro ja cobrem a decisao, que e do `before_request` e nao da rota".
+    O argumento e verdadeiro sobre ONDE a decisao mora e falso sobre o que a
+    suite mede: no MegaSena, a unica rota parametrizada nao publica era
+    justamente a que estava errada, e o filtro a descartava. Custa pouco
+    verificar todas.
+
+    O `before_request` recusa antes de a view rodar, entao um id inexistente
+    nao chega a consultar o banco -- que esta ausente nesta suite.
+    """
+
+    def valor(m: re.Match[str]) -> str:
+        return "1" if (m.group("tipo") or "") in ("int", "float") else "x"
+
+    return _PARAMETRO.sub(valor, regra.rule)
 
 
 def _rotas_get_registradas(app):
@@ -16,11 +41,7 @@ def _rotas_get_registradas(app):
             continue
         if "GET" not in (regra.methods or set()):
             continue
-        # Rotas com parametro exigiriam um valor plausivel; as sem parametro ja
-        # cobrem a decisao, que e do `before_request` e nao da rota.
-        if regra.arguments:
-            continue
-        yield regra.rule
+        yield _url_plausivel(regra)
 
 
 def test_existem_rotas_protegidas_para_verificar(app):

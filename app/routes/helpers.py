@@ -411,31 +411,6 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     return {ticker_id: quantity for ticker_id, quantity in totals.items() if quantity != 0}
 
 
-def accumulate_signed_quantity(
-    ticker_id: int,
-    quantity: Decimal,
-    side: Side,
-    opened_on: date,
-    quantities_by_ticker: dict[int, Decimal],
-    opened_on_by_ticker: dict[int, date],
-) -> None:
-    """Acumula, em ``quantities_by_ticker``, a quantidade líquida de uma
-    posição (positiva para compra, negativa para venda) e, em
-    ``opened_on_by_ticker``, a data de abertura mais antiga já vista para
-    o ticker. Mesma matemática de sinal de ``open_real_quantities_by_ticker``,
-    mas aplicada linha a linha para que o relatório de performance mensal
-    (``app.routes.performance``) possa combinar, no mesmo par de
-    acumuladores, posições de fontes diferentes — ações e opções, reais e
-    hipotéticas — sem duplicar a lógica de sinal em cada laço."""
-    direction = Decimal("1") if side == Side.BUY else Decimal("-1")
-    quantities_by_ticker[ticker_id] = quantities_by_ticker.get(ticker_id, Decimal("0")) + (
-        direction * quantity
-    )
-    earliest = opened_on_by_ticker.get(ticker_id)
-    if earliest is None or opened_on < earliest:
-        opened_on_by_ticker[ticker_id] = opened_on
-
-
 def accumulate_invested_amount(
     ticker_id: int,
     quantity: Decimal,

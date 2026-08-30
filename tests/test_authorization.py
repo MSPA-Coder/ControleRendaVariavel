@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from flask import abort
 
-from app.authorization import requer_admin
+from app.authorization import PAPEL_ADMIN, requer_admin
 from app.models import ROLE_ADMIN, ROLE_OPERADOR, VALID_ROLES, User
 
 
@@ -69,14 +69,57 @@ def test_papeis_validos_sao_apenas_dois():
     assert {ROLE_ADMIN, ROLE_OPERADOR} == VALID_ROLES
 
 
-def test_settings_esta_protegida_por_papel(app):
-    # Amarra o decorator a rota concreta: sem isto, remover `@requer_admin` de
-    # `/settings` passaria despercebido.
-    regra = next(r for r in app.url_map.iter_rules() if r.rule == "/settings")
-    view = app.view_functions[regra.endpoint]
-    assert getattr(view, "__wrapped__", None) is not None, (
-        "/settings deveria estar embrulhada por @requer_admin"
+#: Endpoints restritos a administradores.
+#:
+#: Sao as duas telas do grupo "Sistema" no menu (Configuracoes e Usuarios) mais
+#: as duas rotas que so elas acionam: o controle do coletor RTD e o pedido de
+#: atualizacao imediata.
+ENDPOINTS_DE_ADMIN = frozenset(
+    {
+        "portfolio.settings",
+        "portfolio.request_collector_refresh",
+        "portfolio.rtd_service_partial",
+        "users.index",
+        "users.create",
+        "users.edit",
+        "users.reset_user_password",
+        "users.change_active",
+    }
+)
+
+
+def _endpoints_protegidos_por_papel(app) -> set[str]:
+    return {
+        endpoint
+        for endpoint, view in app.view_functions.items()
+        if getattr(view, "papel_exigido", None) == PAPEL_ADMIN
+    }
+
+
+def test_conjunto_de_rotas_de_admin_e_exatamente_o_declarado(app):
+    """Compara o CONJUNTO, nao uma rota de cada vez.
+
+    A versao anterior deste teste olhava so `/settings`, e olhava a coisa
+    errada: `getattr(view, "__wrapped__")` e verdadeiro para qualquer decorator
+    que use `functools.wraps`, inclusive um `@login_required` sozinho. Passava
+    sem provar papel nenhum.
+
+    Verificar rota por rota tambem so encontra o que alguem ja suspeitava.
+    Comparar o conjunto encontra a rota que ninguem lembrou de verificar --
+    que foi como o Dashboard, as Projecoes e a Posicao por conta ficaram sem
+    verificacao no projeto irmao.
+    """
+    assert _endpoints_protegidos_por_papel(app) == ENDPOINTS_DE_ADMIN, (
+        "As rotas protegidas por papel divergiram da lista declarada. Se uma "
+        "rota nova e mesmo de administrador, acrescente-a aqui; se um "
+        "decorator sumiu, devolva-o -- nao ajuste a lista para o teste passar."
     )
+
+
+def test_existem_rotas_de_admin_para_verificar(app):
+    # Protege o proprio teste: sem isto, um erro que zerasse a coleta deixaria
+    # a comparacao acima passando por vacuidade.
+    assert _endpoints_protegidos_por_papel(app)
 
 
 def test_abort_403_e_o_comportamento_esperado(app):

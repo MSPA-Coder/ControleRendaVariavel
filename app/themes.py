@@ -51,13 +51,6 @@ def parse_theme(form: Mapping[str, str]) -> str:
     return theme
 
 
-def normalize_theme(theme: str | None) -> str:
-    """Normaliza o tema, retornando o default se inválido."""
-    if theme and theme in THEME_IDS:
-        return theme
-    return DEFAULT_THEME
-
-
 def get_theme_options_dict() -> dict[str, str]:
     """Retorna dicionário de temas para uso em templates."""
     return {theme_id: label for theme_id, label, _ in THEME_OPTIONS}
