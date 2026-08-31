@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import re
 
+from sharedauth.access import url_proximo_seguro
+
 from app import PUBLIC_ENDPOINTS
-from app.routes.auth import _local_next_url
 
 #: Substitui `<int:id>`, `<path:filename>` e afins por um valor navegavel.
 _PARAMETRO = re.compile(r"<(?:(?P<tipo>[^:<>]+):)?[^<>]+>")
@@ -96,14 +97,29 @@ def test_lista_de_publicos_e_curta_e_conhecida():
 
 
 def test_login_aceita_apenas_destino_local_sem_barra_invertida():
-    assert _local_next_url("/portfolio?tab=summary") == "/portfolio?tab=summary"
-    assert _local_next_url("//externo.test") is None
-    assert _local_next_url("/\\externo.test") is None
-    assert _local_next_url("/%5cexterno.test") is None
-    assert _local_next_url("/%255cexterno.test") is None
-    assert _local_next_url("/%2f%2fexterno.test") is None
-    assert _local_next_url("/%252f%252fexterno.test") is None
-    assert _local_next_url("https://externo.test") is None
+    # A checagem em si mora em `sharedauth.access` e tem suite propria la; este
+    # teste garante que ESTE app continua usando aquela, e nao uma escrita a
+    # mao -- que foi como as duas versoes entre os apps divergiram.
+    assert url_proximo_seguro("/portfolio?tab=summary") == "/portfolio?tab=summary"
+    assert url_proximo_seguro("//externo.test") is None
+    assert url_proximo_seguro("/\\externo.test") is None
+    assert url_proximo_seguro("/%5cexterno.test") is None
+    assert url_proximo_seguro("/%255cexterno.test") is None
+    assert url_proximo_seguro("/%2f%2fexterno.test") is None
+    assert url_proximo_seguro("/%252f%252fexterno.test") is None
+    assert url_proximo_seguro("https://externo.test") is None
+
+
+def test_as_duas_rotas_que_recebem_next_usam_a_checagem_compartilhada():
+    # `auth.login` e `portfolio.toggle_values_privacy` recebem um `next` que
+    # volta pelo navegador. Uma delas passar a validar por conta propria e
+    # exatamente como a divergencia comeca.
+    import inspect
+
+    from app.routes import auth, privacy
+
+    for modulo in (auth, privacy):
+        assert "url_proximo_seguro(" in inspect.getsource(modulo), modulo.__name__
 
 
 def test_login_recusa_destino_com_separador_aninhado_alem_de_tres_camadas():
@@ -111,4 +127,4 @@ def test_login_recusa_destino_com_separador_aninhado_alem_de_tres_camadas():
     for _ in range(6):
         destino = destino.replace("%", "%25")
 
-    assert _local_next_url(destino) is None
+    assert url_proximo_seguro(destino) is None

@@ -4,8 +4,10 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
+from flask import current_app
 from flask_login import UserMixin  # type: ignore[import-untyped]
 from sharedauth.passwords import conferir_hash, gerar_hash
+from sharedauth.session import identificador_de_sessao, marca_de_sessao
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -107,6 +109,13 @@ class User(Base, UserMixin):  # type: ignore[misc]
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default=ROLE_OPERADOR, server_default=ROLE_OPERADOR)
     is_active_user: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Ligada por quem redefine a senha de outra pessoa (e pela criação de
+    #: conta), desligada só pela troca feita pelo próprio dono. Enquanto está
+    #: ligada, `requer_troca_de_senha` prende a sessão na tela de troca: uma
+    #: senha que duas pessoas conhecem só deve valer até o primeiro acesso.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -117,6 +126,23 @@ class User(Base, UserMixin):  # type: ignore[misc]
 
     def check_password(self, password: str) -> bool:
         return conferir_hash(self.password_hash, password)
+
+    def get_id(self) -> str:
+        """Identificador guardado no cookie: o id **e** a marca da senha.
+
+        O Flask-Login guarda o que esta funcao devolve e o entrega de volta ao
+        `user_loader`. So o id nao bastava: trocar a senha nao derrubava as
+        sessoes abertas em outros lugares, porque o cookie dizia QUEM e a
+        pessoa e nada sobre QUAL senha estava valendo. Quem trocasse a senha
+        por desconfiar de acesso indevido continuaria com esse alguem dentro
+        do sistema -- num app que mostra posicao e patrimonio.
+
+        A marca vem de `sharedauth.session` e e a mesma nos tres apps Flask.
+        """
+        return identificador_de_sessao(
+            self.id,
+            marca_de_sessao(self.password_hash, chave_secreta=current_app.secret_key),
+        )
 
     @property
     def is_active(self) -> bool:

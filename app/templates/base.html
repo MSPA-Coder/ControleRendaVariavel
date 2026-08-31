@@ -40,6 +40,11 @@
   } %}
   {% set crumb = nav_meta.get(request.endpoint, ('', '')) %}
   <div class="app-shell">
+    {#- Bloco para que a tela de troca obrigatoria de senha possa substituir a
+        navegacao inteira: com a marca ligada, o portao devolve para a troca
+        qualquer destino deste menu, entao exibi-los so ofereceria caminhos que
+        nao levam a lugar nenhum. Ver `change_password.html`. -#}
+    {% block navbar %}
     <header class="navbar">
       <div class="navbar-row">
         <div class="logo">
@@ -211,12 +216,17 @@
               {% endif %}
             </button>
           </form>
+          {# Trocar a propria senha nao exige papel nenhum: e a conta de quem
+             esta logado, ao contrario do grupo "Sistema", que administra
+             contas alheias e so aparece para `admin`. #}
+          <a class="nav-minha-senha {{ 'is-current' if request.endpoint == 'account.change_password' }}" href="{{ url_for('account.change_password') }}">Minha senha</a>
           <span class="avatar" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
           <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-primary" type="submit">Sair</button></form>
         </div>
         {% endif %}
       </div>
     </header>
+    {% endblock %}
     <div class="nav-scrim" data-nav-scrim hidden></div>
 
     {% set header_controls_html %}{% block header_controls %}{% endblock %}{% endset %}

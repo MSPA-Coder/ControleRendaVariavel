@@ -1,0 +1,12 @@
+{#- Bloco da senha temporaria devolvida pela redefinicao.
+    Nao e toast de proposito: um aviso que desaparece sozinho levaria embora a
+    unica copia em texto claro da senha. E tambem nao passa por `flash()`, que
+    guardaria a senha na sessao -- um cookie assinado, nao cifrado. -#}
+<section class="catalog-card senha-temporaria" role="status">
+  <h2>Senha temporária de {{ senha_de }}</h2>
+  <p><code class="senha-temporaria-valor">{{ senha_temporaria }}</code></p>
+  <p class="form-help">
+    Anote agora: ela não será mostrada de novo. Quem entrar com ela terá de
+    trocá-la antes de usar o sistema.
+  </p>
+</section>

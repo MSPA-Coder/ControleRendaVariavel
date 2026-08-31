@@ -62,6 +62,8 @@ legado é procedimento administrativo explícito.
   agente exige Bearer token próprio. Autorização é verificada no servidor e
   toda escrita de navegador usa CSRF.
 - Sessão, CSRF, rate limiting da aplicação, controle de acesso, hash de senha,
+  senha temporária e trava de troca pendente, destino pós-login seguro e a
+  marca que amarra a sessão à senha em vigor,
   cabeçalhos de segurança, CSP, formatação pt-BR e health vêm de SharedAuth.
   Não reimplemente localmente. `_number` em `presentation.py` é apenas um
   adaptador para regras de apresentação deste projeto.

@@ -18,25 +18,34 @@ from app.user_management import (
 bp = Blueprint("users", __name__)
 
 
-def _render_users(status: int = 200) -> ResponseReturnValue:
+def _render_users(status: int = 200, **extra: object) -> ResponseReturnValue:
     return render_template(
-        "users.html", users=list_users(), valid_roles=("admin", "operador")
+        "users.html", users=list_users(), valid_roles=("admin", "operador"), **extra
     ), status
 
 
-def _render_results(status: int = 200) -> ResponseReturnValue:
+def _render_results(status: int = 200, **extra: object) -> ResponseReturnValue:
     return render_template(
         "partials/users_results.html",
         users=list_users(),
         valid_roles=("admin", "operador"),
         include_toast=True,
+        **extra,
     ), status
 
 
-def _response(status: int = 200) -> ResponseReturnValue:
+def _response(status: int = 200, **extra: object) -> ResponseReturnValue:
+    """Resposta da tela de usuarios, com ou sem HTMX.
+
+    `extra` existe para a senha temporaria, que **nao pode ir por `flash()`**:
+    o `flash` do Flask guarda a mensagem na sessao, e a sessao e um cookie
+    assinado -- assinado nao e cifrado. Uma senha em texto claro ali sairia
+    legivel no cabecalho da resposta. Vai como variavel de contexto do
+    template, que morre no HTML da propria resposta.
+    """
     if is_htmx_request():
-        return _render_results(status)
-    return _render_users(status)
+        return _render_results(status, **extra)
+    return _render_users(status, **extra)
 
 
 @bp.get("/users")
@@ -79,14 +88,13 @@ def edit(user_id: int) -> ResponseReturnValue:
 @bp.post("/users/<int:user_id>/reset-password")
 @requer_admin
 def reset_user_password(user_id: int) -> ResponseReturnValue:
+    """Redefine a senha de outra conta e mostra a senha temporaria gerada.
+
+    A senha vai no contexto do template, nunca em `flash()` -- ver `_response`.
+    """
     try:
-        reset_password(
-            user_id,
-            request.form.get("password", ""),
-            request.form.get("password_confirmation", ""),
-        )
-        flash("Senha redefinida.", "success")
-        return _response()
+        usuario, senha_temporaria = reset_password(user_id)
+        return _response(senha_temporaria=senha_temporaria, senha_de=usuario.username)
     except UserManagementError as exc:
         db.session.rollback()
         flash(str(exc), "error")

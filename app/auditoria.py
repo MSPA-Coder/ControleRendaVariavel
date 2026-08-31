@@ -50,6 +50,10 @@ ACOES: frozenset[str] = frozenset(
         "ativar",
         "desativar",
         "redefinir_senha",
+        # A troca feita pelo proprio dono. Verbo distinto de
+        # "redefinir_senha", que e a acao de um administrador sobre a conta de
+        # outra pessoa: quem consulta a trilha precisa separar as duas.
+        "trocar_senha",
         "importar",
     }
 )

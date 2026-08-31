@@ -917,3 +917,78 @@ tr.transaction-open { background: var(--accent-soft); }
   display: block;
   margin-top: 0.2rem;
 }
+
+/* Link "Minha senha" na barra superior. Vizinho do avatar e do "Sair": e a
+   propria conta, nao administracao de contas alheias -- por isso fica fora do
+   grupo "Sistema", que so aparece para admin. */
+.nav-minha-senha {
+  border: 1px solid var(--line);
+  border-radius: .45rem;
+  color: var(--muted);
+  font-size: .78rem;
+  padding: .35rem .6rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-minha-senha:hover,
+.nav-minha-senha:focus-visible,
+.nav-minha-senha.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+/* Senha temporaria devolvida pela redefinicao.
+   Persistente e nao toast: e a unica copia em texto claro que vai existir, e
+   quem redefiniu precisa dela na tela o tempo que levar para anotar ou ditar. */
+.senha-temporaria {
+  border-color: var(--accent-line);
+}
+
+/* Monoespacada e espacada: o valor vai ser lido em voz alta ou copiado a mao,
+   e e por isso que o alfabeto do sorteio ja exclui `0/O` e `1/l/I`. */
+.senha-temporaria-valor {
+  background: var(--accent-soft);
+  border-radius: .35rem;
+  color: var(--accent-dark, var(--accent));
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+  font-size: 1.15rem;
+  letter-spacing: .12em;
+  padding: .25rem .5rem;
+  user-select: all;
+}
+
+/* Formulario de troca da propria senha. Uma coluna e estreito de proposito:
+   o `.catalog-create` e uma grade de duas colunas desenhada para a linha de
+   "criar registro" dos cadastros, e com tres campos ele quebra em pares
+   desalinhados. */
+.senha-form {
+  display: grid;
+  gap: .75rem;
+  margin-bottom: 0;
+  max-width: 26rem;
+}
+
+.senha-form label {
+  display: grid;
+  gap: .25rem;
+}
+
+.senha-form button {
+  justify-self: start;
+  margin-top: .25rem;
+}
+
+/* Recusa da troca de senha, fixa no cartao. Ver o comentario em
+   `app/routes/account.py`: o aviso padrao deste app e um toast, que some. */
+.senha-form-erro {
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-line);
+  border-left: 4px solid var(--danger-line);
+  border-radius: .45rem;
+  color: var(--ink);
+  margin: 0 0 1rem;
+  max-width: 26rem;
+  padding: .6rem .8rem;
+}
