@@ -40,7 +40,7 @@ cadastrada no app (portanto sem uma data real para ancorar o início do
 histórico) — ver ``quote_update_targets``."""
 
 
-def portfolio_records() -> list[Portfolio]:
+def portfolio_records(*, include_inactive: bool = False) -> list[Portfolio]:
     """Carteiras cadastradas, em ordem alfabética.
 
     Usada pelos formulários de posição, opção e transação (campo
@@ -48,7 +48,10 @@ def portfolio_records() -> list[Portfolio]:
     derivada da moeda do ticker) e pelo filtro homônimo de Ações, Opções e
     Transações, que oferece as simuladas como escolha explícita. O que não
     as inclui é a opção "Todas" do filtro: ver ``positions_query``."""
-    return list(db.session.scalars(select(Portfolio).order_by(Portfolio.name)))
+    statement = select(Portfolio).order_by(Portfolio.name)
+    if not include_inactive:
+        statement = statement.where(Portfolio.is_active.is_(True))
+    return list(db.session.scalars(statement))
 
 
 def real_portfolio_records() -> list[Portfolio]:
@@ -59,7 +62,9 @@ def real_portfolio_records() -> list[Portfolio]:
     incondicionalmente."""
     return list(
         db.session.scalars(
-            select(Portfolio).where(Portfolio.simulated.is_(False)).order_by(Portfolio.name)
+            select(Portfolio)
+            .where(Portfolio.simulated.is_(False), Portfolio.is_active.is_(True))
+            .order_by(Portfolio.name)
         )
     )
 
@@ -134,23 +139,29 @@ def positions_query(
 
 
 def brokers() -> list[str]:
-    statement = select(Broker.name).order_by(Broker.name)
+    statement = select(Broker.name).where(Broker.is_active.is_(True)).order_by(Broker.name)
     return list(db.session.scalars(statement))
 
 
-def broker_records() -> list[Broker]:
-    return list(db.session.scalars(select(Broker).order_by(Broker.name)))
+def broker_records(*, include_inactive: bool = False) -> list[Broker]:
+    statement = select(Broker).order_by(Broker.name)
+    if not include_inactive:
+        statement = statement.where(Broker.is_active.is_(True))
+    return list(db.session.scalars(statement))
 
 
-def ticker_records() -> list[Ticker]:
-    return list(db.session.scalars(select(Ticker).order_by(Ticker.symbol)))
+def ticker_records(*, include_inactive: bool = False) -> list[Ticker]:
+    statement = select(Ticker).order_by(Ticker.symbol)
+    if not include_inactive:
+        statement = statement.where(Ticker.is_active.is_(True))
+    return list(db.session.scalars(statement))
 
 
 def stock_ticker_records() -> list[Ticker]:
     """Tickers de ações e índices, excluindo os que representam contratos de opção."""
     statement = (
         select(Ticker)
-        .where(~Ticker.option_contract.has())
+        .where(~Ticker.option_contract.has(), Ticker.is_active.is_(True))
         .order_by(Ticker.symbol)
     )
     return list(db.session.scalars(statement))
@@ -162,7 +173,11 @@ def investable_ticker_records() -> list[Ticker]:
     referência de comparação (``Ticker.is_benchmark``), que não
     representam algo que se compra ou vende na carteira — ver
     ``benchmark_candidates``."""
-    statement = select(Ticker).where(Ticker.is_benchmark.is_(False)).order_by(Ticker.symbol)
+    statement = (
+        select(Ticker)
+        .where(Ticker.is_benchmark.is_(False), Ticker.is_active.is_(True))
+        .order_by(Ticker.symbol)
+    )
     return list(db.session.scalars(statement))
 
 
@@ -226,7 +241,11 @@ def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
     em ordem alfabética, oferecidos nos comparadores de evolução dos
     gráficos de Cotações e Performance. ``exclude_ticker_id`` evita
     oferecer comparar um ticker consigo mesmo."""
-    statement = select(Ticker).where(Ticker.is_benchmark.is_(True)).order_by(Ticker.symbol)
+    statement = (
+        select(Ticker)
+        .where(Ticker.is_benchmark.is_(True), Ticker.is_active.is_(True))
+        .order_by(Ticker.symbol)
+    )
     return [
         ticker for ticker in db.session.scalars(statement) if ticker.id != exclude_ticker_id
     ]

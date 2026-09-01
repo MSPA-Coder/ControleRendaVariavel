@@ -238,6 +238,14 @@ class Broker(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(40), unique=True)
     acronym: Mapped[str] = mapped_column(String(40), unique=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    """Cadastro disponível para novos lançamentos.
+
+    Uma corretora que já participa de um fato financeiro não é apagada: o
+    histórico continua íntegro e o cadastro deixa de aparecer nos formulários.
+    """
     positions: Mapped[list[Position]] = relationship(back_populates="broker_ref")
 
 
@@ -255,6 +263,9 @@ class Ticker(Base):
     rtd_market_code: Mapped[str] = mapped_column(String(1))
     currency: Mapped[str] = mapped_column(String(3))
     is_benchmark: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     """Marca um ticker como referência de comparação (ex.: BOVA11, IBOV,
     USDBRL=X) em vez de um ativo detido em carteira.
 
@@ -307,6 +318,9 @@ class Portfolio(Base):
     name: Mapped[str] = mapped_column(String(80), unique=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     simulated: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     description: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

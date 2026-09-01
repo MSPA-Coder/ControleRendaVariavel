@@ -782,7 +782,7 @@ html[data-values-hidden="true"] [data-sensitive-value="true"]::after {
 }
 html[data-values-hidden="true"] input[data-sensitive-input="true"] { -webkit-text-security: disc; }
 html[data-values-hidden="true"] .chart-box { position: relative; }
-html[data-values-hidden="true"] .chart-box canvas { filter: blur(6px); opacity: .38; pointer-events: none; }
+html[data-values-hidden="true"] .chart-box canvas { opacity: 0; pointer-events: none; }
 html[data-values-hidden="true"] .chart-box::after {
   background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; color: var(--muted);
   content: "Valores ocultos"; font-size: .78rem; font-weight: 700; left: 50%; padding: .32rem .58rem;

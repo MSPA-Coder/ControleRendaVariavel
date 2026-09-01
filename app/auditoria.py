@@ -49,6 +49,7 @@ ACOES: frozenset[str] = frozenset(
         "encerrar",
         "ativar",
         "desativar",
+        "arquivar",
         "redefinir_senha",
         # A troca feita pelo proprio dono. Verbo distinto de
         # "redefinir_senha", que e a acao de um administrador sobre a conta de

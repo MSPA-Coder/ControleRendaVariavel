@@ -39,7 +39,7 @@
   </p>
   <div class="table-wrap">
     <table class="catalog-table">
-      <thead><tr><th>Nome</th><th>Moeda</th><th>Simulada</th><th>Descrição</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Moeda</th><th>Simulada</th><th>Estado</th><th>Descrição</th><th>Ações</th></tr></thead>
       <tbody>
       {% for portfolio in portfolios %}
         <tr>
@@ -50,10 +50,10 @@
                   hx-confirm="Salvar as alterações da carteira {{ portfolio.name }}?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="portfolios_management_open" value="1">
-              <input required maxlength="80" name="name" value="{{ portfolio.name }}" aria-label="Nome da carteira {{ portfolio.name }}">
+              <input required maxlength="80" name="name" value="{{ portfolio.name }}" aria-label="Nome da carteira {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}>
             </form>
           </td>
-          <td><select name="currency" form="portfolio-{{ portfolio.id }}" aria-label="Moeda de {{ portfolio.name }}">
+          <td><select name="currency" form="portfolio-{{ portfolio.id }}" aria-label="Moeda de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}>
             <option value="" {{ 'selected' if not portfolio.currency }}>Nenhuma</option>
             {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if portfolio.currency == currency }}>{{ currency }}</option>{% endfor %}
           </select></td>
@@ -61,22 +61,30 @@
             <span class="tag {{ 'tag-open' if portfolio.simulated else 'tag-closed' }}"
                   title="Definida na criação; não pode ser alterada depois.">{{ 'Sim' if portfolio.simulated else 'Não' }}</span>
           </td>
-          <td><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}"></td>
+          <td>{{ 'Ativa' if portfolio.is_active else 'Arquivada' }}</td>
+          <td><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}></td>
           <td class="catalog-actions">
-            <button class="button" type="submit" form="portfolio-{{ portfolio.id }}">Salvar</button>
-            <form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
+            <button class="button" type="submit" form="portfolio-{{ portfolio.id }}" {{ 'disabled' if not portfolio.is_active }}>Salvar</button>
+            {% if portfolio.is_active %}<form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-target="#portfolios-results" hx-swap="outerHTML"
-                  hx-confirm="Excluir a carteira {{ portfolio.name }}?"
+                  hx-confirm="Excluir a carteira {{ portfolio.name }}? Se ela possuir histórico, será arquivada."
                   data-sa-titulo="Excluir carteira" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="portfolios_management_open" value="1">
-              <button class="button button-danger" type="submit">Excluir</button>
-            </form>
+              <button class="button button-danger" type="submit">Remover</button>
+            </form>{% else %}
+            <form method="post" action="{{ url_for('portfolio.activate_portfolio', portfolio_id=portfolio.id) }}"
+                  hx-post="{{ url_for('portfolio.activate_portfolio', portfolio_id=portfolio.id) }}"
+                  hx-target="#portfolios-results" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="portfolios_management_open" value="1">
+              <button class="button" type="submit">Reativar</button>
+            </form>{% endif %}
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="5" class="empty">Nenhuma carteira cadastrada.</td></tr>
+        <tr><td colspan="6" class="empty">Nenhuma carteira cadastrada.</td></tr>
       {% endfor %}
       </tbody>
     </table>

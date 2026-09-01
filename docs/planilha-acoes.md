@@ -39,6 +39,12 @@ ambígua.
 Corretoras e tickers têm cadastros próprios. Mercado, código RTD e moeda
 pertencem ao ticker; posições apenas referenciam esses cadastros.
 
+Um cadastro sem uso pode ser removido. Quando corretora, ticker ou carteira já
+participa de posição, transação, provento ou extrato histórico, ele é
+**arquivado**, não apagado: deixa de ser opção para novos lançamentos e segue
+identificando corretamente o fato passado. A tela permite reativá-lo quando
+for necessário voltar a operar com ele.
+
 ## Movimentos da posição
 
 Cada posição guarda o extrato dos lançamentos que a formaram
