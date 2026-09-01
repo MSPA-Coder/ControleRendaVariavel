@@ -62,6 +62,8 @@ classificação de moneziness ("ITM", "ATM", "OTM") segue o tipo do contrato.
 
 O calendário de vencimentos guarda código anual de call, código anual de put
 e data de exercício. A interface permite criar, alterar e excluir vencimentos.
+Um contrato cuja data de exercício já passou continua consultável no histórico,
+mas não pode receber uma nova posição aberta.
 
 ## Invariantes
 

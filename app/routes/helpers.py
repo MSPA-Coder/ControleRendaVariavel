@@ -742,6 +742,22 @@ def exposure_group_rows(
             "current_weight": group.current_weight,
         }
         for group in groups
+        if any(view.metrics is not None for view in group.positions)
+    ]
+
+
+def missing_quote_rows(views: Sequence[PositionView]) -> list[dict[str, str]]:
+    """Posições existentes que ainda não têm preço para compor exposição."""
+    return [
+        {
+            "ticker": view.position.ticker,
+            "broker": view.position.broker,
+            "market": view.position.market.value,
+            "portfolio": view.position.portfolio_ref.name,
+            "currency": view.position.currency,
+        }
+        for view in views
+        if view.metrics is None
     ]
 
 
@@ -830,7 +846,11 @@ def converted_broker_exposure_chart_data(
     broker_groups: list[BrokerGroup], usd_brl_rate: Decimal | None
 ) -> dict[str, object] | None:
     return converted_exposure_chart_data(
-        ((group.currency, group.broker, group.current_total) for group in broker_groups),
+        (
+            (group.currency, group.broker, group.current_total)
+            for group in broker_groups
+            if any(view.metrics is not None for view in group.positions)
+        ),
         usd_brl_rate,
     )
 
@@ -839,7 +859,11 @@ def converted_market_exposure_chart_data(
     market_groups: list[MarketGroup], usd_brl_rate: Decimal | None
 ) -> dict[str, object] | None:
     return converted_exposure_chart_data(
-        ((group.currency, group.market.value, group.current_total) for group in market_groups),
+        (
+            (group.currency, group.market.value, group.current_total)
+            for group in market_groups
+            if any(view.metrics is not None for view in group.positions)
+        ),
         usd_brl_rate,
     )
 

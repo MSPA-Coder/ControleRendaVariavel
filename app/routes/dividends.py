@@ -49,6 +49,8 @@ def _parse_form() -> DividendInput:
         raise ValueError("Esse ticker está marcado como referência de comparação.")
     if amount <= 0:
         raise ValueError("O valor do provento deve ser positivo.")
+    if payment_date > date.today():
+        raise ValueError("A data de pagamento de um provento recebido não pode estar no futuro.")
     notes = raw.get("notes") or None
     return DividendInput(broker_id, ticker_id, amount, payment_date, kind, notes)
 
