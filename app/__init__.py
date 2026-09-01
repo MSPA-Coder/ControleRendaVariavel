@@ -8,14 +8,19 @@ from flask import Flask, request, session
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
-from sharedauth.access import requer_login
+from sharedauth.access import requer_login, requer_troca_de_senha
 from sharedauth.config import ler_flag, montar_url_postgres
 from sharedauth.csrf import iniciar_csrf
 from sharedauth.messages import registrar_mensagens
 from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, aplicar_limite, iniciar_limiter
 from sharedauth.secrets import resolver_segredo
 from sharedauth.security import registrar_cabecalhos
-from sharedauth.session import configurar_sessao
+from sharedauth.session import (
+    configurar_sessao,
+    marca_de_sessao,
+    marcas_conferem,
+    separar_identificador,
+)
 from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -90,18 +95,37 @@ HEARTBEAT_ENDPOINTS = {
 
 
 @login_manager.user_loader  # type: ignore[misc]
-def _load_user(user_id: str) -> User | None:
+def _load_user(identificador: str) -> User | None:
+    """Carrega o dono da sessão, conferindo a marca da senha.
+
+    O identificador guardado no cookie é `id:marca` -- ver `User.get_id`. A
+    marca não conferir significa que a senha mudou depois que aquele cookie foi
+    emitido: a sessão cai, que é o efeito que faltava para trocar a senha
+    derrubar quem entrou com a antiga.
+
+    `int()` sem guarda derruba a requisição com 500 quando o identificador do
+    cookie não é numérico. O cookie é assinado, então não é um caminho de
+    ataque -- mas um cookie de formato antigo vira erro em vez de sessão
+    recusada. O formato antigo (só o id) agora é recusado antes disso, por
+    `separar_identificador`: as sessões abertas caem uma vez, no primeiro
+    acesso depois do deploy. Mesma guarda do MegaSena.
+    """
+    from flask import current_app
+
     from app.models import User
 
-    # `int()` sem guarda derruba a requisição com 500 quando o identificador do
-    # cookie não é numérico. O cookie é assinado, então não é um caminho de
-    # ataque -- mas um cookie de formato antigo vira erro em vez de sessão
-    # recusada. Mesma guarda do MegaSena.
+    partes = separar_identificador(identificador)
+    if partes is None:
+        return None
+    user_id, marca = partes
     try:
         user = db.session.get(User, int(user_id))
     except (TypeError, ValueError):
         return None
-    return user if user is not None and user.is_active_user else None
+    if user is None or not user.is_active_user:
+        return None
+    atual = marca_de_sessao(user.password_hash, chave_secreta=current_app.secret_key)
+    return user if marcas_conferem(marca, atual) else None
 
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
@@ -347,6 +371,33 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         endpoints_publicos=PUBLIC_ENDPOINTS,
         endpoint_login="auth.login",
         esta_autenticado=lambda: current_user.is_authenticated,
+        usar_hx_redirect=True,
+    )
+
+    # Senha redefinida por um administrador vale ate o primeiro acesso: com a
+    # marca ligada, toda requisicao cai na tela de troca. Verificar so no login
+    # deixaria a marca sem efeito -- bastaria digitar outra URL depois do
+    # desvio para seguir usando a senha que o administrador conhece.
+    #
+    # `account.change_password` e isento pela propria biblioteca. Os daqui sao
+    # os que faltam: sem `auth.logout` a pessoa fica presa dentro do
+    # aplicativo, e sem os estaticos a tela de troca chega sem CSS. O
+    # `portfolio.health` entra para o conteiner nao ser reportado como doente
+    # justamente para quem esta com a senha vencida.
+    requer_troca_de_senha(
+        app,
+        endpoint_troca="account.change_password",
+        endpoints_isentos=frozenset(
+            {
+                "auth.logout",
+                "portfolio.health",
+                "static",
+                "sharedauth.static",
+                "sharedauth_ui.static",
+            }
+        ),
+        esta_autenticado=lambda: current_user.is_authenticated,
+        precisa_trocar=lambda: bool(current_user.must_change_password),
         usar_hx_redirect=True,
     )
 

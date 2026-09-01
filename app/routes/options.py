@@ -148,7 +148,7 @@ def _contracts() -> list[OptionContract]:
     return list(db.session.scalars(statement).unique())
 
 
-def _parse_position() -> OptionPositionInput:
+def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositionInput:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
         broker_id = int(raw["broker_id"])
@@ -170,6 +170,11 @@ def _parse_position() -> OptionPositionInput:
     contract = db.session.get(OptionContract, contract_id)
     if contract is None:
         raise ValueError("Selecione um contrato de opção cadastrado.")
+    if (
+        not permitir_contrato_vencido
+        and contract.expiration.exercise_date < date.today()
+    ):
+        raise ValueError("Não é possível abrir uma posição em um contrato já vencido.")
     if db.session.get(Portfolio, portfolio_id) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
     if quantity <= 0 or average_cost < 0 or (
@@ -316,7 +321,7 @@ def edit_position(position_id: int) -> str:
 def update_position(position_id: int) -> ResponseReturnValue:
     position = db.get_or_404(OptionPosition, position_id)
     try:
-        data = _parse_position()
+        data = _parse_position(permitir_contrato_vencido=True)
     except ValueError as exc:
         flash(str(exc), "error")
         return render_template(

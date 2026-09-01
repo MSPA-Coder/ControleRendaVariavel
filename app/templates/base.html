@@ -40,6 +40,11 @@
   } %}
   {% set crumb = nav_meta.get(request.endpoint, ('', '')) %}
   <div class="app-shell">
+    {#- Bloco para que a tela de troca obrigatoria de senha possa substituir a
+        navegacao inteira: com a marca ligada, o portao devolve para a troca
+        qualquer destino deste menu, entao exibi-los so ofereceria caminhos que
+        nao levam a lugar nenhum. Ver `change_password.html`. -#}
+    {% block navbar %}
     <header class="navbar">
       <div class="navbar-row">
         <div class="logo">
@@ -202,8 +207,8 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="privacy-toggle" type="submit"
                     aria-pressed="{{ 'true' if values_hidden else 'false' }}"
-                    aria-label="{{ 'Mostrar valores' if values_hidden else 'Ocultar valores' }}"
-                    title="{{ 'Mostrar valores' if values_hidden else 'Ocultar valores' }}">
+                    aria-label="{{ 'Desativar modo discreto' if values_hidden else 'Ativar modo discreto' }}"
+                    title="{{ 'Desativar modo discreto' if values_hidden else 'Ativar modo discreto' }}">
               {% if values_hidden %}
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.3A10.8 10.8 0 0 1 12 4c5.5 0 9.5 5 9.5 5a17.7 17.7 0 0 1-3.2 3.3M6.2 6.2C3.9 7.8 2.5 9 2.5 9s4 5 9.5 5c.7 0 1.4-.1 2-.2"/></svg>
               {% else %}
@@ -211,12 +216,17 @@
               {% endif %}
             </button>
           </form>
+          {# Trocar a propria senha nao exige papel nenhum: e a conta de quem
+             esta logado, ao contrario do grupo "Sistema", que administra
+             contas alheias e so aparece para `admin`. #}
+          <a class="nav-minha-senha {{ 'is-current' if request.endpoint == 'account.change_password' }}" href="{{ url_for('account.change_password') }}">Minha senha</a>
           <span class="avatar" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
           <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-primary" type="submit">Sair</button></form>
         </div>
         {% endif %}
       </div>
     </header>
+    {% endblock %}
     <div class="nav-scrim" data-nav-scrim hidden></div>
 
     {% set header_controls_html %}{% block header_controls %}{% endblock %}{% endset %}

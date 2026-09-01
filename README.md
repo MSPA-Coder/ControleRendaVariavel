@@ -53,6 +53,25 @@ A interface fica em <http://127.0.0.1:5301> e o PostgreSQL é publicado apenas
 em `127.0.0.1:5302`. O serviço `migrate` aplica as revisões Alembic antes de
 `web` iniciar.
 
+Quem perde a senha é atendido por um administrador em `/users`: o botão
+**Redefinir** sorteia uma senha temporária, mostrada uma única vez na tela de
+quem redefiniu, para ser entregue fora do sistema. Contas criadas por essa tela
+recebem o mesmo tratamento. Enquanto a troca estiver pendente, toda requisição
+da pessoa cai em `/minha-senha` — só o logout, o `/health` e os arquivos
+estáticos escapam. A troca exige a senha atual e recusa repetir a senha
+temporária. `/minha-senha` também está sempre disponível pela barra superior,
+sem obrigação. O comando `users create-admin` é a exceção: quem o roda escolheu
+a própria senha e não fica com troca pendente.
+
+Duas garantias vieram junto, compartilhadas com os outros apps Flask do
+mantenedor: o destino pós-login (`?next=`) é validado por
+`sharedauth.access.url_proximo_seguro`, que só aceita caminho interno — sem
+isso a tela de login vira um redirecionador aberto; e a sessão carrega uma
+marca da senha em vigor (`sharedauth.session`), então **trocar a senha derruba
+as sessões abertas em outros lugares**, e não só a atual. Quem troca a própria
+senha continua conectado; quem tinha entrado com a senha antiga cai no próximo
+acesso.
+
 O Compose padrão usa a imagem sem montar o código do host. Para edição ao vivo,
 use explicitamente:
 

@@ -39,6 +39,12 @@ ambígua.
 Corretoras e tickers têm cadastros próprios. Mercado, código RTD e moeda
 pertencem ao ticker; posições apenas referenciam esses cadastros.
 
+Um cadastro sem uso pode ser removido. Quando corretora, ticker ou carteira já
+participa de posição, transação, provento ou extrato histórico, ele é
+**arquivado**, não apagado: deixa de ser opção para novos lançamentos e segue
+identificando corretamente o fato passado. A tela permite reativá-lo quando
+for necessário voltar a operar com ele.
+
 ## Movimentos da posição
 
 Cada posição guarda o extrato dos lançamentos que a formaram
@@ -277,3 +283,11 @@ separadas por moeda e, quando o recorte filtrado tiver BRL e USD, acrescenta
 uma visão consolidada em USD: valores em BRL são divididos pela última cotação
 histórica do ticker de referência `USDBRL=X` (BRL por USD). Sem essa cotação,
 o sistema não mistura moedas e mantém apenas as visões separadas.
+
+Posições sem primeira cotação permanecem visíveis nas três análises em uma
+tabela própria, com a situação **Aguardando primeira cotação RTD**. Elas não
+entram em valores nem percentuais e não geram grupos artificiais de valor zero.
+
+Transações encerradas e proventos representam fatos realizados: suas datas de
+abertura, encerramento e pagamento não podem estar no futuro. Cotações manuais
+também não aceitam data futura e exigem preço estritamente positivo.

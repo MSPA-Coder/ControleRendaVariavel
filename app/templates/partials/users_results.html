@@ -2,6 +2,7 @@
   {# Em uma página completa, base.html já renderiza o toast; em uma resposta
      HTMX, este parcial é a única região devolvida e precisa transportá-lo. #}
   {% if include_toast|default(false) %}{% include "partials/flash_toast.html" %}{% endif %}
+  {% if senha_temporaria is defined and senha_temporaria %}{% include "partials/senha_temporaria.html" %}{% endif %}
   <section class="catalog-card">
     <h2>Contas cadastradas</h2>
     <div class="table-wrap">
@@ -28,10 +29,11 @@
             <td>
               <form method="post" action="{{ url_for('users.reset_user_password', user_id=user.id) }}"
                     hx-post="{{ url_for('users.reset_user_password', user_id=user.id) }}" hx-target="#users-results" hx-swap="outerHTML"
-                    hx-confirm="Redefinir a senha deste usuário?">
+                    hx-confirm="Redefinir a senha deste usuário? O sistema vai gerar uma senha temporária, mostrada uma única vez.">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input required minlength="8" type="password" name="password" placeholder="Nova senha" autocomplete="new-password">
-                <input required minlength="8" type="password" name="password_confirmation" placeholder="Confirmar" autocomplete="new-password">
+                {#- Sem campo de senha: quem administra nao escolhe mais a senha
+                    de outra pessoa. O sistema sorteia, mostra uma vez, e o dono
+                    e obrigado a trocar no primeiro acesso. -#}
                 <button class="button" type="submit">Redefinir</button>
               </form>
             </td>

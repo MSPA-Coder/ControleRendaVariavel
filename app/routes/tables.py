@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app import db
+from app.auditoria import registrar
 from app.models import Broker, Market, Portfolio, PortfolioTicker, Ticker
 from app.reference_data import (
     parse_broker,
@@ -20,6 +21,7 @@ from app.routes.helpers import (
     broker_records,
     investable_ticker_records,
     is_htmx_request,
+    portfolio_records,
     portfolio_ticker_has_positions,
     ticker_has_holdings,
     ticker_records,
@@ -39,12 +41,14 @@ def _int_or_none(raw: str | None) -> int | None:
 
 @bp.get("/tables/brokers")
 def table_brokers() -> str:
-    return render_template("table_brokers.html", brokers=broker_records())
+    return render_template("table_brokers.html", brokers=broker_records(include_inactive=True))
 
 
 @bp.get("/tables/tickers")
 def table_tickers() -> str:
-    return render_template("table_tickers.html", tickers=ticker_records(), markets=Market)
+    return render_template(
+        "table_tickers.html", tickers=ticker_records(include_inactive=True), markets=Market
+    )
 
 
 @bp.post("/tables/brokers")
@@ -74,6 +78,9 @@ def create_broker() -> ResponseReturnValue:
 @bp.post("/tables/brokers/<int:broker_id>")
 def update_broker(broker_id: int) -> ResponseReturnValue:
     broker = db.get_or_404(Broker, broker_id)
+    if not broker.is_active:
+        flash("Reative a corretora antes de editá-la.", "error")
+        return _tables_redirect("table_brokers")
     try:
         data = parse_broker(request.form)
         duplicate = db.session.scalar(
@@ -107,10 +114,14 @@ def delete_broker(broker_id: int) -> ResponseReturnValue:
         flash("Corretora excluída.", "success")
     except IntegrityError:
         db.session.rollback()
+        broker = db.get_or_404(Broker, broker_id)
+        broker.is_active = False
+        registrar("corretora", "arquivar", entidade_id=broker.id, detalhes={"nome": broker.name})
+        db.session.commit()
         flash(
-            "A corretora não pode ser excluída enquanto possuir posições, "
-            "transações ou proventos vinculados.",
-            "error",
+            "A corretora possui registros vinculados e foi arquivada. Ela não aparece "
+            "em novos formulários e pode ser reativada nesta tela.",
+            "success",
         )
     return _tables_redirect("table_brokers")
 
@@ -136,6 +147,9 @@ def create_ticker() -> ResponseReturnValue:
 @bp.post("/tables/tickers/<int:ticker_id>")
 def update_ticker(ticker_id: int) -> ResponseReturnValue:
     ticker = db.get_or_404(Ticker, ticker_id)
+    if not ticker.is_active:
+        flash("Reative o ticker antes de editá-lo.", "error")
+        return _tables_redirect("table_tickers")
     try:
         data = parse_ticker(request.form)
         duplicate = db.session.scalar(
@@ -170,10 +184,14 @@ def delete_ticker(ticker_id: int) -> ResponseReturnValue:
         flash("Ticker excluído.", "success")
     except IntegrityError:
         db.session.rollback()
+        ticker = db.get_or_404(Ticker, ticker_id)
+        ticker.is_active = False
+        registrar("ticker", "arquivar", entidade_id=ticker.id, detalhes={"simbolo": ticker.symbol})
+        db.session.commit()
         flash(
-            "O ticker não pode ser excluído enquanto possuir posições, "
-            "transações ou proventos vinculados.",
-            "error",
+            "O ticker possui registros vinculados e foi arquivado. Ele não aparece "
+            "em novos formulários e pode ser reativado nesta tela.",
+            "success",
         )
     return _tables_redirect("table_tickers")
 
@@ -187,7 +205,7 @@ def _portfolios_results_context(
     tickers também o montam: eles respondem ao HTMX com esta mesma região já
     atualizada, no mesmo padrão de ``app.routes.quotes._quote_history_context``.
     """
-    portfolios = list(db.session.scalars(select(Portfolio).order_by(Portfolio.name)))
+    portfolios = portfolio_records(include_inactive=True)
     selected_portfolio: Portfolio | None = None
     if selected_portfolio_id is not None:
         selected_portfolio = next(
@@ -336,6 +354,9 @@ def update_portfolio(portfolio_id: int) -> ResponseReturnValue:
     (POST manual) é recusada com 422 explícito, em vez de ser ignorada em
     silêncio como antes."""
     portfolio = db.get_or_404(Portfolio, portfolio_id)
+    if not portfolio.is_active:
+        flash("Reative a carteira antes de editá-la.", "error")
+        return _portfolios_response(portfolio_id, status=422)
     if _requested_simulated_change(portfolio):
         flash(
             "A natureza da carteira (real ou simulada) não muda depois de "
@@ -377,11 +398,43 @@ def delete_portfolio(portfolio_id: int) -> ResponseReturnValue:
         return _portfolios_response(None)
     except IntegrityError:
         db.session.rollback()
+        portfolio = db.get_or_404(Portfolio, portfolio_id)
+        portfolio.is_active = False
+        registrar("carteira", "arquivar", entidade_id=portfolio.id, detalhes={"nome": portfolio.name})
+        db.session.commit()
         flash(
-            "A carteira não pode ser excluída enquanto possuir posições ou "
-            "transações vinculadas.",
-            "error",
+            "A carteira possui registros vinculados e foi arquivada. Ela não aparece "
+            "em novos formulários e pode ser reativada nesta tela.",
+            "success",
         )
+    return _portfolios_response(portfolio_id)
+
+
+def _reactivate(model: type[Broker] | type[Ticker] | type[Portfolio], record_id: int, label: str) -> None:
+    record = db.get_or_404(model, record_id)
+    record.is_active = True
+    registrar(label, "ativar", entidade_id=record_id)
+    db.session.commit()
+
+
+@bp.post("/tables/brokers/<int:broker_id>/activate")
+def activate_broker(broker_id: int) -> ResponseReturnValue:
+    _reactivate(Broker, broker_id, "corretora")
+    flash("Corretora reativada.", "success")
+    return _tables_redirect("table_brokers")
+
+
+@bp.post("/tables/tickers/<int:ticker_id>/activate")
+def activate_ticker(ticker_id: int) -> ResponseReturnValue:
+    _reactivate(Ticker, ticker_id, "ticker")
+    flash("Ticker reativado.", "success")
+    return _tables_redirect("table_tickers")
+
+
+@bp.post("/tables/portfolios/<int:portfolio_id>/activate")
+def activate_portfolio(portfolio_id: int) -> ResponseReturnValue:
+    _reactivate(Portfolio, portfolio_id, "carteira")
+    flash("Carteira reativada.", "success")
     return _portfolios_response(portfolio_id)
 
 
@@ -390,8 +443,11 @@ def add_portfolio_ticker(portfolio_id: int) -> ResponseReturnValue:
     portfolio = db.get_or_404(Portfolio, portfolio_id)
     ticker_id = _int_or_none(request.form.get("ticker_id"))
     ticker = db.session.get(Ticker, ticker_id) if ticker_id is not None else None
-    if ticker is None:
+    if ticker is None or not ticker.is_active:
         flash("Selecione um ticker cadastrado.", "error")
+        return _portfolios_response(portfolio.id)
+    if not portfolio.is_active:
+        flash("Reative a carteira antes de alterar seus tickers.", "error")
         return _portfolios_response(portfolio.id)
     if db.session.get(PortfolioTicker, (portfolio.id, ticker.id)) is not None:
         flash("Esse ticker já está associado a essa carteira.", "error")

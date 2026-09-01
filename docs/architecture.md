@@ -268,7 +268,7 @@ indisponíveis ou desatualizadas, e nenhum cadastro depende delas.
 |---|---|
 | `users` | contas, papel e estado de acesso |
 | `app_settings` | preferências: coletor, agenda, tema, taxa livre de risco |
-| `brokers`, `tickers`, `portfolios`, `portfolio_tickers` | cadastros |
+| `brokers`, `tickers`, `portfolios`, `portfolio_tickers` | cadastros; os três primeiros podem ser arquivados sem romper fatos históricos |
 | `positions`, `position_movements` | posição de ações e seu extrato |
 | `option_expirations`, `option_contracts`, `option_positions`, `option_position_movements` | o mesmo par, para opções |
 | `transactions` | o que a aba Transações mostra |
@@ -300,6 +300,9 @@ aqui.
 - **autorização no servidor**: `operador` opera a carteira, `admin` também
   acessa Configurações e contas. Esconder o item no template é apresentação, não
   controle: botão ausente não impede ninguém de chamar a rota;
+- **matriz de acesso**: somente `admin` cria, altera, desativa ou redefine
+  contas, muda configurações e aciona o coletor; `operador` cria, edita,
+  encerra e exclui itens da carteira, mas não administra acesso nem o runtime;
 - escrita de navegador exige CSRF; a CSP não admite `unsafe-inline`, e todo
   asset é local;
 - cookies `HttpOnly` e `SameSite=Lax`; sessão de 12 horas, inclusive o
@@ -307,6 +310,17 @@ aqui.
   sistema com posição, custo e provento pessoais;
 - em produção, TLS termina no Nginx, e `FORCE_HTTPS`/`TRUST_PROXY_HEADERS` ligam
   cookies `Secure` e o tratamento dos cabeçalhos do proxy.
+
+O botão de olho é **Modo discreto**: mascara a leitura casual da tela e cobre
+os gráficos. Ele não é uma fronteira de segurança; os dados continuam na
+resposta/DOM para que os gráficos possam ser renderizados no navegador. Quem
+precisa de confidencialidade contra inspeção do navegador precisa de um
+contrato distinto, com dados omitidos no servidor.
+
+Cadastros sem vínculo são excluídos. Se alguma chave estrangeira protege um
+fato financeiro ou o extrato de posições encerradas, a tentativa de remoção
+arquiva o cadastro: ele sai dos novos formulários, preserva o histórico e pode
+ser reativado na tela de cadastro.
 
 A imagem roda sob Gunicorn (dois workers, quatro threads), com usuário não-root
 e filesystem raiz somente leitura; testes, requisitos de desenvolvimento,

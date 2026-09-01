@@ -96,7 +96,7 @@ def test_update_option_position_retorna_formulario_em_modo_edicao_apos_erro(monk
     monkeypatch.setattr(
         options,
         "_parse_position",
-        lambda: (_ for _ in ()).throw(ValueError("dados inválidos")),
+        lambda **_kwargs: (_ for _ in ()).throw(ValueError("dados inválidos")),
     )
     monkeypatch.setattr(
         options,

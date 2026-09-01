@@ -35,6 +35,7 @@ from app.routes.helpers import (
     is_htmx_request,
     latest_usd_brl_quote,
     market_exposure_chart_data,
+    missing_quote_rows,
     poll_interval_seconds,
     portfolio_records,
     positions_query,
@@ -442,6 +443,7 @@ def _render_exposure(
         "portfolios": real_portfolio_records(),
         "group_rows": [],
         "group_heading": "",
+        "missing_quote_rows": missing_quote_rows(portfolio.positions),
         **template_context(portfolio),
     }
     if is_htmx_request():

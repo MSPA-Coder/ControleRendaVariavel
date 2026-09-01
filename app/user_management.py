@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sharedauth.passwords import validar_tamanho
+from sharedauth.passwords import gerar_senha_temporaria, validar_tamanho, validar_troca
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -110,6 +110,9 @@ def create_user(username: str, role: str, password: str, confirmation: str) -> U
         raise LastAdminError("Crie pelo menos um administrador ativo antes de operadores.")
     user = User(username=data.username, role=data.role, is_active_user=True)
     user.set_password(password)
+    # Conta nova nasce com uma senha que quem administra escolheu e conhece --
+    # e o mesmo caso da redefinicao, e vale a mesma obrigacao de trocar.
+    user.must_change_password = True
     db.session.add(user)
     # `flush` antes de registrar: a trilha guarda o id, que so existe depois
     # que o INSERT chega ao banco. Continua na mesma transacao do `_commit`.
@@ -123,7 +126,14 @@ def create_user(username: str, role: str, password: str, confirmation: str) -> U
 
 
 def upsert_from_cli(username: str, role: str, password: str) -> User:
-    """Cria ou atualiza uma conta para o bootstrap administrativo da CLI."""
+    """Cria ou atualiza uma conta para o bootstrap administrativo da CLI.
+
+    **Nao liga `must_change_password`, de proposito.** Quem roda este comando
+    tem shell no conteiner e escolheu a propria senha: nao existe o terceiro
+    que a redefinicao pela tela pressupoe, e obrigar a trocar transformaria o
+    resgate do primeiro acesso num passo a mais sem ganho. Tambem nao desliga
+    a marca de uma conta que ja a tenha.
+    """
     data = UserInput(_username(username), _role(role))
     _password(password, password)
     _lock_admin_mutations()
@@ -179,11 +189,22 @@ def update_user(user_id: int, username: str, role: str) -> User:
     return user
 
 
-def reset_password(user_id: int, password: str, confirmation: str) -> User:
-    _password(password, confirmation)
+def reset_password(user_id: int) -> tuple[User, str]:
+    """Redefine a senha de outra conta e devolve a senha temporaria gerada.
+
+    O administrador nao escolhe mais a senha: uma senha escolhida por ele e
+    uma senha que ele conhece e que tende a se repetir entre contas. O sistema
+    sorteia, mostra uma vez a quem redefiniu, e obriga o dono a troca-la no
+    primeiro acesso.
+
+    O valor devolvido e a **unica copia em texto claro** que vai existir. Quem
+    chama mostra e descarta.
+    """
     _lock_admin_mutations()
     user = _locked_user(user_id)
-    user.set_password(password)
+    senha_temporaria = gerar_senha_temporaria()
+    user.set_password(senha_temporaria)
+    user.must_change_password = True
     # A senha nao entra nos detalhes, nem redigida: nao ha pergunta que ela
     # responda e ha muitas que ela abre.
     registrar(
@@ -191,7 +212,34 @@ def reset_password(user_id: int, password: str, confirmation: str) -> User:
         detalhes={"username": user.username},
     )
     _commit()
-    return user
+    return user, senha_temporaria
+
+
+def change_own_password(
+    user: User, senha_atual: str, senha_nova: str, confirmacao: str
+) -> None:
+    """Troca a senha do proprio dono e desliga a obrigacao de trocar.
+
+    As quatro regras (senha atual confere, confirmacao bate, senha nova
+    diferente da atual, piso de tamanho) vem de `sharedauth.passwords` --
+    inclusive a de "diferente da atual", que e o que impede alguem obrigado a
+    trocar de simplesmente redigitar a senha temporaria e sair com ela.
+    """
+    try:
+        validar_troca(
+            hash_atual=user.password_hash,
+            senha_atual=senha_atual,
+            senha_nova=senha_nova,
+            confirmacao=confirmacao,
+        )
+    except ValueError as exc:
+        raise UserManagementError(str(exc)) from exc
+    user.set_password(senha_nova)
+    user.must_change_password = False
+    # Sem `detalhes`: quem trocou ja e o autor registrado pela trilha, e nao ha
+    # mais nada a dizer que nao seja a propria senha.
+    registrar("usuario", "trocar_senha", entidade_id=user.id)
+    _commit()
 
 
 def set_active(user_id: int, active: bool) -> User:

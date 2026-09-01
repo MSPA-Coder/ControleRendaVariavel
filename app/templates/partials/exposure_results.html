@@ -25,7 +25,27 @@
 
 {% if allocation_charts %}
 {{ exposure.charts(allocation_charts, heading, subject, converted_chart) }}
-{% elif not group_rows %}
+{% elif not group_rows and not missing_quote_rows %}
 {{ exposure.empty_state() }}
+{% endif %}
+
+{% if missing_quote_rows %}
+<section class="exposure-table" aria-label="Posições aguardando cotação">
+  <h2>Posições sem cotação atual</h2>
+  <table>
+    <thead>
+      <tr><th>Ativo</th><th>Corretora</th><th>Mercado</th><th>Carteira</th><th>Moeda</th><th>Situação</th></tr>
+    </thead>
+    <tbody>
+      {% for row in missing_quote_rows %}
+      <tr>
+        <td>{{ row.ticker }}</td><td>{{ row.broker }}</td><td>{{ row.market }}</td>
+        <td>{{ row.portfolio }}</td><td>{{ row.currency }}</td>
+        <td class="missing">Aguardando primeira cotação RTD</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% endif %}
 </div>

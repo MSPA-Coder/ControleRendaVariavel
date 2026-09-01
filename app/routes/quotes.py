@@ -157,12 +157,15 @@ def create_quote_history_entry() -> ResponseReturnValue:
     except (KeyError, ValueError, ArithmeticError):
         flash("Informe um ticker, uma data e um preço válidos.", "error")
         return _quote_management_response(None)
+    if price <= 0:
+        flash("O preço da cotação deve ser positivo.", "error")
+        return _quote_management_response(ticker_id)
+    if recorded_date > date.today():
+        flash("A data da cotação não pode estar no futuro.", "error")
+        return _quote_management_response(ticker_id)
     if db.session.get(Ticker, ticker_id) is None:
         flash("Selecione um ticker cadastrado.", "error")
         return _quote_management_response(None)
-    if price < 0:
-        flash("O preço não pode ser negativo.", "error")
-        return _quote_management_response(ticker_id)
     # Meia-noite UTC do dia informado: um lançamento manual não tem um
     # horário real de observação (ao contrário do coletor RTD), então usa
     # um horário representativo determinístico só para preencher a coluna

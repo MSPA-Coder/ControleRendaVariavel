@@ -31,6 +31,7 @@ def register_blueprints(app: Flask) -> None:
         tables,
         transactions,
     )
+    from app.routes.account import bp as account_bp
     from app.routes.auth import bp as auth_bp
     from app.routes.options import bp as options_bp
     from app.routes.users import bp as users_bp
@@ -39,3 +40,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(options_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(account_bp)

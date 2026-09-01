@@ -154,6 +154,11 @@ def _parse_form() -> TransactionInput:
         )
     if closed_on < opened_on:
         raise ValueError("A data de encerramento não pode ser anterior à data de abertura.")
+    today = date.today()
+    if opened_on > today or closed_on > today:
+        raise ValueError(
+            "As datas de uma transação realizada não podem estar no futuro."
+        )
     result_mode = raw.get("result_mode", "").upper()
     if result_mode not in {"L", "B"}:
         raise ValueError("Modo de resultado inválido.")
