@@ -1,0 +1,279 @@
+{
+  "projeto": "ControleRendaVariavel",
+  "data": "1 de setembro de 2026",
+  "escopo": "Repositório ControleRendaVariavel na íntegra: as 79 rotas HTTP dos 15 módulos de `app/routes/`, a fábrica da aplicação, as camadas de domínio e serviço, os modelos e as 13 revisões Alembic, os 40 templates Jinja, os 6 arquivos de JavaScript próprio, o gerenciador do coletor RTD (`app/rtd_service.py`), `Dockerfile`, `compose.yaml`, `deploy/`, os scripts PowerShell do agente Windows, os arquivos de ambiente (versionados e não versionados), o workflow de CI e o histórico completo do Git.",
+  "stack": {
+    "Linguagem": "Python 3.14",
+    "Framework": "Flask com blueprints por assunto (15 módulos de rota)",
+    "ORM / query builder": "SQLAlchemy 2 (estilo `select()`) + Flask-SQLAlchemy; migrações por Alembic",
+    "Banco": "PostgreSQL 17",
+    "Mecanismo de auth": "SharedAuth v0.10 — sessão + Flask-Login, CSRF por Flask-WTF, portão padrão-nega, papéis `admin`/`operador` decididos localmente; mais um segundo mecanismo, por token Bearer, para o agente coletor",
+    "Frontend": "HTML renderizado no servidor + HTMX (vendorizado) e Chart.js; fontes locais, sem CDN",
+    "Deploy": "Docker Compose (gunicorn com 2 workers), Nginx com TLS no VPS Oracle, agente RTD rodando fora de contêiner numa máquina Windows",
+    "Superfície incomum": "3 rotas `/api/collector/*` públicas por sessão e isentas de CSRF, autenticadas por token compartilhado com o agente Windows"
+  },
+  "nota_metodologica": "Este aplicativo tem DOIS mecanismos de autenticação, e as cinco categorias foram aplicadas aos dois. O primeiro é o de pessoa (sessão + papel), que cobre 76 rotas. O segundo é o de máquina: três rotas `/api/collector/*` que ficam fora do portão de sessão e fora do CSRF, autenticadas por um token Bearer compartilhado com o agente que roda no Windows. Elas recebem atenção desproporcional neste relatório justamente por serem a única superfície do sistema alcançável sem sessão. Quanto ao isolamento por dono: o README declara que este não é serviço multiusuário, e a auditoria confirmou no schema — nenhuma tabela de domínio tem coluna de proprietário nas 13 revisões Alembic.",
+  "metodologia": [
+    {
+      "categoria": "1. Banco sem tranca (isolamento de inquilino/dono)",
+      "mapeamento": "Não há RLS nem middleware de tenant, e não há a que aplicá-los: posição, transação, provento e cotação pertencem a uma CARTEIRA, não a um usuário. O mecanismo efetivo é o portão padrão-nega mais o papel `admin` em 8 rotas. Auditadas todas as consultas de listagem, exposição, performance e risco."
+    },
+    {
+      "categoria": "2. Permissão definida no navegador",
+      "mapeamento": "O único gate de papel do frontend (`base.html:173`) foi cruzado com as rotas do grupo que ele esconde, e as 79 rotas foram varridas para localizar `@requer_admin`."
+    },
+    {
+      "categoria": "3. IDOR",
+      "mapeamento": "Percorridos os 24 handlers que recebem ID no caminho (`position_id`, `option_position_id`, `dividend_id`, `transaction_id`, `broker_id`, `ticker_id`, `portfolio_id`, `contract_id`, `expiration_id`, `user_id`). Como não há dono, a pergunta auditada foi: a rota confere PRIVILÉGIO quando é privilegiada, e valida a existência e a consistência do objeto?"
+    },
+    {
+      "categoria": "4. Chaves expostas (hardcode)",
+      "mapeamento": "Varredura de código, templates, `compose.yaml`, `Dockerfile`, scripts PowerShell (inclusive o de provisionamento do token do agente), workflow de CI, documentação, arquivos `.env` (inclusive os NÃO versionados) e do histórico completo do Git. Auditados os defaults `${VAR:-valor}` do Compose e o `debug.log` presente no disco."
+    },
+    {
+      "categoria": "5. Inputs sem tratamento (XSS)",
+      "mapeamento": "Frontend: varredura dos 6 arquivos de JavaScript próprio por `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` e `document.write`. Backend: 40 templates buscados por `|safe`, `autoescape` e `Markup(`; e atenção específica ao texto de erro que o agente coletor grava (`collector_agent_error`), que é dado de terceiro exibido na tela de Configurações."
+    }
+  ],
+  "resumo": "O ControleRendaVariavel não tem nenhuma falha crítica, alta ou média. As 79 rotas foram percorridas uma a uma: as 8 privilegiadas (5 de gestão de contas, 2 de Configurações e o controle do serviço RTD) exigem `@requer_admin` no servidor, e o único menu escondido por papel no template cobre exatamente esse conjunto. A varredura de XSS voltou vazia — zero `|safe` nos 40 templates, zero `innerHTML` nos 6 arquivos de JavaScript próprio, e o único `new Function` mencionado no código está num comentário explicando por que a CSP o impede. As duas superfícies mais expostas estão bem construídas: a API do agente coletor confere o token com `hmac.compare_digest`, recusa com 503 quando o token não está configurado (falha fechada) e limita o corpo a 512 KB e 2.000 cotações; e a importação de histórico do Yahoo escapa o símbolo com `quote(symbol, safe='')` contra um host fixo, sem espaço para SSRF. Os cinco achados são de severidade baixa ou informativa: folgas de configuração, ausência de teto de taxa na única rota sem sessão, e decisões de projeto que valem estar registradas.",
+  "pontos_fortes": [
+    {
+      "titulo": "Toda rota privilegiada é verificada no servidor",
+      "detalhe": "As 8 rotas privilegiadas carregam `@requer_admin`, que recusa com 403 por `sharedauth.access.requer_papel`. O decorator ainda grava `papel_exigido` na view, para que uma varredura da URLconf consiga distinguir 'protegida por papel' de 'embrulhada por qualquer decorator'.",
+      "evidencia": "app/authorization.py:35-45; app/routes/users.py:52,58,76,89,105; settings.py:148,216; partials.py:53"
+    },
+    {
+      "titulo": "O único menu escondido por papel corresponde exatamente às rotas protegidas",
+      "detalhe": "O grupo 'Sistema' do `base.html` (Configurações e Usuários) é o único gate de papel do frontend, e o comentário ao lado já registra que esconder é apresentação: um operador que digite `/settings` recebe 403 mesmo sem ver o menu.",
+      "evidencia": "app/templates/base.html:170-193"
+    },
+    {
+      "titulo": "API do agente coletor com comparação em tempo constante e falha fechada",
+      "detalhe": "`_require_agent_token` compara o cabeçalho inteiro com `hmac.compare_digest`, e recusa com 503 quando o token não está configurado — em vez de deixar passar por comparação com string vazia. As três rotas são as únicas alcançáveis sem sessão, e todas passam por ele antes de qualquer outra coisa.",
+      "evidencia": "app/routes/collector_agent.py:41-48, 92, 150, 269"
+    },
+    {
+      "titulo": "Limites defensivos na carga do agente",
+      "detalhe": "Corpo recusado acima de 512 KB (com base em `content_length`, antes de ler), no máximo 2.000 cotações por chamada, e o `error` de falha cortado em 250 caracteres antes de gravar. Toda a gravação roda numa transação, com `rollback` em qualquer entrada inválida.",
+      "evidencia": "app/routes/collector_agent.py:27, 81-87, 156-157, 277"
+    },
+    {
+      "titulo": "Importação do Yahoo sem espaço para SSRF",
+      "detalhe": "O host é fixo (`query1.finance.yahoo.com`), o esquema é HTTPS literal e o símbolo do ticker — que é dado de usuário, cadastrado em `/tables/tickers` — entra escapado por `quote(symbol, safe='')` como segmento de caminho. Não há como redirecionar a requisição para outro destino.",
+      "evidencia": "app/quote_history_import.py:87-91"
+    },
+    {
+      "titulo": "Acesso padrão-nega, com o motivo de cada exceção escrito",
+      "detalhe": "`PUBLIC_ENDPOINTS` tem 6 entradas, e cada uma tem justificativa no próprio código — inclusive `sharedauth.static`, com a explicação de que sem ela a mensagem de erro do login apareceria sem estilo. `sharedauth_ui.static` foi deliberadamente deixado FORA, porque só `base.html` o referencia.",
+      "evidencia": "app/__init__.py:52-69"
+    },
+    {
+      "titulo": "Isenção de CSRF explícita, nomeada e mínima",
+      "detalhe": "Apenas as duas rotas POST do agente são isentas, e a isenção é feita por instância (`csrf.exempt`, não singleton de módulo), depois do registro dos blueprints. A terceira rota do agente é GET e não precisa de isenção.",
+      "evidencia": "app/__init__.py:281-285 e sharedauth/csrf.py"
+    },
+    {
+      "titulo": "Sessão amarrada à senha em vigor, com guarda contra cookie de formato antigo",
+      "detalhe": "O `user_loader` separa `id:marca`, recusa formato inválido antes do `int()` (um cookie antigo vira sessão recusada, não erro 500) e compara a marca contra o hash atual — trocar a senha derruba quem entrou com a antiga.",
+      "evidencia": "app/__init__.py:97-128"
+    },
+    {
+      "titulo": "Zero XSS: nenhum `|safe`, nenhum `innerHTML`",
+      "detalhe": "Varredura dos 40 templates por `|safe`, `autoescape` e `Markup(`: nada. Varredura dos 6 arquivos de JavaScript próprio: nenhum `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` ou `document.write` — a única menção a `new Function` é um comentário explicando por que a CSP o impede. O `collector_agent_error`, que é texto de terceiro, sai pelo autoescape do Jinja.",
+      "evidencia": "app/templates/ (40 arquivos) e app/static/*.js"
+    },
+    {
+      "titulo": "Subprocessos do coletor RTD construídos como lista, sem shell",
+      "detalhe": "Todas as chamadas de `subprocess.run`/`Popen` passam a linha de comando como lista, sem `shell=True`. O único valor variável que entra num comando é um PID convertido com `int()`. Não há caminho de injeção de comando.",
+      "evidencia": "app/rtd_service.py:105-122, 306-320, 355-360, 396-404"
+    },
+    {
+      "titulo": "Redirecionamento pós-login e pós-privacidade com a mesma checagem",
+      "detalhe": "Tanto o `next` do login quanto o da alternância de privacidade passam por `sharedauth.access.url_proximo_seguro` — a rota de privacidade seria, sem isso, o redirecionador aberto que o login deixou de ser.",
+      "evidencia": "app/routes/privacy.py:129-138 e app/routes/auth.py"
+    },
+    {
+      "titulo": "Regra do último administrador com trava serializada",
+      "detalhe": "`update_user`, `create_user` e `upsert_from_cli` tomam um lock antes de recontar administradores ativos, e recusam rebaixar o último. Cobre também o caso de reativar/desativar.",
+      "evidencia": "app/user_management.py:65-72, 109-110, 151-154, 177-180"
+    },
+    {
+      "titulo": "Senha temporária nunca passa por `flash()`",
+      "detalhe": "A senha gerada na redefinição vai como variável de contexto do template, e o comentário explica por quê: `flash` guarda na sessão, a sessão é um cookie ASSINADO e assinado não é cifrado — a senha sairia legível no cabeçalho da resposta.",
+      "evidencia": "app/routes/users.py:37-48"
+    },
+    {
+      "titulo": "Sem segredo no histórico do Git",
+      "detalhe": "Nenhum arquivo `.env`, `.pem` ou de segredo jamais foi adicionado ao repositório. Os dois scripts de provisionamento presentes no histórico geram segredo, não o contêm. O `debug.log` no disco foi lido por inteiro: não tem credencial nenhuma.",
+      "evidencia": "git log --all --diff-filter=A"
+    }
+  ],
+  "pontos_fracos": [
+    "O `.env` reúne num só arquivo, em texto claro, três segredos que também existem em `.secrets/`: `SECRET_KEY`, `DATABASE_URL` (senha incluída) e `POSTGRES_PASSWORD`. Não houve exposição — o arquivo já estava em `.dropboxignore` e nunca saiu da máquina —, mas aqui ele não é sobra inerte: `app/remote_collector_agent.py` o abre diretamente para montar o ambiente do agente RTD.",
+    "Não existe limite de taxa global: `iniciar_limiter` é chamado sem `limites_padrao`, e só o login e dois fragmentos de polling têm teto. Isso deixa sem limite algum as três rotas `/api/collector/*` — as únicas alcançáveis SEM sessão em todo o sistema.",
+    "As proteções de transporte moram fora da aplicação e o padrão do Compose é o inseguro (`FORCE_HTTPS` e `TRUST_PROXY_HEADERS` em `false`). Agrava-se por algo específico deste projeto: `deploy/nginx/` existe e está VAZIO — diferente do MegaSena e do ControleBancario, a configuração do proxy de produção não está versionada em lugar nenhum, e com ela vai embora o único ponto onde o HSTS existe.",
+    "O acervo é comum por decisão de projeto: qualquer conta autenticada cria, edita e apaga posição, transação, provento e cotação de todas as carteiras. Está declarado no README e é coerente com um sistema de uso pessoal — mas o papel `operador` existe, sugere separação, e não separa nada além de Configurações e Usuários."
+  ],
+  "nao_aplicaveis": [
+    {
+      "categoria": "1. Banco sem tranca (isolamento de inquilino/dono)",
+      "motivo": "Não há inquilino nem dono a isolar. O README declara, na terceira linha, que a aplicação é 'de uso pessoal do mantenedor' e 'não é plataforma de negociação, custódia ou serviço multiusuário'. Confirmado no schema: posição, transação, provento e cotação apontam para CARTEIRA (`portfolio_id`), e carteira não tem dono — nenhuma das 13 revisões Alembic introduz coluna de proprietário. Não há filtro de dono ausente; não existe filtro de dono a ter."
+    },
+    {
+      "categoria": "3. IDOR (objeto de outro dono)",
+      "motivo": "Pela mesma razão. Os 24 handlers que recebem ID foram percorridos assim mesmo, e todos resolvem o objeto com verificação de existência antes de agir; os 5 de `/users/<id>/...` exigem `admin`. Não foi encontrado handler que altere objeto sem essa resolução."
+    },
+    {
+      "categoria": "5. XSS no backend (e-mail/template)",
+      "motivo": "A aplicação não envia e-mail e não monta HTML em Python. Toda saída passa por `render_template` com o autoescape do Jinja ligado, inclusive o texto de erro gravado pelo agente coletor."
+    }
+  ],
+  "achados": [
+    {
+      "id": "CRV-01",
+      "categoria": "4. Chaves expostas",
+      "severidade": "baixa",
+      "titulo": "Três segredos em texto claro num só `.env` — e o agente RTD o lê diretamente",
+      "arquivo": ".env:1,3,10 (não versionado) + app/remote_collector_agent.py:81 + app/__init__.py:137-152",
+      "descricao": "O arquivo `.env` guarda `SECRET_KEY=Ka7vQ2mL9x…`, `DATABASE_URL=postgresql+psycopg://investimentos:rvDb_9Wm2k…@localhost:5435/investimentos` e `POSTGRES_PASSWORD=rvDb_9Wm2k…` em texto claro — os mesmos valores que já estão em `.secrets/secret_key` e `.secrets/postgres_password`, confirmado por comparação de hash.",
+      "trecho": "SECRET_KEY=Ka7vQ2mL9xR4fN8pD1sW6yC3hJ5tB0eU7gZ2qA4kM9rX1nF6\nDATABASE_URL=postgresql+psycopg://investimentos:rvDb_9Wm2kQ7xT4pL8sF3cH6zN1@localhost:5435/investimentos\nPOSTGRES_PASSWORD=rvDb_9Wm2kQ7xT4pL8sF3cH6zN1",
+      "porque": "Não é exposição, e vale registrar o que foi verificado: o `.gitignore` recusa o arquivo (confirmado por `git check-ignore`); o histórico completo do Git não tem nenhum arquivo de segredo; o `.dropboxignore` já excluía `.env` da sincronização de nuvem ANTES desta auditoria (conferido em `git show HEAD:.dropboxignore`); e a pasta `.secrets/` foi verificada em dropbox.com, inclusive na lixeira — nunca subiu. O que resta é específico deste projeto e não some com a verificação: os TRÊS segredos estão no MESMO arquivo, e ele não é sobra de um caminho antigo — `app/remote_collector_agent.py:81` abre `.env` explicitamente para montar o ambiente do agente RTD, que roda no host Windows, fora de contêiner. Ou seja: o arquivo é operacional, e concentra num só lugar a chave que assina as sessões e a credencial do banco.",
+      "impacto": "Nenhum comprometimento conhecido. O custo é de concentração: qualquer caminho que alcance esse único arquivo — um compartilhamento de pasta, um backup mal escopado, um arquivo compactado do projeto — entrega de uma vez a forja de sessão e o acesso ao banco, sem precisar de mais nada.",
+      "condicoes": "O `compose.yaml` operacional NÃO consome essas variáveis: concede os três segredos por arquivo Docker secret (`SECRET_KEY_FILE`, `POSTGRES_PASSWORD_FILE`, `COLLECTOR_AGENT_TOKEN_FILE`, linhas 73-75). O `.env` vale para a execução local e para o agente RTD no Windows.",
+      "criterios": []
+    },
+    {
+      "id": "CRV-02",
+      "categoria": "2. Permissão definida no navegador",
+      "severidade": "baixa",
+      "titulo": "Sem limite de taxa global: a API do agente, única superfície sem sessão, não tem teto nenhum",
+      "arquivo": "app/__init__.py:213, 274-285 + app/routes/collector_agent.py:41-48",
+      "descricao": "`iniciar_limiter(app)` é chamado sem `limites_padrao`, então não há `default_limits`. Os únicos limites do sistema são `10 per minute` no login e `120 per minute` nos dois fragmentos de polling. As três rotas `/api/collector/*` — que estão em `PUBLIC_ENDPOINTS` e portanto ficam FORA do portão de sessão, e das quais duas são isentas de CSRF — não têm limite algum.",
+      "trecho": "limiter = iniciar_limiter(app)\n...\naplicar_limite(app, limiter, \"auth.login\", LIMITE_LOGIN_PADRAO)\naplicar_limite(app, limiter, (\"portfolio.collector_heartbeat_partial\",\n                             \"portfolio.rtd_service_partial\"), \"120 per minute\")",
+      "porque": "É a única superfície do sistema alcançável sem sessão, e é a única sem qualquer contador. O token em si é longo e comparado em tempo constante, então adivinhá-lo não é uma via prática — mas a ausência de teto significa que qualquer origem na internet pode martelar `GET /api/collector/configuration` indefinidamente, e cada requisição consome um worker do gunicorn (são 2) e uma consulta ao banco antes de o 401 sair. Um 401 sem custo controlado é um alvo de negação de serviço.",
+      "impacto": "Indisponibilidade do serviço a partir de uma origem NÃO autenticada — o que a distingue do mesmo achado nos irmãos, onde a rota cara exige sessão. Não há vazamento nem escalonamento.",
+      "condicoes": "Depende de a porta estar alcançável. O Compose publica apenas em `127.0.0.1:5301`, então a exposição real é a do Nginx do VPS, que precisa alcançar essas rotas para o agente Windows funcionar (`REMOTE_COLLECTOR_ENABLED=true` no ambiente de produção).",
+      "criterios": []
+    },
+    {
+      "id": "CRV-03",
+      "categoria": "4. Chaves expostas",
+      "severidade": "baixa",
+      "titulo": "Padrões inseguros de transporte no Compose, e a configuração do proxy não está versionada",
+      "arquivo": "compose.yaml:82-83 + app/__init__.py:137,193,202-207 + deploy/nginx/ (vazio)",
+      "descricao": "`FORCE_HTTPS` e `TRUST_PROXY_HEADERS` valem `false` quando não informados. A primeira é o único interruptor que liga `Secure` nos cookies; a segunda decide se o `ProxyFix` é instalado. A aplicação não emite `Strict-Transport-Security` e não redireciona HTTP→HTTPS. E o diretório `deploy/nginx/` existe e está VAZIO — diferente do MegaSena (`deploy/nginx/megasena.conf`) e do ControleBancario (`deploy/nginx/controle-bancario.conf`), a configuração do proxy de produção deste projeto não está versionada em lugar nenhum.",
+      "trecho": "FORCE_HTTPS: ${FORCE_HTTPS:-false}\nTRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}",
+      "porque": "As três garantias de transporte — cookie `Secure`, HSTS e chaveamento correto do limitador — dependem de duas variáveis de ambiente e de uma configuração de Nginx que existe apenas no servidor. Uma recriação do VPS não tem de onde restaurar a segunda: não há arquivo a copiar, só memória. E uma implantação que esqueça `.env.vps` sobe em silêncio com o cookie de sessão sem `Secure` e o limite de login chaveado pelo IP do gateway do Docker.",
+      "impacto": "Cookie de sessão interceptável em requisição HTTP e proteção de força bruta do login sem efeito prático, numa implantação com as variáveis ausentes. A ausência do arquivo versionado transforma a perda do HSTS numa possibilidade real, e não hipotética, na próxima recriação do servidor.",
+      "condicoes": "A implantação atual está correta: `.env.vps.example` documenta `FORCE_HTTPS=true` e `TRUST_PROXY_HEADERS=true`. O achado é sobre a ausência de trava e sobre a configuração do proxy não estar sob controle de versão.",
+      "criterios": []
+    },
+    {
+      "id": "CRV-04",
+      "categoria": "1. Isolamento de dados",
+      "severidade": "informativa",
+      "titulo": "O papel `operador` sugere separação de dados e não separa nada",
+      "arquivo": "app/routes/ (47 rotas de escrita) + README.md:3-6",
+      "descricao": "Das 79 rotas, 47 gravam dado financeiro — posição, transação, provento, cotação, contrato de opção, corretora, carteira. Nenhuma delas exige papel. Só 8 rotas exigem `admin`: as 5 de gestão de contas, as 2 de Configurações e o controle do serviço RTD. Uma conta `operador` cria, edita e apaga qualquer registro de qualquer carteira.",
+      "trecho": "@bp.post(\"/positions/<int:position_id>/delete\")\ndef delete_position(position_id: int):\n    ...\n@bp.post(\"/transactions/<int:transaction_id>/delete\")\ndef delete_transaction(transaction_id: int):",
+      "porque": "É a decisão de projeto funcionando como escrita — o README declara que a aplicação não é serviço multiusuário, e o schema confirma que não há dono. Registrado porque a existência dos DOIS papéis cria uma expectativa que o sistema não cumpre: quem vê `operador` na tela de Usuários tende a ler 'acesso reduzido aos dados', e o que existe é apenas 'não administra o sistema'.",
+      "impacto": "Nenhum hoje, no uso pessoal do mantenedor. O ponto é que a distância entre o que o papel sugere e o que ele faz é exatamente o tipo de coisa que se descobre tarde, quando uma segunda pessoa recebe uma conta `operador` acreditando que ela é restrita.",
+      "condicoes": "Todas as 47 rotas exigem sessão. A trilha de auditoria (`app/auditoria.py`) registra as escritas financeiras por evento, então a ação fica rastreada mesmo sem ser impedida.",
+      "criterios": []
+    },
+    {
+      "id": "CRV-05",
+      "categoria": "4. Chaves expostas",
+      "severidade": "baixa",
+      "titulo": "Um único token de máquina, sem rotação prevista e sem escopo por operação",
+      "arquivo": "app/routes/collector_agent.py:41-48, 90, 148, 267",
+      "descricao": "As três rotas do agente compartilham um único `COLLECTOR_AGENT_TOKEN`: a de leitura da configuração, a que grava cotações e a que registra falha. O token é lido uma vez no boot e não tem prazo, contador de uso nem forma de revogação que não seja reiniciar o serviço; e ele vive em texto claro no host Windows, fora de contêiner, ao lado do agente que o usa.",
+      "trecho": "def _require_agent_token() -> None:\n    configured = str(current_app.config[\"COLLECTOR_AGENT_TOKEN\"])\n    supplied = request.headers.get(\"Authorization\", \"\")\n    if not configured:\n        abort(503, \"Coletor remoto nao configurado.\")\n    if not hmac.compare_digest(supplied, f\"Bearer {configured}\"):\n        abort(401, \"Nao autorizado.\")",
+      "porque": "A verificação em si está correta (tempo constante, falha fechada). O que falta é o entorno: quem obtiver o token na máquina Windows — que não tem o endurecimento do contêiner: sem `read_only`, sem `cap_drop`, sem usuário dedicado — pode ler a configuração completa das posições abertas (`GET /api/collector/configuration` devolve ticker, código de mercado e lado de cada posição) e, sobretudo, GRAVAR cotações arbitrárias em `POST /api/collector/quotes`.",
+      "impacto": "Escrever cotação falsa contamina preço corrente, histórico diário, cálculo de risco e desempenho — o produto inteiro do sistema. Não é vazamento de credencial de pessoa, é corrupção silenciosa de dado, difícil de perceber porque a origem é legítima.",
+      "condicoes": "Exige comprometimento da máquina Windows do agente ou do valor do token. O contador de páginas: `REMOTE_COLLECTOR_ENABLED` precisa estar ligado (é o caso em produção) para o agente existir.",
+      "criterios": []
+    }
+  ],
+  "recomendacoes": [
+    {
+      "prioridade": "P1",
+      "achados": [
+        "CRV-02"
+      ],
+      "texto": "Aplicar limite de taxa às três rotas `/api/collector/*`. São as únicas alcançáveis sem sessão e as únicas sem contador. Um teto generoso o bastante para o agente legítimo e estreito o bastante para não deixar um 401 sem custo — por exemplo `60 per minute`, com `override_defaults=True`."
+    },
+    {
+      "prioridade": "P2",
+      "achados": [
+        "CRV-03"
+      ],
+      "texto": "Versionar a configuração do Nginx de produção em `deploy/nginx/`, que hoje é um diretório vazio, incluindo a diretiva de HSTS. Os dois irmãos que rodam no mesmo VPS já fazem isso; aqui a configuração existe apenas na memória do servidor, e some numa recriação."
+    },
+    {
+      "prioridade": "P2",
+      "achados": [
+        "CRV-03"
+      ],
+      "texto": "Fazer a aplicação recusar-se a subir quando `FORCE_HTTPS` estiver desligado num ambiente que declare proxy — a mesma trava recomendada aos irmãos, para que a configuração insegura deixe de ser silenciosa."
+    },
+    {
+      "prioridade": "P3",
+      "achados": [
+        "CRV-01"
+      ],
+      "texto": "Tirar os três segredos do `.env` e passar a leitura do agente RTD para `.secrets/`, via `app/secret_files.py`, que já existe e sabe fazer isso. Rotacionar não é necessário: os valores não vazaram."
+    },
+    {
+      "prioridade": "P3",
+      "achados": [
+        "CRV-05"
+      ],
+      "texto": "Separar o token do agente por operação, ou pelo menos separar leitura de escrita: um token que só lê a configuração e outro que grava cotação."
+    },
+    {
+      "prioridade": "P3",
+      "achados": [
+        "CRV-04"
+      ],
+      "texto": "Decidir e registrar o que o papel `operador` significa — restringir de fato as escritas destrutivas, ou renomeá-lo para algo que não sugira restrição de dados."
+    }
+  ],
+  "issues": [
+    {
+      "n": 1,
+      "severidade": "baixa",
+      "titulo": "[Segurança] Três segredos concentrados num só `.env`, lido pelo agente RTD",
+      "labels": "security, severity:baixa, segredos, higiene",
+      "corpo": "## Problema\n\nO arquivo `.env` guarda três segredos em texto claro, no mesmo lugar:\n\n- `SECRET_KEY` — chave de assinatura da sessão;\n- `DATABASE_URL` — URL de conexão, senha incluída;\n- `POSTGRES_PASSWORD` — a mesma senha, de novo.\n\nSão os mesmos valores que já estão em `.secrets/secret_key` e\n`.secrets/postgres_password`, confirmado por comparação de hash.\n\n### O que NAO e\n\nNão houve exposição. O que foi verificado:\n\n- `.gitignore:34` recusa `.env`, confirmado por `git check-ignore`;\n- o histórico completo do Git não tem nenhum arquivo de segredo;\n- `.dropboxignore:33` ja excluia `.env` da sincronizacao de nuvem ANTES desta\n  auditoria — conferido em `git show HEAD:.dropboxignore`;\n- a pasta `.secrets/` foi verificada em dropbox.com, inclusive na lixeira:\n  nunca subiu.\n\n### Por que ainda vale corrigir\n\nDuas coisas que a verificação não desfaz:\n\n1. **Concentração.** Os três segredos estão no MESMO arquivo. Qualquer caminho\n   que alcance esse arquivo entrega de uma vez a forja de sessão e o acesso ao\n   banco.\n2. **Ele é operacional, não sobra.** `app/remote_collector_agent.py:81` abre\n   `.env` diretamente para montar o ambiente do agente RTD, que roda no host\n   Windows, fora de contêiner — sem `read_only`, sem `cap_drop`, sem usuário\n   dedicado.\n\n## Evidência\n\n`app/remote_collector_agent.py:81`\n\n```python\n    values = _read_dotenv(project_dir / \".env\")\n    values.update(_read_dotenv(project_dir / CONFIG_PATH))\n```\n\n`compose.yaml:73-75` — o caminho que de fato vale em operação:\n\n```yaml\n      SECRET_KEY_FILE: /run/secrets/secret_key\n      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password\n      COLLECTOR_AGENT_TOKEN_FILE: /run/secrets/collector_agent_token\n```\n\n## Impacto\n\nNenhum comprometimento conhecido. O custo é de concentração e de superfície: um\narquivo que reúne tudo, num host que não tem o endurecimento do contêiner.\n\n## Sugestão de correção\n\nO projeto já tem o mecanismo certo e o usa em outro lugar:\n`app/secret_files.py` lê segredo por arquivo do host, com recusa de ausente e\nvazio, e `.secrets/` já existe com quatro arquivos.\n\nMover a leitura do agente RTD de `.env` para `.secrets/`, via\n`project_secret_value`, e deixar no `.env` apenas o que não é segredo\n(`RTD_PROG_ID`, intervalos, flags). Rotacionar não é necessário: os valores não\nvazaram.\n\n## Critérios de aceite\n\n- [ ] `.env` não contém mais `SECRET_KEY`, `DATABASE_URL` nem `POSTGRES_PASSWORD`\n- [ ] `app/remote_collector_agent.py` lê os segredos por `project_secret_value`, não de `.env`\n- [ ] O agente RTD no Windows continua funcionando (verificado pelo pulso na tela de Configurações)\n- [ ] A pilha local sobe com os segredos vindos de `.secrets/`\n- [ ] `.dropboxignore` mantém `.env`, `.secrets/` e `.certs/` (regressão)"
+    },
+    {
+      "n": 2,
+      "severidade": "baixa",
+      "titulo": "[Segurança] API do agente coletor sem limite de taxa",
+      "labels": "security, severity:baixa, rate-limit",
+      "corpo": "## Problema\n\n`iniciar_limiter(app)` é chamado sem `limites_padrao`, então não há\n`default_limits`. Os únicos limites do sistema são `10 per minute` no login e\n`120 per minute` nos dois fragmentos de polling.\n\nAs três rotas `/api/collector/*` não têm limite algum — e são justamente as\nque estão em `PUBLIC_ENDPOINTS`, portanto **fora do portão de sessão**, e das\nquais duas são **isentas de CSRF**.\n\n### Por que é explorável\n\nÉ a única superfície do sistema alcançável sem sessão, e a única sem qualquer\ncontador. O token em si é longo e comparado em tempo constante, então adivinhá-lo\nnão é uma via prática — mas a ausência de teto significa que qualquer origem\npode martelar `GET /api/collector/configuration` indefinidamente, e cada\nrequisição consome um worker do gunicorn (são 2) e uma consulta ao banco antes\nde o 401 sair.\n\nUm 401 sem custo controlado é um alvo de negação de serviço.\n\n## Evidência\n\n`app/__init__.py:213` e `274-280`\n\n```python\n    limiter = iniciar_limiter(app)          # sem limites_padrao\n    ...\n    aplicar_limite(app, limiter, \"auth.login\", LIMITE_LOGIN_PADRAO)\n    aplicar_limite(\n        app,\n        limiter,\n        (\"portfolio.collector_heartbeat_partial\", \"portfolio.rtd_service_partial\"),\n        \"120 per minute\",\n    )\n```\n\n`app/__init__.py:54-59` — as rotas que ficam fora da sessão:\n\n```python\nPUBLIC_ENDPOINTS = frozenset({\n    \"auth.login\",\n    \"portfolio.health\",\n    \"portfolio.collector_agent_configuration\",\n    \"portfolio.collector_agent_quotes\",\n    \"portfolio.collector_agent_failure\",\n    \"static\",\n```\n\n## Impacto\n\nIndisponibilidade do serviço a partir de uma origem **não autenticada** — o que\ndistingue este achado do mesmo problema nos aplicativos irmãos, onde a rota cara\nexige sessão. Não há vazamento nem escalonamento.\n\n## Sugestão de correção\n\nDois limites, ambos com `aplicar_limite` (que já religa `view_functions`\ncorretamente):\n\n```python\n# Generoso o bastante para o agente legitimo, que consulta a cada poucos\n# segundos; estreito o bastante para o 401 nao sair de graca.\naplicar_limite(\n    app, limiter,\n    (\"portfolio.collector_agent_configuration\",\n     \"portfolio.collector_agent_quotes\",\n     \"portfolio.collector_agent_failure\"),\n    \"60 per minute; 2000 per hour\",\n    override_defaults=True,\n)\n```\n\nE, opcionalmente, um `limites_padrao` global para as demais rotas, no mesmo\nespírito do ConfortoTermico.\n\n## Critérios de aceite\n\n- [ ] As três rotas `/api/collector/*` têm limite dedicado\n- [ ] O valor escolhido comporta o intervalo real do agente (conferir `agent_check_interval_seconds` em Configurações)\n- [ ] Teste: chamada acima do limite responde 429, mesmo sem token válido\n- [ ] Teste: o agente com o intervalo configurado não é bloqueado\n- [ ] O pulso do coletor continua chegando na tela depois da mudança (verificado na tela)"
+    },
+    {
+      "n": 3,
+      "severidade": "baixa",
+      "titulo": "[Segurança] Configuração do Nginx de produção não está versionada e transporte depende de padrão inseguro",
+      "labels": "security, severity:baixa, implantacao",
+      "corpo": "## Problema\n\nDuas coisas que se somam:\n\n1. `FORCE_HTTPS` e `TRUST_PROXY_HEADERS` valem `false` quando não informados no\n   Compose. A primeira é o único interruptor que liga `Secure` nos cookies; a\n   segunda decide se o `ProxyFix` é instalado. A aplicação não emite\n   `Strict-Transport-Security` e não redireciona HTTP→HTTPS.\n2. `deploy/nginx/` existe e está **vazio**. Diferente do MegaSena\n   (`deploy/nginx/megasena.conf`) e do ControleBancario\n   (`deploy/nginx/controle-bancario.conf`), a configuração do proxy de produção\n   deste projeto não está versionada em lugar nenhum — e é lá que o HSTS\n   moraria.\n\n### Por que é explorável\n\nAs três garantias de transporte — cookie `Secure`, HSTS e chaveamento correto\ndo limitador — dependem de duas variáveis de ambiente e de uma configuração de\nNginx que existe **apenas no servidor**.\n\nUma recriação do VPS não tem de onde restaurar a segunda: não há arquivo a\ncopiar, só memória. E uma implantação que esqueça `.env.vps` sobe em silêncio,\ncom o cookie de sessão sem `Secure` e o limite de login chaveado pelo IP do\ngateway do Docker — um balde único para todos os clientes.\n\n## Evidência\n\n`compose.yaml:82-83`\n\n```yaml\n      FORCE_HTTPS: ${FORCE_HTTPS:-false}\n      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}\n```\n\n`app/__init__.py:193` e `202-207`\n\n```python\n        https_obrigatorio=bool(app.config[\"FORCE_HTTPS\"]),\n    ...\n    if app.config[\"TRUST_PROXY_HEADERS\"]:\n        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)\n```\n\n`deploy/nginx/` — diretório presente no repositório, sem nenhum arquivo.\n\n## Impacto\n\nCookie de sessão interceptável em requisição HTTP e proteção de força bruta do\nlogin sem efeito prático, numa implantação com as variáveis ausentes. A ausência\ndo arquivo versionado transforma a perda do HSTS numa possibilidade real — e não\nhipotética — na próxima recriação do servidor.\n\n## Sugestão de correção\n\n1. Versionar a configuração do Nginx de produção em `deploy/nginx/`, incluindo\n   `add_header Strict-Transport-Security ... always;`, no mesmo formato que\n   `MegaSena/deploy/nginx/megasena.conf` já usa. Conferir com `sha256sum` dos\n   dois lados que o arquivo versionado é o que está no servidor;\n2. acrescentar à fábrica uma checagem de boot que recuse `FORCE_HTTPS=false`\n   quando `TRUST_PROXY_HEADERS` estiver ligado (há proxy à frente = há TLS à\n   frente = o cookie precisa ser `Secure`).\n\n## Critérios de aceite\n\n- [ ] `deploy/nginx/` contém a configuração de produção, com HSTS\n- [ ] O `sha256sum` do arquivo versionado bate com o do servidor\n- [ ] Subir com `TRUST_PROXY_HEADERS=true` e `FORCE_HTTPS=false` levanta erro nomeando as duas variáveis\n- [ ] Subir sem proxy e sem HTTPS continua funcionando (desenvolvimento local)\n- [ ] Teste cobrindo os dois casos\n- [ ] `docs/deployment-vps.md` registra o arquivo novo e a checagem"
+    },
+    {
+      "n": 4,
+      "severidade": "baixa",
+      "titulo": "[Segurança] Token único do agente permite gravar cotação arbitrária",
+      "labels": "security, severity:baixa, coletor",
+      "corpo": "## Problema\n\nAs três rotas do agente compartilham um único `COLLECTOR_AGENT_TOKEN`: a que\nlê a configuração das posições abertas, a que grava cotações e a que registra\nfalha. O token é lido uma vez no boot e não tem prazo, contador de uso nem\nforma de revogação que não seja reiniciar o serviço.\n\nEle vive em texto claro na máquina Windows do agente, **fora de contêiner** —\nsem `read_only`, sem `cap_drop`, sem usuário dedicado, que é o endurecimento de\nque os serviços do Compose desfrutam.\n\n### Por que é explorável\n\nA verificação em si está correta e não é o problema: comparação em tempo\nconstante, e falha fechada (503) quando o token não está configurado, em vez de\ncomparar com string vazia.\n\nO que falta é o entorno. Quem obtiver o token na máquina Windows:\n\n- lê a configuração completa das posições abertas —\n  `GET /api/collector/configuration` devolve ticker, código de mercado e lado de\n  cada posição, o que é a carteira inteira;\n- e, sobretudo, **grava cotações arbitrárias** em `POST /api/collector/quotes`.\n\n## Evidência\n\n`app/routes/collector_agent.py:41-48`\n\n```python\ndef _require_agent_token() -> None:\n    configured = str(current_app.config[\"COLLECTOR_AGENT_TOKEN\"])\n    supplied = request.headers.get(\"Authorization\", \"\")\n    if not configured:\n        abort(503, \"Coletor remoto nao configurado.\")\n    if not hmac.compare_digest(supplied, f\"Bearer {configured}\"):\n        abort(401, \"Nao autorizado.\")\n```\n\nO mesmo token guarda as três rotas: `app/routes/collector_agent.py:92`, `150`,\n`269`.\n\n## Impacto\n\nEscrever cotação falsa contamina preço corrente, histórico diário, cálculo de\nrisco e desempenho — o produto inteiro do sistema. Não é vazamento de\ncredencial de pessoa: é corrupção silenciosa de dado, e difícil de perceber\nporque a origem é legítima e a gravação é um `upsert` normal.\n\n**Condição:** exige comprometimento da máquina Windows do agente ou do valor do\ntoken, e `REMOTE_COLLECTOR_ENABLED` ligado (é o caso em produção).\n\n## Sugestão de correção\n\nSeparar leitura de escrita, que é a fronteira que importa aqui:\n\n```python\n# Dois segredos, dois arquivos, dois provisionamentos independentes.\nCOLLECTOR_AGENT_TOKEN        # le a configuracao (GET)\nCOLLECTOR_AGENT_WRITE_TOKEN  # grava cotacao e falha (POST)\n```\n\nAssim o comprometimento da máquina Windows deixa de ser, automaticamente,\nautorização para corromper o histórico de preços — e a rotação do token de\nescrita pode ser mais frequente que a do de leitura.\n\nComo defesa complementar, considerar rejeitar cotação cujo `observed_at` esteja\nmuito fora da janela do pregão, ou cujo preço divirja do último em mais de uma\nporcentagem configurável: um agente legítimo nunca produz esses valores.\n\n## Critérios de aceite\n\n- [ ] Existem dois tokens distintos, um para leitura e outro para escrita\n- [ ] `scripts/provision-collector-agent-token.ps1` provisiona os dois\n- [ ] O agente Windows usa cada um na rota correspondente\n- [ ] Teste: token de leitura recusado (401) em `POST /api/collector/quotes`\n- [ ] Teste: token de escrita recusado (401) em `GET /api/collector/configuration`\n- [ ] `docs/deployment-vps.md` registra a rotação independente dos dois"
+    },
+    {
+      "n": 5,
+      "severidade": "informativa",
+      "titulo": "[Segurança] Definir o que o papel `operador` restringe, ou renomeá-lo",
+      "labels": "security, severity:informativa, autorizacao, produto",
+      "corpo": "## Problema\n\nDas 79 rotas, 47 gravam dado financeiro — posição, transação, provento,\ncotação, contrato de opção, corretora, carteira. **Nenhuma delas exige papel.**\n\nSó 8 rotas exigem `admin`: as 5 de gestão de contas, as 2 de Configurações e o\ncontrole do serviço RTD. Uma conta `operador` cria, edita e apaga qualquer\nregistro de qualquer carteira.\n\n### Por que importa\n\nIsso é a decisão de projeto funcionando como escrita — o README declara, na\nterceira linha, que a aplicação é de uso pessoal e não é serviço multiusuário, e\no schema confirma que não há dono de dado. **Não é um defeito.**\n\nO que gera risco é a distância entre o que o papel SUGERE e o que ele FAZ. Quem\nvê `operador` na tela de Usuários tende a ler \"acesso reduzido aos dados\"; o que\nexiste é \"não administra o sistema\". É o tipo de coisa que se descobre tarde —\nno dia em que alguém recebe uma conta `operador` acreditando que ela é restrita.\n\n## Evidência\n\nRotas de escrita sem verificação de papel, exemplos entre 47:\n\n```python\n# app/routes/positions.py:343\n@bp.post(\"/positions/<int:position_id>/delete\")\ndef delete_position(position_id: int):\n\n# app/routes/transactions.py:429\n@bp.post(\"/transactions/<int:transaction_id>/delete\")\ndef delete_transaction(transaction_id: int):\n\n# app/routes/dividends.py:235\n@bp.post(\"/dividends/<int:dividend_id>/delete\")\ndef delete_dividend(dividend_id: int):\n```\n\nOnde o papel É exigido — `app/routes/users.py:52`, `app/routes/settings.py:148`\ne `216`, `app/routes/partials.py:53`.\n\n`README.md:3-6`\n\n```\nAplicacao web de uso pessoal do mantenedor para acompanhar acoes e opcoes: [...]\nNao e plataforma de negociacao, custodia ou servico multiusuario.\n```\n\n## Impacto\n\nNenhum hoje, no uso pessoal do mantenedor. A trilha de auditoria\n(`app/auditoria.py`) registra as escritas financeiras por evento, então a ação\nfica rastreada mesmo sem ser impedida.\n\n## Sugestão de correção\n\nEscolher uma das duas saídas coerentes e registrá-la:\n\n**A — o papel passa a restringir de fato.** As escritas destrutivas (exclusão de\nposição, transação, provento e cotação) passam a exigir `admin`; criação e\nedição continuam livres. É pouca mudança e alinha o papel com a expectativa.\n\n**B — o papel deixa de sugerir o que não faz.** Renomear `operador` para algo\nque descreva o que ele realmente é (\"usuário\", \"não administrador\") e registrar\nno README que o sistema não particiona dados por conta.\n\nSeja qual for a escolha, ela merece um documento: é a decisão que faz duas das\ncinco categorias desta auditoria não se aplicarem, e uma auditoria futura que não\na encontre registrada vai reabrir a discussão.\n\n## Critérios de aceite\n\n- [ ] A decisão (A ou B) está registrada em `docs/architecture.md` ou num ADR\n- [ ] O documento nomeia o gatilho de revisão: a primeira conta de uma segunda pessoa\n- [ ] Se A: as rotas de exclusão exigem `admin` e há teste por rota\n- [ ] Se B: o papel foi renomeado na tela, no modelo e nas migrações necessárias\n- [ ] `tests/test_authorization.py` reflete a decisão"
+    }
+  ]
+}

@@ -309,7 +309,27 @@ aqui.
   "lembrar-me" — o padrão do Flask-Login seriam 365 dias, o que não cabe num
   sistema com posição, custo e provento pessoais;
 - em produção, TLS termina no Nginx, e `FORCE_HTTPS`/`TRUST_PROXY_HEADERS` ligam
-  cookies `Secure` e o tratamento dos cabeçalhos do proxy.
+  cookies `Secure` e o tratamento dos cabeçalhos do proxy. A fábrica recusa
+  subir com `TRUST_PROXY_HEADERS=true` e `FORCE_HTTPS=false` juntos (CRV-03):
+  confiar no proxy sem exigir HTTPS deixaria o cookie de sessão sem `Secure`.
+
+**Decisão registrada (CRV-04, 02/09/2026): `operador` não particiona dados, e
+isso é intencional.** Das 79 rotas, 47 gravam dado financeiro — posição,
+transação, provento, cotação, contrato de opção, corretora, carteira —, e
+nenhuma delas exige papel: uma conta `operador` cria, edita e encerra
+qualquer item de qualquer carteira, exatamente como `admin`. A diferença
+entre os dois papéis é só a linha 300-305 acima: administração de contas,
+Configurações e o controle do coletor. Optou-se por **manter o comportamento e
+só documentá-lo aqui** (não restringir as escritas por papel) — a aplicação é
+declaradamente de uso pessoal (ver `README.md`), o schema não tem coluna de
+dono, e a trilha de auditoria (`app/auditoria.py`) já registra toda escrita
+financeira por evento, então a ação fica rastreada mesmo sem ser impedida.
+**Gatilho para reabrir esta decisão: a primeira vez que uma SEGUNDA pessoa
+receber uma conta `operador`** — nesse momento, "não administra o sistema"
+deixa de ser sinônimo aceitável de "acesso irrestrito aos dados financeiros de
+todo mundo", e a alternativa (restringir exclusões destrutivas a `admin`, ou
+renomear o papel para não sugerir isolamento que não existe) deve ser
+reavaliada.
 
 O botão de olho é **Modo discreto**: mascara a leitura casual da tela e cobre
 os gráficos. Ele não é uma fronteira de segurança; os dados continuam na
@@ -332,10 +352,16 @@ de dados é a única área gravável persistente. O Compose publica a aplicaçã
 
 O rate limit da aplicação usa `memory://`: com dois workers, o contador é por
 processo, não é compartilhado e zera a cada reinício. **A proteção coordenada
-fica na borda** — a configuração Nginx versionada em `../_manutencao/vps/nginx/`
-aplica uma zona `limit_req` compartilhada ao `POST /login`, e isso é requisito da
-implantação atual. Outra topologia precisa manter proteção equivalente na borda
-ou adotar armazenamento compartilhado para o limitador.
+fica na borda** — o vhost deste projeto, versionado em
+[`deploy/nginx/controle-renda-variavel.conf`](../deploy/nginx/controle-renda-variavel.conf)
+(CRV-03: até 02/09/2026 existia só na memória do servidor, sem cópia
+recuperável numa recriação), aplica uma zona `limit_req` compartilhada ao
+`POST /login` definida em `../_manutencao/vps/nginx/conf.d/00-comum.conf`, e
+isso é requisito da implantação atual. Outra topologia precisa manter proteção
+equivalente na borda ou adotar armazenamento compartilhado para o limitador.
+As três rotas do agente coletor (`/api/collector/*`), que ficam fora do gate de
+sessão, têm limite próprio de `60 per minute; 2000 per hour` aplicado pela
+própria aplicação (CRV-02) — são a única superfície alcançável sem sessão.
 
 Detalhes de operação, publicação e verificação estão em
 [`docs/deployment-vps.md`](deployment-vps.md).
