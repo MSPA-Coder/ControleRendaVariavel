@@ -182,6 +182,21 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             raise RuntimeError("Defina SECRET_KEY antes de iniciar a aplicação.")
     if not app.config["SQLALCHEMY_DATABASE_URI"]:
         raise RuntimeError("Defina DATABASE_URL antes de iniciar a aplicação.")
+    if app.config["TRUST_PROXY_HEADERS"] and not app.config["FORCE_HTTPS"]:
+        # CRV-03: confiar em X-Forwarded-* só faz sentido atrás de um proxy
+        # reverso que TERMINA TLS -- e se há TLS terminado à frente, o cookie
+        # de sessão tem que sair com `Secure`. Até 02/09/2026 essa combinação
+        # subia em silêncio: bastava `.env.vps` esquecer `FORCE_HTTPS=true`
+        # (ou uma recriação do servidor sem o arquivo) para o cookie de sessão
+        # ficar sem `Secure` sem nada avisar. Sem exceção para TESTING: não há
+        # ambiente legítimo em que confiar no proxy e não exigir HTTPS façam
+        # sentido juntos.
+        raise RuntimeError(
+            "TRUST_PROXY_HEADERS=true com FORCE_HTTPS=false: há um proxy reverso "
+            "terminando TLS na frente (é para isso que TRUST_PROXY_HEADERS existe), "
+            "e o cookie de sessão sairia sem Secure. Defina FORCE_HTTPS=true junto, "
+            "ou desligue TRUST_PROXY_HEADERS se não há proxy de verdade."
+        )
 
     configurar_sessao(
         app,
@@ -277,6 +292,25 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         limiter,
         ("portfolio.collector_heartbeat_partial", "portfolio.rtd_service_partial"),
         "120 per minute",
+    )
+    # CRV-02: as três rotas do agente são a ÚNICA superfície alcançável sem
+    # sessão (estão em PUBLIC_ENDPOINTS), e duas delas são isentas de CSRF.
+    # Sem limite, qualquer origem não autenticada podia martelar
+    # `GET /api/collector/configuration` indefinidamente -- cada chamada
+    # consome um worker do gunicorn (são 2) e uma consulta ao banco antes do
+    # 401 sair. `override_defaults=True` porque `iniciar_limiter` não recebeu
+    # `limites_padrao`: não há limite global para este substituir hoje, mas
+    # a intenção fica explícita para quando houver.
+    aplicar_limite(
+        app,
+        limiter,
+        (
+            "portfolio.collector_agent_configuration",
+            "portfolio.collector_agent_quotes",
+            "portfolio.collector_agent_failure",
+        ),
+        "60 per minute; 2000 per hour",
+        override_defaults=True,
     )
     for endpoint in (
         "portfolio.collector_agent_quotes",

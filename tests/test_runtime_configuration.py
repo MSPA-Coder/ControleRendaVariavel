@@ -57,6 +57,42 @@ def test_producao_resolve_segredos_de_arquivo_para_o_banco_do_container(
     assert app.config["COLLECTOR_AGENT_TOKEN"] == "token-de-arquivo-com-tamanho-suficiente"
 
 
+def test_recusa_confiar_no_proxy_sem_forcar_https() -> None:
+    """CRV-03: confiar em X-Forwarded-* sem exigir HTTPS deixaria o cookie de
+    sessão sem `Secure` atrás de um proxy que só existe para terminar TLS."""
+    with pytest.raises(RuntimeError, match="TRUST_PROXY_HEADERS.*FORCE_HTTPS"):
+        create_app(
+            {
+                "TESTING": True,
+                "SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL,
+                "TRUST_PROXY_HEADERS": True,
+                "FORCE_HTTPS": False,
+            }
+        )
+
+
+def test_aceita_proxy_e_https_juntos() -> None:
+    # O caminho de produção correto: as duas ligadas juntas.
+    app = create_app(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL,
+            "TRUST_PROXY_HEADERS": True,
+            "FORCE_HTTPS": True,
+        }
+    )
+
+    assert app.config["TRUST_PROXY_HEADERS"] is True
+
+
+def test_aceita_nem_proxy_nem_https() -> None:
+    # Desenvolvimento local, sem proxy nenhum: a combinação padrão dos testes.
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL})
+
+    assert app.config["TRUST_PROXY_HEADERS"] is False
+    assert app.config["FORCE_HTTPS"] is False
+
+
 def test_engine_usa_pool_pre_ping() -> None:
     """Sem isto, uma conexao morta pelo reinicio do Postgres devolve 500 até
     o pool reciclar sozinho -- ver comentário em `app/__init__.py`."""

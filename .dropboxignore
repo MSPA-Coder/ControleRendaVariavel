@@ -32,6 +32,8 @@ tmp/
 # Segredos e estado local do host RTD
 .env
 !.env.example
+.secrets/
+.certs/
 .docker-local/
 
 # Planilhas exportadas (regeneraveis)

@@ -153,6 +153,14 @@ da aplicação ou proteção equivalente no edge.
 Para detalhes de segredos, Nginx, publicação e verificações operacionais, veja
 [Implantação no VPS](docs/deployment-vps.md).
 
+Mensagens de log que carregam texto de fora (parâmetro de requisição,
+exceção de biblioteca) passam por `sharedauth.logs.sanitizar_log`. Ela é
+rede, não garantia: redige por reconhecimento de padrão e não substitui a
+disciplina de nunca colocar um segredo na mensagem em primeiro lugar — ver
+`sharedauth.secrets`, cujas exceções nunca carregam o valor lido. Um rótulo
+novo a reconhecer entra em `sharedauth.logs.CHAVES_SENSIVEIS`, na biblioteca,
+nunca numa cópia local.
+
 ## Validação
 
 Execute a verificação do projeto no estágio `quality`:
