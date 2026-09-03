@@ -14,8 +14,8 @@
       <tr>
         <td>{{ row.label }}</td>
         <td>{{ row.currency }}</td>
-        <td class="number">{{ row.current_total|currency(row.currency) }}</td>
-        <td class="number">{{ row.current_weight|percent }}</td>
+        <td class="number" data-sensitive-value="true">{{ row.current_total|currency(row.currency) }}</td>
+        <td class="number" data-sensitive-value="true">{{ row.current_weight|percent }}</td>
       </tr>
       {% endfor %}
     </tbody>

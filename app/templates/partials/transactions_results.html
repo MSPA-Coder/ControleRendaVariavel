@@ -33,17 +33,17 @@
           {% endif %}
           {% if tx.option_contract_id %}
             {% set c = tx.option_contract_ref %}
-            <br><small>{{ c.option_type.value|upper }} · {{ c.strike|currency(tx.currency, trim=true) }} · {{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</small>
+            <br><small>{{ c.option_type.value|upper }} · <span data-sensitive-value="true">{{ c.strike|currency(tx.currency, trim=true) }}</span> · {{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</small>
           {% endif %}
         </td>
         <td>{{ tx.side.value }}</td>
-        <td class="number">{{ tx.quantity|quantity(tx.currency) }}</td>
-        <td class="number">{{ tx.average_cost|currency(tx.currency) }}</td>
-        <td class="number">{{ tx.exit_price|currency(tx.currency) }}</td>
-        <td class="number {{ tx.result|sign_class }}">{{ tx.result|currency(tx.currency) }}</td>
+        <td class="number" data-sensitive-value="true">{{ tx.quantity|quantity(tx.currency) }}</td>
+        <td class="number" data-sensitive-value="true">{{ tx.average_cost|currency(tx.currency) }}</td>
+        <td class="number" data-sensitive-value="true">{{ tx.exit_price|currency(tx.currency) }}</td>
+        <td class="number {{ tx.result|sign_class }}" data-sensitive-value="true">{{ tx.result|currency(tx.currency) }}</td>
         <td>{{ tx.opened_on.strftime('%d-%b-%y') }}</td>
         <td>{{ tx.closed_on.strftime('%d-%b-%y') if tx.closed_on else '—' }}</td>
-        <td class="number">{{ tx.days_held if tx.days_held is not none else '—' }}</td>
+        <td class="number" data-sensitive-value="true">{{ tx.days_held|number(0) if tx.days_held is not none else '—' }}</td>
         <td>{{ tx.portfolio_ref.name }}</td>
         <td>{{ tx.notes or '' }}</td>
         <td>
@@ -89,24 +89,24 @@
 {% if performance_by_currency %}
 <section class="summary transactions-summary" aria-label="Resumo de transações por moeda">
   {% for summary in performance_by_currency %}
-  <article><span>Ganhos · {{ summary.currency }}</span><strong class="positive">{{ summary.gain|currency(summary.currency) }}</strong></article>
-  <article><span>Perdas · {{ summary.currency }}</span><strong class="negative">{{ summary.loss|currency(summary.currency) }}</strong></article>
-  <article><span>Resultado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}">{{ summary.result|currency(summary.currency) }}</strong></article>
+    <article><span>Ganhos · {{ summary.currency }}</span><strong class="positive" data-sensitive-value="true">{{ summary.gain|currency(summary.currency) }}</strong></article>
+    <article><span>Perdas · {{ summary.currency }}</span><strong class="negative" data-sensitive-value="true">{{ summary.loss|currency(summary.currency) }}</strong></article>
+    <article><span>Resultado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}" data-sensitive-value="true">{{ summary.result|currency(summary.currency) }}</strong></article>
   <article title="Participação de transações com resultado positivo no total, entre as já encerradas.">
     <span>Win rate · {{ summary.currency }}</span>
-    <strong>{{ summary.win_rate|percent if summary.win_rate is not none else '-' }}</strong>
+    <strong data-sensitive-value="true">{{ summary.win_rate|percent if summary.win_rate is not none else '-' }}</strong>
   </article>
   <article title="Ganhos totais divididos pelas perdas totais (em módulo), entre as transações encerradas na mesma moeda. Acima de 1 indica que os ganhos superam as perdas.">
     <span>Profit factor · {{ summary.currency }}</span>
-    <strong>{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '-' }}</strong>
+    <strong data-sensitive-value="true">{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '-' }}</strong>
   </article>
   <article title="Média dos ganhos dividida pela média das perdas (em módulo), entre as transações encerradas na mesma moeda.">
     <span>Payoff ratio · {{ summary.currency }}</span>
-    <strong>{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '-' }}</strong>
+    <strong data-sensitive-value="true">{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '-' }}</strong>
   </article>
   <article title="Média de dias entre abertura e encerramento das transações já encerradas na mesma moeda.">
     <span>Tempo médio em posição · {{ summary.currency }}</span>
-    <strong>{{ summary.avg_days_held|number(1) if summary.avg_days_held is not none else '-' }} dias</strong>
+    <strong data-sensitive-value="true">{{ summary.avg_days_held|number(1) if summary.avg_days_held is not none else '-' }} dias</strong>
   </article>
   {% endfor %}
 </section>

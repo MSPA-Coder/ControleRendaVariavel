@@ -90,7 +90,7 @@
                 {% for entry in month_entries|reverse %}
                   <li>
                     <time datetime="{{ entry.recorded_date.isoformat() }}">{{ entry.recorded_date.strftime('%d/%m') }}</time>
-                    <strong>{{ entry.price|currency(selected_ticker.currency) }}</strong>
+                    <strong data-sensitive-value="true">{{ entry.price|currency(selected_ticker.currency) }}</strong>
                   </li>
                 {% endfor %}
               </ul>
@@ -171,7 +171,7 @@
             </select>
           </label>
           <label>Data da cotação<input type="date" name="recorded_date" max="{{ today }}" required></label>
-          <label>Preço<input type="number" name="price" min="0.00000001" step="0.00000001" required></label>
+          <label>Preço<input type="number" name="price" min="0.00000001" step="0.00000001" required data-sensitive-input="true"></label>
         </div>
         <div class="quote-card-zone quote-card-actions">
           <button class="button button-primary" type="submit"

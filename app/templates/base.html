@@ -199,7 +199,7 @@
              cotacao e o assunto — Acoes e Cotacoes. Nas demais paginas seria
              so uma requisicao a cada 10s sem ninguem para ler. #}
           {% if request.endpoint in ['portfolio.index', 'portfolio.quote_history'] %}
-            {{ collector.heartbeat(collector_heartbeat) }}
+            {{ collector.heartbeat(collector_heartbeat, polling=request.endpoint != 'portfolio.index') }}
           {% endif %}
           {% if crumb[1] %}<span class="nav-current-page">{{ crumb[1] }}</span>{% endif %}
           <form class="privacy-toggle-form" method="post" action="{{ url_for('portfolio.toggle_values_privacy') }}">

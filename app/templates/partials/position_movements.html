@@ -18,13 +18,13 @@
     <tr>
       <td>{{ movement.occurred_on.strftime('%d-%b-%y') }}</td>
       <td>{{ movement.kind|movement_label }}</td>
-      <td class="number">{{ movement.quantity|quantity(position.currency) }}</td>
-      <td class="number">{{ movement.price|currency(position.currency, trim=true) }}</td>
-      <td class="number {{ movement.result|sign_class }}">
+      <td class="number" data-sensitive-value="true">{{ movement.quantity|quantity(position.currency) }}</td>
+      <td class="number" data-sensitive-value="true">{{ movement.price|currency(position.currency, trim=true) }}</td>
+      <td class="number {{ movement.result|sign_class }}" data-sensitive-value="true">
         {{ movement.result|currency(position.currency, trim=true) if movement.result is not none else '—' }}
       </td>
-      <td class="number">{{ movement.resulting_quantity|quantity(position.currency) }}</td>
-      <td class="number">{{ movement.resulting_average_cost|currency(position.currency, trim=true) }}</td>
+      <td class="number" data-sensitive-value="true">{{ movement.resulting_quantity|quantity(position.currency) }}</td>
+      <td class="number" data-sensitive-value="true">{{ movement.resulting_average_cost|currency(position.currency, trim=true) }}</td>
     </tr>
     {% else %}
     <tr><td colspan="7" class="empty">Sem movimentos registrados.</td></tr>

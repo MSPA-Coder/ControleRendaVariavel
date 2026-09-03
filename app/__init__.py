@@ -25,6 +25,8 @@ from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from app.privacy import values_hidden
+
 if TYPE_CHECKING:
     from app.models import User
 
@@ -370,7 +372,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     @app.context_processor
     def _privacy_context() -> dict[str, bool]:
-        return {"values_hidden": bool(session.get("values_hidden", False))}
+        return {"values_hidden": values_hidden()}
 
     @app.after_request
     def _canonizar_url(resposta):

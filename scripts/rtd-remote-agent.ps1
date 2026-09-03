@@ -43,11 +43,21 @@ switch ($Action) {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $scheduledAction = New-ScheduledTaskAction -Execute $PythonWindowlessPath `
             -Argument "-m app.remote_collector_agent" -WorkingDirectory $ProjectDir
-        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
+        # Dois gatilhos, e o segundo existe por experiencia: so o logon deixa a
+        # coleta refem de um unico evento. Uma sessao que ja estava aberta, um
+        # retorno de hibernacao ou uma inicializacao rapida do Windows nao
+        # contam como logon novo, e o dia inteiro passa sem cotacao em silencio.
+        # O gatilho diario tenta de novo antes da janela de coleta; se o agente
+        # ja estiver rodando, MultipleInstances IgnoreNew descarta a segunda.
+        $trigger = @(
+            New-ScheduledTaskTrigger -AtLogOn -User $identity
+            New-ScheduledTaskTrigger -Daily -At "09:40"
+        )
         $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
             -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
-            -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+            -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew `
+            -StartWhenAvailable
         Register-ScheduledTask -TaskName $taskName -Action $scheduledAction -Trigger $trigger `
             -Principal $principal -Settings $settings -Force | Out-Null
         Start-ScheduledTask -TaskName $taskName

@@ -5,8 +5,9 @@
 {% block content %}
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <fieldset class="collector-settings-card">
-    <legend>Coletor de cotações</legend>
+  <fieldset class="collector-settings-card collector-cycle-card">
+    <legend>Ciclo de cotações</legend>
+    <p class="settings-card-intro">Define quando o agente lê o ProfitChart, envia as cotações e permite que Ações recalcule a carteira.</p>
     {% if remote_collector_enabled %}
       <p class="form-help">
         O agente está no Windows e conversa com este servidor por HTTPS. Ele não abre nenhuma porta no computador local.
@@ -26,47 +27,57 @@
       {{ collector.rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) }}
     </div>
     {% endif %}
-    <label class="radio-option">
-      <input type="radio" name="collector_mode" value="excel"
-             {{ 'checked' if settings.collector_mode.value == 'excel' }}>
-      <span>
-        <strong>Excel</strong>
-        <small>Usa uma instância oculta e persistente do Excel como ponte RTD.</small>
-      </span>
-    </label>
-    <label class="radio-option">
-      <input type="radio" name="collector_mode" value="direct"
-             {{ 'checked' if settings.collector_mode.value == 'direct' }}>
-      <span>
-        <strong>RTD direto</strong>
-        <small>Conecta ao servidor COM do ProfitPro sem iniciar o Excel.</small>
-      </span>
-    </label>
+    <div class="collector-mode-options" role="radiogroup" aria-label="Modo de leitura do ProfitChart">
+      <label class="radio-option">
+        <input type="radio" name="collector_mode" value="excel"
+               {{ 'checked' if settings.collector_mode.value == 'excel' }}>
+        <span>
+          <strong>Excel</strong>
+          <small>Usa uma instância oculta e persistente do Excel como ponte RTD.</small>
+        </span>
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="collector_mode" value="direct"
+               {{ 'checked' if settings.collector_mode.value == 'direct' }}>
+        <span>
+          <strong>RTD direto</strong>
+          <small>Conecta ao servidor COM do ProfitPro sem iniciar o Excel.</small>
+        </span>
+      </label>
+    </div>
     <div class="collector-settings-details">
-      <label>Intervalo entre leituras (segundos)
-        <input type="number" name="poll_interval_seconds"
-               min="{{ min_interval }}" max="{{ max_interval }}" step="1"
-               value="{{ settings.poll_interval_seconds }}" required>
-      </label>
-      <label>Alertar cotação desatualizada após (segundos)
-        <input type="number" name="stale_alert_seconds" min="1" max="86400" step="1"
-               value="{{ settings.stale_alert_seconds if settings.stale_alert_seconds is not none else '' }}"
-               placeholder="automático">
-      </label>
+      <div class="collector-field">
+        <label>Intervalo entre leituras (segundos)
+          <input type="number" name="poll_interval_seconds" data-sensitive-input="true"
+                 min="{{ min_interval }}" max="{{ max_interval }}" step="1"
+                 value="{{ settings.poll_interval_seconds }}" required>
+        </label>
+        <p class="form-help">A cada ciclo o agente consulta o ProfitChart, entrega as cotações e Ações atualiza a visualização depois da leitura esperada.</p>
+      </div>
+      <div class="collector-field">
+        <label>Alertar cotação desatualizada após (segundos)
+          <input type="number" name="stale_alert_seconds" data-sensitive-input="true" min="1" max="86400" step="1"
+                 value="{{ settings.stale_alert_seconds if settings.stale_alert_seconds is not none else '' }}"
+                 placeholder="automático">
+        </label>
+        <p class="form-help">Prazo para marcar a última cotação como desatualizada. Em branco, o sistema calcula um limite seguro a partir do ciclo.</p>
+      </div>
     </div>
   </fieldset>
 
-  <fieldset>
-    <legend>Verificação do agente Windows</legend>
+  <fieldset class="agent-sync-card">
+    <legend>Sincronização com o agente Windows</legend>
+    <p class="settings-card-intro">Define só a frequência de consulta de pedidos e configurações no servidor.</p>
     <label>Intervalo para verificar pedidos e configurações (segundos)
-      <input type="number" name="agent_check_interval_seconds"
+      <input type="number" name="agent_check_interval_seconds" data-sensitive-input="true"
              min="{{ min_agent_check_interval }}" max="{{ max_agent_check_interval }}" step="1"
              value="{{ settings.agent_check_interval_seconds }}" required>
     </label>
-    <p class="form-help">Define em quanto tempo o botão de atualização manual e alterações desta tela são percebidos pelo agente. Não altera o intervalo entre leituras.</p>
+    <p class="form-help">Controla em quanto tempo o botão “Atualizar cotações agora” e alterações desta tela chegam ao agente. Não consulta o ProfitChart, não recalcula Ações e não altera o intervalo entre leituras.</p>
   </fieldset>
   <fieldset class="collector-schedule-card">
       <legend>Agenda da coleta</legend>
+      <p class="settings-card-intro">Fora desta janela não há leitura do ProfitChart; a sincronização de configurações continua independente.</p>
       <div class="schedule-section">
         <span class="schedule-section-label">Dias da semana</span>
         <div class="schedule-days">
@@ -97,7 +108,7 @@
   <fieldset>
     <legend>Precificação de opções</legend>
     <label>Taxa livre de risco anual (ex.: 0.1075 para 10,75%)
-      <input type="number" name="risk_free_rate_annual" min="0" max="1" step="0.0001"
+      <input type="number" name="risk_free_rate_annual" data-sensitive-input="true" min="0" max="1" step="0.0001"
              value="{{ settings.risk_free_rate_annual }}" required>
     </label>
     <p class="form-help">

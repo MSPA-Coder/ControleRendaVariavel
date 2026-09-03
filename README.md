@@ -124,9 +124,13 @@ caminho do segredo em `.docker-local/remote-collector.env`; o log fica em
 `%LOCALAPPDATA%\ControleRendaVariavel\remote-collector.log`. Consulte ou remova
 a tarefa com `-Action Status` ou `-Action Uninstall`.
 
-A tela **Configurações** define modo, intervalos e agenda, e permite solicitar
-uma atualização. O agente consulta o servidor e o RTD somente quando a agenda
-está ativa e o ProfitChart está aberto. Sem o agente, a aplicação permanece
+A tela **Configurações** separa os dois ritmos: o **intervalo entre leituras**
+define quando o agente consulta o RTD e entrega cotações; o **intervalo de
+verificação do agente** define somente quando ele busca pedidos e alterações no
+servidor, sem consultar o ProfitChart. A agenda restringe as leituras RTD. O
+botão de atualização manual é percebido na próxima verificação e antecipa uma
+leitura. Em **Ações**, a tela se atualiza perto da próxima leitura esperada, em
+vez de consultar o servidor continuamente. Sem o agente, a aplicação permanece
 utilizável; as cotações aparecem indisponíveis ou desatualizadas e cadastros
 continuam funcionando.
 

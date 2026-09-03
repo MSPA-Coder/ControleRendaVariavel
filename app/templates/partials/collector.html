@@ -6,9 +6,11 @@
    fragmento que já faz polling (o controle do RTD), `polling=false` evita
    duas requisições concorrentes para a mesma informação. #}
 
-{% macro heartbeat(collector_heartbeat, polling=true) %}
+{% macro heartbeat(collector_heartbeat, polling=true, oob=false) %}
 <span
+  id="collector-heartbeat"
   class="collector-heartbeat is-{{ collector_heartbeat.status }}"
+  {% if oob %}hx-swap-oob="outerHTML"{% endif %}
   {% if polling %}
   hx-get="{{ url_for('portfolio.collector_heartbeat_partial') }}"
   hx-trigger="every 10s"

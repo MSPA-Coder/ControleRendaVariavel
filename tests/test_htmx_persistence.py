@@ -225,6 +225,19 @@ def test_confirmacao_de_carteira_simulada_falha_fechada():
     assert "A operação não foi enviada" in script
 
 
+def test_acoes_se_atualiza_no_proximo_ciclo_sem_polling_continuo():
+    template = (ROOT / "app" / "templates" / "partials" / "portfolio_results.html").read_text(
+        encoding="utf-8"
+    )
+    script = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "data-quote-refresh-schedule" in template
+    assert 'hx-trigger="quote-refresh-due"' in template
+    assert "every {{ poll_interval_seconds }}s" not in template
+    assert "schedulePortfolioRefresh" in script
+    assert "QUOTE_REFRESH_GRACE_MS" in script
+
+
 def test_grafico_de_vencimentos_reinicializa_apos_swap_htmx():
     script = (ROOT / "app" / "static" / "expiration-chart.js").read_text(encoding="utf-8")
 

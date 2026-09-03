@@ -244,6 +244,21 @@ PostgreSQL**. Ele consulta `/api/collector/configuration` para saber quais
 instrumentos estão abertos, lê o RTD e devolve as leituras em
 `/api/collector/quotes`; falhas vão para `/api/collector/failure`.
 
+Há dois relógios independentes, configurados em **Configurações**. O
+**intervalo entre leituras** determina quando o agente pode consultar o
+ProfitChart e entregar uma nova cotação. O **intervalo de verificação do
+agente** determina apenas quando ele busca pedidos e alterações de configuração
+no servidor; essa consulta HTTPS não abre nem consulta o ProfitChart. Um pedido
+manual ou uma alteração da configuração de coleta antecipa uma leitura assim
+que a próxima verificação a recebe. A agenda limita somente a leitura RTD.
+
+A aba **Ações** não faz polling contínuo: com base na hora da última cotação e
+no intervalo entre leituras, o navegador agenda uma única atualização do
+fragmento da carteira logo após o próximo ciclo esperado. Se a cotação ainda
+não tiver chegado, espera o próximo ciclo de leitura antes de tentar de novo.
+Assim o cálculo visual acompanha a entrega de cotações sem conexão persistente
+nem requisições a cada poucos segundos.
+
 O servidor nunca inicia conexão para o computador Windows e nunca recebe acesso
 ao ambiente local. Os três endpoints exigem Bearer token próprio, comparado com
 `hmac.compare_digest`, e são os únicos isentos de CSRF — não há navegador nem
