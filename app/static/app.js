@@ -8,24 +8,7 @@
 // ordem do documento), que e quando o HTMX de fato le o config.
 htmx.config.includeIndicatorStyles = false;
 
-const sensitiveInputNames = new Set([
-  "quantity", "price", "average_cost", "target_price", "exit_price", "strike",
-  "premium", "amount", "value", "risk_free_rate", "risk_free_rate_annual", "initial_balance",
-  "quote_multiplier", "target_multiplier",
-]);
-
-function initializeValuesPrivacy(root = document) {
-  root.querySelectorAll("input[name]").forEach((input) => {
-    if (sensitiveInputNames.has(input.name)) input.dataset.sensitiveInput = "true";
-  });
-}
-
 (() => {
-  initializeValuesPrivacy();
-  document.addEventListener("htmx:afterSwap", (event) => {
-    initializeValuesPrivacy(event.target || document);
-  });
-
   const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");
 
@@ -69,20 +52,66 @@ function initializeValuesPrivacy(root = document) {
   }
 
   // Auto-refresh so com a aba a vista. O `every Ns` do HTMX nao sabe se
-  // alguem esta olhando: uma aba de Acoes esquecida em segundo plano
-  // continuaria pedindo a carteira inteira a cada ciclo, sem leitor. Cancelar
-  // no `htmx:beforeRequest` para a requisicao mas preserva o temporizador,
-  // entao o ciclo volta sozinho quando a aba reaparece.
+  // alguem esta olhando: uma aba esquecida em segundo plano continuaria
+  // pedindo fragmentos sem leitor. As tabelas que ainda usam `every` mantem
+  // este cuidado; Acoes usa o agendamento pontual logo abaixo.
   //
   // O filtro declarativo do HTMX (`every 5s [condicao]`) resolveria isso sem
   // JavaScript, mas ele compila a condicao com `new Function` e a CSP do
   // projeto e `default-src 'self'`, sem `unsafe-eval`.
   const POLL_WHEN_VISIBLE = "[data-poll-when-visible]";
+  const PORTFOLIO_REFRESH = "[data-quote-refresh-schedule]";
+  const QUOTE_REFRESH_GRACE_MS = 5000;
+  const attemptedQuoteVersions = new Set();
+  let portfolioRefreshTimer;
+
+  const schedulePortfolioRefresh = () => {
+    if (portfolioRefreshTimer) {
+      window.clearTimeout(portfolioRefreshTimer);
+      portfolioRefreshTimer = undefined;
+    }
+    if (document.hidden || !window.htmx) return;
+
+    const element = document.querySelector(PORTFOLIO_REFRESH);
+    if (!element) return;
+
+    const intervalMs = Number(element.dataset.quoteIntervalMs);
+    const retryMs = Number(element.dataset.quoteRetryMs);
+    const lastReadAt = Date.parse(element.dataset.quoteLastReadAt || "");
+    const safeRetryMs = Number.isFinite(retryMs) && retryMs > 0 ? retryMs : 30000;
+    let delayMs = safeRetryMs;
+
+    if (Number.isFinite(lastReadAt) && Number.isFinite(intervalMs) && intervalMs > 0) {
+      const nextExpectedAt = lastReadAt + intervalMs + QUOTE_REFRESH_GRACE_MS;
+      if (nextExpectedAt > Date.now()) {
+        delayMs = nextExpectedAt - Date.now();
+      } else {
+        // Ao abrir Acoes depois do horário esperado, consulta uma vez já.
+        // Se o agente ainda não tiver entregue uma cotação nova, a mesma
+        // versão espera o intervalo de configuração antes de tentar de novo.
+        const version = element.dataset.quoteLastReadAt;
+        if (!attemptedQuoteVersions.has(version)) {
+          attemptedQuoteVersions.add(version);
+          delayMs = 0;
+        }
+      }
+    }
+
+    portfolioRefreshTimer = window.setTimeout(() => {
+      portfolioRefreshTimer = undefined;
+      if (!document.hidden && document.querySelector(PORTFOLIO_REFRESH) === element) {
+        window.htmx.trigger(element, "quote-refresh-due");
+      }
+    }, delayMs);
+  };
 
   document.addEventListener("htmx:beforeRequest", (event) => {
     if (!document.hidden) return;
     const element = event.detail && event.detail.elt;
-    if (element && element.matches && element.matches(POLL_WHEN_VISIBLE)) {
+    if (
+      element && element.matches &&
+      (element.matches(POLL_WHEN_VISIBLE) || element.matches(PORTFOLIO_REFRESH))
+    ) {
       event.preventDefault();
     }
   });
@@ -94,6 +123,19 @@ function initializeValuesPrivacy(root = document) {
     document.querySelectorAll(POLL_WHEN_VISIBLE).forEach((element) => {
       window.htmx.trigger(element, "poll-resumed");
     });
+    schedulePortfolioRefresh();
+  });
+
+  document.addEventListener("DOMContentLoaded", schedulePortfolioRefresh);
+  document.addEventListener("htmx:afterSwap", (event) => {
+    const target = event.detail && event.detail.target;
+    const requester = event.detail && event.detail.requestConfig && event.detail.requestConfig.elt;
+    if (
+      (target && target.id === "portfolio-results") ||
+      (requester && requester.id === "portfolio-results")
+    ) {
+      schedulePortfolioRefresh();
+    }
   });
 
   document.addEventListener("click", (event) => {

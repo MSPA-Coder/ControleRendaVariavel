@@ -20,7 +20,7 @@
       <option value="">Selecione</option>
       {% for expiration in expirations %}<option value="{{ expiration.id }}">{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
     </select></label>
-    <label>Strike<input required type="number" min="0" step="any" name="strike"></label>
+    <label>Strike<input required type="number" min="0" step="any" name="strike" data-sensitive-input="true"></label>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Adicionar este contrato de opção?"
             data-sa-titulo="Adicionar contrato" data-sa-severidade="warning">Adicionar</button>
@@ -48,7 +48,7 @@
           <td><select required name="expiration_id" form="contract-{{ contract.id }}" aria-label="Vencimento de {{ contract.ticker_ref.symbol }}">
             {% for expiration in expirations %}<option value="{{ expiration.id }}" {{ 'selected' if expiration.id == contract.expiration_id }}>{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
           </select></td>
-          <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}"></td>
+          <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}" data-sensitive-input="true"></td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="contract-{{ contract.id }}"
                     data-sa-confirmar="Salvar as alterações do contrato de {{ contract.ticker_ref.symbol }}?"

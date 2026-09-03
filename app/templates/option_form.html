@@ -39,9 +39,9 @@
   <label>Operação<select name="side">
     {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
   </select></label>
-  <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ value.quantity if value else '' }}"></label>
-  <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}"></label>
-  <label>Target<input type="number" min="0" step="any" name="target_price" value="{{ value.target_price if value and value.target_price is not none else '' }}"></label>
+  <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ value.quantity if value else '' }}" data-sensitive-input="true"></label>
+  <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}" data-sensitive-input="true"></label>
+  <label>Target<input type="number" min="0" step="any" name="target_price" value="{{ value.target_price if value and value.target_price is not none else '' }}" data-sensitive-input="true"></label>
   <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
   <label>Resultado<select name="result_mode">
     {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}

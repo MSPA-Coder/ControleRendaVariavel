@@ -29,14 +29,14 @@
       {% for metrics in ticker_metrics %}
       <tr>
         <td>{{ metrics.ticker }}{{ ' ⚠' if not metrics.has_enough_observations }}</td>
-        <td class="number">{{ metrics.observations }}</td>
-        <td class="number {{ metrics.annualized_return|sign_class }}">{{ metrics.annualized_return|percent(2) if metrics.annualized_return is not none else '-' }}</td>
-        <td class="number">{{ metrics.volatility_annualized|percent(2) if metrics.volatility_annualized is not none else '-' }}</td>
-        <td class="number">{{ metrics.sharpe_ratio|number(2) if metrics.sharpe_ratio is not none else '-' }}</td>
-        <td class="number">{{ metrics.sortino_ratio|number(2) if metrics.sortino_ratio is not none else '-' }}</td>
-        <td class="number {{ metrics.var_95|sign_class }}">{{ metrics.var_95|percent(2) if metrics.var_95 is not none else '-' }}</td>
-        <td class="number negative">{{ metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '-' }}</td>
-        <td class="number">{{ metrics.beta_vs_benchmark|number(2) if metrics.beta_vs_benchmark is not none else '-' }}</td>
+        <td class="number" data-sensitive-value="true">{{ metrics.observations|number(0) }}</td>
+        <td class="number {{ metrics.annualized_return|sign_class }}" data-sensitive-value="true">{{ metrics.annualized_return|percent(2) if metrics.annualized_return is not none else '-' }}</td>
+        <td class="number" data-sensitive-value="true">{{ metrics.volatility_annualized|percent(2) if metrics.volatility_annualized is not none else '-' }}</td>
+        <td class="number" data-sensitive-value="true">{{ metrics.sharpe_ratio|number(2) if metrics.sharpe_ratio is not none else '-' }}</td>
+        <td class="number" data-sensitive-value="true">{{ metrics.sortino_ratio|number(2) if metrics.sortino_ratio is not none else '-' }}</td>
+        <td class="number {{ metrics.var_95|sign_class }}" data-sensitive-value="true">{{ metrics.var_95|percent(2) if metrics.var_95 is not none else '-' }}</td>
+        <td class="number negative" data-sensitive-value="true">{{ metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '-' }}</td>
+        <td class="number" data-sensitive-value="true">{{ metrics.beta_vs_benchmark|number(2) if metrics.beta_vs_benchmark is not none else '-' }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -51,7 +51,7 @@
   {% for drawdown in portfolio_drawdowns %}
     <article title="Aproximação: assume as posições atuais constantes ao longo de todo o histórico simulado.">
       <span>Máx. drawdown da carteira · {{ drawdown.currency }}{{ ' ⚠' if not drawdown.has_enough_observations }}</span>
-      <strong class="negative">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '-' }}</strong>
+      <strong class="negative" data-sensitive-value="true">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '-' }}</strong>
     </article>
   {% endfor %}
 </section>

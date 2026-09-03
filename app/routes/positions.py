@@ -23,6 +23,7 @@ from app.position_closure import (
 )
 from app.routes import bp
 from app.routes.helpers import (
+    agent_check_interval_seconds,
     allocation_chart_data,
     broker_exposure_chart_data,
     broker_records,
@@ -170,6 +171,8 @@ def portfolio_results_context() -> dict[str, object]:
     if selected_return_days not in RETURN_PERIOD_DAYS:
         selected_return_days = 365
     selected_return_label = dict(RETURN_PERIODS)[selected_return_days]
+    poll_interval = poll_interval_seconds()
+    agent_check_interval = agent_check_interval_seconds()
     portfolio = build_portfolio(
         positions_query(portfolio_id, broker, group_by_broker=group_by_broker),
         stale_after_seconds=quote_stale_after_seconds(),
@@ -184,7 +187,8 @@ def portfolio_results_context() -> dict[str, object]:
             for view in portfolio.positions
         },
         "group_by_broker": group_by_broker,
-        "poll_interval_seconds": poll_interval_seconds(),
+        "poll_interval_seconds": poll_interval,
+        "quote_refresh_retry_seconds": max(poll_interval, agent_check_interval),
         "selected_broker": broker or "",
         "selected_portfolio_id": selected_portfolio_id,
         "portfolios": portfolio_records(),
@@ -204,6 +208,7 @@ def index() -> str:
     autorizacao e identica nos dois caminhos.
     """
     results = portfolio_results_context()
+    results["include_heartbeat_oob"] = is_htmx_request()
     if is_htmx_request():
         return render_template("partials/portfolio_results.html", **results)
     # O estado do coletor nao vem mais daqui: o liga/desliga mora em

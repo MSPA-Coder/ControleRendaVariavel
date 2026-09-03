@@ -44,11 +44,11 @@
           </td>
           {% for kind in income_kinds %}
           {% set recebido = total.amount_by_kind.get(kind.value) %}
-          <td class="number">{{ recebido|currency(total.currency) if recebido else '-' }}</td>
+          <td class="number" data-sensitive-value="true">{{ recebido|currency(total.currency) if recebido else '-' }}</td>
           {% endfor %}
-          <td class="number">{{ total.total_amount|currency(total.currency) }}</td>
-          <td class="number">{{ total.cost_basis|currency(total.currency) if total.cost_basis is not none else '-' }}</td>
-          <td class="number">{{ total.yield_on_cost|percent(2) if total.yield_on_cost is not none else '-' }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.cost_basis|currency(total.currency) if total.cost_basis is not none else '-' }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.yield_on_cost|percent(2) if total.yield_on_cost is not none else '-' }}</td>
         </tr>
         {% if expanded %}
         <tr class="movement-detail">
@@ -63,7 +63,7 @@
                   <td>{{ entry.broker }}</td>
                   <td>{{ entry.payment_date.strftime('%d-%b-%y') }}</td>
                   <td>{{ entry.kind|income_kind_label }}</td>
-                  <td class="number">{{ entry.amount|currency(entry.currency) }}</td>
+                  <td class="number" data-sensitive-value="true">{{ entry.amount|currency(entry.currency) }}</td>
                   <td>{{ entry.notes or '' }}</td>
                   <td><a href="{{ url_for('portfolio.edit_dividend', dividend_id=entry.id) }}">editar</a></td>
                 </tr>
@@ -97,7 +97,7 @@
                     aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os meses de {{ total.year }}">{{ '−' if expanded else '+' }}</button>
             {{ total.year }}{{ ' · ' + total.currency if total.currency != 'BRL' }}
           </td>
-          <td class="number">{{ total.total_amount|currency(total.currency) }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</td>
         </tr>
         {% if expanded %}
         <tr class="movement-detail">
@@ -113,7 +113,7 @@
                 {% for month in total.months %}
                 <tr>
                   <td>{{ month.month.strftime('%m/%Y') }}</td>
-                  <td class="number">{{ month.total_amount|currency(month.currency) }}</td>
+                  <td class="number" data-sensitive-value="true">{{ month.total_amount|currency(month.currency) }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -142,10 +142,10 @@
    silenciosamente ignorado pelo navegador. #}
 <section class="summary dividend-summary" aria-label="Total de proventos por tipo e por moeda">
   {% for kind, currency, total in totals_by_kind_currency %}
-    <article><span>{{ kind|income_kind_label }} · {{ currency }}</span><strong class="positive">{{ total|currency(currency) }}</strong></article>
+    <article><span>{{ kind|income_kind_label }} · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
   {% endfor %}
   {% for currency, total in totals_by_currency %}
-    <article><span>Total recebido · {{ currency }}</span><strong class="positive">{{ total|currency(currency) }}</strong></article>
+    <article><span>Total recebido · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
   {% endfor %}
 </section>
 {% endif %}

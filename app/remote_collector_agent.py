@@ -20,6 +20,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
+from app.collector_settings import MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS
 from app.domain import MARKET_TIMEZONE
 from app.models import CollectorMode
 from app.rtd import ExcelRtdQuoteProvider, Instrument, QuoteValue
@@ -62,6 +63,38 @@ DEFAULT_COLLECTOR_SCHEDULE = CollectorSchedule(
     DEFAULT_COLLECTOR_SCHEDULE_START_TIME,
     DEFAULT_COLLECTOR_SCHEDULE_END_TIME,
 )
+
+
+@dataclass(slots=True)
+class AgentDeadlines:
+    """Relógios independentes do agente remoto.
+
+    A consulta de configuração é barata e não toca o ProfitChart. A leitura
+    RTD, por outro lado, só é disparada no seu próprio prazo (ou por pedido
+    manual já recebido na configuração). Manter os dois prazos explícitos
+    evita que o menor intervalo transforme o outro em polling frequente.
+    """
+
+    next_configuration_at: float = 0.0
+    next_quote_at: float = float("inf")
+
+    def configuration_due(self, now: float) -> bool:
+        return now >= self.next_configuration_at
+
+    def quote_due(self, now: float) -> bool:
+        return now >= self.next_quote_at
+
+    def schedule_configuration(self, now: float, interval: int) -> None:
+        self.next_configuration_at = now + interval
+
+    def schedule_quote(self, now: float, interval: int) -> None:
+        self.next_quote_at = now + interval
+
+    def request_quote_now(self) -> None:
+        self.next_quote_at = 0.0
+
+    def sleep_seconds(self, now: float) -> float:
+        return max(0.0, min(self.next_configuration_at, self.next_quote_at) - now)
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
@@ -132,6 +165,18 @@ def _valid_agent_check_interval(value: object) -> int:
         raise ValueError("Intervalo de verificação inválido.") from exc
     if not MIN_AGENT_CHECK_INTERVAL_SECONDS <= interval <= MAX_AGENT_CHECK_INTERVAL_SECONDS:
         raise ValueError("Intervalo de verificação fora da faixa permitida.")
+    return interval
+
+
+def _valid_poll_interval(value: object) -> int:
+    if isinstance(value, bool):
+        raise ValueError("Intervalo entre leituras inválido.")
+    try:
+        interval = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Intervalo entre leituras inválido.") from exc
+    if not MIN_POLL_INTERVAL_SECONDS <= interval <= MAX_POLL_INTERVAL_SECONDS:
+        raise ValueError("Intervalo entre leituras fora da faixa permitida.")
     return interval
 
 
@@ -297,6 +342,15 @@ def _instrument_sets(configuration: dict[str, Any]) -> tuple[list[Instrument], d
     return instruments, option_keys
 
 
+def _collection_configuration(configuration: dict[str, Any]) -> dict[str, Any]:
+    """Campos cuja mudança pede uma nova leitura, não só uma nova checagem."""
+    return {
+        key: value
+        for key, value in configuration.items()
+        if key not in {"agent_check_interval_seconds", "refresh_requested"}
+    }
+
+
 def _serialized(value: QuoteValue) -> dict[str, str | int]:
     return {
         "last_price": str(value.last_price),
@@ -338,64 +392,81 @@ def run(project_dir: Path, *, profit_detector: ProfitDetector | None = None) -> 
     agent_check_interval = _load_agent_check_interval(state_path)
     collector_schedule = _load_collector_schedule(state_path)
     detector = profit_detector or WindowsProfitDetector()
-    next_poll_at = 0.0
+    deadlines = AgentDeadlines()
+    configuration: dict[str, Any] | None = None
     idle_reason: str | None = None
     try:
         while True:
-            if not collector_schedule.is_active(datetime.now(MARKET_TIMEZONE)):
-                providers.close()
-                if idle_reason != "schedule":
-                    logger.info("Agente aguardando a próxima janela da agenda de coleta.")
-                    idle_reason = "schedule"
-                time.sleep(agent_check_interval)
-                continue
-            try:
-                profit_running = detector.is_running()
-            except RuntimeError as exc:
-                providers.close()
-                if idle_reason != "profit-check-error":
-                    logger.warning("Agente aguardando verificação local do ProfitChart: %s", exc)
-                    idle_reason = "profit-check-error"
-                time.sleep(agent_check_interval)
-                continue
-            if not profit_running:
-                providers.close()
-                if idle_reason != "profit-closed":
-                    logger.info("Agente aguardando o ProfitChart ser aberto.")
-                    idle_reason = "profit-closed"
-                time.sleep(agent_check_interval)
-                continue
-            try:
-                configuration = api.configuration()
-                agent_check_interval = _valid_agent_check_interval(
-                    configuration.get("agent_check_interval_seconds")
-                )
-                collector_schedule = _schedule_from_payload(configuration.get("collector_schedule"))
+            now = time.monotonic()
+            if deadlines.configuration_due(now):
+                previous_configuration = configuration
+                schedule_was_active = collector_schedule.is_active(datetime.now(MARKET_TIMEZONE))
                 try:
-                    _store_agent_state(state_path, agent_check_interval, collector_schedule)
-                except OSError as exc:
-                    logger.warning("Não foi possível atualizar o estado local do agente: %s", exc)
+                    configuration = api.configuration()
+                    _valid_poll_interval(configuration.get("poll_interval_seconds"))
+                    previous_collection = (
+                        _collection_configuration(previous_configuration)
+                        if previous_configuration is not None
+                        else None
+                    )
+                    current_collection = _collection_configuration(configuration)
+                    collection_changed = current_collection != previous_collection
+                    refresh_requested = configuration.get("refresh_requested") is True
+                    agent_check_interval = _valid_agent_check_interval(
+                        configuration.get("agent_check_interval_seconds")
+                    )
+                    collector_schedule = _schedule_from_payload(configuration.get("collector_schedule"))
+                    deadlines.schedule_configuration(now, agent_check_interval)
+                    try:
+                        _store_agent_state(state_path, agent_check_interval, collector_schedule)
+                    except OSError as exc:
+                        logger.warning("Não foi possível atualizar o estado local do agente: %s", exc)
+                    schedule_just_opened = not schedule_was_active and collector_schedule.is_active(
+                        datetime.now(MARKET_TIMEZONE)
+                    )
+                    if collection_changed or refresh_requested or schedule_just_opened:
+                        deadlines.request_quote_now()
+                except Exception as exc:
+                    configuration = None
+                    logger.warning("Não foi possível consultar a configuração do coletor: %s", exc)
+                    api.send_failure(exc)
+                    deadlines.schedule_configuration(now, agent_check_interval)
+
+            now = time.monotonic()
+            if configuration is not None and deadlines.quote_due(now):
+                poll_interval = _valid_poll_interval(configuration.get("poll_interval_seconds"))
                 if not collector_schedule.is_active(datetime.now(MARKET_TIMEZONE)):
                     providers.close()
-                    idle_reason = "schedule"
-                    time.sleep(agent_check_interval)
-                    continue
-                now = time.monotonic()
-                refresh_requested = configuration.get("refresh_requested") is True
-                if now >= next_poll_at or refresh_requested:
-                    mode = CollectorMode(str(configuration["collector_mode"]))
-                    interval = int(configuration["poll_interval_seconds"])
-                    instruments, option_keys = _instrument_sets(configuration)
-                    values = providers.get(mode).fetch(instruments) if instruments else []
-                    api.send_quotes(_quotes_payload(values, option_keys))
-                    next_poll_at = time.monotonic() + interval
-                    logger.info("Ciclo de cotações entregue ao VPS (%s instrumentos).", len(values))
-                idle_reason = None
-            except Exception as exc:
-                logger.warning("Ciclo do coletor falhou: %s", exc)
-                api.send_failure(exc)
-                next_poll_at = time.monotonic() + agent_check_interval
-            time.sleep(agent_check_interval)
+                    if idle_reason != "schedule":
+                        logger.info("Agente aguardando a próxima janela da agenda de coleta.")
+                        idle_reason = "schedule"
+                    deadlines.schedule_quote(now, poll_interval)
+                else:
+                    try:
+                        profit_running = detector.is_running()
+                        if not profit_running:
+                            providers.close()
+                            if idle_reason != "profit-closed":
+                                logger.info("Agente aguardando o ProfitChart ser aberto.")
+                                idle_reason = "profit-closed"
+                        else:
+                            mode = CollectorMode(str(configuration["collector_mode"]))
+                            instruments, option_keys = _instrument_sets(configuration)
+                            values = providers.get(mode).fetch(instruments) if instruments else []
+                            api.send_quotes(_quotes_payload(values, option_keys))
+                            logger.info("Ciclo de cotações entregue ao VPS (%s instrumentos).", len(values))
+                            idle_reason = None
+                    except Exception as exc:
+                        providers.close()
+                        logger.warning("Leitura de cotações falhou: %s", exc)
+                        api.send_failure(exc)
+                    finally:
+                        # Inclusive quando o Profit está fechado ou falha: a
+                        # próxima tentativa é no intervalo de leitura, não no
+                        # intervalo de configuração.
+                        deadlines.schedule_quote(time.monotonic(), poll_interval)
+
+            time.sleep(deadlines.sleep_seconds(time.monotonic()))
     finally:
         providers.close()
 

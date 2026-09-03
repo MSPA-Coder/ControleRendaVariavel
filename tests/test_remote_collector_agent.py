@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from app.remote_collector_agent import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    AgentDeadlines,
     CollectorSchedule,
     _instrument_sets,
     _load_agent_check_interval,
@@ -14,6 +15,7 @@ from app.remote_collector_agent import (
     _store_agent_check_interval,
     _store_agent_state,
     _valid_agent_check_interval,
+    _valid_poll_interval,
 )
 from app.rtd import QuoteValue
 
@@ -72,6 +74,26 @@ def test_agente_rejeita_intervalo_de_verificacao_fora_da_faixa() -> None:
 
     with pytest.raises(ValueError):
         _valid_agent_check_interval(4)
+
+
+def test_agente_mantem_leitura_e_configuracao_em_relogios_independentes() -> None:
+    deadlines = AgentDeadlines()
+
+    deadlines.schedule_configuration(0, 10)
+    deadlines.schedule_quote(0, 60)
+
+    assert deadlines.configuration_due(10) is True
+    assert deadlines.quote_due(10) is False
+    assert deadlines.sleep_seconds(10) == 0
+    assert deadlines.quote_due(60) is True
+
+
+def test_agente_valida_intervalo_de_leitura_recebido_do_servidor() -> None:
+    import pytest
+
+    assert _valid_poll_interval(60) == 60
+    with pytest.raises(ValueError):
+        _valid_poll_interval(0)
 
 
 def test_agente_respeita_agenda_unica_para_b3_e_ativos_americanos() -> None:

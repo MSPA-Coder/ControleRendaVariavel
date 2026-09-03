@@ -61,7 +61,7 @@
     </div>
     <ul class="allocation-list" aria-label="Dados da exposição por {{ subject }}">
       {% for label in chart.labels %}
-      <li><span>{{ label }}</span><strong>{{ chart["value_values"][loop.index0]|currency(chart.currency) }}</strong><strong>{{ chart.weight_values[loop.index0]|percent }}</strong></li>
+      <li><span>{{ label }}</span><strong data-sensitive-value="true">{{ chart["value_values"][loop.index0]|currency(chart.currency) }}</strong><strong data-sensitive-value="true">{{ chart.weight_values[loop.index0]|percent }}</strong></li>
       {% endfor %}
     </ul>
   </div>
@@ -88,8 +88,8 @@
       <tr>
         <td>{{ caller(group) }}</td>
         <td>{{ group.currency }}</td>
-        <td class="number">{{ group.current_total|currency(group.currency) }}</td>
-        <td class="number">{{ group.current_weight|percent }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.current_total|currency(group.currency) }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.current_weight|percent }}</td>
       </tr>
       {% endfor %}
     </tbody>

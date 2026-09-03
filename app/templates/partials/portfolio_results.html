@@ -1,10 +1,9 @@
+{% import "partials/collector.html" as collector %}
 {# Resultado da carteira: tabela e resumo por moeda.
 
-   O wrapper se reagenda sozinho — os atributos hx-* voltam a cada troca — e
-   a URL carrega os filtros vigentes, para que a atualizacao automatica nao
-   descarte o recorte que o usuario escolheu. O intervalo vem do banco, entao
-   mudar a configuracao passa a valer na proxima troca, sem recarregar a
-   pagina (era o que o JavaScript anterior fazia com window.location.reload).
+   O navegador só pede um novo fragmento perto do próximo ciclo de leitura
+   esperado. A programação acontece em app.js; ela usa a última cotação e o
+   intervalo recebidos aqui, não um polling contínuo.
 
    Pelo mesmo motivo, o `+` que abre o extrato de uma posicao consolidada nao
    guarda estado no navegador: ele troca o fragmento por uma URL com
@@ -12,9 +11,12 @@
    isso, o extrato fecharia sozinho a cada poll.
 #}
 <div id="portfolio-results"
-     data-poll-when-visible
+     data-quote-refresh-schedule
+     data-quote-last-read-at="{{ collector_heartbeat.last_read_at or '' }}"
+     data-quote-interval-ms="{{ poll_interval_seconds * 1000 }}"
+     data-quote-retry-ms="{{ quote_refresh_retry_seconds * 1000 }}"
      hx-get="{{ url_for('portfolio.index', **request.args) }}"
-     hx-trigger="every {{ poll_interval_seconds }}s, poll-resumed"
+     hx-trigger="quote-refresh-due"
      hx-swap="outerHTML">
 {# Agrupado por corretora, o nome aparece uma vez no rodape de cada grupo:
    a coluna sai inteira, cabecalho junto, em vez de sobrar um titulo sobre
@@ -40,26 +42,26 @@
       {% endif %}
       <a href="{{ url_for('portfolio.edit_position', position_id=p.id) }}">{{ p.ticker }}</a>
     </td>
-    <td class="number">{{ p.quantity|quantity(p.currency) }}</td>
-    <td class="number">{{ p.average_cost|currency(p.currency, trim=true) }}</td>
+    <td class="number" data-sensitive-value="true">{{ p.quantity|quantity(p.currency) }}</td>
+    <td class="number" data-sensitive-value="true">{{ p.average_cost|currency(p.currency, trim=true) }}</td>
     {% if m %}
-      <td class="number">{{ m.current_price|currency(p.currency, trim=true) }}</td>
-      <td class="number {{ m.daily_variation|sign_class }}">{{ m.daily_variation|percent }}</td>
-      <td class="number {{ m.result|sign_class }}">{{ m.result|currency(p.currency, 0) }}</td>
-      <td class="number {{ m.return_pct|sign_class }}">{{ m.return_pct|percent }}</td>
-      <td class="number {{ m.period_return|sign_class }}">{{ m.period_return|percent }}</td>
-      <td class="number">{{ m.stop_gain|currency(p.currency, trim=true) }}</td>
-      <td class="number {{ m.distance_to_target|sign_class }}">{{ m.distance_to_target|percent(2) }}</td>
-      <td class="number {{ m.breakeven|sign_class }}">{{ m.breakeven|percent }}</td>
-      <td class="number">{{ m.unwind_value|currency(p.currency, 0) }}</td>
-      <td class="number">{{ item.current_weight|percent }}</td>
-      <td class="number {{ m.build_value|sign_class }}">{{ m.build_value|currency(p.currency, 0) }}</td>
-      <td class="number">{{ item.cost_weight|percent }}</td>
-      <td>{{ p.side.value }}</td><td class="number">{{ m.days }}</td>
+      <td class="number" data-sensitive-value="true">{{ m.current_price|currency(p.currency, trim=true) }}</td>
+      <td class="number {{ m.daily_variation|sign_class }}" data-sensitive-value="true">{{ m.daily_variation|percent }}</td>
+      <td class="number {{ m.result|sign_class }}" data-sensitive-value="true">{{ m.result|currency(p.currency, 0) }}</td>
+      <td class="number {{ m.return_pct|sign_class }}" data-sensitive-value="true">{{ m.return_pct|percent }}</td>
+      <td class="number {{ m.period_return|sign_class }}" data-sensitive-value="true">{{ m.period_return|percent }}</td>
+      <td class="number" data-sensitive-value="true">{{ m.stop_gain|currency(p.currency, trim=true) }}</td>
+      <td class="number {{ m.distance_to_target|sign_class }}" data-sensitive-value="true">{{ m.distance_to_target|percent(2) }}</td>
+      <td class="number {{ m.breakeven|sign_class }}" data-sensitive-value="true">{{ m.breakeven|percent }}</td>
+      <td class="number" data-sensitive-value="true">{{ m.unwind_value|currency(p.currency, 0) }}</td>
+      <td class="number" data-sensitive-value="true">{{ item.current_weight|percent }}</td>
+      <td class="number {{ m.build_value|sign_class }}" data-sensitive-value="true">{{ m.build_value|currency(p.currency, 0) }}</td>
+      <td class="number" data-sensitive-value="true">{{ item.cost_weight|percent }}</td>
+      <td>{{ p.side.value }}</td><td class="number" data-sensitive-value="true">{{ m.days|number(0) }}</td>
     {% else %}
       {# 12 colunas: de Atual ate o segundo %, deixando Tipo e Dias de fora. #}
       <td colspan="12" class="missing">Aguardando primeira cotação RTD</td>
-      <td>{{ p.side.value }}</td><td class="number">-</td>
+      <td>{{ p.side.value }}</td><td class="number" data-sensitive-value="true">-</td>
     {% endif %}
     <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
     <td class="ticker-status">
@@ -104,10 +106,10 @@
       {% for item in group.positions %}{{ position_row(item) }}{% endfor %}
       <tr class="broker-total">
         <th colspan="2">{{ group.broker }} · {{ group.positions|length }} posição(ões)</th>
-        <td class="number">{{ group.cost_total|currency(group.currency, 0) }}</td>
-        <td class="number">{{ group.current_total|currency(group.currency, 0) }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.cost_total|currency(group.currency, 0) }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.current_total|currency(group.currency, 0) }}</td>
         <td></td>
-        <td class="number {{ group.result_total|sign_class }}">{{ group.result_total|currency(group.currency, 0) }}</td>
+        <td class="number {{ group.result_total|sign_class }}" data-sensitive-value="true">{{ group.result_total|currency(group.currency, 0) }}</td>
         <td colspan="13"></td>
       </tr>
       </tbody>
@@ -137,26 +139,29 @@
     <div class="currency-card-grid">
       <article>
         <span>Custo <small class="currency-symbol">{{ symbol }}</small></span>
-        <strong>{{ total.cost_total|number(0) }}</strong>
+        <strong data-sensitive-value="true">{{ total.cost_total|number(0) }}</strong>
       </article>
       <article>
         <span>Valor atual <small class="currency-symbol">{{ symbol }}</small></span>
-        <strong>{{ total.current_total|number(0) }}</strong>
+        <strong data-sensitive-value="true">{{ total.current_total|number(0) }}</strong>
       </article>
       <article>
         <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
-        <strong class="{{ total.result_total|sign_class }}">{{ total.result_total|number(0) }}</strong>
+        <strong class="{{ total.result_total|sign_class }}" data-sensitive-value="true">{{ total.result_total|number(0) }}</strong>
       </article>
       <article>
         <span>Retorno</span>
-        <strong class="{{ total.return_pct|sign_class }}">{{ total.return_pct|percent(2) }}</strong>
+        <strong class="{{ total.return_pct|sign_class }}" data-sensitive-value="true">{{ total.return_pct|percent(2) }}</strong>
       </article>
       <article title="Índice Herfindahl-Hirschman: quanto menor, mais diversificada a carteira nesta moeda.">
         <span>Concentração (HHI)</span>
-        <strong>{{ total.hhi|number(3) }}</strong>
+        <strong data-sensitive-value="true">{{ total.hhi|number(3) }}</strong>
       </article>
     </div>
   </article>
   {% endfor %}
 </section>
 </div>
+{% if include_heartbeat_oob %}
+  {{ collector.heartbeat(collector_heartbeat, polling=false, oob=true) }}
+{% endif %}

@@ -11,7 +11,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
-from app.collector_settings import DEFAULT_POLL_INTERVAL_SECONDS
+from app.collector_settings import (
+    DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    DEFAULT_POLL_INTERVAL_SECONDS,
+)
 from app.holdings_history import DividendEvent, HoldingEvent
 from app.models import (
     AppSetting,
@@ -668,6 +671,13 @@ def poll_interval_seconds() -> int:
     if settings is None:
         return DEFAULT_POLL_INTERVAL_SECONDS
     return settings.poll_interval_seconds
+
+
+def agent_check_interval_seconds() -> int:
+    settings = db.session.get(AppSetting, 1)
+    if settings is None:
+        return DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
+    return settings.agent_check_interval_seconds
 
 
 def quote_stale_after_seconds() -> int:
