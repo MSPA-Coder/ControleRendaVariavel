@@ -57,6 +57,13 @@ def test_filtros_preservam_a_apresentacao_normal_fora_do_modo_discreto(app):
     assert "12,34%" in rendered
 
 
+def test_filtros_cobrem_zero_negativo_e_nulo_sem_alterar_o_modo_normal(app):
+    assert _render(app, "{{ value|currency('BRL') }}", hidden=True, value=Decimal("0")) == "****"
+    assert _render(app, "{{ value|currency('BRL') }}", hidden=True, value=Decimal("-12.34")) == "****"
+    assert _render(app, "{{ value|currency('BRL') }}", hidden=True, value=None) == "-"
+    assert _render(app, "{{ value|currency('BRL') }}", hidden=False, value=Decimal("-12.34")) == "R$ -12,34"
+
+
 def test_renderizacao_minima_mascara_output_financeiro_e_preserva_marcador(app):
     rendered = _render(
         app,
@@ -144,3 +151,14 @@ def test_outputs_financeiros_fora_de_class_number_tambem_sao_marcados():
         source = (TEMPLATES / template).read_text(encoding="utf-8")
         for snippet in snippets:
             assert snippet in source, f"marcador ausente em {template}: {snippet}"
+
+
+def test_modo_privacidade_tem_placeholder_css_e_inputs_de_encerramento_marcados():
+    stylesheet = (ROOT / "app" / "static" / "app.css").read_text(encoding="utf-8")
+
+    assert '[data-sensitive-value="true"]:not(input)::after' in stylesheet
+    assert 'content: "****"' in stylesheet
+    assert "pointer-events: none" in stylesheet
+    for template in ("close_position_form.html", "close_option_form.html"):
+        source = (TEMPLATES / template).read_text(encoding="utf-8")
+        assert source.count('data-sensitive-input="true"') >= 4

@@ -778,6 +778,12 @@ details.catalog-card > h2 { display: none; }
 .privacy-toggle:hover, .privacy-toggle:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .privacy-toggle svg { fill: none; height: 1.15rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 1.15rem; }
 html[data-values-hidden="true"] input[data-sensitive-input="true"] { -webkit-text-security: disc; }
+html[data-values-hidden="true"] [data-sensitive-value="true"]:not(input) {
+  color: transparent !important; text-shadow: none !important;
+}
+html[data-values-hidden="true"] [data-sensitive-value="true"]:not(input)::after {
+  color: var(--muted); content: "****"; letter-spacing: .06em;
+}
 html[data-values-hidden="true"] .chart-box { position: relative; }
 html[data-values-hidden="true"] .chart-box canvas { opacity: 0; pointer-events: none; }
 html[data-values-hidden="true"] .chart-box::after {

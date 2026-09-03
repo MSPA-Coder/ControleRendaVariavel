@@ -11,8 +11,8 @@
     continua aberto com o mesmo custo médio e o extrato da posição guarda a parcela realizada.
     Essa ação não pode ser desfeita diretamente — se for engano, registre a operação inversa manualmente.
   </p>
-  <label>Quantidade em carteira<input type="text" disabled value="{{ position.quantity|quantity(position.currency) }}"></label>
-  <label>Custo médio<input type="text" disabled value="{{ position.average_cost|currency(position.currency) }}"></label>
+  <label>Quantidade em carteira<input type="text" disabled data-sensitive-input="true" value="{{ position.quantity|quantity(position.currency) }}"></label>
+  <label>Custo médio<input type="text" disabled data-sensitive-input="true" value="{{ position.average_cost|currency(position.currency) }}"></label>
   <label>Quantidade a encerrar
     <input required type="number" min="0" step="any" max="{{ position.quantity }}" name="quantity" value="{{ position.quantity }}" data-sensitive-input="true">
   </label>
