@@ -27,14 +27,6 @@ POSITION_MOVEMENT_LABELS = {
     "adjustment": "Ajuste",
 }
 
-RTD_STATUS_LABELS = {
-    "waiting_for_profit": "RTD aguardando Profit",
-    "starting": "RTD iniciando",
-    "backoff": "RTD em nova tentativa",
-    "error": "RTD com erro",
-    "unavailable": "RTD indisponível",
-}
-
 INCOME_KIND_LABELS = {
     "dividendo": "Dividendo",
     "jcp": "JCP",
@@ -153,18 +145,6 @@ def register_filters(app: Flask) -> None:
     @app.template_filter("collector_status_label")
     def collector_status_label(status: str | None) -> str:
         return COLLECTOR_STATUS_LABELS.get(status or "", "Coletor indisponível")
-
-    @app.template_filter("rtd_status_label")
-    def rtd_status_label(status: str | None, running: bool) -> str:
-        """Rótulo do controle do coletor RTD.
-
-        Estados intermediários (aguardando o Profit, iniciando, em nova
-        tentativa) têm texto próprio; fora deles, o rótulo apenas reflete se
-        o coletor está ligado.
-        """
-        return RTD_STATUS_LABELS.get(
-            status or "", "RTD ligado" if running else "RTD desligado"
-        )
 
     @app.template_filter("income_kind_label")
     def income_kind_label(value: object) -> str:

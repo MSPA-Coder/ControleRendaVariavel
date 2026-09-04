@@ -21,17 +21,28 @@
     });
     return Array.from(rows.values());
   }
-  function zoomedSeries(dates, prices, zoom) {
+  function latestQuoteDate(dates, prices) {
+    var latest = null;
+    dates.forEach(function (date, index) {
+      if (!date || !Number.isFinite(prices[index])) return;
+      if (latest === null || date > latest) latest = date;
+    });
+    return latest;
+  }
+  function zoomedSeries(dates, prices, zoom, sharedLatest) {
     if (zoom === "all") return { dates: dates, prices: prices };
     var months = { "1m": 1, "3m": 3, "6m": 6, "1y": 12 }[zoom];
     if (!months || !dates.length) return { dates: dates, prices: prices };
-    var latest = dates.reduce(function (result, value) { return value > result ? value : result; }, dates[0]);
+    var latest = sharedLatest || latestQuoteDate(dates, prices);
+    if (!latest) return { dates: [], prices: [] };
     var cutoff = new Date(latest + "T00:00:00Z");
     cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
     var cutoffDate = cutoff.toISOString().slice(0, 10);
     var selectedDates = [], selectedPrices = [];
     dates.forEach(function (value, index) {
-      if (value >= cutoffDate) { selectedDates.push(value); selectedPrices.push(prices[index]); }
+      if (value >= cutoffDate && (!sharedLatest || value <= sharedLatest)) {
+        selectedDates.push(value); selectedPrices.push(prices[index]);
+      }
     });
     return { dates: selectedDates, prices: selectedPrices };
   }
@@ -42,17 +53,15 @@
     rows.forEach(function (row) { map.set(row.label, row.close); });
     return map;
   }
-  // Rebase para "evolução percentual desde o primeiro ponto disponível":
-  // cada série usa sua PRÓPRIA primeira cotação como base, para que duas
-  // séries com escalas/moedas diferentes (ex.: preço de uma ação em R$ vs.
-  // uma taxa de câmbio) fiquem comparáveis no mesmo eixo percentual.
-  function rebaseToPercent(labels, closes) {
-    var base = null;
+  // Rebase para evolução percentual desde a primeira data em que as duas
+  // séries têm cotação. A mesma âncora é essencial para que a comparação não
+  // esconda uma diferença de período inicial entre os ativos.
+  function rebaseToPercent(labels, closes, anchorLabel) {
+    var base = closes.get(anchorLabel);
+    if (base === undefined || base === 0) return labels.map(function () { return null; });
     return labels.map(function (label) {
       var value = closes.get(label);
       if (value === undefined) return null;
-      if (base === null) base = value;
-      if (base === 0) return null;
       return (value / base - 1) * 100;
     });
   }
@@ -84,12 +93,20 @@
   // comum, no mesmo eixo. Substitui o candlestick porque OHLC não tem um
   // equivalente comparável para duas séries sobrepostas.
   function drawComparison(container, primaryLabel, primaryRows, benchmarkLabel, benchmarkRows) {
+    var primaryCloses = closesByLabel(primaryRows), benchmarkCloses = closesByLabel(benchmarkRows);
+    var commonLabels = Array.from(primaryCloses.keys()).filter(function (label) {
+      return benchmarkCloses.has(label);
+    }).sort();
+    // Sem uma data comum não existe uma comparação percentual válida. Limpar
+    // o container também evita deixar um gráfico anterior parecendo atual.
+    if (!commonLabels.length) { container.replaceChildren(); return false; }
     if (typeof Chart === "undefined") return;
+    var firstCommon = commonLabels[0];
     var labels = Array.from(new Set(primaryRows.map(function (row) { return row.label; }).concat(
       benchmarkRows.map(function (row) { return row.label; })
-    ))).sort();
-    var primarySeries = rebaseToPercent(labels, closesByLabel(primaryRows));
-    var benchmarkSeries = rebaseToPercent(labels, closesByLabel(benchmarkRows));
+    ))).filter(function (label) { return label >= firstCommon; }).sort();
+    var primarySeries = rebaseToPercent(labels, primaryCloses, firstCommon);
+    var benchmarkSeries = rebaseToPercent(labels, benchmarkCloses, firstCommon);
     container.replaceChildren();
     var canvas = document.createElement("canvas");
     canvas.setAttribute("role", "img");
@@ -113,22 +130,33 @@
         scales: { y: { ticks: { callback: function (value) { return formatPercent(value); } } } },
       },
     });
+    return true;
   }
   function render(chartType, period, zoom) {
     var container = document.getElementById("quote-history-chart"); if (!container) return;
-    var primary = zoomedSeries(parseData(container, "dates"), parseData(container, "prices").map(Number), zoom);
-    var dates = primary.dates, prices = primary.prices;
+    var primaryDates = parseData(container, "dates"), primaryPrices = parseData(container, "prices").map(Number);
     var currency = container.dataset.currency || "BRL";
     var benchmarkLabel = container.dataset.benchmarkLabel;
     if (benchmarkLabel) {
+      var benchmarkDates = parseData(container, "benchmarkDates"), benchmarkPrices = parseData(container, "benchmarkPrices").map(Number);
+      // Ambas as séries recebem a mesma data final para que 1m/3m/6m/1y
+      // represente exatamente a mesma janela de comparação. O menor último
+      // ponto evita que a janela contenha um trecho sem benchmark (ou ticker).
+      var comparisonLatest = [latestQuoteDate(primaryDates, primaryPrices), latestQuoteDate(benchmarkDates, benchmarkPrices)]
+        .filter(function (date) { return date !== null; })
+        .reduce(function (latest, date) { return latest === null || date < latest ? date : latest; }, null);
+      var primary = zoomedSeries(primaryDates, primaryPrices, zoom, comparisonLatest);
+      var dates = primary.dates, prices = primary.prices;
       var primaryRows = aggregate(dates, prices, period);
-      var benchmark = zoomedSeries(parseData(container, "benchmarkDates"), parseData(container, "benchmarkPrices").map(Number), zoom);
-      var benchmarkDates = benchmark.dates, benchmarkPrices = benchmark.prices;
+      var benchmark = zoomedSeries(benchmarkDates, benchmarkPrices, zoom, comparisonLatest);
+      benchmarkDates = benchmark.dates; benchmarkPrices = benchmark.prices;
       var benchmarkRows = aggregate(benchmarkDates, benchmarkPrices, period);
-      if (!primaryRows.length || !benchmarkRows.length) return;
+      if (!primaryRows.length || !benchmarkRows.length) { container.replaceChildren(); return; }
       drawComparison(container, container.dataset.label || "Selecionado", primaryRows, benchmarkLabel, benchmarkRows);
       return;
     }
+    var primary = zoomedSeries(primaryDates, primaryPrices, zoom);
+    var dates = primary.dates, prices = primary.prices;
     var rows = aggregate(dates, prices, period);
     if (!rows.length) return;
     if (period !== "daily") { drawCandles(container, rows, currency); return; }

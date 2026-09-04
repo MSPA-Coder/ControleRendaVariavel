@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 
 from flask import flash, redirect, render_template, request, url_for
@@ -20,11 +21,40 @@ from app.routes.helpers import (
     quote_update_target_tickers,
     quote_update_targets,
     stock_ticker_records,
-    ticker_position_start_date,
     ticker_price_series,
     upsert_quote_history,
 )
 from app.validation import parse_finite_decimal
+
+
+def common_quote_start_date(
+    history: Sequence[QuoteHistory], benchmark_history: Sequence[QuoteHistory]
+) -> date | None:
+    """Return the first calendar date quoted for both comparison tickers.
+
+    Quote history is sparse (market holidays and failed imports are not
+    interpolated), so comparison starts at the first exact intersection of
+    the two recorded date sets. A position's ``opened_on`` is deliberately
+    not used: it does not establish that either ticker had a quote that day.
+    """
+    common_dates = {entry.recorded_date for entry in history}.intersection(
+        entry.recorded_date for entry in benchmark_history
+    )
+    return min(common_dates) if common_dates else None
+
+
+def trim_to_common_quote_start(
+    history: Sequence[QuoteHistory], benchmark_history: Sequence[QuoteHistory]
+) -> tuple[list[QuoteHistory], list[QuoteHistory], date | None]:
+    """Trim comparison series to their first exact common quote date."""
+    start_date = common_quote_start_date(history, benchmark_history)
+    if start_date is None:
+        return [], [], None
+    return (
+        [entry for entry in history if entry.recorded_date >= start_date],
+        [entry for entry in benchmark_history if entry.recorded_date >= start_date],
+        start_date,
+    )
 
 
 def _quote_history_context(
@@ -62,22 +92,19 @@ def _quote_history_context(
     )
 
     # No modo de comparação, o gráfico (só o gráfico — o navegador de
-    # cotações abaixo continua mostrando o histórico completo) fica
-    # restrito a "desde que a posição foi aberta": comparar contra um
-    # índice usando cotações de antes da compra não diz nada sobre o
-    # desempenho da posição (mesma convenção de
-    # mercado, ex. Sharesight "since first purchase").
+    # cotações abaixo continua mostrando o histórico completo) começa na
+    # primeira data com cotação registrada para os dois tickers. Como as
+    # séries são diárias e esparsas, o início precisa ser uma data exata da
+    # interseção, e não apenas a maior data inicial de cada série.
     chart_history = history
     chart_benchmark_history = benchmark_history
+    chart_comparison_start_date: date | None = None
     if selected_benchmark is not None:
-        position_start = ticker_position_start_date(selected_ticker.id) if selected_ticker else None
-        if position_start is not None:
-            chart_history = [
-                entry for entry in history if entry.recorded_date >= position_start
-            ]
-            chart_benchmark_history = [
-                entry for entry in benchmark_history if entry.recorded_date >= position_start
-            ]
+        (
+            chart_history,
+            chart_benchmark_history,
+            chart_comparison_start_date,
+        ) = trim_to_common_quote_start(history, benchmark_history)
 
     return {
         "tickers": tickers,
@@ -87,6 +114,11 @@ def _quote_history_context(
         "selected_benchmark": selected_benchmark,
         "chart_history": chart_history,
         "chart_benchmark_history": chart_benchmark_history,
+        "chart_comparison_start_date": (
+            chart_comparison_start_date.isoformat()
+            if chart_comparison_start_date is not None
+            else None
+        ),
         "today": date.today().isoformat(),
         "default_import_start": (date.today() - timedelta(days=59)).isoformat(),
         "default_import_end": date.today().isoformat(),
@@ -219,8 +251,8 @@ def import_quote_history() -> ResponseReturnValue:
 
 @bp.post("/quotes/import-position-history")
 def import_position_quote_history() -> ResponseReturnValue:
-    """Refresh stock history from the earliest open-position date per
-    ticker, plus every ticker registered as a comparison benchmark."""
+    """Refresh action and option history from each ticker's earliest
+    open-position date, plus every comparison benchmark."""
 
     targets = quote_update_targets()
     db.session.rollback()

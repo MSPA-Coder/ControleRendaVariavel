@@ -1,39 +1,45 @@
 from __future__ import annotations
 
 import ctypes
+import logging
 import os
+import sys
+import time
 from datetime import UTC, datetime
-from decimal import Decimal
+from pathlib import Path
 
 import click
 from flask import Flask, current_app
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import joinedload
 
 from app import db
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_settings import collector_schedule_is_active, default_collector_settings
+from app.collector_database import (
+    DestinationWatcher,
+    local_loop_arguments,
+    read_collector_destination,
+)
+from app.collector_lock import CollectorAlreadyRunningError, collector_process_lock
+from app.collector_loop import run_collector_loop
+from app.collector_settings import DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
 from app.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
-    AppSetting,
+    CollectorDestination,
     CollectorMode,
-    OptionContract,
-    OptionPosition,
-    OptionQuote,
-    Position,
-    Quote,
     QuoteHistory,
     User,
 )
+from app.profit_detector import WindowsProfitDetector
 from app.quote_history_import import (
     DailyQuote,
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
-from app.routes.helpers import quote_update_targets, upsert_quote_history
+from app.remote_collector_agent import remote_loop_arguments
+from app.routes.helpers import quote_update_targets
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
 from app.user_management import UserManagementError, set_active, upsert_from_cli
@@ -157,8 +163,14 @@ def probe_rtd_direct(ticker: str, market_code: str) -> None:
 @click.option("--watch", is_flag=True, help="Continua atualizando até ser interrompido.")
 def poll_rtd(watch: bool) -> None:
     """Refreshes quotes with the collector selected on the Settings page."""
-    import time
+    try:
+        with collector_process_lock(Path(current_app.root_path).parent, wait=watch):
+            _poll_rtd(watch)
+    except CollectorAlreadyRunningError as exc:
+        raise click.ClickException(str(exc)) from exc
 
+
+def _collector_providers() -> CollectorProviderManager:
     def provider_factory(mode: CollectorMode) -> ManagedQuoteProvider:
         common = {
             "prog_id": current_app.config["RTD_PROG_ID"],
@@ -175,176 +187,104 @@ def poll_rtd(watch: bool) -> None:
             visible=current_app.config["RTD_EXCEL_VISIBLE"],
         )
 
-    providers = CollectorProviderManager(provider_factory)
-    supervisor_pid = os.getenv("RTD_SUPERVISOR_PID")
+    return CollectorProviderManager(provider_factory)
+
+
+def _collector_logger() -> logging.Logger:
+    """Log do coletor local em stdout, que é onde a tarefa Windows o captura.
+
+    O agente remoto escreve em arquivo próprio porque roda solto; aqui quem
+    inicia o processo -- a Scheduled Task ou o supervisor -- já redireciona a
+    saída, e abrir um segundo arquivo só criaria dois lugares para procurar.
+    """
+    logger = logging.getLogger("controle_renda_variavel.local_collector")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger.addHandler(handler)
+    return logger
+
+
+def _loop_arguments(destination: CollectorDestination, project_dir: Path) -> dict[str, object]:
+    if destination is CollectorDestination.LOCAL:
+        return local_loop_arguments()
+    return remote_loop_arguments(project_dir)
+
+
+def _poll_rtd_once(destination: CollectorDestination, project_dir: Path) -> None:
+    """Uma leitura e sai -- o modo de diagnóstico, sem supervisão nem espera.
+
+    Entrega ao mesmo destino configurado na tela: um ciclo manual não é
+    desculpa para gravar no banco local enquanto a coleta está indo para o
+    VPS. Ao contrário do ``--watch``, não espera o ProfitChart abrir -- quem
+    roda um ciclo à mão prefere ver o erro de COM a ver o comando terminar
+    em silêncio.
+    """
+    arguments = _loop_arguments(destination, project_dir)
+    source = arguments["source"]
+    sink = arguments["sink"]
+    configuration = source.configuration()  # type: ignore[attr-defined]
+    if not configuration.schedule.is_active():
+        return
+    providers = _collector_providers()
+    instruments = list(configuration.instruments)
     try:
-        while True:
-            if not supervisor_process_is_alive(supervisor_pid):
-                return
-            db.session.expire_all()
-            settings = db.session.get(AppSetting, 1)
-            if settings is None:
-                settings = default_collector_settings()
-                db.session.add(settings)
-                db.session.commit()
-            collector_mode = settings.collector_mode
-            poll_interval_seconds = settings.poll_interval_seconds
-            schedule_active = collector_schedule_is_active(
-                settings.collector_schedule_weekdays,
-                settings.collector_schedule_start_time,
-                settings.collector_schedule_end_time,
-            )
-            if not schedule_active:
-                db.session.rollback()
-                providers.close()
-                if not watch:
-                    return
-                time.sleep(poll_interval_seconds)
-                continue
-            positions = db.session.scalars(select(Position).order_by(Position.id)).all()
-            option_positions = db.session.scalars(
-                select(OptionPosition)
-                .options(
-                    joinedload(OptionPosition.contract).joinedload(
-                        OptionContract.ticker_ref
-                    ),
-                    joinedload(OptionPosition.contract).joinedload(
-                        OptionContract.underlying_ticker_ref
-                    ),
-                )
-                .order_by(OptionPosition.id)
-            ).unique().all()
-            instruments = [
-                Instrument(item.id, item.ticker, item.rtd_market_code, item.side.value)
-                for item in positions
-            ]
-            for item in option_positions:
-                option_key = -item.id * 2
-                instruments.extend(
-                    [
-                        Instrument(
-                            option_key,
-                            item.contract.ticker_ref.symbol,
-                            item.contract.ticker_ref.rtd_market_code,
-                        ),
-                        Instrument(
-                            option_key - 1,
-                            item.contract.underlying_ticker_ref.symbol,
-                            item.contract.underlying_ticker_ref.rtd_market_code,
-                        ),
-                    ]
-                )
-            db.session.rollback()
-            try:
-                provider = providers.get(collector_mode)
-                values = provider.fetch(instruments)
-                positions_by_id = {item.id: item for item in positions}
-                ticker_prices: dict[int, tuple[Decimal, datetime]] = {}
-                for value in (item for item in values if item.position_id > 0):
-                    statement = insert(Quote).values(
-                        position_id=value.position_id,
-                        last_price=value.last_price,
-                        previous_close=value.previous_close,
-                        instrument_status=value.instrument_status,
-                        source_status="online",
-                        error_message=None,
-                        observed_at=value.observed_at,
-                    )
-                    statement = statement.on_conflict_do_update(
-                        index_elements=[Quote.position_id],
-                        set_={
-                            "last_price": statement.excluded.last_price,
-                            "previous_close": statement.excluded.previous_close,
-                            "instrument_status": statement.excluded.instrument_status,
-                            "source_status": "online",
-                            "error_message": None,
-                            "observed_at": statement.excluded.observed_at,
-                        },
-                    )
-                    db.session.execute(statement)
-                    stock_position = positions_by_id.get(value.position_id)
-                    if stock_position is not None:
-                        ticker_prices[stock_position.ticker_id] = (
-                            value.quote_history_price,
-                            value.observed_at,
-                        )
-                values_by_id = {item.position_id: item for item in values}
-                for option_position in option_positions:
-                    option_key = -option_position.id * 2
-                    option_value = values_by_id[option_key]
-                    underlying_value = values_by_id[option_key - 1]
-                    option_statement = insert(OptionQuote).values(
-                        option_position_id=option_position.id,
-                        last_price=option_value.last_price,
-                        previous_close=option_value.previous_close,
-                        underlying_price=underlying_value.last_price,
-                        instrument_status=option_value.instrument_status,
-                        source_status="online",
-                        error_message=None,
-                        observed_at=option_value.observed_at,
-                    )
-                    option_statement = option_statement.on_conflict_do_update(
-                        index_elements=[OptionQuote.option_position_id],
-                        set_={
-                            "last_price": option_statement.excluded.last_price,
-                            "previous_close": option_statement.excluded.previous_close,
-                            "underlying_price": option_statement.excluded.underlying_price,
-                            "instrument_status": option_statement.excluded.instrument_status,
-                            "source_status": "online",
-                            "error_message": None,
-                            "observed_at": option_statement.excluded.observed_at,
-                        },
-                    )
-                    db.session.execute(option_statement)
-                    ticker_prices[option_position.contract.ticker_id] = (
-                        option_value.quote_history_price,
-                        option_value.observed_at,
-                    )
-                    ticker_prices[option_position.contract.underlying_ticker_id] = (
-                        underlying_value.quote_history_price,
-                        underlying_value.observed_at,
-                    )
-                # Um snapshot por ticker por dia, não a cada poll — ver a
-                # docstring de QuoteHistory para o porquê.
-                upsert_quote_history(
-                    (
-                        ticker_id,
-                        price,
-                        observed_at.astimezone(MARKET_TIMEZONE).date(),
-                        observed_at,
-                    )
-                    for ticker_id, (price, observed_at) in ticker_prices.items()
-                )
-                db.session.commit()
-                click.echo(
-                    f"{len(values)} cotações atualizadas via {collector_mode.value} "
-                    f"em {datetime.now(UTC).isoformat()}"
-                )
-            except Exception as exc:
-                db.session.rollback()
-                db.session.query(Quote).update(
-                    {"source_status": "error", "error_message": str(exc)[:250]}
-                )
-                db.session.query(OptionQuote).update(
-                    {"source_status": "error", "error_message": str(exc)[:250]}
-                )
-                db.session.commit()
-                if not watch:
-                    raise click.ClickException(str(exc)) from exc
-                click.echo(f"Falha transitória no RTD: {exc}", err=True)
-                time.sleep(poll_interval_seconds)
-                continue
-            if not watch:
-                return
-            time.sleep(poll_interval_seconds)
+        values = (
+            providers.get(configuration.collector_mode).fetch(instruments) if instruments else []
+        )
+        sink.publish(values, configuration.option_keys)  # type: ignore[attr-defined]
+    except Exception as exc:
+        sink.report_failure(exc)  # type: ignore[attr-defined]
+        raise click.ClickException(str(exc)) from exc
     finally:
         providers.close()
+    click.echo(
+        f"{len(values)} cotações entregues {sink.destination_label} "  # type: ignore[attr-defined]
+        f"via {configuration.collector_mode.value} em {datetime.now(UTC).isoformat()}"
+    )
+
+
+def _poll_rtd(watch: bool) -> None:
+    project_dir = Path(current_app.root_path).parent
+    if not watch:
+        _poll_rtd_once(read_collector_destination(), project_dir)
+        return
+    # O coletor local é filho de quem o iniciou: se aquele processo morrer, o
+    # laço para em vez de continuar segurando COM sem ninguém supervisionando.
+    supervisor_pid = os.getenv("RTD_SUPERVISOR_PID")
+    logger = _collector_logger()
+    while supervisor_process_is_alive(supervisor_pid):
+        destination = read_collector_destination()
+        watcher = DestinationWatcher(destination)
+        try:
+            arguments = _loop_arguments(destination, project_dir)
+        except RuntimeError as exc:
+            # Destino remoto escolhido sem URL ou token: reclamar e esperar,
+            # em vez de reiniciar em laço fechado. Voltar o destino para
+            # local na tela recupera sem mexer no host.
+            logger.warning("Destino %s indisponível: %s", destination.value, exc)
+            time.sleep(DEFAULT_AGENT_CHECK_INTERVAL_SECONDS)
+            continue
+        logger.info("Coleta ativa com destino %s.", destination.value)
+        run_collector_loop(
+            providers=_collector_providers(),
+            detector=WindowsProfitDetector(),
+            logger=logger,
+            # `watcher` é religado a cada destino; prendê-lo no argumento
+            # evita a captura tardia da variável do laço.
+            should_continue=lambda observador=watcher: (
+                supervisor_process_is_alive(supervisor_pid) and observador.unchanged()
+            ),
+            **arguments,  # type: ignore[arg-type]
+        )
 
 
 @click.command("import-position-history")
 def import_position_history() -> None:
-    """Import daily stock history from each open position's first date,
-    plus every ticker registered as a comparison benchmark."""
+    """Import daily action and option history from each open position's
+    first date, plus every ticker registered as a comparison benchmark."""
 
     targets = quote_update_targets()
     db.session.rollback()

@@ -213,7 +213,8 @@ normativos estão em [`docs/planilha-acoes.md`](planilha-acoes.md) e
 
 `rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` fala COM
 com o servidor RTD; `collector.py` mantém um provedor aberto e o troca quando o
-modo muda; `rtd_service.py` supervisiona o processo coletor;
+modo muda; `collector_loop.py` é o laço único de coleta e
+`profit_detector.py` responde se o ProfitChart está aberto;
 `collector_heartbeat.py` resume a última leitura persistida **sem expor valor de
 cotação**; `collector_settings.py` valida modo, intervalos e agenda.
 
@@ -238,11 +239,52 @@ Docker, e ela foi desenhada para não ampliar a superfície do servidor:
 Excel/ProfitChart → agente Windows → HTTPS autenticado → aplicação → PostgreSQL
 ```
 
-O agente (`app/remote_collector_agent.py`, instalado por
-`scripts/rtd-remote-agent.ps1`) **não cria a aplicação Flask e não acessa o
-PostgreSQL**. Ele consulta `/api/collector/configuration` para saber quais
-instrumentos estão abertos, lê o RTD e devolve as leituras em
+### Um coletor, dois destinos
+
+`scripts/rtd-agent.ps1` registra uma tarefa Windows única que executa
+`flask --app app:create_app poll-rtd --watch` no ambiente Python do projeto.
+O laço vive em `app/collector_loop.py` e não sabe para onde entrega: ele fala
+com dois protocolos, `ConfigurationSource` e `QuoteSink`. As implementações
+são `HttpConfigurationSource`/`HttpQuoteSink` (VPS, em
+`app/remote_collector_agent.py`) e `DatabaseConfigurationSource`/
+`DatabaseQuoteSink` (banco local, em `app/collector_database.py`).
+
+`app_settings.collector_destination` escolhe o par. O processo relê a coluna a
+cada intervalo de verificação -- e não a cada volta do laço, que pode girar a
+cada segundo -- e, quando ela muda, o laço termina e reinicia contra a outra
+ponta, fechando o provedor COM na saída. O padrão é `remote`, de modo que uma
+instalação existente continua entregando ao VPS sem que ninguém escolha nada.
+
+Só a instância que roda na máquina do ProfitChart mostra o controle na tela, e
+a rota recusa com 403 onde `REMOTE_COLLECTOR_ENABLED` está ligado: é o banco
+local que o coletor consulta, e trocar o valor no VPS não teria efeito além de
+deixar as duas linhas discordando.
+
+A exclusão entre destinos é estrutural: uma tarefa, um processo, um destino por
+vez. Antes eram duas tarefas com scripts checando a existência um do outro.
+Além disso, `poll-rtd` adquire o lock interprocesso do projeto antes de abrir o
+provedor, cobrindo o toggle administrativo e workers diferentes; o lock é
+liberado pelo sistema operacional quando o processo termina.
+
+Esse ciclo não é o login/logout da aplicação web. O coletor é global à máquina
+e não deve ser iniciado por cada requisição ou worker do Flask. O Docker
+continua sem executar COM: o processo roda fora do contêiner e, no destino
+local, usa a porta publicada do PostgreSQL.
+
+A escrita de um ciclo é uma só (`persist_readings`), usada tanto pelo destino
+local quanto pelo endpoint que recebe as cotações do agente. Um terceiro
+destino não pode virar uma terceira cópia dos upserts e do snapshot diário de
+`quote_history`.
+
+No destino remoto, a origem consulta `/api/collector/configuration` para saber
+quais instrumentos estão abertos e o destino devolve as leituras em
 `/api/collector/quotes`; falhas vão para `/api/collector/failure`.
+`app/remote_collector_agent.py` **não cria a aplicação Flask e não acessa o
+PostgreSQL** -- e `python -m app.remote_collector_agent` continua sendo a
+entrada para a máquina que só entrega ao VPS e prefere não ter credencial de
+banco alguma no processo. A tarefa unificada, por atender aos dois destinos,
+carrega a credencial do PostgreSQL local: é ela que guarda a escolha. Essa
+credencial nunca alcança o banco do VPS.
 
 Há dois relógios independentes, configurados em **Configurações**. O
 **intervalo entre leituras** determina quando o agente pode consultar o
@@ -264,16 +306,25 @@ ao ambiente local. Os três endpoints exigem Bearer token próprio, comparado co
 `hmac.compare_digest`, e são os únicos isentos de CSRF — não há navegador nem
 sessão do outro lado. O corpo é limitado a 512 KB.
 
-`REMOTE_COLLECTOR_ENABLED` escolhe entre os dois modos. Habilitado, o estado da
-coleta nasce indisponível e só existe quando chega o pulso do agente.
-Desabilitado, `RtdServiceManager` supervisiona um processo `poll-rtd` local — e
-não o faz quando `RTD_COLLECTOR_PROCESS` está definido (o próprio subprocesso
-também cria a aplicação, e supervisionar de novo formaria uma cadeia infinita de
-coletores) nem sob `TESTING`.
+`REMOTE_COLLECTOR_ENABLED` diz o que esta instância é: com ele ligado, a
+aplicação é o VPS que recebe cotações do agente; desligado, é a instância que
+roda na máquina do ProfitChart e mostra o controle de destino.
 
-**Sem o agente, a aplicação continua utilizável.** Cotações aparecem
-indisponíveis ou desatualizadas, e nenhum cadastro depende delas.
-`rtd_service_state()` trata host offline como indisponibilidade, não como erro.
+**A aplicação web não é dona de coletor nenhum.** Ela não inicia, não
+supervisiona e não encerra processo de coleta -- isso é da tarefa do Windows.
+Já foi diferente: `RtdServiceManager` iniciava e matava um `poll-rtd` a partir
+da tela, e com Gunicorn criando uma fábrica por worker aquilo significava um
+candidato a coletor por worker disputando a mesma sessão COM.
+
+O que a tela oferece é **pausar e retomar**: `app_settings.collector_paused` é
+lido pela origem ativa -- a linha local quando a coleta grava aqui, o payload
+do VPS quando ela entrega lá -- de modo que o botão de cada tela pausa a coleta
+que aquela instância está dirigindo. Pausa não é parada: o processo continua
+vivo e voltando a perguntar, e retoma sozinho quando a tela religa.
+
+**Sem o coletor, a aplicação continua utilizável.** Cotações aparecem
+indisponíveis ou desatualizadas, e nenhum cadastro depende delas. O estado
+exibido vem do pulso persistido, não de uma sondagem do host.
 
 ## Persistência
 

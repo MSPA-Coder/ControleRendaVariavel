@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.domain import PositionMetrics, calculate_position, safe_div
+from app.domain import PositionMetrics, calculate_position, operation_result, safe_div
 from app.instrument_status import instrument_status_class, instrument_status_letter
-from app.models import Market, Position
+from app.models import Market, Position, PositionMovementKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +93,48 @@ class PortfolioView:
     currency_totals: list[PortfolioTotal]
     broker_groups: list[BrokerGroup]
     market_groups: list[MarketGroup]
+
+
+def position_movement_results(
+    position: Position,
+    current_price: Decimal | None,
+) -> dict[int, Decimal | None]:
+    """Calcula o resultado exibido no extrato expandido de uma ação.
+
+    ``PositionMovement.result`` é um fato persistido e representa somente o
+    resultado realizado de um encerramento parcial. O extrato da Carteira
+    também mostra, porém, o ganho/perda hipotético de cada aporte contra a
+    cotação atual. Esse valor é deliberadamente calculado em memória, a partir
+    do mesmo snapshot de ``current_price`` usado na linha da posição, e nunca
+    é escrito de volta no movimento.
+
+    O mapa contém todos os movimentos para que o partial possa distinguir um
+    resultado não aplicável (ajuste ou aporte sem cotação) de um resultado
+    realizado. A cotação já deve incluir ``quote_multiplier`` (como
+    ``PositionMetrics.current_price``); aplicá-lo aqui novamente distorceria o
+    resultado.
+    """
+    results: dict[int, Decimal | None] = {}
+    for movement in position.movements:
+        if movement.kind in (PositionMovementKind.OPEN, PositionMovementKind.INCREASE):
+            results[movement.id] = (
+                operation_result(
+                    position.side.value,
+                    movement.quantity,
+                    movement.price,
+                    current_price,
+                    position.result_mode,
+                )
+                if current_price is not None
+                else None
+            )
+        elif movement.kind == PositionMovementKind.DECREASE:
+            # Encerramentos continuam exibindo o resultado realizado gravado.
+            results[movement.id] = movement.result
+        else:
+            # Ajustes não são compras nem vendas e, portanto, não têm P/L.
+            results[movement.id] = None
+    return results
 
 
 def build_portfolio(

@@ -13,16 +13,19 @@ from decimal import Decimal
 from typing import Any
 
 from flask import abort, current_app, jsonify, request
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import joinedload
 
 from app import db
-from app.domain import MARKET_TIMEZONE
-from app.models import AppSetting, OptionContract, OptionPosition, OptionQuote, Position, Quote
+from app.collector_database import (
+    OptionReading,
+    load_collector_positions,
+    option_instrument_keys,
+    persist_readings,
+    record_agent_online,
+)
+from app.collector_settings import schedule_from_settings
+from app.models import AppSetting
 from app.routes import bp
-from app.routes.helpers import upsert_quote_history
-from app.rtd import parse_decimal
+from app.rtd import QuoteValue, parse_decimal
 
 MAX_BODY_BYTES = 512 * 1024
 
@@ -92,37 +95,14 @@ def collector_agent_configuration():
     _require_agent_token()
     settings = _settings()
     _record_agent_seen(settings)
-    positions = list(
-        db.session.scalars(
-            select(Position)
-            .options(joinedload(Position.ticker_ref))
-            .order_by(Position.id)
-        )
-    )
-    option_positions = list(
-        db.session.scalars(
-            select(OptionPosition)
-            .options(
-                joinedload(OptionPosition.contract).joinedload(OptionContract.ticker_ref),
-                joinedload(OptionPosition.contract).joinedload(OptionContract.underlying_ticker_ref),
-            )
-            .order_by(OptionPosition.id)
-        ).unique()
-    )
+    positions, option_positions = load_collector_positions()
     return jsonify(
         collector_mode=settings.collector_mode.value,
         poll_interval_seconds=settings.poll_interval_seconds,
         agent_check_interval_seconds=settings.agent_check_interval_seconds,
-        collector_schedule={
-            "weekdays": [
-                int(value)
-                for value in settings.collector_schedule_weekdays.split(",")
-                if value.isdigit()
-            ],
-            "start_time": settings.collector_schedule_start_time.strftime("%H:%M"),
-            "end_time": settings.collector_schedule_end_time.strftime("%H:%M"),
-        },
+        collector_schedule=schedule_from_settings(settings).as_payload(),
         refresh_requested=settings.collector_refresh_requested_at is not None,
+        paused=settings.collector_paused,
         positions=[
             {
                 "position_id": item.id,
@@ -145,6 +125,41 @@ def collector_agent_configuration():
     )
 
 
+def _stock_reading(item: object) -> QuoteValue:
+    if not isinstance(item, dict):
+        raise ValueError("cotação inválida")
+    return QuoteValue(
+        position_id=int(item["position_id"]),
+        last_price=_decimal(item, "last_price"),
+        previous_close=_decimal(item, "previous_close"),
+        instrument_status=_string(item, "instrument_status"),
+        observed_at=_as_aware_datetime(item.get("observed_at")),
+        last_trade_price=_decimal(item, "history_price"),
+    )
+
+
+def _option_reading(item: object) -> OptionReading:
+    if not isinstance(item, dict):
+        raise ValueError("cotação inválida")
+    observed_at = _as_aware_datetime(item.get("observed_at"))
+    option_position_id = int(item["option_position_id"])
+    return OptionReading(
+        option_position_id=option_position_id,
+        option=QuoteValue(
+            # A mesma chave sintética que o coletor usa para a opção, para o
+            # valor continuar identificável se ele voltar a circular solto.
+            position_id=option_instrument_keys(option_position_id)[0],
+            last_price=_decimal(item, "last_price"),
+            previous_close=_decimal(item, "previous_close"),
+            instrument_status=_string(item, "instrument_status"),
+            observed_at=observed_at,
+            last_trade_price=_decimal(item, "history_price"),
+        ),
+        underlying_last_price=_decimal(item, "underlying_price"),
+        underlying_history_price=_decimal(item, "underlying_history_price"),
+    )
+
+
 @bp.post("/api/collector/quotes")
 def collector_agent_quotes():
     _require_agent_token()
@@ -156,110 +171,16 @@ def collector_agent_quotes():
     if len(positions_payload) + len(options_payload) > 2_000:
         abort(400, "Quantidade de cotações inválida.")
     try:
-        position_ids = {int(item["position_id"]) for item in positions_payload if isinstance(item, dict)}
-        option_position_ids = {
-            int(item["option_position_id"]) for item in options_payload if isinstance(item, dict)
-        }
-        positions = {
-            item.id: item
-            for item in db.session.scalars(
-                select(Position).where(Position.id.in_(position_ids))
-            )
-        }
-        option_positions = {
-            item.id: item
-            for item in db.session.scalars(
-                select(OptionPosition)
-                .options(joinedload(OptionPosition.contract))
-                .where(OptionPosition.id.in_(option_position_ids))
-            ).unique()
-        }
-        if len(positions) != len(position_ids) or len(option_positions) != len(option_position_ids):
-            raise ValueError("posição inexistente")
-        ticker_prices: dict[int, tuple[Decimal, datetime]] = {}
-        for item in positions_payload:
-            if not isinstance(item, dict):
-                raise ValueError("cotação inválida")
-            position_id = int(item["position_id"])
-            observed_at = _as_aware_datetime(item.get("observed_at"))
-            statement = insert(Quote).values(
-                position_id=position_id,
-                last_price=_decimal(item, "last_price"),
-                previous_close=_decimal(item, "previous_close"),
-                instrument_status=_string(item, "instrument_status"),
-                source_status="online",
-                error_message=None,
-                observed_at=observed_at,
-            )
-            db.session.execute(
-                statement.on_conflict_do_update(
-                    index_elements=[Quote.position_id],
-                    set_={
-                        "last_price": statement.excluded.last_price,
-                        "previous_close": statement.excluded.previous_close,
-                        "instrument_status": statement.excluded.instrument_status,
-                        "source_status": "online",
-                        "error_message": None,
-                        "observed_at": statement.excluded.observed_at,
-                    },
-                )
-            )
-            ticker_prices[positions[position_id].ticker_id] = (
-                _decimal(item, "history_price"),
-                observed_at,
-            )
-        for item in options_payload:
-            if not isinstance(item, dict):
-                raise ValueError("cotação inválida")
-            option_position_id = int(item["option_position_id"])
-            observed_at = _as_aware_datetime(item.get("observed_at"))
-            statement = insert(OptionQuote).values(
-                option_position_id=option_position_id,
-                last_price=_decimal(item, "last_price"),
-                previous_close=_decimal(item, "previous_close"),
-                underlying_price=_decimal(item, "underlying_price"),
-                instrument_status=_string(item, "instrument_status"),
-                source_status="online",
-                error_message=None,
-                observed_at=observed_at,
-            )
-            db.session.execute(
-                statement.on_conflict_do_update(
-                    index_elements=[OptionQuote.option_position_id],
-                    set_={
-                        "last_price": statement.excluded.last_price,
-                        "previous_close": statement.excluded.previous_close,
-                        "underlying_price": statement.excluded.underlying_price,
-                        "instrument_status": statement.excluded.instrument_status,
-                        "source_status": "online",
-                        "error_message": None,
-                        "observed_at": statement.excluded.observed_at,
-                    },
-                )
-            )
-            contract = option_positions[option_position_id].contract
-            ticker_prices[contract.ticker_id] = (_decimal(item, "history_price"), observed_at)
-            ticker_prices[contract.underlying_ticker_id] = (
-                _decimal(item, "underlying_history_price"),
-                observed_at,
-            )
-        upsert_quote_history(
-            (
-                ticker_id,
-                price,
-                observed_at.astimezone(MARKET_TIMEZONE).date(),
-                observed_at,
-            )
-            for ticker_id, (price, observed_at) in ticker_prices.items()
+        # A escrita é a mesma do coletor local (app/collector_database.py); o
+        # que este endpoint acrescenta é desconfiar de cada campo antes.
+        persist_readings(
+            [_stock_reading(item) for item in positions_payload],
+            [_option_reading(item) for item in options_payload],
         )
     except (KeyError, TypeError, ValueError) as exc:
         db.session.rollback()
         abort(400, str(exc))
-    settings = _settings()
-    settings.collector_agent_seen_at = datetime.now(UTC)
-    settings.collector_agent_status = "online"
-    settings.collector_agent_error = None
-    settings.collector_refresh_requested_at = None
+    record_agent_online(_settings())
     db.session.commit()
     return jsonify(updated=len(positions_payload) + len(options_payload))
 

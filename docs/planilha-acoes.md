@@ -58,6 +58,32 @@ quando há mais de um.
 | encerramento parcial | encerramento de parte da quantidade | reduz a quantidade; custo médio inalterado |
 | ajuste | edição direta de quantidade ou custo médio | passa a valer o que foi editado |
 
+### Resultado no extrato expandido
+
+Ao abrir o extrato de uma posição pelo **+** na aba **Ações**, a coluna
+**Resultado** mostra, para cada **abertura** ou **aumento**, o ganho ou a perda
+não realizado daquele lote contra a cotação atual:
+
+```
+resultado = sinal × quantidade do lote × (cotação atual − preço do aporte)
+```
+
+O sinal é `+1` para compra (`C`) e `-1` para venda (`V`). O modo `L` aplica o
+fator líquido `0,9996`; o modo `B` mostra o valor bruto. A cotação atual já
+considera o multiplicador da posição. Portanto, o resultado de cada linha usa
+somente sua própria quantidade e seu preço de aporte, e não o saldo ou o custo
+médio acumulado.
+
+O resultado de um **encerramento parcial** continua sendo o resultado realizado
+registrado no movimento. **Ajustes** não são compras nem vendas e permanecem
+como não aplicáveis. Sem cotação atual, aportes também permanecem como não
+aplicáveis. O resultado é calculado somente para a visualização: não
+altera `PositionMovement.result` nem é persistida.
+
+Todos os valores são um snapshot da cotação carregada na requisição. Uma nova
+leitura do coletor pode atualizar a cotação logo depois, e o próximo refresh
+recalculará os resultados; não há nova consulta por movimento.
+
 Nada disso vale numa carteira `simulated`: ela existe só para ver valores nas
 grades, não para operar. Uma segunda entrada na mesma exposição é **rejeitada**
 em vez de fundida (não há aumento), não há extrato de movimentos, e não há
@@ -101,6 +127,17 @@ posição. Por isso, em Transações:
 Uma transação cuja posição de origem já não existe (encerramento total, ou
 posição excluída depois) volta a ser um registro histórico comum, editável e
 excluível sem efeito colateral.
+
+## Comparação de cotações
+
+Na aba **Cotações**, ao comparar dois ativos, o gráfico começa na primeira
+data de calendário em que há cotação registrada para **ambos**. A data é a
+primeira interseção exata dos históricos; não se usa a data de abertura da
+posição nem se interpolam pregões ausentes. A partir desse ponto, cada série
+mantém seus próprios dias registrados, e a listagem de cotações do ativo
+selecionado continua exibindo o histórico completo. Se não houver nenhuma
+data em comum, o gráfico não é desenhado e a tela informa explicitamente que
+a comparação está indisponível.
 
 ## Performance mensal (retorno encadeado, TWR)
 

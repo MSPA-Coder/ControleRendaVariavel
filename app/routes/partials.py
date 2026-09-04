@@ -11,15 +11,15 @@ app. O cabeçalho ``HX-Request`` nunca é consultado aqui como permissão.
 
 from __future__ import annotations
 
-from contextlib import suppress
-
 from flask import render_template, request
 from flask.typing import ResponseReturnValue
 
+from app import db
 from app.authorization import requer_admin
+from app.collector_database import collector_settings_row
 from app.collector_heartbeat import collector_heartbeat
 from app.routes import bp
-from app.routes.helpers import quote_stale_after_seconds, rtd_service, rtd_service_state
+from app.routes.helpers import collector_is_enabled, quote_stale_after_seconds
 
 
 def _render_heartbeat() -> str:
@@ -32,12 +32,9 @@ def _render_heartbeat() -> str:
 
 
 def _render_rtd_toggle() -> str:
-    running, available, status = rtd_service_state()
     return render_template(
         "partials/rtd_toggle.html",
-        rtd_service_running=running,
-        rtd_service_available=available,
-        rtd_service_status=status,
+        collector_enabled=collector_is_enabled(),
         collector_heartbeat=collector_heartbeat(
             stale_after_seconds=quote_stale_after_seconds()
         ),
@@ -52,17 +49,19 @@ def collector_heartbeat_partial() -> ResponseReturnValue:
 @bp.route("/partials/rtd-service", methods=["GET", "POST"])
 @requer_admin
 def rtd_service_partial() -> ResponseReturnValue:
-    """Lê e, no POST, alterna o coletor RTD.
+    """Lê e, no POST, pausa ou retoma a coleta.
 
     A leitura é GET e a escrita é POST, com CSRF — o HTMX envia o token pelo
     ``hx-headers`` definido em ``base.html``. O corpo do POST vem do próprio
-    checkbox: presente significa ligar, ausente significa desligar.
+    checkbox: presente significa coletar, ausente significa pausar.
+
+    A pausa vale para a coleta que esta instância dirige. Na máquina do
+    ProfitChart isso é a coleta com destino local; no VPS, a que o agente
+    entrega por HTTPS. Em nenhum dos casos há processo sendo iniciado ou
+    encerrado daqui.
     """
     if request.method == "POST":
-        service = rtd_service()
-        enabled = request.form.get("enabled") is not None
-        # O fragmento devolvido abaixo mostra o estado real e mantém o controle
-        # desabilitado quando o coletor falha, sem derrubar a página.
-        with suppress(OSError, RuntimeError):
-            service.start() if enabled else service.stop()
+        settings = collector_settings_row()
+        settings.collector_paused = request.form.get("enabled") is None
+        db.session.commit()
     return _render_rtd_toggle()

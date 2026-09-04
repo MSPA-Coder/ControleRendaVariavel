@@ -74,6 +74,7 @@
   <tr class="movement-detail">
     <td colspan="{{ columns }}">
       {% with movements = p.movements, position = p %}
+        {% set movement_results = movement_results_by_position[p.id] %}
         {% include "partials/position_movements.html" %}
       {% endwith %}
     </td>

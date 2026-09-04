@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import cast
 
 from flask import current_app, request
 from sqlalchemy import func, select
@@ -34,7 +33,6 @@ from app.models import (
 )
 from app.portfolio import BrokerGroup, MarketGroup, PositionView
 from app.quote_history_import import TickerImportTarget
-from app.rtd_service import RtdService
 
 DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS = 730
 """Janela usada para a primeira importação de um ticker de referência
@@ -255,15 +253,15 @@ def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
 
 
 def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
-    """Tickers e data inicial para a atualização de histórico "desde a
+    """Ativos e data inicial para a atualização de histórico "desde a
     posição" (comando ``flask import-position-history`` e rota
     ``/quotes/import-position-history``).
 
     Reúne dois grupos, sem duplicar um ticker que esteja nos dois:
 
-    - Tickers com ao menos uma posição (real ou hipotética): a partir da
-      data de abertura mais antiga desse ticker especificamente (mesmo
-      critério de sempre).
+    - Tickers com ao menos uma posição de ação ou de opção (real ou
+      hipotética): a partir da data de abertura mais antiga desse ticker
+      especificamente.
     - Tickers de referência (``Ticker.is_benchmark``): a partir da data de
       abertura mais antiga entre TODAS as posições existentes, para que o
       histórico do benchmark cubra qualquer comparação possível — mesmo
@@ -284,6 +282,24 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
         .join(Ticker, Ticker.id == Position.ticker_id)
         .group_by(Position.ticker_id, Ticker.symbol, Ticker.market, Ticker.is_benchmark)
     ).all()
+    option_position_rows = db.session.execute(
+        select(
+            OptionContract.ticker_id,
+            Ticker.symbol,
+            Ticker.market,
+            Ticker.is_benchmark,
+            func.min(OptionPosition.opened_on).label("start_date"),
+        )
+        .join(OptionContract, OptionPosition.contract_id == OptionContract.id)
+        .join(Ticker, OptionContract.ticker_id == Ticker.id)
+        .group_by(
+            OptionContract.ticker_id,
+            Ticker.symbol,
+            Ticker.market,
+            Ticker.is_benchmark,
+        )
+    ).all()
+
     targets: dict[int, tuple[TickerImportTarget, date]] = {
         row.ticker_id: (
             TickerImportTarget(row.ticker_id, row.symbol, row.market, row.is_benchmark),
@@ -292,7 +308,23 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
         for row in position_rows
     }
 
-    earliest_position_start = db.session.scalar(select(func.min(Position.opened_on)))
+    # Um ticker pode ser simultaneamente objeto de uma posição de ação e de
+    # um contrato de opção. Preserva-se um único alvo e a menor data, para
+    # não perder o começo de nenhuma das duas exposições.
+    for row in option_position_rows:
+        candidate = (
+            TickerImportTarget(row.ticker_id, row.symbol, row.market, row.is_benchmark),
+            row.start_date,
+        )
+        previous = targets.get(row.ticker_id)
+        if previous is None or row.start_date < previous[1]:
+            targets[row.ticker_id] = candidate
+
+    all_position_rows = [*position_rows, *option_position_rows]
+    earliest_position_start = min(
+        (row.start_date for row in all_position_rows),
+        default=None,
+    )
     benchmark_start = earliest_position_start or (
         date.today() - timedelta(days=DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS)
     )
@@ -497,6 +529,14 @@ def position_movement_events(
     examinar ``kind``: abertura, aumento, baixa parcial e ajuste só diferem
     no saldo que deixam.
 
+    Posições reais legadas que ainda não têm nenhuma linha em
+    ``OptionPositionMovement`` entram como uma única abertura sintética, na
+    data ``opened_on`` e com a quantidade consolidada. O ``outer join`` faz
+    essa compatibilidade no mesmo snapshot que lê os movimentos: uma posição
+    com extrato nunca recebe uma segunda linha sintética, e não há uma segunda
+    consulta vulnerável a uma inserção concorrente entre a detecção e a leitura.
+    A linha é somente para leitura; nenhum dado financeiro é reescrito.
+
     O ``price`` do movimento NÃO é lido aqui de propósito. O fluxo do TWR é
     avaliado a preço de mercado da data, não ao preço lançado — ver o
     docstring de ``app.holdings_history.portfolio_flow_series`` para o
@@ -532,20 +572,29 @@ def position_movement_events(
     if broker:
         stock_statement = stock_statement.where(Broker.name == broker)
 
+    option_event_date = func.coalesce(
+        OptionPositionMovement.occurred_on, OptionPosition.opened_on
+    ).label("occurred_on")
+    option_event_quantity = func.coalesce(
+        OptionPositionMovement.resulting_quantity, OptionPosition.quantity
+    ).label("resulting_quantity")
     option_statement = (
         select(
-            OptionPositionMovement.occurred_on,
+            option_event_date,
             OptionPosition.id,
             OptionContract.ticker_id,
             OptionPosition.side,
-            OptionPositionMovement.resulting_quantity,
+            option_event_quantity,
         )
-        .join(OptionPositionMovement.position)
         .join(OptionPosition.contract)
         .join(OptionPosition.broker_ref)
         .join(OptionPosition.portfolio_ref)
+        .outerjoin(
+            OptionPositionMovement,
+            OptionPositionMovement.option_position_id == OptionPosition.id,
+        )
         .where(Portfolio.simulated.is_(False))
-        .order_by(OptionPositionMovement.occurred_on, OptionPositionMovement.id)
+        .order_by(option_event_date, OptionPositionMovement.id)
     )
     if portfolio_id is not None:
         option_statement = option_statement.where(OptionPosition.portfolio_id == portfolio_id)
@@ -701,21 +750,15 @@ def is_htmx_request() -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
-def rtd_service() -> RtdService:
-    return cast(RtdService, current_app.extensions["rtd_service"])
+def collector_is_enabled() -> bool:
+    """Se a coleta que esta instância dirige está ativa ou pausada.
 
-
-def rtd_service_state() -> tuple[bool, bool, str]:
-    """``(ligado, disponível, status)`` do coletor, tolerante a host offline.
-
-    Quando o coletor não responde, a tela o mostra como indisponível em vez de
-    quebrar. Nenhuma operação de cadastro depende dele.
+    Sem linha de configuração ainda, a resposta é "ativa": a pausa é uma
+    escolha explícita, e uma instalação recém-criada não deve aparecer
+    parada só porque ninguém abriu a tela ainda.
     """
-    service = rtd_service()
-    try:
-        return service.is_running, service.available, service.status
-    except (OSError, RuntimeError):
-        return False, False, "unavailable"
+    paused = db.session.scalar(select(AppSetting.collector_paused).where(AppSetting.id == 1))
+    return not bool(paused)
 
 
 def exposure_chart_data(

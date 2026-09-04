@@ -16,12 +16,17 @@
   <tbody>
     {% for movement in movements %}
     <tr>
+      {% if movement_results is defined %}
+        {% set display_result = movement_results.get(movement.id) %}
+      {% else %}
+        {% set display_result = movement.result %}
+      {% endif %}
       <td>{{ movement.occurred_on.strftime('%d-%b-%y') }}</td>
       <td>{{ movement.kind|movement_label }}</td>
       <td class="number" data-sensitive-value="true">{{ movement.quantity|quantity(position.currency) }}</td>
       <td class="number" data-sensitive-value="true">{{ movement.price|currency(position.currency, trim=true) }}</td>
-      <td class="number {{ movement.result|sign_class }}" data-sensitive-value="true">
-        {{ movement.result|currency(position.currency, trim=true) if movement.result is not none else '—' }}
+      <td class="number {{ display_result|sign_class }}" data-sensitive-value="true">
+        {{ display_result|currency(position.currency, trim=true) if display_result is not none else '—' }}
       </td>
       <td class="number" data-sensitive-value="true">{{ movement.resulting_quantity|quantity(position.currency) }}</td>
       <td class="number" data-sensitive-value="true">{{ movement.resulting_average_cost|currency(position.currency, trim=true) }}</td>

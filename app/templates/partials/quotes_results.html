@@ -66,7 +66,12 @@
               aria-expanded="{{ 'true' if quote_management_open else 'false' }}">Gerenciar Cotações</button>
     </div>
 
-    {% if history %}
+    {% if selected_benchmark and not chart_comparison_start_date %}
+    <p class="form-help" role="status">
+      Não há cotações registradas na mesma data para {{ selected_ticker.symbol }}
+      e {{ selected_benchmark.symbol }}; a comparação está indisponível.
+    </p>
+    {% elif history %}
     <div id="quote-history-chart" class="chart-box"
          data-dates='{{ chart_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
          data-prices='{{ chart_history|map(attribute='price')|map('string')|list|tojson }}'
@@ -77,7 +82,9 @@
          data-benchmark-dates='{{ chart_benchmark_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
          data-benchmark-prices='{{ chart_benchmark_history|map(attribute='price')|map('string')|list|tojson }}'
          {% endif %}
-         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a abertura da posição' if selected_benchmark }}"></div>
+         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a primeira data com cotação para os dois ativos' if selected_benchmark }}"></div>
+    {% endif %}
+    {% if history %}
     <div class="quote-history-browser" aria-label="Cotações registradas">
       {% for year, year_entries in history|reverse|groupby('recorded_date.year') %}
         <section class="quote-history-year">

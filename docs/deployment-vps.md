@@ -54,7 +54,7 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 5. No Windows, instale o agente RTD com a URL HTTPS pública:
 
    ```powershell
-   .\scripts\rtd-remote-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
+   .\scripts\rtd-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
    ```
 
 O mesmo token do agente deve estar em `.secrets/collector_agent_token` nos dois
