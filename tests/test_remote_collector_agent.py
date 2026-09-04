@@ -3,19 +3,21 @@ from __future__ import annotations
 from datetime import UTC, datetime, time
 from decimal import Decimal
 
-from app.remote_collector_agent import (
+from app.collector_loop import CollectorDeadlines
+from app.collector_settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
-    AgentDeadlines,
     CollectorSchedule,
+    schedule_from_payload,
+    valid_agent_check_interval,
+    valid_poll_interval,
+)
+from app.remote_collector_agent import (
     _instrument_sets,
     _load_agent_check_interval,
     _load_collector_schedule,
     _quotes_payload,
-    _schedule_from_payload,
     _store_agent_check_interval,
     _store_agent_state,
-    _valid_agent_check_interval,
-    _valid_poll_interval,
 )
 from app.rtd import QuoteValue
 
@@ -66,18 +68,18 @@ def test_agente_guarda_e_reaproveita_intervalo_no_arquivo_local(tmp_path) -> Non
     _store_agent_check_interval(state_path, 30)
 
     assert _load_agent_check_interval(state_path) == 30
-    assert _valid_agent_check_interval(5) == 5
+    assert valid_agent_check_interval(5) == 5
 
 
 def test_agente_rejeita_intervalo_de_verificacao_fora_da_faixa() -> None:
     import pytest
 
     with pytest.raises(ValueError):
-        _valid_agent_check_interval(4)
+        valid_agent_check_interval(4)
 
 
 def test_agente_mantem_leitura_e_configuracao_em_relogios_independentes() -> None:
-    deadlines = AgentDeadlines()
+    deadlines = CollectorDeadlines()
 
     deadlines.schedule_configuration(0, 10)
     deadlines.schedule_quote(0, 60)
@@ -91,9 +93,9 @@ def test_agente_mantem_leitura_e_configuracao_em_relogios_independentes() -> Non
 def test_agente_valida_intervalo_de_leitura_recebido_do_servidor() -> None:
     import pytest
 
-    assert _valid_poll_interval(60) == 60
+    assert valid_poll_interval(60) == 60
     with pytest.raises(ValueError):
-        _valid_poll_interval(0)
+        valid_poll_interval(0)
 
 
 def test_agente_respeita_agenda_unica_para_b3_e_ativos_americanos() -> None:
@@ -106,7 +108,7 @@ def test_agente_respeita_agenda_unica_para_b3_e_ativos_americanos() -> None:
 
 def test_agente_guarda_agenda_no_estado_local(tmp_path) -> None:
     state_path = tmp_path / "remote-collector-state.json"
-    schedule = _schedule_from_payload(
+    schedule = schedule_from_payload(
         {"weekdays": [0, 1, 2, 3, 4], "start_time": "09:45", "end_time": "18:10"}
     )
 

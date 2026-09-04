@@ -2,6 +2,8 @@
 
 Este módulo não cria a aplicação Flask e não acessa PostgreSQL. Isso mantém o
 ProfitChart/COM no Windows e deixa o VPS apenas receber leituras autenticadas.
+O laço em si mora em ``app.collector_loop``; aqui ficam só a origem e o
+destino HTTP -- o que fazer com a rede, e nada sobre quando coletar.
 """
 
 from __future__ import annotations
@@ -9,10 +11,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from datetime import time as datetime_time
+from datetime import UTC
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -20,8 +20,15 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_settings import MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS
-from app.domain import MARKET_TIMEZONE
+from app.collector_loop import CollectorConfiguration, run_collector_loop
+from app.collector_settings import (
+    DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    DEFAULT_COLLECTOR_SCHEDULE,
+    CollectorSchedule,
+    schedule_from_payload,
+    valid_agent_check_interval,
+    valid_poll_interval,
+)
 from app.models import CollectorMode
 from app.rtd import ExcelRtdQuoteProvider, Instrument, QuoteValue
 from app.rtd_direct import DirectRtdQuoteProvider
@@ -29,72 +36,6 @@ from app.rtd_service import ProfitDetector, WindowsProfitDetector
 
 CONFIG_PATH = Path(".docker-local") / "remote-collector.env"
 AGENT_LOGGER_NAME = "controle_renda_variavel.remote_collector"
-DEFAULT_AGENT_CHECK_INTERVAL_SECONDS = 30
-MIN_AGENT_CHECK_INTERVAL_SECONDS = 5
-MAX_AGENT_CHECK_INTERVAL_SECONDS = 3600
-DEFAULT_COLLECTOR_SCHEDULE_WEEKDAYS = frozenset({0, 1, 2, 3, 4})
-DEFAULT_COLLECTOR_SCHEDULE_START_TIME = datetime_time(9, 45)
-DEFAULT_COLLECTOR_SCHEDULE_END_TIME = datetime_time(18, 10)
-
-
-@dataclass(frozen=True, slots=True)
-class CollectorSchedule:
-    weekdays: frozenset[int]
-    start_time: datetime_time
-    end_time: datetime_time
-
-    def is_active(self, now: datetime) -> bool:
-        local_time = now.astimezone(MARKET_TIMEZONE)
-        return (
-            local_time.weekday() in self.weekdays
-            and self.start_time <= local_time.timetz().replace(tzinfo=None) < self.end_time
-        )
-
-    def as_payload(self) -> dict[str, object]:
-        return {
-            "weekdays": sorted(self.weekdays),
-            "start_time": self.start_time.strftime("%H:%M"),
-            "end_time": self.end_time.strftime("%H:%M"),
-        }
-
-
-DEFAULT_COLLECTOR_SCHEDULE = CollectorSchedule(
-    DEFAULT_COLLECTOR_SCHEDULE_WEEKDAYS,
-    DEFAULT_COLLECTOR_SCHEDULE_START_TIME,
-    DEFAULT_COLLECTOR_SCHEDULE_END_TIME,
-)
-
-
-@dataclass(slots=True)
-class AgentDeadlines:
-    """Relógios independentes do agente remoto.
-
-    A consulta de configuração é barata e não toca o ProfitChart. A leitura
-    RTD, por outro lado, só é disparada no seu próprio prazo (ou por pedido
-    manual já recebido na configuração). Manter os dois prazos explícitos
-    evita que o menor intervalo transforme o outro em polling frequente.
-    """
-
-    next_configuration_at: float = 0.0
-    next_quote_at: float = float("inf")
-
-    def configuration_due(self, now: float) -> bool:
-        return now >= self.next_configuration_at
-
-    def quote_due(self, now: float) -> bool:
-        return now >= self.next_quote_at
-
-    def schedule_configuration(self, now: float, interval: int) -> None:
-        self.next_configuration_at = now + interval
-
-    def schedule_quote(self, now: float, interval: int) -> None:
-        self.next_quote_at = now + interval
-
-    def request_quote_now(self) -> None:
-        self.next_quote_at = 0.0
-
-    def sleep_seconds(self, now: float) -> float:
-        return max(0.0, min(self.next_configuration_at, self.next_quote_at) - now)
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
@@ -156,57 +97,12 @@ def _state_path(project_dir: Path) -> Path:
     return directory / "ControleRendaVariavel" / "remote-collector-state.json"
 
 
-def _valid_agent_check_interval(value: object) -> int:
-    if isinstance(value, bool):
-        raise ValueError("Intervalo de verificação inválido.")
-    try:
-        interval = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Intervalo de verificação inválido.") from exc
-    if not MIN_AGENT_CHECK_INTERVAL_SECONDS <= interval <= MAX_AGENT_CHECK_INTERVAL_SECONDS:
-        raise ValueError("Intervalo de verificação fora da faixa permitida.")
-    return interval
-
-
-def _valid_poll_interval(value: object) -> int:
-    if isinstance(value, bool):
-        raise ValueError("Intervalo entre leituras inválido.")
-    try:
-        interval = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Intervalo entre leituras inválido.") from exc
-    if not MIN_POLL_INTERVAL_SECONDS <= interval <= MAX_POLL_INTERVAL_SECONDS:
-        raise ValueError("Intervalo entre leituras fora da faixa permitida.")
-    return interval
-
-
-def _schedule_from_payload(value: object) -> CollectorSchedule:
-    if not isinstance(value, dict):
-        raise ValueError("Agenda do coletor inválida.")
-    raw_weekdays = value.get("weekdays")
-    if not isinstance(raw_weekdays, list) or any(
-        isinstance(day, bool) or not isinstance(day, int) for day in raw_weekdays
-    ):
-        raise ValueError("Dias da agenda do coletor inválidos.")
-    weekdays = frozenset(raw_weekdays)
-    if not weekdays or any(day < 0 or day > 6 for day in weekdays):
-        raise ValueError("Dias da agenda do coletor inválidos.")
-    try:
-        start_time = datetime_time.fromisoformat(str(value["start_time"]))
-        end_time = datetime_time.fromisoformat(str(value["end_time"]))
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError("Horários da agenda do coletor inválidos.") from exc
-    if start_time >= end_time:
-        raise ValueError("Faixa de horário da agenda do coletor inválida.")
-    return CollectorSchedule(weekdays, start_time, end_time)
-
-
 def _load_agent_check_interval(path: Path) -> int:
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(state, dict):
             raise ValueError("Estado inválido.")
-        return _valid_agent_check_interval(state.get("agent_check_interval_seconds"))
+        return valid_agent_check_interval(state.get("agent_check_interval_seconds"))
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
 
@@ -216,7 +112,7 @@ def _load_collector_schedule(path: Path) -> CollectorSchedule:
         state = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(state, dict):
             raise ValueError("Estado inválido.")
-        return _schedule_from_payload(state.get("collector_schedule"))
+        return schedule_from_payload(state.get("collector_schedule"))
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return DEFAULT_COLLECTOR_SCHEDULE
 
@@ -304,7 +200,9 @@ def _provider_factory(config: dict[str, str]):
     return factory
 
 
-def _instrument_sets(configuration: dict[str, Any]) -> tuple[list[Instrument], dict[int, tuple[int, int]]]:
+def _instrument_sets(
+    configuration: dict[str, Any],
+) -> tuple[list[Instrument], dict[int, tuple[int, int]]]:
     instruments: list[Instrument] = []
     option_keys: dict[int, tuple[int, int]] = {}
     positions = configuration.get("positions", [])
@@ -342,15 +240,6 @@ def _instrument_sets(configuration: dict[str, Any]) -> tuple[list[Instrument], d
     return instruments, option_keys
 
 
-def _collection_configuration(configuration: dict[str, Any]) -> dict[str, Any]:
-    """Campos cuja mudança pede uma nova leitura, não só uma nova checagem."""
-    return {
-        key: value
-        for key, value in configuration.items()
-        if key not in {"agent_check_interval_seconds", "refresh_requested"}
-    }
-
-
 def _serialized(value: QuoteValue) -> dict[str, str | int]:
     return {
         "last_price": str(value.last_price),
@@ -361,7 +250,9 @@ def _serialized(value: QuoteValue) -> dict[str, str | int]:
     }
 
 
-def _quotes_payload(values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]) -> dict[str, object]:
+def _quotes_payload(
+    values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]
+) -> dict[str, object]:
     by_id = {value.position_id: value for value in values}
     positions = [
         {"position_id": value.position_id, **_serialized(value)}
@@ -383,92 +274,65 @@ def _quotes_payload(values: list[QuoteValue], option_keys: dict[int, tuple[int, 
     return {"positions": positions, "option_positions": option_positions}
 
 
+@dataclass(frozen=True, slots=True)
+class HttpConfigurationSource:
+    """Configuração vinda do VPS: tudo aqui é entrada não confiável."""
+
+    api: CollectorApi
+
+    def configuration(self) -> CollectorConfiguration:
+        payload = self.api.configuration()
+        instruments, option_keys = _instrument_sets(payload)
+        return CollectorConfiguration(
+            collector_mode=CollectorMode(str(payload["collector_mode"])),
+            poll_interval_seconds=valid_poll_interval(payload.get("poll_interval_seconds")),
+            agent_check_interval_seconds=valid_agent_check_interval(
+                payload.get("agent_check_interval_seconds")
+            ),
+            schedule=schedule_from_payload(payload.get("collector_schedule")),
+            instruments=tuple(instruments),
+            option_keys=option_keys,
+            refresh_requested=payload.get("refresh_requested") is True,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class HttpQuoteSink:
+    """Entrega ao VPS. Nunca toca banco: só sabe falar HTTPS com um token."""
+
+    api: CollectorApi
+
+    @property
+    def destination_label(self) -> str:
+        return "ao VPS"
+
+    def publish(
+        self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]
+    ) -> None:
+        self.api.send_quotes(_quotes_payload(values, option_keys))
+
+    def report_failure(self, error: Exception) -> None:
+        self.api.send_failure(error)
+
+
 def run(project_dir: Path, *, profit_detector: ProfitDetector | None = None) -> None:
     config = _environment(project_dir)
     api = CollectorApi(config.get("COLLECTOR_REMOTE_URL", ""), _read_token(project_dir, config))
-    logger = _logger(project_dir)
-    providers = CollectorProviderManager(_provider_factory(config))
     state_path = _state_path(project_dir)
-    agent_check_interval = _load_agent_check_interval(state_path)
-    collector_schedule = _load_collector_schedule(state_path)
-    detector = profit_detector or WindowsProfitDetector()
-    deadlines = AgentDeadlines()
-    configuration: dict[str, Any] | None = None
-    idle_reason: str | None = None
-    try:
-        while True:
-            now = time.monotonic()
-            if deadlines.configuration_due(now):
-                previous_configuration = configuration
-                schedule_was_active = collector_schedule.is_active(datetime.now(MARKET_TIMEZONE))
-                try:
-                    configuration = api.configuration()
-                    _valid_poll_interval(configuration.get("poll_interval_seconds"))
-                    previous_collection = (
-                        _collection_configuration(previous_configuration)
-                        if previous_configuration is not None
-                        else None
-                    )
-                    current_collection = _collection_configuration(configuration)
-                    collection_changed = current_collection != previous_collection
-                    refresh_requested = configuration.get("refresh_requested") is True
-                    agent_check_interval = _valid_agent_check_interval(
-                        configuration.get("agent_check_interval_seconds")
-                    )
-                    collector_schedule = _schedule_from_payload(configuration.get("collector_schedule"))
-                    deadlines.schedule_configuration(now, agent_check_interval)
-                    try:
-                        _store_agent_state(state_path, agent_check_interval, collector_schedule)
-                    except OSError as exc:
-                        logger.warning("Não foi possível atualizar o estado local do agente: %s", exc)
-                    schedule_just_opened = not schedule_was_active and collector_schedule.is_active(
-                        datetime.now(MARKET_TIMEZONE)
-                    )
-                    if collection_changed or refresh_requested or schedule_just_opened:
-                        deadlines.request_quote_now()
-                except Exception as exc:
-                    configuration = None
-                    logger.warning("Não foi possível consultar a configuração do coletor: %s", exc)
-                    api.send_failure(exc)
-                    deadlines.schedule_configuration(now, agent_check_interval)
-
-            now = time.monotonic()
-            if configuration is not None and deadlines.quote_due(now):
-                poll_interval = _valid_poll_interval(configuration.get("poll_interval_seconds"))
-                if not collector_schedule.is_active(datetime.now(MARKET_TIMEZONE)):
-                    providers.close()
-                    if idle_reason != "schedule":
-                        logger.info("Agente aguardando a próxima janela da agenda de coleta.")
-                        idle_reason = "schedule"
-                    deadlines.schedule_quote(now, poll_interval)
-                else:
-                    try:
-                        profit_running = detector.is_running()
-                        if not profit_running:
-                            providers.close()
-                            if idle_reason != "profit-closed":
-                                logger.info("Agente aguardando o ProfitChart ser aberto.")
-                                idle_reason = "profit-closed"
-                        else:
-                            mode = CollectorMode(str(configuration["collector_mode"]))
-                            instruments, option_keys = _instrument_sets(configuration)
-                            values = providers.get(mode).fetch(instruments) if instruments else []
-                            api.send_quotes(_quotes_payload(values, option_keys))
-                            logger.info("Ciclo de cotações entregue ao VPS (%s instrumentos).", len(values))
-                            idle_reason = None
-                    except Exception as exc:
-                        providers.close()
-                        logger.warning("Leitura de cotações falhou: %s", exc)
-                        api.send_failure(exc)
-                    finally:
-                        # Inclusive quando o Profit está fechado ou falha: a
-                        # próxima tentativa é no intervalo de leitura, não no
-                        # intervalo de configuração.
-                        deadlines.schedule_quote(time.monotonic(), poll_interval)
-
-            time.sleep(deadlines.sleep_seconds(time.monotonic()))
-    finally:
-        providers.close()
+    run_collector_loop(
+        source=HttpConfigurationSource(api),
+        sink=HttpQuoteSink(api),
+        providers=CollectorProviderManager(_provider_factory(config)),
+        detector=profit_detector or WindowsProfitDetector(),
+        logger=_logger(project_dir),
+        initial_schedule=_load_collector_schedule(state_path),
+        initial_check_interval=_load_agent_check_interval(state_path),
+        on_configuration=lambda configuration: _store_agent_state(
+            state_path,
+            configuration.agent_check_interval_seconds,
+            configuration.schedule,
+        ),
+    )
 
 
 def main() -> None:
