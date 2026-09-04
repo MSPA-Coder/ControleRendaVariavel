@@ -115,7 +115,11 @@ PostgreSQL desta máquina (`app/collector_database.py`). No destino remoto o
 servidor nunca abre conexão para o Windows. `REMOTE_COLLECTOR_ENABLED` habilita
 os endpoints e o estado remoto -- e é o que decide se esta instância mostra o
 botão de destino, porque só o banco da máquina do ProfitChart é consultado pelo
-coletor. `RtdServiceManager` fornece o estado exibido na interface.
+coletor. A aplicacao web nao inicia, supervisiona nem encerra coletor algum:
+o que a tela oferece e pausar e retomar a coleta, gravando
+`app_settings.collector_paused`, que o coletor le no proximo intervalo de
+verificacao. O estado exibido vem do pulso persistido
+(`collector_heartbeat.py`), alimentado pelos dois destinos.
 
 Sem o agente, a aplicação continua utilizável e informa cotações indisponíveis
 ou desatualizadas; cadastros não dependem de RTD. Normalize e valide leituras

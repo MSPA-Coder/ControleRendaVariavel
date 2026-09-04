@@ -26,10 +26,15 @@
 </span>
 {% endmacro %}
 
-{% macro rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) %}
-{# `hx-disabled-elt="this"` desabilita o controle durante a requisição, o
-   mesmo cuidado que o JS anterior tinha para evitar cliques repetidos. #}
-<label class="rtd-toggle" title="Ativar ou desligar o coletor de cotações RTD"
+{% macro rtd_toggle(collector_enabled, collector_heartbeat) %}
+{# O controle pausa e retoma a coleta; ele nao inicia nem encerra processo.
+   Quem e dono do ciclo de vida do coletor e a tarefa do Windows. O que este
+   botao grava e um fato na tabela, que o coletor le no proximo intervalo de
+   verificacao -- por isso o rotulo fala de coleta, e nao de "ligado".
+
+   `hx-disabled-elt` desabilita o controle durante a requisição, o mesmo
+   cuidado que o JS anterior tinha para evitar cliques repetidos. #}
+<label class="rtd-toggle" title="Pausar ou retomar a coleta de cotações"
        hx-get="{{ url_for('portfolio.rtd_service_partial') }}"
        hx-trigger="every 10s"
        hx-swap="outerHTML"
@@ -38,15 +43,14 @@
     type="checkbox"
     role="switch"
     name="enabled"
-    aria-label="Coletor RTD"
+    aria-label="Coleta de cotações"
     hx-post="{{ url_for('portfolio.rtd_service_partial') }}"
     hx-target="closest label"
     hx-swap="outerHTML"
-    {{ 'checked' if rtd_service_running }}
-    {{ 'disabled' if not rtd_service_available }}
+    {{ 'checked' if collector_enabled }}
   >
   <span class="rtd-toggle-track" aria-hidden="true"></span>
-  <span>{{ rtd_service_status|rtd_status_label(rtd_service_running) }}</span>
+  <span>{{ 'Coleta ativa' if collector_enabled else 'Coleta pausada' }}</span>
   {{ heartbeat(collector_heartbeat, polling=false) }}
 </label>
 {% endmacro %}

@@ -102,6 +102,7 @@ def collector_agent_configuration():
         agent_check_interval_seconds=settings.agent_check_interval_seconds,
         collector_schedule=schedule_from_settings(settings).as_payload(),
         refresh_requested=settings.collector_refresh_requested_at is not None,
+        paused=settings.collector_paused,
         positions=[
             {
                 "position_id": item.id,

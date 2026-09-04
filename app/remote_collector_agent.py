@@ -30,9 +30,9 @@ from app.collector_settings import (
     valid_poll_interval,
 )
 from app.models import CollectorMode
+from app.profit_detector import ProfitDetector, WindowsProfitDetector
 from app.rtd import ExcelRtdQuoteProvider, Instrument, QuoteValue
 from app.rtd_direct import DirectRtdQuoteProvider
-from app.rtd_service import ProfitDetector, WindowsProfitDetector
 
 CONFIG_PATH = Path(".docker-local") / "remote-collector.env"
 AGENT_LOGGER_NAME = "controle_renda_variavel.remote_collector"
@@ -293,6 +293,7 @@ class HttpConfigurationSource:
             instruments=tuple(instruments),
             option_keys=option_keys,
             refresh_requested=payload.get("refresh_requested") is True,
+            paused=payload.get("paused") is True,
         )
 
 

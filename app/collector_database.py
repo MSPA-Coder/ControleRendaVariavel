@@ -284,6 +284,7 @@ class DatabaseConfigurationSource:
             instruments=tuple(instruments),
             option_keys=option_keys,
             refresh_requested=settings.collector_refresh_requested_at is not None,
+            paused=settings.collector_paused,
         )
         # Nada foi escrito: encerrar a transação de leitura evita segurar um
         # snapshot do PostgreSQL entre um ciclo e o próximo.

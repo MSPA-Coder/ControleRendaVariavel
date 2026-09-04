@@ -19,8 +19,8 @@ from app.collector import CollectorProviderManager
 from app.collector_settings import CollectorSchedule
 from app.domain import MARKET_TIMEZONE
 from app.models import CollectorMode
+from app.profit_detector import ProfitDetector
 from app.rtd import Instrument, QuoteValue
-from app.rtd_service import ProfitDetector
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +34,7 @@ class CollectorConfiguration:
     instruments: tuple[Instrument, ...]
     option_keys: dict[int, tuple[int, int]] = field(default_factory=dict)
     refresh_requested: bool = False
+    paused: bool = False
 
     @property
     def collection_fingerprint(self) -> tuple[object, ...]:
@@ -49,6 +50,9 @@ class CollectorConfiguration:
             self.schedule,
             self.instruments,
             tuple(sorted(self.option_keys.items())),
+            # Religar entra aqui para a coleta voltar na hora, e não no fim
+            # do intervalo de leitura -- que pode ser de cinco minutos.
+            self.paused,
         )
 
 
@@ -168,7 +172,15 @@ def run_collector_loop(
             now = monotonic()
             if configuration is not None and deadlines.quote_due(now):
                 poll_interval = configuration.poll_interval_seconds
-                if not schedule.is_active(market_now()):
+                if configuration.paused:
+                    # Pausa não é parada: o processo continua vivo e voltando
+                    # a perguntar, para retomar sozinho quando a tela religar.
+                    providers.close()
+                    if idle_reason != "paused":
+                        logger.info("Coleta pausada nas Configurações.")
+                        idle_reason = "paused"
+                    deadlines.schedule_quote(now, poll_interval)
+                elif not schedule.is_active(market_now()):
                     providers.close()
                     if idle_reason != "schedule":
                         logger.info("Agente aguardando a próxima janela da agenda de coleta.")

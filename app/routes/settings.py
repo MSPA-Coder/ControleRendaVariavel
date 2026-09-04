@@ -27,10 +27,7 @@ from app.collector_settings import (
 from app.models import AppSetting, CollectorDestination, CollectorMode, Ticker
 from app.pricing_settings import parse_pricing_settings
 from app.routes import bp
-from app.routes.helpers import (
-    rtd_service_state,
-    ticker_records,
-)
+from app.routes.helpers import ticker_records
 from app.themes import (
     DEFAULT_THEME,
     THEME_DESCRIPTIONS,
@@ -119,7 +116,6 @@ def _get_or_create_settings() -> AppSetting:
 
 
 def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseReturnValue:
-    running, available, rtd_status = rtd_service_state()
     return (
         render_template(
             "settings.html",
@@ -138,9 +134,7 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
             theme_options=get_theme_options_dict(),
             theme_descriptions=THEME_DESCRIPTIONS,
             current_theme=settings.theme,
-            rtd_service_running=running,
-            rtd_service_available=available,
-            rtd_service_status=rtd_status,
+            collector_enabled=not settings.collector_paused,
             remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
             collector_destination=settings.collector_destination,
         ),

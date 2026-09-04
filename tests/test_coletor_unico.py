@@ -1,15 +1,19 @@
-"""Garante que o agente Windows seja o único mecanismo de coleta RTD.
+"""Garante que a aplicação web não seja um mecanismo de coleta.
 
-Nenhum caminho de ``create_app`` produz um cliente HTTP de coletor. O processo
-do host lê o RTD e entrega as cotações; a aplicação apenas as recebe.
+Quem lê o ProfitChart é a tarefa do Windows; a aplicação recebe cotações,
+mostra estado e grava a pausa. Nenhum caminho de ``create_app`` pode iniciar,
+supervisionar ou encerrar um coletor -- com Gunicorn criando uma fábrica por
+worker, isso significaria um candidato a coletor por worker disputando a
+mesma sessão COM.
 """
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from app import create_app
-from app.rtd_service import RtdServiceManager
 
 BASE = {
     "SQLALCHEMY_DATABASE_URI": "postgresql+psycopg://test:test@localhost:5432/test",
@@ -22,63 +26,45 @@ def _app(**extra):
 
 
 @pytest.mark.parametrize("remoto", [True, False])
-def test_o_servico_de_coletor_nunca_e_um_cliente_http(remoto):
-    servico = _app(REMOTE_COLLECTOR_ENABLED=remoto).extensions["rtd_service"]
+def test_a_aplicacao_nao_registra_servico_de_coletor(remoto):
+    extensoes = _app(REMOTE_COLLECTOR_ENABLED=remoto).extensions
 
-    assert isinstance(servico, RtdServiceManager), (
-        "voltou a existir um segundo tipo de servico de coletor: se for outro "
-        "modo de coleta, decida antes qual dos dois le o ProfitChart"
+    assert "rtd_service" not in extensoes, (
+        "a aplicacao web voltou a ser dona de um coletor: se for mesmo "
+        "necessario, decida antes quem encerra o processo da tarefa do Windows"
     )
 
 
-def test_o_servico_existe_sempre():
-    # `rtd_service()` em `routes/helpers.py` le direto de `extensions`; nao
-    # registrar nada levantaria KeyError na tela de Configuracoes em vez de
-    # mostrar o coletor como indisponivel.
-    for remoto in (True, False):
-        assert _app(REMOTE_COLLECTOR_ENABLED=remoto).extensions["rtd_service"] is not None
+@pytest.mark.parametrize("remoto", [True, False])
+def test_criar_a_aplicacao_nao_sobe_thread_de_supervisao(remoto):
+    # Esta guarda ja custou caro uma vez: cada `create_app()` da suite subia no
+    # Windows uma thread sondando o ProfitChart por `powershell.exe` a cada
+    # 2 segundos. A suite ficava inexecutavel na maquina de quem desenvolve e
+    # verde no CI, que e Linux -- o pior resultado possivel para um teste.
+    antes = {thread.name for thread in threading.enumerate()}
+
+    _app(REMOTE_COLLECTOR_ENABLED=remoto)
+
+    novas = {thread.name for thread in threading.enumerate()} - antes
+    assert novas == set(), f"create_app iniciou threads: {novas}"
 
 
-def test_com_agente_remoto_o_estado_e_indisponivel():
-    # Com o agente ligado, quem coleta e o processo do host. A aplicacao
-    # reporta indisponivel ate receber o pulso do agente.
-    servico = _app(REMOTE_COLLECTOR_ENABLED=True).extensions["rtd_service"]
-
-    assert servico.available is False
-    assert servico.is_running is False
-    assert servico.status == "unavailable"
-
-
-def test_a_suite_nao_supervisiona_o_profitchart():
-    # `available` do gerenciador vale `sys.platform == "win32"`. Sem esta
-    # guarda, cada `create_app()` da suite subia no Windows uma thread sondando
-    # o ProfitChart por `powershell.exe` a cada 2 segundos: a suite ficava
-    # inexecutavel na maquina de quem desenvolve e verde no CI, que e Linux.
-    # Verde onde ninguem olha e quebrado onde se trabalha e o pior resultado
-    # possivel para um teste.
-    servico = _app(REMOTE_COLLECTOR_ENABLED=False).extensions["rtd_service"]
-
-    assert servico._background_supervision is False
-
-
-def test_a_fabrica_local_nao_inicia_supervisor_por_worker():
-    # A configuração de produção não deve mudar o ciclo de vida: cada worker
-    # criado pelo Gunicorn recebe um serviço inerte até um start() explícito.
-    servico = create_app(
+def test_a_fabrica_de_producao_tambem_nao_inicia_coletor():
+    # A configuração de produção não pode mudar o ciclo de vida.
+    extensoes = create_app(
         {
             **BASE,
             "TESTING": False,
             "SECRET_KEY": "test-secret",
             "REMOTE_COLLECTOR_ENABLED": False,
         }
-    ).extensions["rtd_service"]
+    ).extensions
 
-    assert servico._background_supervision is False
-    assert servico._supervisor_thread is None
+    assert "rtd_service" not in extensoes
 
 
 def test_nao_ha_configuracao_de_conexao_ativa_com_o_host():
-    # A aplicacao nao se conecta ao host Windows; apenas o agente inicia
+    # A aplicacao nao se conecta ao host Windows; apenas o coletor inicia
     # conexoes e entrega as cotacoes ao servidor.
     config = _app().config
 

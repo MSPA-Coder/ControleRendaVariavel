@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import cast
 
 from flask import current_app, request
 from sqlalchemy import func, select
@@ -34,7 +33,6 @@ from app.models import (
 )
 from app.portfolio import BrokerGroup, MarketGroup, PositionView
 from app.quote_history_import import TickerImportTarget
-from app.rtd_service import RtdService
 
 DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS = 730
 """Janela usada para a primeira importação de um ticker de referência
@@ -752,21 +750,15 @@ def is_htmx_request() -> bool:
     return request.headers.get("HX-Request") == "true"
 
 
-def rtd_service() -> RtdService:
-    return cast(RtdService, current_app.extensions["rtd_service"])
+def collector_is_enabled() -> bool:
+    """Se a coleta que esta instância dirige está ativa ou pausada.
 
-
-def rtd_service_state() -> tuple[bool, bool, str]:
-    """``(ligado, disponível, status)`` do coletor, tolerante a host offline.
-
-    Quando o coletor não responde, a tela o mostra como indisponível em vez de
-    quebrar. Nenhuma operação de cadastro depende dele.
+    Sem linha de configuração ainda, a resposta é "ativa": a pausa é uma
+    escolha explícita, e uma instalação recém-criada não deve aparecer
+    parada só porque ninguém abriu a tela ainda.
     """
-    service = rtd_service()
-    try:
-        return service.is_running, service.available, service.status
-    except (OSError, RuntimeError):
-        return False, False, "unavailable"
+    paused = db.session.scalar(select(AppSetting.collector_paused).where(AppSetting.id == 1))
+    return not bool(paused)
 
 
 def exposure_chart_data(

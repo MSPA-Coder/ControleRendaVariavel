@@ -213,7 +213,8 @@ normativos estão em [`docs/planilha-acoes.md`](planilha-acoes.md) e
 
 `rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` fala COM
 com o servidor RTD; `collector.py` mantém um provedor aberto e o troca quando o
-modo muda; `rtd_service.py` supervisiona o processo coletor;
+modo muda; `collector_loop.py` é o laço único de coleta e
+`profit_detector.py` responde se o ProfitChart está aberto;
 `collector_heartbeat.py` resume a última leitura persistida **sem expor valor de
 cotação**; `collector_settings.py` valida modo, intervalos e agenda.
 
@@ -305,18 +306,25 @@ ao ambiente local. Os três endpoints exigem Bearer token próprio, comparado co
 `hmac.compare_digest`, e são os únicos isentos de CSRF — não há navegador nem
 sessão do outro lado. O corpo é limitado a 512 KB.
 
-`REMOTE_COLLECTOR_ENABLED` escolhe entre os dois modos. Habilitado, o estado da
-coleta nasce indisponível e só existe quando chega o pulso do agente.
-Desabilitado, `RtdServiceManager` pode supervisionar um processo `poll-rtd`
-local, mas permanece inerte durante `create_app`: cada worker web só inicia a
-supervisão após uma chamada explícita a `start()` (ou ao controlador do host).
-O processo `poll-rtd` também cria a aplicação, que permanece inerte pelo mesmo
-motivo; `RTD_COLLECTOR_PROCESS` é mantido para compatibilidade com
-controladores legados e diagnóstico.
+`REMOTE_COLLECTOR_ENABLED` diz o que esta instância é: com ele ligado, a
+aplicação é o VPS que recebe cotações do agente; desligado, é a instância que
+roda na máquina do ProfitChart e mostra o controle de destino.
 
-**Sem o agente, a aplicação continua utilizável.** Cotações aparecem
-indisponíveis ou desatualizadas, e nenhum cadastro depende delas.
-`rtd_service_state()` trata host offline como indisponibilidade, não como erro.
+**A aplicação web não é dona de coletor nenhum.** Ela não inicia, não
+supervisiona e não encerra processo de coleta -- isso é da tarefa do Windows.
+Já foi diferente: `RtdServiceManager` iniciava e matava um `poll-rtd` a partir
+da tela, e com Gunicorn criando uma fábrica por worker aquilo significava um
+candidato a coletor por worker disputando a mesma sessão COM.
+
+O que a tela oferece é **pausar e retomar**: `app_settings.collector_paused` é
+lido pela origem ativa -- a linha local quando a coleta grava aqui, o payload
+do VPS quando ela entrega lá -- de modo que o botão de cada tela pausa a coleta
+que aquela instância está dirigindo. Pausa não é parada: o processo continua
+vivo e voltando a perguntar, e retoma sozinho quando a tela religa.
+
+**Sem o coletor, a aplicação continua utilizável.** Cotações aparecem
+indisponíveis ou desatualizadas, e nenhum cadastro depende delas. O estado
+exibido vem do pulso persistido, não de uma sondagem do host.
 
 ## Persistência
 

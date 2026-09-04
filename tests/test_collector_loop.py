@@ -171,6 +171,30 @@ def test_origem_indisponivel_reporta_falha_e_nao_coleta() -> None:
     assert [str(erro) for erro in destino.falhas] == ["Comunicação com o VPS falhou."]
 
 
+def test_coleta_pausada_nao_le_e_fecha_o_provedor() -> None:
+    destino = _DestinoEspiao()
+
+    provedor = _rodar(
+        _OrigemFixa(_configuracao(paused=True)),
+        destino,
+        _ProfitFalso(rodando=True),
+    )
+
+    assert destino.entregas == []
+    # Pausa não é falha: nada a reportar, e a sessão COM é liberada em vez de
+    # ficar aberta ociosa enquanto ninguém coleta.
+    assert destino.falhas == []
+    assert provedor.aberto is False
+
+
+def test_religar_volta_a_coletar_sem_esperar_o_intervalo_de_leitura() -> None:
+    """Religar entra na impressão digital, então dispara leitura imediata."""
+    pausada = _configuracao(paused=True)
+    ativa = _configuracao()
+
+    assert pausada.collection_fingerprint != ativa.collection_fingerprint
+
+
 def test_leitura_e_configuracao_correm_em_relogios_independentes() -> None:
     origem = _OrigemFixa(_configuracao())
     destino = _DestinoEspiao()

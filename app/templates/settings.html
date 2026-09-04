@@ -24,7 +24,7 @@
        participa: o efeito e imediato e nao ha o que confirmar. O `enabled`
        viaja junto num envio do formulario, e o handler o ignora. #}
     <div class="rtd-toggle-row">
-      {{ collector.rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) }}
+      {{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
     </div>
     {# Destino da coleta. So aparece aqui, na instancia que roda na maquina
        do ProfitChart: e ela que o coletor consulta. No VPS o botao nao

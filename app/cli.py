@@ -32,6 +32,7 @@ from app.models import (
     QuoteHistory,
     User,
 )
+from app.profit_detector import WindowsProfitDetector
 from app.quote_history_import import (
     DailyQuote,
     QuoteHistoryImportError,
@@ -41,7 +42,6 @@ from app.remote_collector_agent import remote_loop_arguments
 from app.routes.helpers import quote_update_targets
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
-from app.rtd_service import WindowsProfitDetector
 from app.user_management import UserManagementError, set_active, upsert_from_cli
 
 

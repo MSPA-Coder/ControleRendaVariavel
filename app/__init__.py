@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from flask import Flask, request, session
@@ -241,28 +240,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     registrar_ui(app)
     registrar_mensagens(app)
 
-    # O agente Windows entrega cotacoes por HTTPS. `RtdServiceManager` fornece
-    # o estado exibido na tela; com o agente remoto habilitado, o estado nasce
-    # indisponivel ate que o servidor receba o pulso do agente.
-    from app.rtd_service import RtdServiceManager
-
-    if app.config["REMOTE_COLLECTOR_ENABLED"]:
-        app.extensions["rtd_service"] = RtdServiceManager(
-            Path(app.root_path).parent,
-            available=False,
-            background_supervision=False,
-        )
-    else:
-        # A aplicação web não inicia supervisão local durante ``create_app``.
-        # Gunicorn cria uma fábrica por worker; iniciar aqui faria cada worker
-        # disputar seu próprio ``poll-rtd``. O ciclo de vida local é explícito:
-        # ``RtdServiceManager.start()`` (ou o controlador do host) o habilita.
-        # Assim, a própria fábrica criada por ``poll-rtd`` também permanece
-        # inerte e não cria uma cadeia de supervisores.
-        app.extensions["rtd_service"] = RtdServiceManager(
-            Path(app.root_path).parent,
-            background_supervision=False,
-        )
+    # A aplicação web não inicia, supervisiona nem encerra coletor algum. Quem
+    # é dono desse ciclo de vida é a tarefa do Windows (`scripts/rtd-agent.ps1`),
+    # e o que a tela oferece é pausar e retomar a coleta -- um fato gravado em
+    # `app_settings`, que o coletor lê no próximo intervalo de verificação.
+    #
+    # Isto foi um supervisor de processo aqui dentro. Com Gunicorn criando uma
+    # fábrica por worker, aquilo significava um coletor candidato por worker
+    # disputando a mesma sessão COM.
 
     from app.auditoria import registrar_escritas_financeiras
     from app.cli import register_commands
