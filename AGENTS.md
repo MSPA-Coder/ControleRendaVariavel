@@ -26,8 +26,9 @@ expressa melhor.
 
 ## Execução e persistência
 
-Aplicação, PostgreSQL, migrações, testes, lint e build rodam em Docker. Não
-instale ferramentas do projeto no host. Comandos usuais:
+Aplicação, PostgreSQL, migrações e build rodam em Docker, e é lá que testes e
+lint são validados antes de commitar. Não instale ferramentas do projeto no
+Python global do host. Comandos usuais:
 
 ```powershell
 docker compose up --build -d
@@ -36,6 +37,32 @@ docker compose --profile quality run --build --rm quality
 docker compose exec web flask --app app:create_app <comando>
 Invoke-WebRequest http://127.0.0.1:5301/health
 ```
+
+### Loop rápido no host
+
+O portão `quality` custa dezenas de segundos por rodada -- caro demais para o
+ciclo de edição. Para isso existe um venv do projeto:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+```
+
+O `.venv/` é uma pasta do projeto, já ignorada pelo Git: não altera o Python
+do sistema nem o PATH, e apagar a pasta desfaz a instalação por inteiro. A
+proibição que vale é outra, e continua de pé -- nada de instalar dependências
+do projeto no Python global do Windows.
+
+`sharedauth` vem de repositório privado: o `git` precisa estar autenticado,
+ou instale do clone local na tag que `pyproject.toml` fixa.
+
+Os dois ambientes acham defeitos diferentes, então nenhum substitui o outro.
+Foi o venv que revelou dois defeitos só-Windows que o contêiner nunca
+mostrou (ver o docstring de `tests/conftest.py`); e é o contêiner que tem
+`ruff` e `pip-audit` na versão que a CI usa. Itere no venv e passe pelo
+`quality` antes de commitar.
 
 O Compose publica a aplicação em `127.0.0.1:5301` e PostgreSQL em
 `127.0.0.1:5302`; na rede interna, o banco é `db:5432`. `migrate` aplica
