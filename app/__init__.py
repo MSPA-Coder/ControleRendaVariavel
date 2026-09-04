@@ -314,7 +314,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         """
         if request.endpoint not in HEARTBEAT_ENDPOINTS:
             return {}
-        from app.collector_heartbeat import collector_heartbeat
+        from app.collector.heartbeat import collector_heartbeat
 
         return {
             "collector_heartbeat": collector_heartbeat(

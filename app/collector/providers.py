@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
+from app.collector.rtd import Instrument, QuoteValue
 from app.models import CollectorMode
-from app.rtd import Instrument, QuoteValue
 
 
 class ManagedQuoteProvider(Protocol):

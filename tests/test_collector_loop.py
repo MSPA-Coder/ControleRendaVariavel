@@ -13,11 +13,11 @@ from decimal import Decimal
 
 import pytest
 
-from app.collector import CollectorProviderManager
-from app.collector_loop import CollectorConfiguration, run_collector_loop
-from app.collector_settings import CollectorSchedule
+from app.collector.loop import CollectorConfiguration, run_collector_loop
+from app.collector.providers import CollectorProviderManager
+from app.collector.rtd import Instrument, QuoteValue
+from app.collector.settings import CollectorSchedule
 from app.models import CollectorMode
-from app.rtd import Instrument, QuoteValue
 
 ABERTA = CollectorSchedule(frozenset({0, 1, 2, 3, 4}), time(9, 45), time(18, 10))
 DENTRO_DA_JANELA = datetime(2026, 8, 17, 12, 45, tzinfo=UTC)

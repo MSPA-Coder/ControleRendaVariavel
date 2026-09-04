@@ -6,7 +6,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
-from app.rtd import Instrument, QuoteValue, parse_decimal
+from app.collector.rtd import Instrument, QuoteValue, parse_decimal
 
 RTD_TYPELIB_ID = "{EFCFBDCA-78A5-450B-8228-346C4F44D5B8}"
 QUOTE_FIELDS = ("ULT", "FEC", "EST")

@@ -16,8 +16,8 @@ from flask.typing import ResponseReturnValue
 
 from app import db
 from app.authorization import requer_admin
-from app.collector_database import collector_settings_row
-from app.collector_heartbeat import collector_heartbeat
+from app.collector.database import collector_settings_row
+from app.collector.heartbeat import collector_heartbeat
 from app.routes import bp
 from app.routes.helpers import collector_is_enabled, quote_stale_after_seconds
 

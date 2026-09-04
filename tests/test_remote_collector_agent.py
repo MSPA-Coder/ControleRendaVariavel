@@ -3,15 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, time
 from decimal import Decimal
 
-from app.collector_loop import CollectorDeadlines
-from app.collector_settings import (
-    DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
-    CollectorSchedule,
-    schedule_from_payload,
-    valid_agent_check_interval,
-    valid_poll_interval,
-)
-from app.remote_collector_agent import (
+from app.collector.loop import CollectorDeadlines
+from app.collector.remote_agent import (
     _instrument_sets,
     _load_agent_check_interval,
     _load_collector_schedule,
@@ -19,7 +12,14 @@ from app.remote_collector_agent import (
     _store_agent_check_interval,
     _store_agent_state,
 )
-from app.rtd import QuoteValue
+from app.collector.rtd import QuoteValue
+from app.collector.settings import (
+    DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    CollectorSchedule,
+    schedule_from_payload,
+    valid_agent_check_interval,
+    valid_poll_interval,
+)
 
 
 def test_agente_monta_instrumentos_e_payload_sem_expor_acesso_ao_banco() -> None:

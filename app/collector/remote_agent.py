@@ -2,7 +2,7 @@
 
 Este módulo não cria a aplicação Flask e não acessa PostgreSQL. Isso mantém o
 ProfitChart/COM no Windows e deixa o VPS apenas receber leituras autenticadas.
-O laço em si mora em ``app.collector_loop``; aqui ficam só a origem e o
+O laço em si mora em ``app.collector.loop``; aqui ficam só a origem e o
 destino HTTP -- o que fazer com a rede, e nada sobre quando coletar.
 """
 
@@ -19,9 +19,12 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_loop import CollectorConfiguration, run_collector_loop
-from app.collector_settings import (
+from app.collector.loop import CollectorConfiguration, run_collector_loop
+from app.collector.profit_detector import ProfitDetector, WindowsProfitDetector
+from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
+from app.collector.rtd import ExcelRtdQuoteProvider, Instrument, QuoteValue
+from app.collector.rtd_direct import DirectRtdQuoteProvider
+from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_COLLECTOR_SCHEDULE,
     CollectorSchedule,
@@ -30,9 +33,6 @@ from app.collector_settings import (
     valid_poll_interval,
 )
 from app.models import CollectorMode
-from app.profit_detector import ProfitDetector, WindowsProfitDetector
-from app.rtd import ExcelRtdQuoteProvider, Instrument, QuoteValue
-from app.rtd_direct import DirectRtdQuoteProvider
 
 CONFIG_PATH = Path(".docker-local") / "remote-collector.env"
 AGENT_LOGGER_NAME = "controle_renda_variavel.remote_collector"

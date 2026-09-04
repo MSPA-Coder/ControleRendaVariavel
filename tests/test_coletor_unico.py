@@ -12,13 +12,13 @@ from __future__ import annotations
 import threading
 
 import pytest
+from conftest import CONFIG_DE_TESTE
 
 from app import create_app
 
-BASE = {
-    "SQLALCHEMY_DATABASE_URI": "postgresql+psycopg://test:test@localhost:5432/test",
-    "TESTING": True,
-}
+# Mesma configuração do conftest, `creator` incluso: nenhuma app montada nos
+# testes deve ser capaz de abrir socket para o banco.
+BASE = dict(CONFIG_DE_TESTE)
 
 
 def _app(**extra):
