@@ -238,6 +238,21 @@ def test_acoes_se_atualiza_no_proximo_ciclo_sem_polling_continuo():
     assert "QUOTE_REFRESH_GRACE_MS" in script
 
 
+def test_resposta_htmx_antiga_nao_sobrescreve_intencao_mais_recente_em_acoes():
+    script = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert "portfolioRequestGenerations = new WeakMap()" in script
+    assert "portfolioExpansionRequests = new Set()" in script
+    assert "latestPortfolioRequestGeneration += 1" in script
+    assert 'requester.matches(".row-toggle")' in script
+    assert "isScheduledRefresh && portfolioExpansionRequests.size > 0" in script
+    assert 'event.preventDefault();\n      return;' in script
+    assert 'document.addEventListener("htmx:afterRequest"' in script
+    assert 'document.addEventListener("htmx:beforeSwap"' in script
+    assert "generation === latestPortfolioRequestGeneration" in script
+    assert "event.preventDefault();" in script
+
+
 def test_grafico_de_vencimentos_reinicializa_apos_swap_htmx():
     script = (ROOT / "app" / "static" / "expiration-chart.js").read_text(encoding="utf-8")
 

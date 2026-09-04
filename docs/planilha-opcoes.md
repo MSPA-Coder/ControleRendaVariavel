@@ -31,6 +31,13 @@ ativo-objeto, strike e vencimento.
 - `ULT` do ativo-objeto alimenta folga de strike e breakeven.
 - Strike e exercício são dados cadastrais do contrato e do vencimento;
   indisponibilidade do RTD não os altera.
+- O comando **Atualizar Cotações desde a abertura da posição** também importa
+  o histórico diário do ticker de cada contrato de opção, desde a abertura
+  mais antiga encontrada para esse ticker. Esse histórico alimenta a aba
+  **Performance**; `OptionQuote` é somente o snapshot atual do RTD e não o
+  substitui. Se um cadastro legado não tiver extrato de movimentos, a
+  Performance pode usar uma abertura sintética somente para leitura, sem
+  alterar os dados persistidos.
 
 ## Fórmulas
 

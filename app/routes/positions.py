@@ -11,7 +11,7 @@ from flask.typing import ResponseReturnValue
 
 from app import db
 from app.models import Broker, Portfolio, Position, Side, Ticker
-from app.portfolio import PortfolioView, build_portfolio
+from app.portfolio import PortfolioView, build_portfolio, position_movement_results
 from app.position_closure import (
     close_open_position,
     create_or_merge_position,
@@ -181,6 +181,16 @@ def portfolio_results_context() -> dict[str, object]:
     expanded = expanded_position_ids()
     return {
         "portfolio": portfolio,
+        # Resultado hipotético por aporte é exclusivo do extrato de Ações.
+        # Cada mapa usa o mesmo snapshot de cotação já calculado para a linha;
+        # não há uma nova consulta por movimento nem escrita dinâmica no ORM.
+        "movement_results_by_position": {
+            view.position.id: position_movement_results(
+                view.position,
+                view.metrics.current_price if view.metrics is not None else None,
+            )
+            for view in portfolio.positions
+        },
         "expanded_positions": expanded,
         "expand_urls": {
             view.position.id: toggle_expanded_url(expanded, view.position.id)

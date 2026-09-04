@@ -65,6 +65,34 @@ htmx.config.includeIndicatorStyles = false;
   const attemptedQuoteVersions = new Set();
   let portfolioRefreshTimer;
 
+  // O refresh agendado e o botao +/- fazem requisicoes para o mesmo alvo.
+  // Quando coincidem, o navegador pode entregar primeiro a resposta antiga
+  // (por exemplo, o refresh) e depois a intencao mais recente (o clique), ou
+  // vice-versa. O HTMX nao ordena respostas: sem esta guarda, a resposta
+  // antiga pode fechar uma expansao que acabou de ser aberta.
+  //
+  // O refresh automatico espera enquanto um clique de expansao esta em voo.
+  // Sem isso, um refresh iniciado depois do clique seria considerado a
+  // intencao mais nova e poderia fechar a linha antes da resposta do clique.
+  // A requisicao antiga continua sendo enviada; somente o swap obsoleto e
+  // descartado. O mapa e por XHR para distinguir respostas mesmo depois que
+  // o fragmento alvo foi substituido por outerHTML.
+  const portfolioRequestGenerations = new WeakMap();
+  let latestPortfolioRequestGeneration = 0;
+  const portfolioExpansionRequests = new Set();
+
+  const targetsPortfolioResults = (detail) => {
+    const target = detail && detail.target;
+    const requester = detail && detail.elt;
+    const requestConfig = detail && detail.requestConfig;
+    const configuredRequester = requestConfig && requestConfig.elt;
+    return Boolean(
+      (target && target.id === "portfolio-results") ||
+      (requester && requester.id === "portfolio-results") ||
+      (configuredRequester && configuredRequester.id === "portfolio-results"),
+    );
+  };
+
   const schedulePortfolioRefresh = () => {
     if (portfolioRefreshTimer) {
       window.clearTimeout(portfolioRefreshTimer);
@@ -114,6 +142,46 @@ htmx.config.includeIndicatorStyles = false;
     ) {
       event.preventDefault();
     }
+  });
+
+  document.addEventListener("htmx:beforeRequest", (event) => {
+    // A requisicao que uma guarda anterior impediu nao representa uma nova
+    // intencao e nao deve tornar respostas validas obsoletas.
+    if (event.defaultPrevented || !targetsPortfolioResults(event.detail)) return;
+    const xhr = event.detail && event.detail.xhr;
+    const requester = event.detail && event.detail.elt;
+    const isExpansionRequest = Boolean(
+      requester && requester.matches && requester.matches(".row-toggle"),
+    );
+    const isScheduledRefresh = Boolean(
+      requester && requester.matches && requester.matches(PORTFOLIO_REFRESH),
+    );
+    if (isScheduledRefresh && portfolioExpansionRequests.size > 0) {
+      // O timer nao e uma nova intencao do usuario. Deixa o clique terminar;
+      // o afterSwap vai programar o proximo ciclo com a linha ainda aberta.
+      event.preventDefault();
+      return;
+    }
+    if (!xhr) return;
+    latestPortfolioRequestGeneration += 1;
+    portfolioRequestGenerations.set(xhr, latestPortfolioRequestGeneration);
+    if (isExpansionRequest) portfolioExpansionRequests.add(xhr);
+  });
+
+  document.addEventListener("htmx:afterRequest", (event) => {
+    const xhr = event.detail && event.detail.xhr;
+    if (xhr) portfolioExpansionRequests.delete(xhr);
+  });
+
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    if (!targetsPortfolioResults(event.detail)) return;
+    const xhr = event.detail && event.detail.xhr;
+    const generation = xhr && portfolioRequestGenerations.get(xhr);
+    if (generation === undefined || generation === latestPortfolioRequestGeneration) return;
+
+    // Deixar o evento cancelado faz o HTMX executar afterRequest normalmente,
+    // mas impede apenas a substituicao visual do fragmento obsoleto.
+    event.preventDefault();
   });
 
   // Ao voltar para a aba, atualiza na hora em vez de esperar o proximo ciclo:
