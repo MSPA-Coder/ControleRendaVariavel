@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 
 from app.domain import MARKET_TIMEZONE
-from app.models import AppSetting, CollectorMode
+from app.models import AppSetting, CollectorDestination, CollectorMode
 from app.themes import DEFAULT_THEME
 
 MIN_POLL_INTERVAL_SECONDS = 1
@@ -198,6 +198,7 @@ def default_collector_settings() -> AppSetting:
         id=1,
         theme=DEFAULT_THEME,
         collector_mode=CollectorMode.EXCEL,
+        collector_destination=CollectorDestination.REMOTE,
         poll_interval_seconds=DEFAULT_POLL_INTERVAL_SECONDS,
         agent_check_interval_seconds=DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
         collector_schedule_weekdays=DEFAULT_COLLECTOR_SCHEDULE_WEEKDAYS,

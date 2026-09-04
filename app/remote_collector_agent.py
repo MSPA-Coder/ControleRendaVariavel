@@ -315,23 +315,45 @@ class HttpQuoteSink:
         self.api.send_failure(error)
 
 
-def run(project_dir: Path, *, profit_detector: ProfitDetector | None = None) -> None:
+def remote_loop_arguments(project_dir: Path) -> dict[str, object]:
+    """Origem e destino para entregar ao VPS por HTTPS.
+
+    Levanta ``RuntimeError`` quando a URL ou o token não estão configurados:
+    escolher este destino sem ter com quem falar é um erro de instalação, e
+    falhar aqui é melhor do que coletar para lugar nenhum.
+
+    A agenda e o intervalo iniciais vêm do arquivo de estado local, e não de
+    um padrão fixo, para o agente não sair coletando fora de hora enquanto a
+    primeira consulta ao VPS ainda não voltou.
+    """
     config = _environment(project_dir)
     api = CollectorApi(config.get("COLLECTOR_REMOTE_URL", ""), _read_token(project_dir, config))
     state_path = _state_path(project_dir)
-    run_collector_loop(
-        source=HttpConfigurationSource(api),
-        sink=HttpQuoteSink(api),
-        providers=CollectorProviderManager(_provider_factory(config)),
-        detector=profit_detector or WindowsProfitDetector(),
-        logger=_logger(project_dir),
-        initial_schedule=_load_collector_schedule(state_path),
-        initial_check_interval=_load_agent_check_interval(state_path),
-        on_configuration=lambda configuration: _store_agent_state(
+    return {
+        "source": HttpConfigurationSource(api),
+        "sink": HttpQuoteSink(api),
+        "initial_schedule": _load_collector_schedule(state_path),
+        "initial_check_interval": _load_agent_check_interval(state_path),
+        "on_configuration": lambda configuration: _store_agent_state(
             state_path,
             configuration.agent_check_interval_seconds,
             configuration.schedule,
         ),
+    }
+
+
+def run(project_dir: Path, *, profit_detector: ProfitDetector | None = None) -> None:
+    """Entrada dedicada ao modo remoto, sem criar a aplicação Flask.
+
+    A tarefa unificada do Windows usa ``poll-rtd``, que decide o destino pela
+    configuração. Este caminho continua para a máquina que só entrega ao VPS
+    e prefere não ter credencial de banco alguma no processo.
+    """
+    run_collector_loop(
+        providers=CollectorProviderManager(_provider_factory(_environment(project_dir))),
+        detector=profit_detector or WindowsProfitDetector(),
+        logger=_logger(project_dir),
+        **remote_loop_arguments(project_dir),  # type: ignore[arg-type]
     )
 
 

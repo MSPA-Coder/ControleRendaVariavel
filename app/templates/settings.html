@@ -26,6 +26,25 @@
     <div class="rtd-toggle-row">
       {{ collector.rtd_toggle(rtd_service_running, rtd_service_available, rtd_service_status, collector_heartbeat) }}
     </div>
+    {# Destino da coleta. So aparece aqui, na instancia que roda na maquina
+       do ProfitChart: e ela que o coletor consulta. No VPS o botao nao
+       existe e a rota recusa, porque o valor daquela linha nao e lido por
+       ninguem e o botao mentiria sobre ter efeito. #}
+    <div class="collector-destination-row">
+      <p class="form-help">
+        Destino da coleta:
+        <strong>{{ 'este computador' if collector_destination.value == 'local' else 'o VPS' }}</strong>.
+        Os dois se excluem: com o destino local as cotações não são enviadas ao VPS, e vice-versa.
+      </p>
+      <div class="form-actions">
+        <button class="button" type="submit"
+                formaction="{{ url_for('portfolio.switch_collector_destination') }}"
+                data-sa-confirmar="{{ 'Passar a gravar as cotações no banco deste computador? O VPS deixa de receber.' if collector_destination.value == 'remote' else 'Voltar a entregar as cotações ao VPS? Este computador deixa de gravar.' }}"
+                data-sa-titulo="Trocar destino da coleta" data-sa-severidade="warning">
+          {{ 'Passar a coletar neste computador' if collector_destination.value == 'remote' else 'Voltar a entregar ao VPS' }}
+        </button>
+      </div>
+    </div>
     {% endif %}
     <div class="collector-mode-options" role="radiogroup" aria-label="Modo de leitura do ProfitChart">
       <label class="radio-option">

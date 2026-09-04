@@ -48,6 +48,18 @@ class CollectorMode(StrEnum):
     DIRECT = "direct"
 
 
+class CollectorDestination(StrEnum):
+    """Para onde o coletor Windows entrega as cotações que lê.
+
+    Os dois destinos sao mutuamente exclusivos por desenho: um processo so,
+    um destino por vez. `REMOTE` e o padrao para que uma instalacao nova
+    continue entregando ao VPS sem ninguem precisar escolher nada.
+    """
+
+    REMOTE = "remote"
+    LOCAL = "local"
+
+
 class OptionType(StrEnum):
     CALL = "call"
     PUT = "put"
@@ -193,6 +205,13 @@ class AppSetting(Base):
     collector_mode: Mapped[CollectorMode] = mapped_column(
         Enum(CollectorMode, name="collector_mode"), default=CollectorMode.EXCEL
     )
+    collector_destination: Mapped[CollectorDestination] = mapped_column(
+        Enum(CollectorDestination, name="collector_destination"),
+        default=CollectorDestination.REMOTE,
+        server_default=CollectorDestination.REMOTE.name,
+    )
+    """Destino da coleta. So a instancia que roda na maquina do ProfitChart
+    tem o controle na tela; no VPS o valor desta linha nao e consultado."""
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=2)
     agent_check_interval_seconds: Mapped[int] = mapped_column(Integer, default=30)
     """Intervalo do agente Windows para consultar alterações e pedidos no VPS."""

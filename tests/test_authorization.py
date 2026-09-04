@@ -78,6 +78,7 @@ ENDPOINTS_DE_ADMIN = frozenset(
     {
         "portfolio.settings",
         "portfolio.request_collector_refresh",
+        "portfolio.switch_collector_destination",
         "portfolio.rtd_service_partial",
         "users.index",
         "users.create",

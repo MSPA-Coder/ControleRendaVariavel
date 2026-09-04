@@ -12,8 +12,9 @@ transacional, como no resto do projeto.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+import time as time_module
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -23,10 +24,16 @@ from sqlalchemy.orm import joinedload
 
 from app import db
 from app.collector_loop import CollectorConfiguration
-from app.collector_settings import default_collector_settings, schedule_from_settings
+from app.collector_settings import (
+    DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    DEFAULT_COLLECTOR_SCHEDULE,
+    default_collector_settings,
+    schedule_from_settings,
+)
 from app.domain import MARKET_TIMEZONE
 from app.models import (
     AppSetting,
+    CollectorDestination,
     OptionContract,
     OptionPosition,
     OptionQuote,
@@ -305,3 +312,53 @@ class DatabaseQuoteSink:
         db.session.query(OptionQuote).update({"source_status": "error", "error_message": message})
         record_agent_failure(collector_settings_row(), message)
         db.session.commit()
+
+
+def read_collector_destination() -> CollectorDestination:
+    """O destino escolhido na tela, lido sempre fresco.
+
+    Só esta máquina consulta a coluna: é a instância local que tem o botão.
+    A leitura descarta a transação anterior de propósito -- um processo de
+    vida longa que não faça isso continuaria vendo o snapshot da primeira
+    consulta e nunca perceberia a troca.
+    """
+    db.session.rollback()
+    destination = db.session.scalar(
+        select(AppSetting.collector_destination).where(AppSetting.id == 1)
+    )
+    db.session.rollback()
+    return destination or CollectorDestination.REMOTE
+
+
+@dataclass(slots=True)
+class DestinationWatcher:
+    """Percebe a troca de destino sem consultar o banco a cada volta do laço.
+
+    O laço gira a cada intervalo de leitura, que pode ser de um segundo; o
+    destino muda quando alguém clica num botão. Reler no ritmo do laço seria
+    uma consulta por segundo para responder a um evento raro, então a
+    releitura acompanha o intervalo de verificação.
+    """
+
+    current: CollectorDestination
+    interval_seconds: float = float(DEFAULT_AGENT_CHECK_INTERVAL_SECONDS)
+    read: Callable[[], CollectorDestination] = read_collector_destination
+    monotonic: Callable[[], float] = time_module.monotonic
+    _next_check_at: float = field(default=0.0, init=False)
+
+    def unchanged(self) -> bool:
+        now = self.monotonic()
+        if now < self._next_check_at:
+            return True
+        self._next_check_at = now + self.interval_seconds
+        return self.read() == self.current
+
+
+def local_loop_arguments() -> dict[str, object]:
+    """Origem e destino para gravar no PostgreSQL desta máquina."""
+    return {
+        "source": DatabaseConfigurationSource(),
+        "sink": DatabaseQuoteSink(),
+        "initial_schedule": DEFAULT_COLLECTOR_SCHEDULE,
+        "initial_check_interval": DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    }

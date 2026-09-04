@@ -107,12 +107,15 @@ outra chamada externa. Proteja invariantes concorrentes no banco.
 Excel/COM não roda no contêiner Linux. Somente o ambiente Python isolado do
 agente RTD pode executar no host Windows; o restante continua em Docker.
 
-O mecanismo operacional é
-`scripts/rtd-remote-agent.ps1` → `app.remote_collector_agent`. O agente lê o
-Excel/ProfitChart e entrega cotações ao servidor por HTTPS autenticado. O
+O mecanismo operacional é `scripts/rtd-agent.ps1` → uma tarefa Windows que
+executa `poll-rtd --watch`. Uma tarefa, um processo, um destino por vez: o
+laço (`app/collector_loop.py`) é o mesmo, e a tela de Configurações escolhe se
+as cotações vão ao VPS por HTTPS (`app/remote_collector_agent.py`) ou ao
+PostgreSQL desta máquina (`app/collector_database.py`). No destino remoto o
 servidor nunca abre conexão para o Windows. `REMOTE_COLLECTOR_ENABLED` habilita
-os endpoints e o estado remoto, e `RtdServiceManager` fornece o estado exibido
-na interface.
+os endpoints e o estado remoto -- e é o que decide se esta instância mostra o
+botão de destino, porque só o banco da máquina do ProfitChart é consultado pelo
+coletor. `RtdServiceManager` fornece o estado exibido na interface.
 
 Sem o agente, a aplicação continua utilizável e informa cotações indisponíveis
 ou desatualizadas; cadastros não dependem de RTD. Normalize e valide leituras

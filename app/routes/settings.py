@@ -4,7 +4,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import current_app, flash, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -24,7 +24,7 @@ from app.collector_settings import (
     parse_collector_schedule,
     parse_collector_settings,
 )
-from app.models import AppSetting, CollectorMode, Ticker
+from app.models import AppSetting, CollectorDestination, CollectorMode, Ticker
 from app.pricing_settings import parse_pricing_settings
 from app.routes import bp
 from app.routes.helpers import (
@@ -53,6 +53,12 @@ _WEEKDAY_OPTIONS = (
 def _submitted_settings() -> AppSetting:
     """Re-render an invalid submission without changing persisted settings."""
     submitted = default_collector_settings()
+    # O destino não vem deste formulário -- tem botão próprio. Reexibir o
+    # padrão aqui mostraria "entregando ao VPS" para quem está coletando
+    # localmente, só porque outro campo da tela ficou inválido.
+    persisted = db.session.get(AppSetting, 1)
+    if persisted is not None:
+        submitted.collector_destination = persisted.collector_destination
     raw_theme = request.form.get("theme", DEFAULT_THEME).strip().lower()
     submitted.theme = (
         raw_theme
@@ -136,6 +142,7 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
             rtd_service_available=available,
             rtd_service_status=rtd_status,
             remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
+            collector_destination=settings.collector_destination,
         ),
         status,
     )
@@ -215,12 +222,40 @@ def settings() -> ResponseReturnValue:
 @bp.post("/settings/collector/refresh")
 @requer_admin
 def request_collector_refresh() -> ResponseReturnValue:
-    """Enfileira uma leitura para o agente Windows, sem abrir porta no host."""
-    if not current_app.config["REMOTE_COLLECTOR_ENABLED"]:
-        flash("A atualização remota só está disponível no ambiente VPS.", "error")
-        return redirect(url_for("portfolio.settings"))
+    """Enfileira uma leitura para o agente Windows, sem abrir porta no host.
+
+    Vale para os dois destinos: o coletor lê o pedido no mesmo campo, esteja
+    ele entregando ao VPS ou gravando no banco local.
+    """
     settings = _get_or_create_settings()
     settings.collector_refresh_requested_at = datetime.now(UTC)
     db.session.commit()
     flash("Atualização solicitada ao coletor Windows.", "success")
+    return redirect(url_for("portfolio.settings"))
+
+
+@bp.post("/settings/collector/destination")
+@requer_admin
+def switch_collector_destination() -> ResponseReturnValue:
+    """Alterna o destino da coleta entre o VPS e o banco desta máquina.
+
+    Recusa fora da instância local. O `REMOTE_COLLECTOR_ENABLED` já separa os
+    dois deploys, e só o banco da máquina do ProfitChart é consultado pelo
+    coletor -- trocar o valor no VPS não teria efeito nenhum e deixaria as
+    duas linhas discordando sobre o que está acontecendo. Esconder o botão no
+    template não basta: a recusa precisa estar aqui, onde o POST chega.
+    """
+    if current_app.config["REMOTE_COLLECTOR_ENABLED"]:
+        abort(403)
+    settings = _get_or_create_settings()
+    settings.collector_destination = (
+        CollectorDestination.LOCAL
+        if settings.collector_destination is CollectorDestination.REMOTE
+        else CollectorDestination.REMOTE
+    )
+    db.session.commit()
+    if settings.collector_destination is CollectorDestination.LOCAL:
+        flash("A coleta passa a gravar no banco deste computador.", "success")
+    else:
+        flash("A coleta volta a ser entregue ao VPS.", "success")
     return redirect(url_for("portfolio.settings"))

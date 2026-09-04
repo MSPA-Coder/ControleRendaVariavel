@@ -100,73 +100,73 @@ docker compose exec web flask --app app:create_app import-position-history
 ## Cotações RTD no Windows
 
 Excel/COM não existe no contêiner Linux. Essa é a única exceção ao runtime em
-Docker: o agente instalado por `scripts/rtd-remote-agent.ps1` executa
-`app.remote_collector_agent` no Windows, lê o RTD do Excel/ProfitChart e entrega
-as cotações ao servidor por HTTPS autenticado. O servidor nunca inicia conexão
-com o Windows nem recebe acesso ao ambiente local.
+Docker: uma tarefa Windows lê o RTD do Excel/ProfitChart e entrega as cotações
+ao destino escolhido na tela de Configurações. São dois destinos possíveis, e
+eles se excluem -- um coletor, um destino por vez:
 
 ```text
-Excel/ProfitChart -> agente RTD Windows -> HTTPS autenticado -> aplicação -> PostgreSQL
+Excel/ProfitChart -> coletor Windows -> HTTPS autenticado -> aplicação no VPS -> PostgreSQL
+Excel/ProfitChart -> coletor Windows -> PostgreSQL local (127.0.0.1:5302)
 ```
 
-Para preparar e instalar o agente:
+No destino remoto, o servidor nunca inicia conexão com o Windows nem recebe
+acesso ao ambiente local.
+
+Para preparar e instalar o coletor:
 
 ```powershell
 py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[rtd]"
 .\scripts\provision-collector-agent-token.ps1
-.\scripts\rtd-remote-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
+.\scripts\rtd-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
 ```
 
-O mesmo conteúdo de `.secrets/collector_agent_token` deve existir no Windows e
-no servidor, transferido por canal seguro. A tarefa guarda apenas a URL e o
-caminho do segredo em `.docker-local/remote-collector.env`; o log fica em
-`%LOCALAPPDATA%\ControleRendaVariavel\remote-collector.log`. Consulte ou remova
-a tarefa com `-Action Status` ou `-Action Uninstall`.
+`-ApiUrl` só é necessária para o destino remoto e pode ser omitida em uma
+instalação que vá coletar apenas no banco local. O mesmo conteúdo de
+`.secrets/collector_agent_token` deve existir no Windows e no servidor,
+transferido por canal seguro. A tarefa guarda apenas a URL e o caminho do
+segredo em `.docker-local/remote-collector.env`; os demais segredos são lidos
+de `.secrets/` e não entram nos argumentos da tarefa nem no log. A saída fica
+em `%LOCALAPPDATA%\ControleRendaVariavel\collector.log`. Consulte ou remova a
+tarefa com `-Action Status` ou `-Action Uninstall`.
 
-Para coletar no banco local desta máquina, use o modo alternativo abaixo. Ele
-inicia no logon do Windows, lê `SECRET_KEY` e a senha PostgreSQL diretamente
-dos arquivos em `.secrets/` e grava pela porta local `5302`; os segredos não
-entram nos argumentos da tarefa nem no log.
+A tarefa começa no **logon do Windows**, com um segundo gatilho diário antes do
+pregão, e termina quando a sessão do Windows termina. Isso não acompanha o
+login ou o logout da sessão web: o coletor é um recurso da máquina, não de uma
+aba. Instalar a tarefa unificada remove as tarefas separadas das versões
+anteriores.
 
-```powershell
-.\scripts\rtd-local-agent.ps1 -Action Install
-```
+### Escolher o destino
+
+O botão fica na tela **Configurações**, e só existe na instância que roda na
+máquina do ProfitChart -- é o banco dela que o coletor consulta. No VPS o
+controle não aparece e a rota recusa: trocar o valor lá não teria efeito e
+deixaria as duas instalações discordando sobre para onde a coleta está indo.
+
+Uma instalação nova começa entregando ao VPS. Ao trocar para o destino local,
+as cotações passam a ser gravadas no PostgreSQL desta máquina e param de ser
+enviadas ao VPS; ao voltar, o inverso. A troca é percebida no próximo
+intervalo de verificação, sem reinstalar nada.
+
+A exclusão entre os destinos é estrutural: uma tarefa, um processo, um destino
+por vez. Além disso `poll-rtd` mantém um lock interprocesso, de modo que o
+toggle administrativo ou outro worker não consegue manter um segundo coletor
+ativo; o lock é do sistema operacional e é liberado mesmo se o processo morrer.
+
+### Ritmos da coleta
 
 A tela **Configurações** separa os dois ritmos: o **intervalo entre leituras**
-define quando o agente consulta o RTD e entrega cotações; o **intervalo de
-verificação do agente** define somente quando ele busca pedidos e alterações no
-servidor, sem consultar o ProfitChart. A agenda restringe as leituras RTD. O
-botão de atualização manual é percebido na próxima verificação e antecipa uma
-leitura. Em **Ações**, a tela se atualiza perto da próxima leitura esperada, em
-vez de consultar o servidor continuamente. Sem o agente, a aplicação permanece
-utilizável; as cotações aparecem indisponíveis ou desatualizadas e cadastros
-continuam funcionando.
+define quando o coletor consulta o RTD e entrega cotações; o **intervalo de
+verificação do agente** define somente quando ele busca pedidos e alterações de
+configuração, sem consultar o ProfitChart. A agenda restringe as leituras RTD.
+O botão de atualização manual é percebido na próxima verificação e antecipa uma
+leitura -- vale para os dois destinos. Em **Ações**, a tela se atualiza perto da
+próxima leitura esperada, em vez de consultar o servidor continuamente. Sem o
+coletor, a aplicação permanece utilizável; as cotações aparecem indisponíveis ou
+desatualizadas e cadastros continuam funcionando.
 
-`poll-rtd` e `probe-rtd-direct` também dependem de Excel/COM e servem apenas
-para diagnóstico no ambiente Python isolado do Windows. Não os execute no
-contêiner `web`.
-
-### Coletor local
-
-Quando a aplicação usa um PostgreSQL local publicado pelo Compose, o mesmo
-núcleo de coleta pode gravar diretamente nesse banco pelo Windows. Instale a
-tarefa local com:
-
-```powershell
-.\scripts\rtd-local-agent.ps1 -Action Install
-```
-
-A tarefa executa `poll-rtd --watch` sem abrir janela, aceita apenas uma
-instância e reinicia após uma falha. Ela começa no **logon do Windows** e é
-encerrada quando a sessão do Windows termina; isso não acompanha o login ou o
-logout da sessão web. Consulte ou remova com `-Action Status` ou `-Action
-Uninstall`. Não instale o coletor local e o agente remoto ao mesmo tempo para
-o mesmo ProfitChart: ambos abririam COM e poderiam disputar a mesma fonte.
-O próprio `poll-rtd` mantém um lock interprocesso, portanto o toggle
-administrativo ou outro worker não consegue manter um segundo coletor local
-ativo. A saída do processo fica em
-`%LOCALAPPDATA%\ControleRendaVariavel\local-collector.log`.
+`poll-rtd` e `probe-rtd-direct` dependem de Excel/COM e rodam no ambiente Python
+isolado do Windows. Não os execute no contêiner `web`.
 
 ## Segurança e produção
 

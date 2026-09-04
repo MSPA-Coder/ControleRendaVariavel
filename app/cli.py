@@ -4,6 +4,7 @@ import ctypes
 import logging
 import os
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,17 +15,19 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app import db
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_database import DatabaseConfigurationSource, DatabaseQuoteSink
+from app.collector_database import (
+    DestinationWatcher,
+    local_loop_arguments,
+    read_collector_destination,
+)
 from app.collector_lock import CollectorAlreadyRunningError, collector_process_lock
 from app.collector_loop import run_collector_loop
-from app.collector_settings import (
-    DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
-    DEFAULT_COLLECTOR_SCHEDULE,
-)
+from app.collector_settings import DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
 from app.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
+    CollectorDestination,
     CollectorMode,
     QuoteHistory,
     User,
@@ -34,6 +37,7 @@ from app.quote_history_import import (
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
+from app.remote_collector_agent import remote_loop_arguments
 from app.routes.helpers import quote_update_targets
 from app.rtd import ExcelRtdQuoteProvider, Instrument
 from app.rtd_direct import DirectRtdQuoteProvider
@@ -203,55 +207,78 @@ def _collector_logger() -> logging.Logger:
     return logger
 
 
-def _poll_rtd_once(
-    source: DatabaseConfigurationSource,
-    sink: DatabaseQuoteSink,
-    providers: CollectorProviderManager,
-) -> None:
+def _loop_arguments(destination: CollectorDestination, project_dir: Path) -> dict[str, object]:
+    if destination is CollectorDestination.LOCAL:
+        return local_loop_arguments()
+    return remote_loop_arguments(project_dir)
+
+
+def _poll_rtd_once(destination: CollectorDestination, project_dir: Path) -> None:
     """Uma leitura e sai -- o modo de diagnóstico, sem supervisão nem espera.
 
-    Ao contrário do ``--watch``, não espera o ProfitChart abrir: quem roda um
-    ciclo à mão prefere ver o erro de COM a ver o comando terminar em
-    silêncio.
+    Entrega ao mesmo destino configurado na tela: um ciclo manual não é
+    desculpa para gravar no banco local enquanto a coleta está indo para o
+    VPS. Ao contrário do ``--watch``, não espera o ProfitChart abrir -- quem
+    roda um ciclo à mão prefere ver o erro de COM a ver o comando terminar
+    em silêncio.
     """
-    configuration = source.configuration()
+    arguments = _loop_arguments(destination, project_dir)
+    source = arguments["source"]
+    sink = arguments["sink"]
+    configuration = source.configuration()  # type: ignore[attr-defined]
     if not configuration.schedule.is_active():
         return
+    providers = _collector_providers()
     instruments = list(configuration.instruments)
     try:
-        values = providers.get(configuration.collector_mode).fetch(instruments) if instruments else []
-        sink.publish(values, configuration.option_keys)
+        values = (
+            providers.get(configuration.collector_mode).fetch(instruments) if instruments else []
+        )
+        sink.publish(values, configuration.option_keys)  # type: ignore[attr-defined]
     except Exception as exc:
-        sink.report_failure(exc)
+        sink.report_failure(exc)  # type: ignore[attr-defined]
         raise click.ClickException(str(exc)) from exc
     finally:
         providers.close()
     click.echo(
-        f"{len(values)} cotações atualizadas via {configuration.collector_mode.value} "
-        f"em {datetime.now(UTC).isoformat()}"
+        f"{len(values)} cotações entregues {sink.destination_label} "  # type: ignore[attr-defined]
+        f"via {configuration.collector_mode.value} em {datetime.now(UTC).isoformat()}"
     )
 
 
 def _poll_rtd(watch: bool) -> None:
-    source = DatabaseConfigurationSource()
-    sink = DatabaseQuoteSink()
-    providers = _collector_providers()
+    project_dir = Path(current_app.root_path).parent
     if not watch:
-        _poll_rtd_once(source, sink, providers)
+        _poll_rtd_once(read_collector_destination(), project_dir)
         return
     # O coletor local é filho de quem o iniciou: se aquele processo morrer, o
     # laço para em vez de continuar segurando COM sem ninguém supervisionando.
     supervisor_pid = os.getenv("RTD_SUPERVISOR_PID")
-    run_collector_loop(
-        source=source,
-        sink=sink,
-        providers=providers,
-        detector=WindowsProfitDetector(),
-        logger=_collector_logger(),
-        initial_schedule=DEFAULT_COLLECTOR_SCHEDULE,
-        initial_check_interval=DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
-        should_continue=lambda: supervisor_process_is_alive(supervisor_pid),
-    )
+    logger = _collector_logger()
+    while supervisor_process_is_alive(supervisor_pid):
+        destination = read_collector_destination()
+        watcher = DestinationWatcher(destination)
+        try:
+            arguments = _loop_arguments(destination, project_dir)
+        except RuntimeError as exc:
+            # Destino remoto escolhido sem URL ou token: reclamar e esperar,
+            # em vez de reiniciar em laço fechado. Voltar o destino para
+            # local na tela recupera sem mexer no host.
+            logger.warning("Destino %s indisponível: %s", destination.value, exc)
+            time.sleep(DEFAULT_AGENT_CHECK_INTERVAL_SECONDS)
+            continue
+        logger.info("Coleta ativa com destino %s.", destination.value)
+        run_collector_loop(
+            providers=_collector_providers(),
+            detector=WindowsProfitDetector(),
+            logger=logger,
+            # `watcher` é religado a cada destino; prendê-lo no argumento
+            # evita a captura tardia da variável do laço.
+            should_continue=lambda observador=watcher: (
+                supervisor_process_is_alive(supervisor_pid) and observador.unchanged()
+            ),
+            **arguments,  # type: ignore[arg-type]
+        )
 
 
 @click.command("import-position-history")
