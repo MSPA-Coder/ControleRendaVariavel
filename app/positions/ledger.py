@@ -1,6 +1,6 @@
 """Preservação do extrato de uma posição que está sendo encerrada.
 
-``app.position_closure`` e ``app.option_position_closure`` apagam a posição
+``app.positions.closure`` e ``app.options.closure`` apagam a posição
 ao encerrá-la por inteiro, e o extrato vai junto em cascata. O relatório de
 performance precisa preservar esses lançamentos para incluir posições
 encerradas e evitar viés de sobrevivência.

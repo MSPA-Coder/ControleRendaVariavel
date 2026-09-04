@@ -13,8 +13,8 @@ from conftest import CONFIG_DE_TESTE
 
 from app import CHAVE_TEMA_NA_SESSAO, create_app, login_manager
 from app.collector.database import DestinationWatcher
+from app.core.themes import DEFAULT_THEME
 from app.models import ROLE_ADMIN, CollectorDestination, User
-from app.themes import DEFAULT_THEME
 
 # Deriva da configuração do conftest em vez de repeti-la: é dela que vem o
 # `creator` que recusa a conexão sem abrir socket. Sem ele, o POST que este

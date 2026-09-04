@@ -31,7 +31,7 @@ from app.collector.settings import (
     default_collector_settings,
     schedule_from_settings,
 )
-from app.domain import MARKET_TIMEZONE
+from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     AppSetting,
     CollectorDestination,

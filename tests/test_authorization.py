@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from flask import abort
 
-from app.authorization import PAPEL_ADMIN, requer_admin
+from app.accounts.authorization import PAPEL_ADMIN, requer_admin
 from app.models import ROLE_ADMIN, ROLE_OPERADOR, VALID_ROLES, User
 
 
@@ -36,13 +36,13 @@ def rota_protegida():
 
 
 def test_admin_alcanca(app, monkeypatch, rota_protegida):
-    monkeypatch.setattr("app.authorization.current_user", _UsuarioFalso(ROLE_ADMIN))
+    monkeypatch.setattr("app.accounts.authorization.current_user", _UsuarioFalso(ROLE_ADMIN))
     with app.test_request_context("/settings"):
         assert rota_protegida() == "alcancou"
 
 
 def test_operador_recebe_403(app, monkeypatch, rota_protegida):
-    monkeypatch.setattr("app.authorization.current_user", _UsuarioFalso(ROLE_OPERADOR))
+    monkeypatch.setattr("app.accounts.authorization.current_user", _UsuarioFalso(ROLE_OPERADOR))
     with app.test_request_context("/settings"), pytest.raises(Exception) as erro:
         rota_protegida()
     assert "403" in str(erro.value)
@@ -51,7 +51,7 @@ def test_operador_recebe_403(app, monkeypatch, rota_protegida):
 def test_anonimo_sem_papel_recebe_403(app, monkeypatch, rota_protegida):
     # `getattr(current_user, "is_admin", False)` precisa negar quando a
     # propriedade nem existe, nao estourar.
-    monkeypatch.setattr("app.authorization.current_user", object())
+    monkeypatch.setattr("app.accounts.authorization.current_user", object())
     with app.test_request_context("/settings"), pytest.raises(Exception) as erro:
         rota_protegida()
     assert "403" in str(erro.value)

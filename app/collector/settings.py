@@ -4,9 +4,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, time
 
-from app.domain import MARKET_TIMEZONE
+from app.core.domain import MARKET_TIMEZONE
+from app.core.themes import DEFAULT_THEME
 from app.models import AppSetting, CollectorDestination, CollectorMode
-from app.themes import DEFAULT_THEME
 
 MIN_POLL_INTERVAL_SECONDS = 1
 MAX_POLL_INTERVAL_SECONDS = 3600

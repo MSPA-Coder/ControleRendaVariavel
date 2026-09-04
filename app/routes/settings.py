@@ -9,7 +9,7 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import db, esquecer_tema_da_sessao
-from app.authorization import requer_admin
+from app.accounts.authorization import requer_admin
 from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_COLLECTOR_SCHEDULE_END_TIME,
@@ -24,17 +24,17 @@ from app.collector.settings import (
     parse_collector_schedule,
     parse_collector_settings,
 )
-from app.models import AppSetting, CollectorDestination, CollectorMode, Ticker
-from app.pricing_settings import parse_pricing_settings
-from app.routes import bp
-from app.routes.helpers import ticker_records
-from app.themes import (
+from app.core.pricing_settings import parse_pricing_settings
+from app.core.themes import (
     DEFAULT_THEME,
     THEME_DESCRIPTIONS,
     THEME_OPTIONS,
     get_theme_options_dict,
     parse_theme,
 )
+from app.models import AppSetting, CollectorDestination, CollectorMode, Ticker
+from app.routes import bp
+from app.routes.helpers import ticker_records
 
 _WEEKDAY_OPTIONS = (
     (0, "Segunda-feira"),

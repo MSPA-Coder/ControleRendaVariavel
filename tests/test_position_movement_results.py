@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.models import PositionMovementKind, Side
-from app.portfolio import position_movement_results
+from app.positions.portfolio import position_movement_results
 
 ROOT = Path(__file__).parents[1]
 

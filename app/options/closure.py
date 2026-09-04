@@ -1,13 +1,22 @@
-"""Ciclo de vida de uma posição de ações: abertura, aumento, ajuste e
+"""Ciclo de vida de uma posição de opções: abertura, aumento, ajuste e
 encerramento (total ou parcial).
+
+Espelha ``app.positions.closure`` (ações) trocando ``Position`` por
+``OptionPosition``, ``PositionMovement`` por ``OptionPositionMovement`` e
+``ticker_id`` por ``contract_id``. O algoritmo em si (custo médio ponderado,
+replay do extrato e divisão de quantidade num encerramento parcial) é o mesmo
+dos dois instrumentos e vive em ``app.core.domain``; só a persistência muda entre
+os dois módulos.
 
 Três registros andam juntos e são mantidos em dia aqui, nunca nas rotas:
 
-- ``Position`` — o estado atual consolidado (uma linha por ticker, corretora,
-  tipo e natureza);
-- ``PositionMovement`` — o extrato que explica como se chegou a esse estado;
+- ``OptionPosition`` — o estado atual consolidado (uma linha por contrato,
+  corretora, tipo e carteira);
+- ``OptionPositionMovement`` — o extrato que explica como se chegou a esse
+  estado;
 - ``Transaction`` — o que aparece na aba Transações: uma linha aberta
-  espelhando a posição e uma linha fechada para cada parcela realizada.
+  espelhando a posição (``option_contract_id`` preenchido, ``ticker_id``
+  nulo) e uma linha fechada para cada parcela realizada.
 """
 
 from __future__ import annotations
@@ -18,7 +27,7 @@ from decimal import Decimal
 from sqlalchemy import Select, select
 
 from app import db
-from app.domain import (
+from app.core.domain import (
     StatementEntry,
     is_duplicate_entry,
     plan_position_closure,
@@ -26,27 +35,20 @@ from app.domain import (
     weighted_average_cost,
 )
 from app.models import (
+    OptionPosition,
+    OptionPositionMovement,
     Portfolio,
-    Position,
-    PositionMovement,
     PositionMovementKind,
     Transaction,
     TransactionStatus,
 )
-from app.position_ledger import archive_closed_position
+from app.positions.ledger import archive_closed_position
 
 
 def _is_simulated(portfolio_id: int) -> bool:
-    """Se a carteira ``portfolio_id`` é a Simulada.
-
-    Consulta direta em vez do relacionamento ``Position.portfolio_ref``:
-    o ``candidate`` de ``create_or_merge_position`` ainda não foi
-    adicionado à sessão no ponto em que isso precisa ser decidido, e um
-    relacionamento não carrega por lazy load em um objeto transiente. A
-    consulta é barata: ``Portfolio`` é uma tabela pequena e, nas rotas, o
-    id já costuma estar no mapa de identidade da sessão (validado em
-    ``_parse_form``/``_parse_position`` antes de chegar aqui).
-    """
+    """Mesma ideia de ``position_closure._is_simulated``, para opções: consulta
+    direta porque o ``candidate`` de ``create_or_merge_position`` ainda não foi
+    adicionado à sessão no ponto em que isso precisa ser decidido."""
 
     portfolio = db.session.get(Portfolio, portfolio_id)
     return portfolio is not None and portfolio.simulated
@@ -65,13 +67,13 @@ SIMULATED_CLOSE_REJECTED = (
 )
 
 
-def create_open_transaction_for_position(position: Position) -> Transaction:
-    """Cria a linha ``status=OPEN`` que espelha uma posição recém-criada,
-    para que ela apareça imediatamente em Transações como aberta."""
+def create_open_transaction_for_position(position: OptionPosition) -> Transaction:
+    """Cria a linha ``status=OPEN`` que espelha uma posição de opção recém-
+    criada, para que ela apareça imediatamente em Transações como aberta."""
 
     transaction = Transaction(
         broker_id=position.broker_id,
-        ticker_id=position.ticker_id,
+        option_contract_id=position.contract_id,
         quantity=position.quantity,
         average_cost=position.average_cost,
         exit_price=None,
@@ -88,27 +90,28 @@ def create_open_transaction_for_position(position: Position) -> Transaction:
     return transaction
 
 
-def _open_transaction_for(position_id: int) -> Transaction | None:
+def _open_transaction_for(option_position_id: int) -> Transaction | None:
     return db.session.scalar(
         select(Transaction).where(
-            Transaction.source_position_id == position_id,
+            Transaction.source_position_id == option_position_id,
             Transaction.status == TransactionStatus.OPEN,
             # ``Position`` e ``OptionPosition`` têm sequências de id
-            # independentes: sem este filtro, uma posição de opção com o
+            # independentes: sem este filtro, uma posição de ação com o
             # mesmo id numérico faria esta consulta encontrar duas linhas
-            # (``MultipleResultsFound``) ou a linha errada.
-            Transaction.ticker_id.is_not(None),
+            # ou a linha errada.
+            Transaction.option_contract_id.is_not(None),
         )
     )
 
 
-def sync_open_transaction_for_position(position: Position) -> None:
+def sync_open_transaction_for_position(position: OptionPosition) -> None:
     """Mantém a linha aberta espelhada em dia após uma edição da posição.
     Cria a linha se, por algum motivo, ela ainda não existir.
 
-    Posição simulada não tem transação. Ao trocar uma posição simulada para uma
-    carteira real, o ramo "cria se não existir" abre a transação sem exigir um
-    caminho dedicado."""
+    Posição simulada não tem transação: não faz nada (ver
+    ``position_closure.sync_open_transaction_for_position``, o mesmo
+    mecanismo para ações, inclusive para a transição simulada -> real: a linha
+    "nasce" aqui porque nenhuma existia antes)."""
 
     if position.simulated:
         return
@@ -117,7 +120,7 @@ def sync_open_transaction_for_position(position: Position) -> None:
         create_open_transaction_for_position(position)
         return
     transaction.broker_id = position.broker_id
-    transaction.ticker_id = position.ticker_id
+    transaction.option_contract_id = position.contract_id
     transaction.quantity = position.quantity
     transaction.average_cost = position.average_cost
     transaction.side = position.side
@@ -128,7 +131,7 @@ def sync_open_transaction_for_position(position: Position) -> None:
 
 def delete_open_transaction_for_position(position_id: int) -> None:
     """Remove a linha aberta espelhada quando a posição é excluída sem
-    encerramento (ver ``routes.positions.delete_position``)."""
+    encerramento (ver ``routes.options.delete_position``)."""
 
     transaction = _open_transaction_for(position_id)
     if transaction is not None:
@@ -136,7 +139,7 @@ def delete_open_transaction_for_position(position_id: int) -> None:
 
 
 def record_movement(
-    position: Position,
+    position: OptionPosition,
     kind: PositionMovementKind,
     *,
     quantity_delta: Decimal,
@@ -144,16 +147,16 @@ def record_movement(
     occurred_on: date,
     result: Decimal | None = None,
     transaction_id: int | None = None,
-) -> PositionMovement:
-    """Acrescenta um lançamento ao extrato da posição.
+) -> OptionPositionMovement:
+    """Acrescenta um lançamento ao extrato da posição de opção.
 
     O estado resultante é fotografado a partir da posição, que já deve estar
-    atualizada quando esta função é chamada: é o custo médio vigente **depois**
-    do movimento que interessa a quem lê o extrato.
+    atualizada quando esta função é chamada: é o custo médio vigente
+    **depois** do movimento que interessa a quem lê o extrato.
     """
 
-    movement = PositionMovement(
-        position_id=position.id,
+    movement = OptionPositionMovement(
+        option_position_id=position.id,
         kind=kind,
         quantity_delta=quantity_delta,
         price=price,
@@ -167,18 +170,13 @@ def record_movement(
     return movement
 
 
-def replay_movements(position: Position) -> None:
+def replay_movements(position: OptionPosition) -> None:
     """Recalcula o saldo de cada movimento e o estado atual da posição.
 
     Necessário quando um movimento sai do meio do extrato — ao desfazer um
-    encerramento parcial: os saldos gravados nos movimentos seguintes ainda
-    descontariam uma parcela que não existe mais, e a posição continuaria
-    reduzida. Reaplicar a cadeia inteira é o que faz extrato e posição voltarem
-    a contar a mesma história.
-
-    O custo médio é reaplicado junto porque um aumento o redefine; um
-    encerramento parcial, não. O cálculo em si é ``domain.replay_statement``;
-    esta função só traduz de/para os modelos ORM.
+    encerramento parcial. O cálculo em si é ``domain.replay_statement``; esta
+    função só traduz de/para os modelos ORM (ver
+    ``position_closure.replay_movements``, o mesmo algoritmo para ações).
     """
 
     movements = list(position.movements)
@@ -201,42 +199,45 @@ def replay_movements(position: Position) -> None:
     position.average_cost = replayed[-1].resulting_average_cost
 
 
-def partial_close_of_open_position(transaction: Transaction) -> Position | None:
-    """A posição ainda aberta que esta transação encerrou parcialmente.
+def partial_close_of_open_position(transaction: Transaction) -> OptionPosition | None:
+    """A posição de opção ainda aberta que esta transação encerrou
+    parcialmente.
 
-    ``None`` quando a transação não veio de uma posição, ainda está aberta ou
-    encerrou a posição por inteiro — nesse caso ela é um registro histórico
-    independente, e não o espelho de um movimento de uma posição viva.
+    ``None`` quando a transação não veio de uma posição de opção, ainda está
+    aberta ou encerrou a posição por inteiro — nesse caso ela é um registro
+    histórico independente, e não o espelho de um movimento de uma posição
+    viva.
     """
 
     if (
         transaction.status is not TransactionStatus.CLOSED
         or transaction.source_position_id is None
-        or transaction.ticker_id is None
+        or transaction.option_contract_id is None
     ):
         return None
-    return db.session.get(Position, transaction.source_position_id)
+    return db.session.get(OptionPosition, transaction.source_position_id)
 
 
-def revert_partial_close(transaction: Transaction) -> Position | None:
+def revert_partial_close(transaction: Transaction) -> OptionPosition | None:
     """Desfaz o encerramento parcial que gerou esta transação.
 
     Devolve a quantidade encerrada à posição e remove a baixa do extrato, para
-    que excluir a transação em Transações realmente volte ao estado anterior —
-    em vez de apagar o registro da venda e deixar a posição reduzida.
+    que excluir a transação em Transações realmente volte ao estado anterior.
 
     Não faz ``commit``: quem exclui a transação é dono do limite transacional.
     """
 
     position = db.session.scalar(
-        select(Position)
-        .where(Position.id == transaction.source_position_id)
+        select(OptionPosition)
+        .where(OptionPosition.id == transaction.source_position_id)
         .with_for_update()
     )
     if position is None:
         return None
     movement = db.session.scalar(
-        select(PositionMovement).where(PositionMovement.transaction_id == transaction.id)
+        select(OptionPositionMovement).where(
+            OptionPositionMovement.transaction_id == transaction.id
+        )
     )
     if movement is None:
         # Encerramento parcial anterior ao vínculo entre baixa e transação:
@@ -250,49 +251,40 @@ def revert_partial_close(transaction: Transaction) -> Position | None:
     return position
 
 
-def _mergeable_statement(candidate: Position) -> Select[tuple[Position]]:
-    """Consulta da posição aberta que um novo aporte reforçaria.
+def _mergeable_statement(candidate: OptionPosition) -> Select[tuple[OptionPosition]]:
+    """Consulta da posição de opção aberta que um novo aporte reforçaria.
 
-    Unifica somente o que representa a mesma exposição: mesmo ticker, mesma
-    corretora, mesmo tipo (compra ou venda) e mesma carteira. Uma compra não
-    abate uma venda nem uma posição de uma carteira contamina a de outra —
-    essas continuam sendo linhas separadas na carteira.
+    Unifica somente o que representa a mesma exposição: mesmo **contrato**
+    (não apenas o mesmo ativo-objeto — strike e vencimento diferentes nunca
+    se fundem), mesma corretora, mesmo tipo (compra ou venda) e mesma
+    carteira. É o análogo de ``position_closure._mergeable_statement``
+    trocando ticker por contrato.
     """
 
     return (
-        select(Position)
+        select(OptionPosition)
         .where(
-            Position.broker_id == candidate.broker_id,
-            Position.ticker_id == candidate.ticker_id,
-            Position.side == candidate.side,
-            Position.portfolio_id == candidate.portfolio_id,
+            OptionPosition.broker_id == candidate.broker_id,
+            OptionPosition.contract_id == candidate.contract_id,
+            OptionPosition.side == candidate.side,
+            OptionPosition.portfolio_id == candidate.portfolio_id,
         )
-        .order_by(Position.id)
+        .order_by(OptionPosition.id)
         .limit(1)
     )
 
 
-def _mergeable_position(candidate: Position) -> Position | None:
-    """A posição que o aporte vai reforçar, já travada para escrita.
-
-    O ``FOR UPDATE`` existe porque dois aportes simultâneos no mesmo ativo
-    leriam a mesma quantidade e o segundo sobrescreveria o primeiro.
-    """
+def _mergeable_position(candidate: OptionPosition) -> OptionPosition | None:
+    """A posição que o aporte vai reforçar, já travada para escrita."""
 
     return db.session.scalar(_mergeable_statement(candidate).with_for_update())
 
 
-def duplicate_entry(candidate: Position) -> PositionMovement | None:
+def duplicate_entry(candidate: OptionPosition) -> OptionPositionMovement | None:
     """O último lançamento da posição, quando ele é idêntico a este aporte.
 
-    Serve à confirmação extra no cadastro: dois cliques em Salvar produzem dois
-    lançamentos iguais em milissegundos, e o segundo é indistinguível de um
-    aporte real — ele soma quantidade e mexe no custo médio como qualquer
-    outro. Comparar quantidade, preço e data com o último movimento é o que
-    permite perguntar antes, em vez de deixar o usuário descobrir depois.
-
-    Consulta sem lock: é uma leitura para decidir se pergunta algo ao usuário,
-    não o começo da escrita.
+    Serve à confirmação extra no cadastro (ver
+    ``position_closure.duplicate_entry``, o mesmo mecanismo para ações).
     """
 
     existing = db.session.scalar(_mergeable_statement(candidate))
@@ -312,17 +304,15 @@ def duplicate_entry(candidate: Position) -> PositionMovement | None:
     return None
 
 
-def create_or_merge_position(candidate: Position) -> tuple[Position, bool]:
-    """Registra um aporte, abrindo uma posição nova ou reforçando a existente.
+def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition, bool]:
+    """Registra um aporte, abrindo uma posição de opção nova ou reforçando a
+    existente.
 
     Devolve a posição persistida e se ela já existia. Quando já existia, o
     ``candidate`` é descartado: a quantidade é somada e o custo médio passa a
     ser a média ponderada dos dois (ver ``domain.weighted_average_cost``). A
-    data inicial recua para a mais antiga das duas, porque a posição de fato é
-    mantida desde o primeiro aporte; e os parâmetros da posição existente
-    (delta da cotação, multiplicador do target e modo de resultado) são
-    preservados, já que um aporte não é motivo para redefinir o alvo de uma
-    posição em andamento.
+    data inicial recua para a mais antiga das duas, e o target da posição
+    existente é preservado, já que um aporte não é motivo para redefini-lo.
 
     Não faz ``commit``: quem inicia a operação de escrita é dono do limite
     transacional.
@@ -367,24 +357,17 @@ def create_or_merge_position(candidate: Position) -> tuple[Position, bool]:
 
 
 def record_position_adjustment(
-    position: Position,
+    position: OptionPosition,
     previous_quantity: Decimal,
     previous_average_cost: Decimal,
 ) -> None:
-    """Mantém o extrato coerente depois de uma edição direta da posição.
+    """Mantém o extrato coerente depois de uma edição direta da posição (ver
+    ``position_closure.record_position_adjustment``, o mesmo mecanismo para
+    ações).
 
-    Enquanto a posição só tem a abertura, editá-la é corrigir o próprio
-    lançamento de abertura, e é isso que acontece. Depois que ela passou a ter
-    histórico (aportes ou encerramentos parciais), reescrever a abertura
-    falsificaria o passado: a diferença vira um movimento de ajuste, e o
-    extrato continua explicando o estado atual.
-
-    Posição simulada não tem extrato: não faz nada. Cobre tanto a
-    edição comum de uma posição já simulada quanto a transição real ->
-    simulada — o extrato existente é descartado à parte, por
-    ``discard_simulation_history``, porque esta função só adiciona
-    movimentos, nunca apaga.
-    """
+    Posição simulada não tem extrato: não faz nada. O descarte do extrato ao
+    entrar na Simulada é responsabilidade de
+    ``discard_simulation_history``, chamada à parte pela rota."""
 
     if position.simulated:
         return
@@ -420,20 +403,8 @@ def record_position_adjustment(
     )
 
 
-def discard_simulation_history(position: Position) -> None:
-    """Descarta o histórico quando uma posição entra na
-    carteira Simulada: apaga a linha ``status=OPEN`` que a espelhava em
-    Transações e descarta o extrato inteiro — a carteira Simulada não tem
-    nenhum dos dois.
-
-    Chamada pela rota **depois** de a posição já ter o novo
-    ``portfolio_id`` atribuído. A transição no sentido contrário (simulada
-    -> real) não precisa de uma função dedicada: ``record_position_adjustment``
-    recria a abertura do extrato (que está vazio) e
-    ``sync_open_transaction_for_position`` cria a linha aberta que faltava —
-    as duas já rodam depois de toda edição, e as guardas de ambas passam a
-    deixá-las agir assim que a carteira deixa de ser a Simulada.
-    """
+def discard_simulation_history(position: OptionPosition) -> None:
+    """Apaga a linha aberta e o extrato ao entrar na carteira Simulada."""
 
     delete_open_transaction_for_position(position.id)
     for movement in list(position.movements):
@@ -446,29 +417,18 @@ def close_open_position(
     closed_on: date,
     quantity: Decimal | None = None,
 ) -> Transaction | None:
-    """Encerra uma posição aberta, por inteiro ou em parte, de forma atômica.
-    Devolve ``None`` quando a posição não existe mais.
+    """Encerra uma posição de opção aberta, por inteiro ou em parte, de forma
+    atômica. Devolve ``None`` quando a posição não existe mais.
 
-    Encerramento **total** (``quantity`` ausente ou igual à quantidade em
-    carteira): reaproveita a linha ``status=OPEN`` já existente em
-    ``transactions`` e a atualiza para ``status=CLOSED``, em vez de inserir uma
-    nova — preserva o mesmo registro ao longo do ciclo de vida da posição — e
-    apaga a posição, junto com o extrato de movimentos.
-
-    Encerramento **parcial**: insere uma nova linha fechada com a quantidade
-    realizada e reduz a linha aberta ao saldo que permanece na carteira, de
-    modo que as duas somem a quantidade original. O custo médio do saldo não
-    muda: vender parte da posição realiza resultado, não altera o que foi pago
-    pelo que restou.
-
-    A carteira Simulada não permite encerramento: a validação roda **depois**
-    do ``FOR UPDATE`` (para travar antes de decidir) e faz ``rollback`` antes
-    de propagar, liberando o lock sem deixar nada pela metade — mesmo
-    padrão de erro que ``plan_position_closure`` já usa aqui embaixo.
+    Mesma mecânica de ``position_closure.close_open_position``: reaproveita a
+    linha ``status=OPEN`` já existente em ``transactions`` num encerramento
+    total, e insere uma linha fechada nova + reduz o saldo num parcial. A
+    carteira Simulada não permite encerramento — ver a mesma
+    guarda em ``position_closure.close_open_position``.
     """
 
     position = db.session.scalar(
-        select(Position).where(Position.id == position_id).with_for_update()
+        select(OptionPosition).where(OptionPosition.id == position_id).with_for_update()
     )
     if position is None:
         return None
@@ -501,14 +461,14 @@ def close_open_position(
 
 
 def _close_entirely(
-    position: Position, exit_price: Decimal, closed_on: date, result: Decimal
+    position: OptionPosition, exit_price: Decimal, closed_on: date, result: Decimal
 ) -> Transaction:
     transaction = _open_transaction_for(position.id)
     if transaction is None:
         transaction = Transaction(source_position_id=position.id)
         db.session.add(transaction)
     transaction.broker_id = position.broker_id
-    transaction.ticker_id = position.ticker_id
+    transaction.option_contract_id = position.contract_id
     transaction.quantity = position.quantity
     transaction.average_cost = position.average_cost
     transaction.exit_price = exit_price
@@ -519,14 +479,14 @@ def _close_entirely(
     transaction.result = result
     transaction.status = TransactionStatus.CLOSED
     transaction.portfolio_id = position.portfolio_id
-    transaction.notes = f"Encerrada a partir da posição #{position.id}."
-    # Antes de apagar: a exclusão leva o extrato em cascata, e sem ele a
-    # posição encerrada sumiria do relatório de performance, que reconstrói a
-    # série a partir dele. Ver `app.position_ledger`.
+    transaction.notes = f"Encerrada a partir da posição de opção #{position.id}."
+    # Mesma preservação da posição de ações (ver `app.positions.ledger`). O
+    # ticker é o do CONTRATO, nunca o do ativo-objeto: é ele que tem preço e
+    # é o que a série de performance soma.
     archive_closed_position(
-        instrument="stock",
+        instrument="option",
         position_id=position.id,
-        ticker_id=position.ticker_id,
+        ticker_id=position.contract.ticker_id,
         portfolio_id=position.portfolio_id,
         broker_id=position.broker_id,
         side=position.side,
@@ -541,7 +501,7 @@ def _close_entirely(
 
 
 def _close_partially(
-    position: Position,
+    position: OptionPosition,
     closing_quantity: Decimal,
     exit_price: Decimal,
     closed_on: date,
@@ -549,7 +509,7 @@ def _close_partially(
 ) -> Transaction:
     transaction = Transaction(
         broker_id=position.broker_id,
-        ticker_id=position.ticker_id,
+        option_contract_id=position.contract_id,
         quantity=closing_quantity,
         average_cost=position.average_cost,
         exit_price=exit_price,
@@ -561,7 +521,7 @@ def _close_partially(
         status=TransactionStatus.CLOSED,
         portfolio_id=position.portfolio_id,
         source_position_id=position.id,
-        notes=f"Encerramento parcial da posição #{position.id}.",
+        notes=f"Encerramento parcial da posição de opção #{position.id}.",
     )
     db.session.add(transaction)
     # A baixa guarda o id da transação, e por isso precisa dele antes do

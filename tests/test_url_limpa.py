@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.url_limpa import ENDPOINTS_COM_BARRA, FILTROS_PADRAO, url_canonica
+from app.core.url_limpa import ENDPOINTS_COM_BARRA, FILTROS_PADRAO, url_canonica
 
 
 def _em(app, caminho: str, endpoint: str):

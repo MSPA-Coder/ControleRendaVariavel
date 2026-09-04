@@ -10,9 +10,9 @@ from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 
 from app import db
+from app.core.validation import parse_finite_decimal
 from app.models import Broker, Portfolio, Position, Side, Ticker
-from app.portfolio import PortfolioView, build_portfolio, position_movement_results
-from app.position_closure import (
+from app.positions.closure import (
     close_open_position,
     create_or_merge_position,
     delete_open_transaction_for_position,
@@ -21,6 +21,7 @@ from app.position_closure import (
     record_position_adjustment,
     sync_open_transaction_for_position,
 )
+from app.positions.portfolio import PortfolioView, build_portfolio, position_movement_results
 from app.routes import bp
 from app.routes.helpers import (
     agent_check_interval_seconds,
@@ -44,7 +45,6 @@ from app.routes.helpers import (
     real_portfolio_records,
     selected_filters,
 )
-from app.validation import parse_finite_decimal
 
 RETURN_PERIODS = (
     (7, "Semanal"),

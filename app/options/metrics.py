@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from app.domain import operation_result, safe_div
+from app.core.domain import operation_result, safe_div
 from app.models import OptionType
 
 

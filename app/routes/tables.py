@@ -8,9 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.auditoria import registrar
+from app.accounts.auditoria import registrar
 from app.models import Broker, Market, Portfolio, PortfolioTicker, Ticker
-from app.reference_data import (
+from app.quotes.reference_data import (
     parse_broker,
     parse_portfolio_create,
     parse_portfolio_update,

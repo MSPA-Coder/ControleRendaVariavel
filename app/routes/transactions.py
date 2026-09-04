@@ -10,7 +10,8 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import joinedload
 
 from app import db
-from app.domain import operation_result
+from app.core.domain import operation_result
+from app.core.validation import parse_finite_decimal
 from app.models import (
     Broker,
     OptionContract,
@@ -22,13 +23,13 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
-from app.option_position_closure import (
+from app.options.closure import (
     partial_close_of_open_position as option_partial_close_of_open_position,
 )
-from app.option_position_closure import (
+from app.options.closure import (
     revert_partial_close as option_revert_partial_close,
 )
-from app.position_closure import partial_close_of_open_position, revert_partial_close
+from app.positions.closure import partial_close_of_open_position, revert_partial_close
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
@@ -37,7 +38,6 @@ from app.routes.helpers import (
     portfolio_records,
     selected_filters,
 )
-from app.validation import parse_finite_decimal
 
 
 def _partial_close_source(transaction: Transaction) -> Position | OptionPosition | None:

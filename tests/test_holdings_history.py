@@ -1,4 +1,4 @@
-"""Matemática pura de ``app.holdings_history`` — sem app, sem banco, sem
+"""Matemática pura de ``app.positions.holdings_history`` — sem app, sem banco, sem
 fixtures: cálculo de domínio se testa com números conferidos à mão.
 
 O caso central é o aumento no meio do histórico. Quantidade histórica errada
@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.holdings_history import (
+from app.positions.holdings_history import (
     DividendEvent,
     HoldingEvent,
     QuantityTimeline,

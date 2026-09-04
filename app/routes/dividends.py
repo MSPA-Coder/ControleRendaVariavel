@@ -10,8 +10,9 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
 from app import db
-from app.dividend_report import build_dividend_report
+from app.core.validation import parse_finite_decimal
 from app.models import Broker, Dividend, IncomeKind, Ticker
+from app.performance.dividends import build_dividend_report
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
@@ -19,7 +20,6 @@ from app.routes.helpers import (
     is_htmx_request,
     open_real_cost_basis_by_ticker,
 )
-from app.validation import parse_finite_decimal
 
 
 @dataclass(frozen=True, slots=True)

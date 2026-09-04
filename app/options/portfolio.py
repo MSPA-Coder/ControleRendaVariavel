@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.greeks import OptionGreeks, calculate_greeks
-from app.instrument_status import instrument_status_class, instrument_status_letter
+from app.core.instrument_status import instrument_status_class, instrument_status_letter
 from app.models import OptionPosition
-from app.options import OptionMetrics, calculate_option
+from app.options.greeks import OptionGreeks, calculate_greeks
+from app.options.metrics import OptionMetrics, calculate_option
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +42,7 @@ class MoneynessTotal:
 class OptionPortfolioTotal:
     portfolio_name: str
     """Nome da carteira, que titula o card. Os totais sao agrupados por
-    (carteira, moeda), como em ``app.portfolio``: cada carteira e um bolso
+    (carteira, moeda), como em ``app.positions.portfolio``: cada carteira e um bolso
     separado."""
     simulated: bool
     """``True`` marca o card visualmente. É atributo da carteira, não do
@@ -180,9 +180,9 @@ def build_option_portfolio(
     # como patrimônio real no card de totalização. O bucket nasce na
     # primeira posição vista daquela natureza, então uma carteira sem
     # nenhuma posição simulada simplesmente não ganha um segundo card (mesmo
-    # critério de ``app.portfolio.build_portfolio`` para os totais por
+    # critério de ``app.positions.portfolio.build_portfolio`` para os totais por
     # moeda).
-    # Chave (carteira, moeda), como em ``app.portfolio.build_portfolio``:
+    # Chave (carteira, moeda), como em ``app.positions.portfolio.build_portfolio``:
     # cada carteira e um bolso separado, e a moeda entra na chave porque
     # somar moedas diferentes sem cambio nao significa nada. A moeda vem do
     # ticker do contrato (``OptionPosition.currency``), nunca de constante.

@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.validation import parse_finite_decimal
+from app.core.validation import parse_finite_decimal
 
 MIN_RISK_FREE_RATE_ANNUAL = Decimal("0")
 MAX_RISK_FREE_RATE_ANNUAL = Decimal("1")  # 100% a.a., limite generoso de sanidade

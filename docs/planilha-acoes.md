@@ -142,11 +142,11 @@ a comparação está indisponível.
 ## Performance mensal (retorno encadeado, TWR)
 
 O relatório de performance (`app/routes/performance.py`,
-`app/monthly_performance.py`) usa quantidade **histórica**, não a quantidade
+`app/performance/monthly.py`) usa quantidade **histórica**, não a quantidade
 atual da posição: para cada ticker, a última `resulting_quantity` do extrato
 (`position_movements`/`option_position_movements`) com `occurred_on <= d`,
 com sinal do `side`. As funções puras que implementam o modelo ficam em
-`app/holdings_history.py` (sem ORM, sem I/O — `HoldingEvent`,
+`app/positions/holdings_history.py` (sem ORM, sem I/O — `HoldingEvent`,
 `QuantityTimeline`, `portfolio_flow_series`, `twr_index_series`).
 
 **Fluxo, avaliado a preço de mercado.** A variação de quantidade em cada data
@@ -190,7 +190,7 @@ O comparador de índice/benchmark (`build_benchmark_shadow_series`) usa a
 mesma lista de fluxos reais, acumulando cotas (`cotas += F(d) /
 preço_benchmark(d)`) em vez de ancorar num único aporte inicial — aporte e
 retirada entram na data certa, inclusive quando `invested_amount <= 0`. O risco
-por carteira (`app/risk.py`,
+por carteira (`app/performance/risk.py`,
 `app/routes/risk.py`) usa o mesmo índice TWR como base do drawdown.
 
 ### Limitações aceitas
