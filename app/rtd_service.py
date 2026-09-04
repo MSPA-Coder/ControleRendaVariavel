@@ -180,6 +180,10 @@ class RtdServiceManager:
             if not self.available:
                 raise RuntimeError("O coletor RTD só pode ser iniciado no Windows.")
             self._desired_running = True
+            # ``create_app`` deixa a supervisão inerte para que workers web não
+            # iniciem coletores implicitamente. Um início explícito reativa o
+            # loop persistente antes de executar o primeiro ciclo.
+            self._background_supervision = True
             self._ensure_supervisor()
             self._wake_supervisor.set()
             return self._supervise_once_locked(self._monotonic())
@@ -293,9 +297,9 @@ class RtdServiceManager:
             return False
         self._external_process_ids = self._rtd_process_ids()
         child_environment = os.environ.copy()
-        # ``poll-rtd`` cria a fábrica Flask para acessar banco e configuração.
-        # Sem este marcador, a fábrica criaria outro RtdServiceManager,
-        # que abriria mais um ``poll-rtd --watch`` recursivamente.
+        # ``poll-rtd`` cria a fábrica Flask para acessar banco e configuração;
+        # ela permanece inerte por padrão. O marcador é mantido para
+        # compatibilidade com controladores legados e diagnóstico do processo.
         child_environment["RTD_COLLECTOR_PROCESS"] = "true"
         child_environment["RTD_SUPERVISOR_PID"] = str(os.getpid())
         child_environment["PYTHONIOENCODING"] = "utf-8"

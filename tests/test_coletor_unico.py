@@ -61,6 +61,22 @@ def test_a_suite_nao_supervisiona_o_profitchart():
     assert servico._background_supervision is False
 
 
+def test_a_fabrica_local_nao_inicia_supervisor_por_worker():
+    # A configuração de produção não deve mudar o ciclo de vida: cada worker
+    # criado pelo Gunicorn recebe um serviço inerte até um start() explícito.
+    servico = create_app(
+        {
+            **BASE,
+            "TESTING": False,
+            "SECRET_KEY": "test-secret",
+            "REMOTE_COLLECTOR_ENABLED": False,
+        }
+    ).extensions["rtd_service"]
+
+    assert servico._background_supervision is False
+    assert servico._supervisor_thread is None
+
+
 def test_nao_ha_configuracao_de_conexao_ativa_com_o_host():
     # A aplicacao nao se conecta ao host Windows; apenas o agente inicia
     # conexoes e entrega as cotacoes ao servidor.

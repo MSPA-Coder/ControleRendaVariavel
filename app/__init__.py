@@ -253,16 +253,15 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             background_supervision=False,
         )
     else:
-        # O subprocesso ``poll-rtd`` também cria a aplicação Flask para usar
-        # as configurações e o banco. Ele não pode iniciar outro supervisor:
-        # isso formaria uma cadeia infinita de coletores no host Windows.
-        collector_process = os.getenv("RTD_COLLECTOR_PROCESS", "").lower() == "true"
-        # `TESTING` também desliga a supervisão para que criar a aplicação em
-        # testes no Windows não inicie threads nem sondagens do ProfitChart.
-        supervisionar = not collector_process and not app.config["TESTING"]
+        # A aplicação web não inicia supervisão local durante ``create_app``.
+        # Gunicorn cria uma fábrica por worker; iniciar aqui faria cada worker
+        # disputar seu próprio ``poll-rtd``. O ciclo de vida local é explícito:
+        # ``RtdServiceManager.start()`` (ou o controlador do host) o habilita.
+        # Assim, a própria fábrica criada por ``poll-rtd`` também permanece
+        # inerte e não cria uma cadeia de supervisores.
         app.extensions["rtd_service"] = RtdServiceManager(
             Path(app.root_path).parent,
-            background_supervision=supervisionar,
+            background_supervision=False,
         )
 
     from app.auditoria import registrar_escritas_financeiras

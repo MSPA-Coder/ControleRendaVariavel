@@ -124,6 +124,15 @@ caminho do segredo em `.docker-local/remote-collector.env`; o log fica em
 `%LOCALAPPDATA%\ControleRendaVariavel\remote-collector.log`. Consulte ou remova
 a tarefa com `-Action Status` ou `-Action Uninstall`.
 
+Para coletar no banco local desta máquina, use o modo alternativo abaixo. Ele
+inicia no logon do Windows, lê `SECRET_KEY` e a senha PostgreSQL diretamente
+dos arquivos em `.secrets/` e grava pela porta local `5302`; os segredos não
+entram nos argumentos da tarefa nem no log.
+
+```powershell
+.\scripts\rtd-local-agent.ps1 -Action Install
+```
+
 A tela **Configurações** separa os dois ritmos: o **intervalo entre leituras**
 define quando o agente consulta o RTD e entrega cotações; o **intervalo de
 verificação do agente** define somente quando ele busca pedidos e alterações no
@@ -137,6 +146,27 @@ continuam funcionando.
 `poll-rtd` e `probe-rtd-direct` também dependem de Excel/COM e servem apenas
 para diagnóstico no ambiente Python isolado do Windows. Não os execute no
 contêiner `web`.
+
+### Coletor local
+
+Quando a aplicação usa um PostgreSQL local publicado pelo Compose, o mesmo
+núcleo de coleta pode gravar diretamente nesse banco pelo Windows. Instale a
+tarefa local com:
+
+```powershell
+.\scripts\rtd-local-agent.ps1 -Action Install
+```
+
+A tarefa executa `poll-rtd --watch` sem abrir janela, aceita apenas uma
+instância e reinicia após uma falha. Ela começa no **logon do Windows** e é
+encerrada quando a sessão do Windows termina; isso não acompanha o login ou o
+logout da sessão web. Consulte ou remova com `-Action Status` ou `-Action
+Uninstall`. Não instale o coletor local e o agente remoto ao mesmo tempo para
+o mesmo ProfitChart: ambos abririam COM e poderiam disputar a mesma fonte.
+O próprio `poll-rtd` mantém um lock interprocesso, portanto o toggle
+administrativo ou outro worker não consegue manter um segundo coletor local
+ativo. A saída do processo fica em
+`%LOCALAPPDATA%\ControleRendaVariavel\local-collector.log`.
 
 ## Segurança e produção
 

@@ -238,6 +238,26 @@ Docker, e ela foi desenhada para não ampliar a superfície do servidor:
 Excel/ProfitChart → agente Windows → HTTPS autenticado → aplicação → PostgreSQL
 ```
 
+### Banco local
+
+Para uma instalação local, `scripts/rtd-local-agent.ps1` registra uma única
+tarefa Windows que executa `flask --app app:create_app poll-rtd --watch` no
+ambiente Python do projeto. O núcleo (`CollectorProviderManager`, provedores,
+agenda e backoff) é o mesmo do coletor existente; só o destino muda: o comando
+grava no PostgreSQL local em vez de enviar por HTTPS. A tarefa usa `pythonw`,
+não recebe segredos na linha de comando, inicia no logon interativo e termina
+com o logoff do Windows.
+
+Esse ciclo não é o login/logout da aplicação web. O coletor é global à máquina
+e não deve ser iniciado por cada requisição ou worker do Flask. Instale apenas
+um dos modos local/remoto para o mesmo ProfitChart; duas tarefas poderiam abrir
+duas sessões COM concorrentes. O Docker continua sem executar COM: o processo
+local roda fora do contêiner e usa a porta publicada do PostgreSQL.
+Além disso, `poll-rtd` adquire o lock interprocesso do projeto antes de abrir o
+provedor. Assim, uma tarefa local, um início administrativo e tentativas de
+workers diferentes não mantêm dois coletores ativos; o lock é liberado pelo
+sistema operacional quando o processo termina.
+
 O agente (`app/remote_collector_agent.py`, instalado por
 `scripts/rtd-remote-agent.ps1`) **não cria a aplicação Flask e não acessa o
 PostgreSQL**. Ele consulta `/api/collector/configuration` para saber quais
@@ -266,10 +286,12 @@ sessão do outro lado. O corpo é limitado a 512 KB.
 
 `REMOTE_COLLECTOR_ENABLED` escolhe entre os dois modos. Habilitado, o estado da
 coleta nasce indisponível e só existe quando chega o pulso do agente.
-Desabilitado, `RtdServiceManager` supervisiona um processo `poll-rtd` local — e
-não o faz quando `RTD_COLLECTOR_PROCESS` está definido (o próprio subprocesso
-também cria a aplicação, e supervisionar de novo formaria uma cadeia infinita de
-coletores) nem sob `TESTING`.
+Desabilitado, `RtdServiceManager` pode supervisionar um processo `poll-rtd`
+local, mas permanece inerte durante `create_app`: cada worker web só inicia a
+supervisão após uma chamada explícita a `start()` (ou ao controlador do host).
+O processo `poll-rtd` também cria a aplicação, que permanece inerte pelo mesmo
+motivo; `RTD_COLLECTOR_PROCESS` é mantido para compatibilidade com
+controladores legados e diagnóstico.
 
 **Sem o agente, a aplicação continua utilizável.** Cotações aparecem
 indisponíveis ou desatualizadas, e nenhum cadastro depende delas.

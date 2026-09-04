@@ -4,6 +4,7 @@ import ctypes
 import os
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import click
 from flask import Flask, current_app
@@ -13,6 +14,7 @@ from sqlalchemy.orm import joinedload
 
 from app import db
 from app.collector import CollectorProviderManager, ManagedQuoteProvider
+from app.collector_lock import CollectorAlreadyRunningError, collector_process_lock
 from app.collector_settings import collector_schedule_is_active, default_collector_settings
 from app.domain import MARKET_TIMEZONE
 from app.models import (
@@ -156,6 +158,14 @@ def probe_rtd_direct(ticker: str, market_code: str) -> None:
 @click.command("poll-rtd")
 @click.option("--watch", is_flag=True, help="Continua atualizando até ser interrompido.")
 def poll_rtd(watch: bool) -> None:
+    try:
+        with collector_process_lock(Path(current_app.root_path).parent, wait=watch):
+            _poll_rtd(watch)
+    except CollectorAlreadyRunningError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def _poll_rtd(watch: bool) -> None:
     """Refreshes quotes with the collector selected on the Settings page."""
     import time
 
@@ -343,8 +353,8 @@ def poll_rtd(watch: bool) -> None:
 
 @click.command("import-position-history")
 def import_position_history() -> None:
-    """Import daily stock history from each open position's first date,
-    plus every ticker registered as a comparison benchmark."""
+    """Import daily action and option history from each open position's
+    first date, plus every ticker registered as a comparison benchmark."""
 
     targets = quote_update_targets()
     db.session.rollback()

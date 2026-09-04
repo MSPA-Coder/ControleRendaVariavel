@@ -160,6 +160,14 @@ Para exercitar a coleta, use os provedores determinísticos da suíte em vez de
 COM. `poll-rtd` e `probe-rtd-direct` dependem de Excel e só rodam no ambiente
 Python isolado do Windows — não os execute no contêiner `web`.
 
+Para gravar no PostgreSQL local, a tarefa única pode ser instalada no logon do
+Windows por `scripts/rtd-local-agent.ps1 -Action Install`. Ela executa
+`poll-rtd --watch` de forma invisível e termina com o logoff do Windows. Esse
+é um ciclo do sistema operacional, não da sessão web; não se deve iniciar ou
+parar o processo a cada login/logout HTTP. Não instale a tarefa local junto do
+agente remoto para o mesmo ProfitChart. O comando `poll-rtd` também possui
+exclusão interprocesso, cobrindo o toggle administrativo e múltiplos workers.
+
 O caminho do agente remoto (`REMOTE_COLLECTOR_ENABLED=true`) pode ser exercitado
 sem Windows chamando os endpoints `/api/collector/*` com o Bearer token de
 `.secrets/collector_agent_token`: é a mesma superfície que o agente usa, e a
