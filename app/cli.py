@@ -14,15 +14,19 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app import db
-from app.collector import CollectorProviderManager, ManagedQuoteProvider
-from app.collector_database import (
+from app.collector.database import (
     DestinationWatcher,
     local_loop_arguments,
     read_collector_destination,
 )
-from app.collector_lock import CollectorAlreadyRunningError, collector_process_lock
-from app.collector_loop import run_collector_loop
-from app.collector_settings import DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
+from app.collector.lock import CollectorAlreadyRunningError, collector_process_lock
+from app.collector.loop import run_collector_loop
+from app.collector.profit_detector import WindowsProfitDetector
+from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
+from app.collector.remote_agent import remote_loop_arguments
+from app.collector.rtd import ExcelRtdQuoteProvider, Instrument
+from app.collector.rtd_direct import DirectRtdQuoteProvider
+from app.collector.settings import DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
 from app.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
@@ -32,16 +36,12 @@ from app.models import (
     QuoteHistory,
     User,
 )
-from app.profit_detector import WindowsProfitDetector
 from app.quote_history_import import (
     DailyQuote,
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
-from app.remote_collector_agent import remote_loop_arguments
 from app.routes.helpers import quote_update_targets
-from app.rtd import ExcelRtdQuoteProvider, Instrument
-from app.rtd_direct import DirectRtdQuoteProvider
 from app.user_management import UserManagementError, set_active, upsert_from_cli
 
 

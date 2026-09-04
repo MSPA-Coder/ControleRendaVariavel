@@ -9,15 +9,19 @@ coleta está indo.
 from __future__ import annotations
 
 import pytest
+from conftest import CONFIG_DE_TESTE
 
 from app import CHAVE_TEMA_NA_SESSAO, create_app, login_manager
-from app.collector_database import DestinationWatcher
+from app.collector.database import DestinationWatcher
 from app.models import ROLE_ADMIN, CollectorDestination, User
 from app.themes import DEFAULT_THEME
 
+# Deriva da configuração do conftest em vez de repeti-la: é dela que vem o
+# `creator` que recusa a conexão sem abrir socket. Sem ele, o POST que este
+# arquivo faz de propósito ia até o banco, e no Windows a tentativa custava
+# 260 s -- sozinha, mais de oito vezes o orçamento da suíte inteira.
 CONFIG_BASE: dict[str, object] = {
-    "SQLALCHEMY_DATABASE_URI": "postgresql+psycopg://test:test@localhost:5432/test",
-    "TESTING": True,
+    **CONFIG_DE_TESTE,
     # O CSRF desta rota é o mesmo de todas as outras e tem suíte própria em
     # test_csrf.py; aqui o que se mede é a decisão por instância.
     "WTF_CSRF_ENABLED": False,

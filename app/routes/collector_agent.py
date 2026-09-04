@@ -15,17 +15,17 @@ from typing import Any
 from flask import abort, current_app, jsonify, request
 
 from app import db
-from app.collector_database import (
+from app.collector.database import (
     OptionReading,
     load_collector_positions,
     option_instrument_keys,
     persist_readings,
     record_agent_online,
 )
-from app.collector_settings import schedule_from_settings
+from app.collector.rtd import QuoteValue, parse_decimal
+from app.collector.settings import schedule_from_settings
 from app.models import AppSetting
 from app.routes import bp
-from app.rtd import QuoteValue, parse_decimal
 
 MAX_BODY_BYTES = 512 * 1024
 
@@ -33,7 +33,7 @@ MAX_BODY_BYTES = 512 * 1024
 def _settings() -> AppSetting:
     settings = db.session.get(AppSetting, 1)
     if settings is None:
-        from app.collector_settings import default_collector_settings
+        from app.collector.settings import default_collector_settings
 
         settings = default_collector_settings()
         db.session.add(settings)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, time
 
-from app.collector_settings import collector_schedule_is_active
+from app.collector.settings import collector_schedule_is_active
 
 
 def test_agenda_do_coletor_local_usa_horario_da_b3_para_todos_os_ativos() -> None:

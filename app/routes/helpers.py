@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
-from app.collector_settings import (
+from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_POLL_INTERVAL_SECONDS,
 )

@@ -15,12 +15,12 @@ from datetime import datetime
 from logging import Logger
 from typing import Protocol
 
-from app.collector import CollectorProviderManager
-from app.collector_settings import CollectorSchedule
+from app.collector.profit_detector import ProfitDetector
+from app.collector.providers import CollectorProviderManager
+from app.collector.rtd import Instrument, QuoteValue
+from app.collector.settings import CollectorSchedule
 from app.domain import MARKET_TIMEZONE
 from app.models import CollectorMode
-from app.profit_detector import ProfitDetector
-from app.rtd import Instrument, QuoteValue
 
 
 @dataclass(frozen=True, slots=True)

@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app import db, esquecer_tema_da_sessao
 from app.authorization import requer_admin
-from app.collector_settings import (
+from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_COLLECTOR_SCHEDULE_END_TIME,
     DEFAULT_COLLECTOR_SCHEDULE_START_TIME,

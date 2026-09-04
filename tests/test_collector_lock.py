@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.collector_lock import CollectorAlreadyRunningError, collector_process_lock
+from app.collector.lock import CollectorAlreadyRunningError, collector_process_lock
 
 
 def test_collector_lock_is_exclusive_and_releases_on_exit(tmp_path) -> None:

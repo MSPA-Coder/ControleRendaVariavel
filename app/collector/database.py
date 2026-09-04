@@ -23,8 +23,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
 from app import db
-from app.collector_loop import CollectorConfiguration
-from app.collector_settings import (
+from app.collector.loop import CollectorConfiguration
+from app.collector.rtd import Instrument, QuoteValue
+from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_COLLECTOR_SCHEDULE,
     default_collector_settings,
@@ -41,7 +42,6 @@ from app.models import (
     Quote,
 )
 from app.routes.helpers import upsert_quote_history
-from app.rtd import Instrument, QuoteValue
 
 
 def collector_settings_row() -> AppSetting:

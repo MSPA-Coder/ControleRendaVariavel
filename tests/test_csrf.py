@@ -8,19 +8,14 @@ tornaria o teste decorativo.
 from __future__ import annotations
 
 import pytest
+from conftest import CONFIG_DE_TESTE
 
 from app import create_app
 
 
 @pytest.fixture
 def client_com_csrf():
-    application = create_app(
-        {
-            "SQLALCHEMY_DATABASE_URI": "postgresql+psycopg://test:test@localhost:5432/test",
-            "TESTING": True,
-            "WTF_CSRF_ENABLED": True,
-        }
-    )
+    application = create_app({**CONFIG_DE_TESTE, "WTF_CSRF_ENABLED": True})
     return application.test_client()
 
 
