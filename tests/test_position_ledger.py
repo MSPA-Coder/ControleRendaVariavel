@@ -4,7 +4,7 @@ Encerrar apaga a posição e seu extrato em cascata. O arquivo preserva os
 lançamentos necessários para que a performance inclua posições encerradas e
 não sofra viés de sobrevivência.
 
-Estes testes exercitam ``app.position_ledger`` sem banco: a função recebe os
+Estes testes exercitam ``app.positions.ledger`` sem banco: a função recebe os
 lançamentos já lidos e devolve as linhas a gravar. A sessão é substituída por
 um coletor, porque o que importa aqui é QUAIS linhas nascem, não o SQL.
 """
@@ -16,8 +16,8 @@ from decimal import Decimal
 
 import pytest
 
-from app import position_ledger
 from app.models import Side
+from app.positions import ledger as position_ledger
 
 
 class _SessionSpy:

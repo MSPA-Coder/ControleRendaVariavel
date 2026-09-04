@@ -62,7 +62,7 @@ filtro aplicado aparecia na barra como
 `/?portfolio_id=all&broker=&return_days=365` — nada ali foi escolhido por
 ninguém.
 
-`app/url_limpa.py` monta o endereço equivalente sem esse ruído, e o
+`app/core/url_limpa.py` monta o endereço equivalente sem esse ruído, e o
 `after_request` `_canonizar_url` (em `app/__init__.py`) o entrega no cabeçalho
 `HX-Replace-Url`. O navegador troca a barra sem recarregar. O filtro continua na
 URL quando é um filtro de verdade: `?broker=XP` aparece exatamente quando
@@ -127,7 +127,7 @@ ambiente do contêiner: `NOME_FILE` aponta o caminho e
 `sharedauth.secrets.resolver_segredo` o lê. `NOME` direto continua aceito para
 execução manual e injeção de teste, mas não é o contrato do Compose.
 
-`app/secret_files.py` guarda o que só este projeto tem: o agente RTD roda no
+`app/core/secret_files.py` guarda o que só este projeto tem: o agente RTD roda no
 Windows, fora de contêiner, e lê os valores de `.secrets/` na raiz do projeto.
 Um consumidor único não justifica mover para a biblioteca.
 
@@ -171,7 +171,7 @@ para vários leitores de uma vez.
 
 ### Domínio financeiro
 
-`app/domain.py` é o núcleo puro: custo médio ponderado, resultado de operação,
+`app/core/domain.py` é o núcleo puro: custo médio ponderado, resultado de operação,
 métricas de posição, replay de extrato e plano de encerramento. Sem Flask, sem
 ORM, sem I/O. `Decimal` do início ao fim, com arredondamento explícito — a
 política de arredondamento é do domínio, não do driver.
@@ -243,11 +243,11 @@ Excel/ProfitChart → agente Windows → HTTPS autenticado → aplicação → P
 
 `scripts/rtd-agent.ps1` registra uma tarefa Windows única que executa
 `flask --app app:create_app poll-rtd --watch` no ambiente Python do projeto.
-O laço vive em `app/collector_loop.py` e não sabe para onde entrega: ele fala
+O laço vive em `app/collector/loop.py` e não sabe para onde entrega: ele fala
 com dois protocolos, `ConfigurationSource` e `QuoteSink`. As implementações
 são `HttpConfigurationSource`/`HttpQuoteSink` (VPS, em
-`app/remote_collector_agent.py`) e `DatabaseConfigurationSource`/
-`DatabaseQuoteSink` (banco local, em `app/collector_database.py`).
+`app/collector/remote_agent.py`) e `DatabaseConfigurationSource`/
+`DatabaseQuoteSink` (banco local, em `app/collector/database.py`).
 
 `app_settings.collector_destination` escolhe o par. O processo relê a coluna a
 cada intervalo de verificação -- e não a cada volta do laço, que pode girar a
@@ -279,7 +279,7 @@ destino não pode virar uma terceira cópia dos upserts e do snapshot diário de
 No destino remoto, a origem consulta `/api/collector/configuration` para saber
 quais instrumentos estão abertos e o destino devolve as leituras em
 `/api/collector/quotes`; falhas vão para `/api/collector/failure`.
-`app/remote_collector_agent.py` **não cria a aplicação Flask e não acessa o
+`app/collector/remote_agent.py` **não cria a aplicação Flask e não acessa o
 PostgreSQL** -- e `python -m app.remote_collector_agent` continua sendo a
 entrada para a máquina que só entrega ao VPS e prefere não ter credencial de
 banco alguma no processo. A tarefa unificada, por atender aos dois destinos,
@@ -388,7 +388,7 @@ entre os dois papéis é só a linha 300-305 acima: administração de contas,
 Configurações e o controle do coletor. Optou-se por **manter o comportamento e
 só documentá-lo aqui** (não restringir as escritas por papel) — a aplicação é
 declaradamente de uso pessoal (ver `README.md`), o schema não tem coluna de
-dono, e a trilha de auditoria (`app/auditoria.py`) já registra toda escrita
+dono, e a trilha de auditoria (`app/accounts/auditoria.py`) já registra toda escrita
 financeira por evento, então a ação fica rastreada mesmo sem ser impedida.
 **Gatilho para reabrir esta decisão: a primeira vez que uma SEGUNDA pessoa
 receber uma conta `operador`** — nesse momento, "não administra o sistema"

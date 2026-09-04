@@ -15,7 +15,7 @@ from flask import render_template, request
 from flask.typing import ResponseReturnValue
 
 from app import db
-from app.authorization import requer_admin
+from app.accounts.authorization import requer_admin
 from app.collector.database import collector_settings_row
 from app.collector.heartbeat import collector_heartbeat
 from app.routes import bp

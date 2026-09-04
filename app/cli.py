@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app import db
+from app.accounts.users import UserManagementError, set_active, upsert_from_cli
 from app.collector.database import (
     DestinationWatcher,
     local_loop_arguments,
@@ -27,7 +28,7 @@ from app.collector.remote_agent import remote_loop_arguments
 from app.collector.rtd import ExcelRtdQuoteProvider, Instrument
 from app.collector.rtd_direct import DirectRtdQuoteProvider
 from app.collector.settings import DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
-from app.domain import MARKET_TIMEZONE
+from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
@@ -36,13 +37,12 @@ from app.models import (
     QuoteHistory,
     User,
 )
-from app.quote_history_import import (
+from app.quotes.history_import import (
     DailyQuote,
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
 from app.routes.helpers import quote_update_targets
-from app.user_management import UserManagementError, set_active, upsert_from_cli
 
 
 def register_commands(app: Flask) -> None:

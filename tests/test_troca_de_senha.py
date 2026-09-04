@@ -18,9 +18,9 @@ import pytest
 from sharedauth.session import marca_de_sessao
 
 from app import CHAVE_TEMA_NA_SESSAO, PUBLIC_ENDPOINTS, login_manager
-from app import user_management as um
+from app.accounts import users as um
+from app.core.themes import DEFAULT_THEME
 from app.models import ROLE_ADMIN, ROLE_OPERADOR, User
-from app.themes import DEFAULT_THEME
 
 
 def _login_as(client, user, monkeypatch):

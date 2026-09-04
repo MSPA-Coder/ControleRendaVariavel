@@ -6,12 +6,12 @@ from decimal import Decimal
 from flask import Flask
 from sharedauth.formatting import numero
 
-from app.domain import MARKET_TIMEZONE
-from app.instrument_status import (
+from app.core.domain import MARKET_TIMEZONE
+from app.core.instrument_status import (
     INSTRUMENT_STATUS_DESCRIPTIONS,
     INSTRUMENT_STATUS_LABELS,
 )
-from app.privacy import mask_text, mask_value
+from app.core.privacy import mask_text, mask_value
 
 COLLECTOR_STATUS_LABELS = {
     "online": "Coletor online",

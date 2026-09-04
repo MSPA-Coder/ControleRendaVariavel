@@ -6,7 +6,7 @@ from flask import redirect, request, session, url_for
 from flask.typing import ResponseReturnValue
 from sharedauth.access import url_proximo_seguro
 
-from app.privacy import VALUES_HIDDEN_SESSION_KEY
+from app.core.privacy import VALUES_HIDDEN_SESSION_KEY
 from app.routes import bp
 
 

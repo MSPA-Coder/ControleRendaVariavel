@@ -28,8 +28,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app import Base
-from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
-from app.themes import DEFAULT_THEME
+from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.core.themes import DEFAULT_THEME
 
 
 class Market(StrEnum):
@@ -76,7 +76,7 @@ class IncomeKind(StrEnum):
     A distinção não é fiscal, é de PRECIFICAÇÃO: o histórico de cotações
     importado do Yahoo já embute dividendo e JCP no preço quando usa
     ``adjclose``, mas nenhuma fonte de preço embute aluguel de ações. Ver
-    ``app.quote_history_import``, que por isso passou a gravar o ``close``
+    ``app.quotes.history_import``, que por isso passou a gravar o ``close``
     nominal — com a série nominal, as três rendas entram no retorno pelo
     cadastro, explicitamente e sem contagem dupla.
     """
@@ -381,7 +381,7 @@ class Position(Base):
 
     Um novo aporte no mesmo ativo não cria outra linha aqui — ele soma a
     quantidade e recalcula o custo médio ponderado da posição existente (ver
-    ``app.position_closure.create_or_merge_position``). O histórico de como
+    ``app.positions.closure.create_or_merge_position``). O histórico de como
     se chegou à quantidade e ao custo médio atuais fica em
     ``PositionMovement``.
     """
@@ -470,7 +470,7 @@ class Position(Base):
         """``True`` quando a posição está na carteira Simulada
         (``portfolio_ref.simulated``). Usada pelas guardas de carteiras simuladas (sem
         merge, sem extrato, sem encerramento) e pelo agrupamento dos totais
-        de ``app.portfolio.build_portfolio`` por (moeda, simulada)."""
+        de ``app.positions.portfolio.build_portfolio`` por (moeda, simulada)."""
         return self.portfolio_ref.simulated
 
 
@@ -648,7 +648,7 @@ class PositionLedgerArchive(Base):
     )
     instrument: Mapped[str] = mapped_column(String(6))
     """``stock`` ou ``option``. Junto com ``source_position_id`` reproduz a
-    chave de posição usada por ``app.holdings_history.HoldingEvent``, que
+    chave de posição usada por ``app.positions.holdings_history.HoldingEvent``, que
     precisa distinguir as duas porque ``Position`` e ``OptionPosition`` têm
     sequências de id independentes."""
     source_position_id: Mapped[int] = mapped_column(Integer)
@@ -812,8 +812,8 @@ class OptionPositionMovement(Base):
 
     Espelha ``PositionMovement`` (ver a documentação lá) trocando a posição de
     ações pela de opções. O algoritmo que produz e reaplica estes lançamentos
-    é compartilhado entre os dois — ver ``app.domain.replay_statement`` e
-    ``app.position_closure`` — e só a persistência muda.
+    é compartilhado entre os dois — ver ``app.core.domain.replay_statement`` e
+    ``app.positions.closure`` — e só a persistência muda.
     """
 
     __tablename__ = "option_position_movements"
@@ -909,7 +909,7 @@ class Transaction(Base):
     fechamento), no mesmo espírito de ``Position``.
 
     Toda ``Position`` criada em Carteira ganha automaticamente uma linha
-    aqui com ``status=OPEN`` (ver ``app.position_closure``), para que a
+    aqui com ``status=OPEN`` (ver ``app.positions.closure``), para que a
     aba Transações mostre tanto as posições abertas quanto as já
     encerradas, filtráveis pelo status. Ao encerrar a posição por inteiro,
     a mesma linha é atualizada para ``status=CLOSED`` em vez de criar uma

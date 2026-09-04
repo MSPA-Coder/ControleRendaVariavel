@@ -19,7 +19,7 @@ from app.collector.profit_detector import ProfitDetector
 from app.collector.providers import CollectorProviderManager
 from app.collector.rtd import Instrument, QuoteValue
 from app.collector.settings import CollectorSchedule
-from app.domain import MARKET_TIMEZONE
+from app.core.domain import MARKET_TIMEZONE
 from app.models import CollectorMode
 
 

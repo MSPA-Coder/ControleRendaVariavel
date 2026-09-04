@@ -1,4 +1,4 @@
-"""Redução mensal e comparador de índice de ``app.monthly_performance``.
+"""Redução mensal e comparador de índice de ``app.performance.monthly``.
 
 A matemática diária do TWR já está coberta em ``tests/test_holdings_history.py``
 e não é retestada aqui. O que este arquivo protege é o que a redução a um
@@ -15,13 +15,13 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.holdings_history import DividendEvent, HoldingEvent
-from app.monthly_performance import (
+from app.performance.monthly import (
     MonthlyPerformancePoint,
     align_benchmark_to_points,
     build_benchmark_shadow_series,
     build_monthly_performance,
 )
+from app.positions.holdings_history import DividendEvent, HoldingEvent
 
 
 def _event(

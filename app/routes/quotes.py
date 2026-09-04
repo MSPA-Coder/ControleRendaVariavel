@@ -8,8 +8,9 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy import delete
 
 from app import db
+from app.core.validation import parse_finite_decimal
 from app.models import QuoteHistory, Ticker
-from app.quote_history_import import (
+from app.quotes.history_import import (
     DailyQuote,
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
@@ -24,7 +25,6 @@ from app.routes.helpers import (
     ticker_price_series,
     upsert_quote_history,
 )
-from app.validation import parse_finite_decimal
 
 
 def common_quote_start_date(

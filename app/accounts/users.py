@@ -9,7 +9,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.auditoria import registrar
+from app.accounts.auditoria import registrar
 from app.models import ROLE_ADMIN, VALID_ROLES, User
 
 _ADMIN_MUTATION_LOCK = "controle-renda-variavel:user-management"

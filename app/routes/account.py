@@ -22,7 +22,7 @@ from flask.typing import ResponseReturnValue
 from flask_login import current_user, login_user  # type: ignore[import-untyped]
 
 from app import db
-from app.user_management import UserManagementError, change_own_password
+from app.accounts.users import UserManagementError, change_own_password
 
 bp = Blueprint("account", __name__)
 

@@ -6,7 +6,7 @@ um tem rótulo e cor próprios nas telas de Ações e Opções — ver
 ``docs/planilha-acoes.md``.
 
 Vive em módulo próprio porque as duas telas montam suas views em lugares
-diferentes (``app.portfolio`` e ``app.option_portfolio``) e precisam do mesmo
+diferentes (``app.positions.portfolio`` e ``app.options.portfolio``) e precisam do mesmo
 mapeamento; duplicá-lo deixaria as duas grades divergirem em silêncio.
 """
 

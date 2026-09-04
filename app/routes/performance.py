@@ -4,20 +4,20 @@ from flask import render_template, request
 from sqlalchemy import select
 
 from app import db
-from app.holdings_history import (
-    DividendEvent,
-    HoldingEvent,
-    QuantityTimeline,
-    prorate_dividends,
-)
 from app.models import IncomeKind, Ticker
-from app.monthly_performance import (
+from app.performance.monthly import (
     MonthlyPerformancePoint,
     MonthlyPerformanceReport,
     align_benchmark_to_points,
     build_benchmark_shadow_series,
     build_monthly_performance,
     normalize_performance_period,
+)
+from app.positions.holdings_history import (
+    DividendEvent,
+    HoldingEvent,
+    QuantityTimeline,
+    prorate_dividends,
 )
 from app.routes import bp
 from app.routes.helpers import (

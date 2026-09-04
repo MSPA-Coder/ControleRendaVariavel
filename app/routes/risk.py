@@ -7,15 +7,15 @@ from flask import render_template
 from sqlalchemy import select
 
 from app import db
-from app.holdings_history import DividendEvent, HoldingEvent
 from app.models import AppSetting, Ticker
-from app.risk import (
+from app.performance.risk import (
     MIN_OBSERVATIONS_FOR_CONFIDENCE,
     PortfolioDrawdown,
     TickerRiskMetrics,
     build_portfolio_drawdown,
     build_ticker_risk_metrics,
 )
+from app.positions.holdings_history import DividendEvent, HoldingEvent
 from app.routes import bp
 from app.routes.helpers import (
     dividend_events,

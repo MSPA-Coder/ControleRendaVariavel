@@ -14,11 +14,11 @@ exceção que confirma a regra acima: não pode medir sobre o patrimônio bruto,
 ao contrário do drawdown por ticker (``TickerRiskMetrics.max_drawdown``, que
 mede sobre a série de PREÇO e por isso não é afetado por fluxo de
 aporte/retirada). Com quantidade histórica reconstruída do extrato
-(``app.holdings_history``, não mais a quantidade de hoje aplicada ao
+(``app.positions.holdings_history``, não mais a quantidade de hoje aplicada ao
 passado), um aporte grande faz o patrimônio saltar e cria um pico artificial
 que "afunda" todo o resto da série; uma retirada faz o patrimônio despencar e
 essa queda pareceria uma perda que nunca aconteceu. Por isso o drawdown por
-carteira é medido sobre o ÍNDICE TWR (``app.holdings_history.twr_index_series``)
+carteira é medido sobre o ÍNDICE TWR (``app.positions.holdings_history.twr_index_series``)
 — o mesmo índice do relatório de performance mensal, que já neutraliza
 aporte/retirada no numerador do retorno — e nunca sobre o valor bruto da
 carteira. ``max_drawdown`` em si fica intacto: muda só a série que ele
@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
-from app.holdings_history import (
+from app.positions.holdings_history import (
     DividendEvent,
     HoldingEvent,
     portfolio_flow_series,

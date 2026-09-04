@@ -14,7 +14,6 @@ from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_POLL_INTERVAL_SECONDS,
 )
-from app.holdings_history import DividendEvent, HoldingEvent
 from app.models import (
     AppSetting,
     Broker,
@@ -31,8 +30,9 @@ from app.models import (
     Side,
     Ticker,
 )
-from app.portfolio import BrokerGroup, MarketGroup, PositionView
-from app.quote_history_import import TickerImportTarget
+from app.positions.holdings_history import DividendEvent, HoldingEvent
+from app.positions.portfolio import BrokerGroup, MarketGroup, PositionView
+from app.quotes.history_import import TickerImportTarget
 
 DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS = 730
 """Janela usada para a primeira importação de um ticker de referência
@@ -452,7 +452,7 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     """Quantidade líquida por ticker das posições REAIS ainda abertas.
     Usada pelos relatórios de risco e de performance mensal para
     a aproximação "posições atuais constantes no passado" (ver
-    ``app.risk.portfolio_value_series``)."""
+    ``app.performance.risk.portfolio_value_series``)."""
     statement = (
         select(Position.ticker_id, Position.quantity, Position.side)
         .join(Position.portfolio_ref)
@@ -507,7 +507,7 @@ def position_movement_events(
     portfolio_id: int | None = None, broker: str | None = None
 ) -> list[HoldingEvent]:
     """Extrato de posições REAIS — ações e opções — como eventos de
-    quantidade e fluxo assinados, insumo de ``app.holdings_history`` para o
+    quantidade e fluxo assinados, insumo de ``app.positions.holdings_history`` para o
     TWR encadeado (ver "Performance mensal" em ``docs/planilha-acoes.md``).
 
     Os filtros são os mesmos de ``app.routes.performance`` — carteira,
@@ -539,7 +539,7 @@ def position_movement_events(
 
     O ``price`` do movimento NÃO é lido aqui de propósito. O fluxo do TWR é
     avaliado a preço de mercado da data, não ao preço lançado — ver o
-    docstring de ``app.holdings_history.portfolio_flow_series`` para o
+    docstring de ``app.positions.holdings_history.portfolio_flow_series`` para o
     motivo (``opened_on`` de posição antiga é a data do cadastro, não da
     compra; ``quote_history`` guarda fechamento ajustado enquanto o custo
     médio é nominal).
@@ -637,7 +637,7 @@ def position_movement_events(
     # Posicoes ja encerradas nao tem mais extrato (a exclusao o leva em
     # cascata); o que sobrou delas esta no arquivo. Sem esta terceira
     # consulta o relatorio mediria so os ativos que continuaram na carteira
-    # -- vies de sobrevivencia. Ver `app.position_ledger`.
+    # -- vies de sobrevivencia. Ver `app.positions.ledger`.
     archive_statement = (
         select(
             PositionLedgerArchive.occurred_on,
@@ -680,11 +680,11 @@ def position_movement_events(
 
 def dividend_events(ticker_ids: Iterable[int]) -> list[DividendEvent]:
     """Rendas dos tickers pedidos — dividendo, JCP e aluguel de ações —, em
-    ordem cronológica, insumo de ``app.holdings_history.prorate_dividends``.
+    ordem cronológica, insumo de ``app.positions.holdings_history.prorate_dividends``.
 
     As três entram no retorno da carteira, e por isso nenhuma é filtrada
     aqui: desde que ``quote_history`` passou a gravar o ``close`` nominal
-    (ver ``app.quote_history_import``), o preço não embute mais nenhuma
+    (ver ``app.quotes.history_import``), o preço não embute mais nenhuma
     delas, e deixar qualquer uma de fora subestimaria o retorno. ``kind``
     viaja junto para o relatório poder dizer quanto cada uma rendeu.
 

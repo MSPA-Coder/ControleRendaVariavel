@@ -1,11 +1,11 @@
 """Relatório de Performance mensal: quantidade histórica e retorno TWR.
 
-Consome ``app.holdings_history`` — domínio puro que traduz o extrato
+Consome ``app.positions.holdings_history`` — domínio puro que traduz o extrato
 (``position_movements``/``option_position_movements``, já reunidos pela
 rota) em ``HoldingEvent`` (quantidade e fluxo assinados por data) e
 ``DividendEvent`` (provento já rateado pelo recorte de carteira/corretora
 escolhido). Este módulo não acessa ORM nem faz I/O — só stdlib e
-``app.holdings_history`` — e decide apenas COMO reduzir a série diária que
+``app.positions.holdings_history`` — e decide apenas COMO reduzir a série diária que
 ``portfolio_flow_series``/``twr_index_series`` produzem a um ponto por mês.
 
 Substitui a aproximação antiga — quantidades ATUAIS das posições REAIS
@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.holdings_history import (
+from app.positions.holdings_history import (
     DividendEvent,
     HoldingEvent,
     PortfolioFlowPoint,
@@ -83,7 +83,7 @@ class MonthlyPerformanceReport:
     points: list[MonthlyPerformancePoint]
     daily_flows: list[tuple[date, Decimal]]
     """Aportes e retiradas na granularidade DIÁRIA, já avaliados a preço de
-    mercado (ver ``app.holdings_history.portfolio_flow_series``). Existe
+    mercado (ver ``app.positions.holdings_history.portfolio_flow_series``). Existe
     para o comparador de índice: ``build_benchmark_shadow_series`` precisa
     da data exata de cada fluxo para comprar a cota certa do benchmark, e o
     ponto mensal já perdeu essa granularidade. Datas sem fluxo ficam de
@@ -292,7 +292,7 @@ def build_benchmark_shadow_series(
     carteira saltar sem relação com desempenho).
 
     ``flows`` é a mesma lista de fluxos reais da carteira (``F(d)``, ver
-    ``app.holdings_history``) usada para calcular o índice TWR — positivo
+    ``app.positions.holdings_history``) usada para calcular o índice TWR — positivo
     em aporte, negativo em retirada/encerramento. A técnica é acumular
     COTAS hipotéticas do benchmark, em vez de ancorar o valor investido em
     um único ponto (a aproximação antiga — todo o custo médio atual

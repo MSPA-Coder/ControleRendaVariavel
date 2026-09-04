@@ -24,7 +24,7 @@ from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app.privacy import values_hidden
+from app.core.privacy import values_hidden
 
 if TYPE_CHECKING:
     from app.models import User
@@ -249,9 +249,9 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     # fábrica por worker, aquilo significava um coletor candidato por worker
     # disputando a mesma sessão COM.
 
-    from app.auditoria import registrar_escritas_financeiras
+    from app.accounts.auditoria import registrar_escritas_financeiras
     from app.cli import register_commands
-    from app.presentation import register_filters
+    from app.core.presentation import register_filters
     from app.routes import register_blueprints
 
     # Trilha de auditoria (S7). Autenticacao e gestao de contas registram
@@ -336,7 +336,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         (`esquecer_tema_da_sessao`), então a troca aparece na próxima página
         sem esperar a sessão expirar.
         """
-        from app.themes import DEFAULT_THEME, THEME_IDS
+        from app.core.themes import DEFAULT_THEME, THEME_IDS
 
         # A tela de login é pública e deve continuar renderizando mesmo nos
         # testes/ambientes em que o banco ainda não foi iniciado.
@@ -379,7 +379,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         if request.headers.get("HX-Request", "").lower() != "true":
             return resposta
 
-        from app.url_limpa import url_canonica
+        from app.core.url_limpa import url_canonica
 
         destino = url_canonica()
         if destino is not None:

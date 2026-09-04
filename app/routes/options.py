@@ -20,6 +20,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
+from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.core.validation import parse_finite_decimal
 from app.models import (
     AppSetting,
     Broker,
@@ -31,8 +33,7 @@ from app.models import (
     Side,
     Ticker,
 )
-from app.option_portfolio import build_option_portfolio
-from app.option_position_closure import (
+from app.options.closure import (
     close_open_position,
     create_or_merge_position,
     delete_open_transaction_for_position,
@@ -41,7 +42,7 @@ from app.option_position_closure import (
     record_position_adjustment,
     sync_open_transaction_for_position,
 )
-from app.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.options.portfolio import build_option_portfolio
 from app.routes.helpers import (
     brokers,
     investable_ticker_records,
@@ -51,7 +52,6 @@ from app.routes.helpers import (
     portfolio_records,
     selected_filters,
 )
-from app.validation import parse_finite_decimal
 
 bp = Blueprint("options", __name__)
 

@@ -13,7 +13,7 @@ from sqlalchemy import select
 from werkzeug.wrappers import Response
 
 from app import db
-from app.auditoria import registrar
+from app.accounts.auditoria import registrar
 from app.models import User
 
 bp = Blueprint("auth", __name__)

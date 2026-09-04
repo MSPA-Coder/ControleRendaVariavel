@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.domain import PositionMetrics, calculate_position, operation_result, safe_div
-from app.instrument_status import instrument_status_class, instrument_status_letter
+from app.core.domain import PositionMetrics, calculate_position, operation_result, safe_div
+from app.core.instrument_status import instrument_status_class, instrument_status_letter
 from app.models import Market, Position, PositionMovementKind
 
 

@@ -89,7 +89,7 @@ known-first-party = ["app", "migrations", "scripts", "tests"]
 "app/collector/rtd_direct.py" = ["N802", "N803", "N806"]
 # `Bucket = tuple[int, str]` é um alias de tipo; PascalCase é a convenção para
 # aliases e o N806 não distingue alias de variável comum.
-"app/option_portfolio.py" = ["N806"]
+"app/options/portfolio.py" = ["N806"]
 
 [tool.ruff.format]
 quote-style = "double"

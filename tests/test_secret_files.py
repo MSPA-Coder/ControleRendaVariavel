@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.secret_files import project_secret_value
+from app.core.secret_files import project_secret_value
 
 
 def test_project_secret_value_encontra_o_caminho_padrao(tmp_path: Path) -> None:
@@ -25,7 +25,7 @@ def test_project_secret_value_encontra_o_caminho_padrao(tmp_path: Path) -> None:
 def test_url_do_postgres_escapa_a_senha_sem_registrar_valor() -> None:
     """O contrato mudou de lugar, não de exigência.
 
-    A montagem da URL saiu de `app.secret_files` para
+    A montagem da URL saiu de `app.core.secret_files` para
     `sharedauth.config.montar_url_postgres`, compartilhada com o MegaSena e o
     ConfortoTermico. O teste continua aqui porque o que ele guarda é uma
     exigência *deste* app: a senha do Postgres deste projeto pode conter

@@ -4,9 +4,8 @@ from flask import Blueprint, flash, render_template, request
 from flask.typing import ResponseReturnValue
 
 from app import db
-from app.authorization import requer_admin
-from app.routes.helpers import is_htmx_request
-from app.user_management import (
+from app.accounts.authorization import requer_admin
+from app.accounts.users import (
     UserManagementError,
     create_user,
     list_users,
@@ -14,6 +13,7 @@ from app.user_management import (
     set_active,
     update_user,
 )
+from app.routes.helpers import is_htmx_request
 
 bp = Blueprint("users", __name__)
 

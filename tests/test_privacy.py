@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from flask import session
 
-from app.privacy import VALUES_HIDDEN_SESSION_KEY
+from app.core.privacy import VALUES_HIDDEN_SESSION_KEY
 
 ROOT = Path(__file__).parents[1]
 TEMPLATES = ROOT / "app" / "templates"

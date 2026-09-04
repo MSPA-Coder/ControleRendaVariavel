@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from app.auditoria import ACOES, ENTIDADES_FINANCEIRAS, _limpar, _resumo, registrar
+from app.accounts.auditoria import ACOES, ENTIDADES_FINANCEIRAS, _limpar, _resumo, registrar
 
 # ---------------------------------------------------------------------------
 # A trilha não pode derrubar a operação
@@ -26,7 +26,7 @@ def test_falha_ao_registrar_nao_interrompe_quem_chamou(app) -> None:
     virar um defeito na carteira.
     """
     with app.test_request_context("/"), mock.patch(
-        "app.auditoria.db.session.add", side_effect=RuntimeError("banco fora")
+        "app.accounts.auditoria.db.session.add", side_effect=RuntimeError("banco fora")
     ):
         registrar("Position", "criar", entidade_id=1)  # não levanta
 
@@ -38,8 +38,8 @@ def test_registrar_nao_faz_commit(app) -> None:
     que ele aconteceu.
     """
     with app.test_request_context("/"), mock.patch(
-        "app.auditoria.db.session.add"
-    ), mock.patch("app.auditoria.db.session.commit") as commit:
+        "app.accounts.auditoria.db.session.add"
+    ), mock.patch("app.accounts.auditoria.db.session.commit") as commit:
         registrar("Position", "criar", entidade_id=1)
 
     commit.assert_not_called()
@@ -48,8 +48,8 @@ def test_registrar_nao_faz_commit(app) -> None:
 def test_acao_fora_do_vocabulario_avisa_mas_registra(app) -> None:
     """Vocabulário desconhecido é defeito de programação, não de dado."""
     with app.test_request_context("/"), mock.patch(
-        "app.auditoria.db.session.add"
-    ) as add, mock.patch("app.auditoria._log") as log:
+        "app.accounts.auditoria.db.session.add"
+    ) as add, mock.patch("app.accounts.auditoria._log") as log:
         registrar("Position", "acao-inventada", entidade_id=1)
 
     log.warning.assert_called_once()
@@ -144,7 +144,7 @@ def test_os_campos_do_resumo_existem_nos_modelos_auditados() -> None:
     informacao que identificaria a linha, em silencio.
     """
     from app import models
-    from app.auditoria import ENTIDADES_FINANCEIRAS
+    from app.accounts.auditoria import ENTIDADES_FINANCEIRAS
 
     campos = {"ticker_id", "portfolio_id", "broker_id", "side", "quantity", "status"}
     reconhecidos = {
@@ -216,7 +216,7 @@ def test_a_senha_nunca_entra_na_trilha() -> None:
     from pathlib import Path
 
     fonte = (
-        Path(__file__).resolve().parent.parent / "app" / "user_management.py"
+        Path(__file__).resolve().parent.parent / "app" / "accounts" / "users.py"
     ).read_text(encoding="utf-8")
 
     def corpo(nome: str) -> str:
