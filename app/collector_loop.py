@@ -109,6 +109,7 @@ def run_collector_loop(
     initial_schedule: CollectorSchedule,
     initial_check_interval: int,
     on_configuration: Callable[[CollectorConfiguration], None] = lambda _: None,
+    should_continue: Callable[[], bool] = lambda: True,
     monotonic: Callable[[], float] = time_module.monotonic,
     sleep: Callable[[float], None] = time_module.sleep,
     market_now: Callable[[], datetime] = lambda: datetime.now(MARKET_TIMEZONE),
@@ -118,6 +119,10 @@ def run_collector_loop(
     `initial_schedule` e `initial_check_interval` cobrem o intervalo entre o
     início do processo e a primeira configuração bem-sucedida: sem eles, uma
     origem indisponível deixaria o loop sem noção de agenda nenhuma.
+
+    `should_continue` é consultado antes de cada iteração. É por ele que o
+    coletor local morre junto do supervisor que o iniciou, em vez de virar um
+    órfão segurando COM depois que o processo pai já saiu.
     """
 
     deadlines = CollectorDeadlines()
@@ -126,7 +131,7 @@ def run_collector_loop(
     configuration: CollectorConfiguration | None = None
     idle_reason: str | None = None
     try:
-        while True:
+        while should_continue():
             now = monotonic()
             if deadlines.configuration_due(now):
                 previous = configuration
