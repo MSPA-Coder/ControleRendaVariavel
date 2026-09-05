@@ -43,7 +43,20 @@ Set-Location $ProjectDir
 # em ErrorRecord; com "Stop" isso encerraria o coletor no primeiro aviso do
 # Flask. A partir daqui os erros apenas seguem para o log.
 $ErrorActionPreference = "Continue"
+
+# O log e o unico canal de diagnostico do coletor, e ele mentia sobre o proprio
+# conteudo. O Python emite UTF-8, mas o pipeline do PowerShell decodifica a
+# saida do filho pelo codepage do console -- cp850 na tarefa agendada -- e
+# "cotacoes" chegava aqui ja como "cota├º├Áes", gravado depois como UTF-8
+# valido: os caracteres errados iam para o disco e o original nao voltava.
+# Fixar as duas pontas em UTF-8 fecha o ciclo. `Out-File -Encoding utf8` saiu
+# junto porque no Windows PowerShell 5.1 ele ainda grava BOM.
+$env:PYTHONIOENCODING = "utf-8"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$utf8SemBom = [System.Text.UTF8Encoding]::new($false)
+
 & $PythonPath -m flask --app app:create_app poll-rtd --watch 2>&1 |
-    ForEach-Object { $_.ToString() } |
-    Out-File -FilePath $logPath -Append -Encoding utf8
+    ForEach-Object {
+        [System.IO.File]::AppendAllText($logPath, $_.ToString() + [Environment]::NewLine, $utf8SemBom)
+    }
 exit $LASTEXITCODE
