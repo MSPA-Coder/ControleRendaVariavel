@@ -249,6 +249,15 @@ são `HttpConfigurationSource`/`HttpQuoteSink` (VPS, em
 `app/collector/remote_agent.py`) e `DatabaseConfigurationSource`/
 `DatabaseQuoteSink` (banco local, em `app/collector/database.py`).
 
+A tarefa roda na sessão interativa do mantenedor e sem janela de console.
+As duas são exigências, não preferência estética: o RTD chega por COM do
+Excel aberto na área de trabalho, então marcar “executar estando o usuário
+conectado ou não” colocaria o processo na sessão 0 e ele subiria sem nunca
+ler cotação alguma. E o `-WindowStyle Hidden` do PowerShell não esconde nada
+onde o Windows Terminal é o terminal padrão, que o ignora; por isso a ação da
+tarefa é `conhost.exe --headless`, que hospeda o processo sem console visível
+sem depender dessa preferência do usuário.
+
 `app_settings.collector_destination` escolhe o par. O processo relê a coluna a
 cada intervalo de verificação -- e não a cada volta do laço, que pode girar a
 cada segundo -- e, quando ela muda, o laço termina e reinicia contra a outra

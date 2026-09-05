@@ -45,6 +45,12 @@ $runnerPath = Join-Path $PSScriptRoot "rtd-agent-run.ps1"
 $configDir = Join-Path $ProjectDir ".docker-local"
 $configPath = Join-Path $configDir "remote-collector.env"
 $taskPowerShellPath = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+# O console legado, hospedeiro explicito da tarefa. Quem decide se ha janela e
+# o hospedeiro de console, nao o shell: onde o Windows Terminal e o terminal
+# padrao, ele ignora o -WindowStyle Hidden que o PowerShell pede, e a tarefa
+# abre uma janela visivel a cada logon e as 09:40. O --headless hospeda o
+# processo sem console visivel e nao depende dessa preferencia do usuario.
+$taskConhostPath = Join-Path $env:SystemRoot "System32\conhost.exe"
 
 function Get-CollectorTask {
     Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -114,6 +120,9 @@ switch ($Action) {
             if (-not (Test-Path -LiteralPath $taskPowerShellPath)) {
                 throw "PowerShell do Windows não encontrado em $taskPowerShellPath."
             }
+            if (-not (Test-Path -LiteralPath $taskConhostPath)) {
+                throw "Console do Windows não encontrado em $taskConhostPath."
+            }
             if (-not [string]::IsNullOrWhiteSpace($ApiUrl)) {
                 if (-not $ApiUrl.StartsWith("https://")) {
                     throw "Informe -ApiUrl com a URL HTTPS do Controle de Renda Variável no VPS."
@@ -127,8 +136,10 @@ switch ($Action) {
             }
 
             $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-            $scheduledAction = New-ScheduledTaskAction -Execute $taskPowerShellPath `
-                -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runnerPath`"" `
+            # Sem -WindowStyle Hidden: o sinalizador nao esconde nada aqui, e
+            # mante-lo sugeriria que o ocultamento vem do shell. Vem do --headless.
+            $scheduledAction = New-ScheduledTaskAction -Execute $taskConhostPath `
+                -Argument "--headless `"$taskPowerShellPath`" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runnerPath`"" `
                 -WorkingDirectory $ProjectDir
             $trigger = @(
                 New-ScheduledTaskTrigger -AtLogOn -User $identity
