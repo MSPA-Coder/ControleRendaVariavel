@@ -12,7 +12,7 @@ suja e a deploy key é somente leitura.
 
 ## Primeira publicação
 
-O repositório privado é clonado com a deploy key cadastrada no GitHub e o
+O repositório é clonado com a deploy key cadastrada no GitHub e o
 apelido `github-renda` configurado em `~/.ssh/config`:
 
 ```text

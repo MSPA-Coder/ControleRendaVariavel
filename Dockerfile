@@ -32,7 +32,8 @@ RUN apt-get update \
 FROM base AS runtime
 COPY pyproject.toml README.md ./
 COPY app ./app
-# `pyproject.toml` inclui `sharedauth` de um repositório Git privado
+# `pyproject.toml` inclui `sharedauth` de um repositório Git PÚBLICO
+# -- o token abaixo é herança de quando ele era privado e hoje não é exigido
 # (github.com/MSPA-Coder/SharedAuth) -- pip precisa de `git` no PATH e de
 # credencial para HTTPS. O secret `github_token` (BuildKit, nunca vira camada
 # da imagem) autentica só para este RUN; `git config --unset` no fim da mesma
