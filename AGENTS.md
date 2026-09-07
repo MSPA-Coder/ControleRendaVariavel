@@ -46,9 +46,16 @@ ciclo de edição. Para isso existe um venv do projeto:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pytest -q -m "not banco"
 .\.venv\Scripts\python.exe -m ruff check .
 ```
+
+O `-m "not banco"` exclui a camada que precisa de PostgreSQL, que não existe no
+venv. Sem o filtro, esses testes são pulados com uma mensagem explicando o
+motivo — não falham silenciosamente, mas também não medem nada. Eles rodam no
+`quality`, que sobe o `db-teste` junto. **Não desmarque um teste `banco` para
+fazer o laço rápido passar**: essa camada existe justamente para cobrir o que o
+laço rápido não alcança.
 
 O `.venv/` é uma pasta do projeto, já ignorada pelo Git: não altera o Python
 do sistema nem o PATH, e apagar a pasta desfaz a instalação por inteiro. A
@@ -81,13 +88,25 @@ e restauração são responsabilidade exclusiva do BackupRestore; não replique
 seus procedimentos ou detalhes internos neste repositório. Alteração destrutiva
 de dados exige backup validado e autorização explícita.
 
-PostgreSQL é o único backend aceitável quando um teste precisar de
-persistência; SQLite não o substitui. **Hoje nenhum precisa**: a suíte recusa a
-conexão de propósito (ver o docstring de `tests/conftest.py`), então nenhum
-invariante que dependa de banco -- atomicidade, preço médio não-negativo,
-concorrência -- é verificado automaticamente. Não leia esta seção como se
-existisse cobertura de persistência; ela diz qual banco usar no dia em que
-houver. Mudança de schema cria nova revisão Alembic, revisada manualmente.
+PostgreSQL é o único backend dos testes com persistência; SQLite não o
+substitui. A suíte tem duas camadas (ver o docstring de `tests/conftest.py`): a
+maior parte recusa a conexão de propósito, e os testes marcados com
+`@pytest.mark.banco` falam com o serviço `db-teste` do Compose — efêmero, em
+tmpfs, e deliberadamente separado do `db` com dados reais.
+
+O que a camada com banco cobre hoje é o piso, não a cobertura toda: as
+`CheckConstraint` de quantidade e custo médio, o guarda contra `NaN`, o tipo
+`numeric` das colunas de valor, e a aplicação da cadeia de migrações em banco
+vazio. Atomicidade e concorrência ainda não têm teste; ao escrever um, é nessa
+camada que ele vai.
+
+**O bootstrap em PostgreSQL vazio deixou de ser passo manual:** toda execução
+do `quality` aplica todas as revisões Alembic a um banco vazio, porque é assim
+que a fixture `app_com_banco` monta o cenário. Uma revisão que falha ao
+executar reprova na CI, e não mais no `deploy.sh` — que reverte código e
+imagem, mas não reverte migração.
+
+Mudança de schema cria nova revisão Alembic, revisada manualmente.
 Não edite uma migração que possa ter sido aplicada. Banco vazio nasce por
 `alembic upgrade head`, nunca por `create_all()` ou `stamp`; adoção de banco
 legado é procedimento administrativo explícito.

@@ -102,3 +102,9 @@ addopts = "-q --tb=short"
 # Sem isto o pytest coloca `tests/` no sys.path em vez da raiz, e `import app`
 # falha dentro do conteiner.
 pythonpath = ["."]
+markers = [
+  # A suite tem duas camadas; ver o docstring de `tests/conftest.py`. Esta
+  # marca isola a que exige PostgreSQL, para o laco rapido no venv poder
+  # exclui-la com `-m "not banco"`.
+  "banco: exige um PostgreSQL de verdade (servico `db-teste` do Compose)",
+]
