@@ -62,13 +62,16 @@ do sistema nem o PATH, e apagar a pasta desfaz a instalação por inteiro. A
 proibição que vale é outra, e continua de pé -- nada de instalar dependências
 do projeto no Python global do Windows.
 
-`sharedauth` é instalado direto do GitHub, na tag que `pyproject.toml` fixa.
-O repositório é **público**, então o `pip install` não precisa de credencial
-nenhuma -- basta `git` no PATH. A engrenagem de token que o `Dockerfile` e a CI
-ainda montam (`--mount=type=secret,id=github_token`, `.secrets/github_token.txt`
-e o PAT de leitura) é herança da época em que ele era privado, e continua
-funcionando sem atrapalhar; retirá-la é mudança de build, com sua própria
-validação, e não um ajuste de documentação.
+`sharedauth` é instalado direto do GitHub, na tag que `pyproject.toml` fixa e
+no commit que o `uv.lock` registra. O repositório é **público**: o build precisa
+só de `git` no PATH, nenhuma credencial.
+
+A engrenagem de token que existia aqui — secret do BuildKit, `git config
+url...insteadOf` para injetar um PAT, e `.secrets/github_token.txt` — **saiu em
+08/09/2026** (achado L23 do `LEVANTAMENTO_2026-09.md`). Era herança da época em
+que o repositório era privado, e o efeito que importa é fora deste arquivo:
+enquanto qualquer build da frota exigisse o token, ele tinha de existir no VPS
+também.
 
 Os dois ambientes acham defeitos diferentes, então nenhum substitui o outro.
 Foi o venv que revelou dois defeitos só-Windows que o contêiner nunca
