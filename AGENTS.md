@@ -1,5 +1,16 @@
 # ControleRendaVariavel — guia de engenharia
 
+> **A frota é este projeto, o ControleBancario e o MegaSena.** Os três
+> compartilham o `SharedAuth`, o mesmo formato de Compose e Dockerfile e o mesmo
+> portão `quality`; servem de referência uns aos outros, e uma divergência entre
+> eles é candidata a correção.
+>
+> **O ConfortoTermico não está na frota** e segue trilha própria desde
+> 07/09/2026: a arquitetura dele é livre, e diferença em relação a ele **não é
+> débito**. O que ele preserva é o contrato operacional — VPS, `deploy.sh`,
+> vigia, autocura, alerta, backup e `SharedAuth`. Ver o ADR 008 daquele
+> repositório.
+
 ## Escopo e fontes de verdade
 
 Este repositório contém uma aplicação Flask de uso pessoal do mantenedor para
