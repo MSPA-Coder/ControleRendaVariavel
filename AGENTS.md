@@ -55,8 +55,13 @@ do sistema nem o PATH, e apagar a pasta desfaz a instalação por inteiro. A
 proibição que vale é outra, e continua de pé -- nada de instalar dependências
 do projeto no Python global do Windows.
 
-`sharedauth` vem de repositório privado: o `git` precisa estar autenticado,
-ou instale do clone local na tag que `pyproject.toml` fixa.
+`sharedauth` é instalado direto do GitHub, na tag que `pyproject.toml` fixa.
+O repositório é **público**, então o `pip install` não precisa de credencial
+nenhuma -- basta `git` no PATH. A engrenagem de token que o `Dockerfile` e a CI
+ainda montam (`--mount=type=secret,id=github_token`, `.secrets/github_token.txt`
+e o PAT de leitura) é herança da época em que ele era privado, e continua
+funcionando sem atrapalhar; retirá-la é mudança de build, com sua própria
+validação, e não um ajuste de documentação.
 
 Os dois ambientes acham defeitos diferentes, então nenhum substitui o outro.
 Foi o venv que revelou dois defeitos só-Windows que o contêiner nunca
@@ -76,8 +81,13 @@ e restauração são responsabilidade exclusiva do BackupRestore; não replique
 seus procedimentos ou detalhes internos neste repositório. Alteração destrutiva
 de dados exige backup validado e autorização explícita.
 
-PostgreSQL também é o backend dos testes com persistência; SQLite não o
-substitui. Mudança de schema cria nova revisão Alembic, revisada manualmente.
+PostgreSQL é o único backend aceitável quando um teste precisar de
+persistência; SQLite não o substitui. **Hoje nenhum precisa**: a suíte recusa a
+conexão de propósito (ver o docstring de `tests/conftest.py`), então nenhum
+invariante que dependa de banco -- atomicidade, preço médio não-negativo,
+concorrência -- é verificado automaticamente. Não leia esta seção como se
+existisse cobertura de persistência; ela diz qual banco usar no dia em que
+houver. Mudança de schema cria nova revisão Alembic, revisada manualmente.
 Não edite uma migração que possa ter sido aplicada. Banco vazio nasce por
 `alembic upgrade head`, nunca por `create_all()` ou `stamp`; adoção de banco
 legado é procedimento administrativo explícito.
