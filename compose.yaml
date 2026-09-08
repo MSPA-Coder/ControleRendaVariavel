@@ -50,7 +50,6 @@ services:
       target: runtime
       secrets:
         - local_ca
-        - github_token
     restart: unless-stopped
     cpus: 1.0
     mem_limit: 512m
@@ -112,7 +111,6 @@ services:
       target: runtime
       secrets:
         - local_ca
-        - github_token
     read_only: true
     cpus: 0.5
     mem_limit: 512m
@@ -198,7 +196,6 @@ services:
       target: quality
       secrets:
         - local_ca
-        - github_token
     # OS NOMES TÊM PREFIXO `TESTE_` DE PROPÓSITO, e não são `POSTGRES_HOST` e
     # companhia.
     #
@@ -235,12 +232,6 @@ volumes:
 secrets:
   local_ca:
     file: .certs/local-root-ca.crt
-  # PAT de acesso restrito (somente-leitura, só no repositório SharedAuth) --
-  # usado apenas durante o build, para o `pip install` de `pyproject.toml`
-  # baixar a dependência Git privada. Nunca vira variável de ambiente do
-  # runtime nem fica na imagem final. Mesmo token já usado no MegaSena.
-  github_token:
-    file: .secrets/github_token.txt
   secret_key:
     file: .secrets/secret_key
   postgres_password:

@@ -22,10 +22,6 @@ exige tratar a senha do banco e a invalidação das sessões abertas.
 Faltam dois arquivos que o script não cria, porque não são segredos gerados
 aqui:
 
-- `.secrets/github_token.txt` — PAT somente-leitura, restrito ao repositório
-  SharedAuth. O `pip install` do build o usa para baixar a dependência privada.
-  Ele existe apenas durante o build, não vira variável de ambiente do runtime e
-  não fica na imagem final;
 - `.certs/local-root-ca.crt` — o Compose declara esse arquivo como secret, então
   ele **precisa existir** ou `docker compose config` falha antes de qualquer
   coisa. Numa máquina cujo antivírus ou proxy intercepta TLS, ele guarda a raiz
