@@ -144,6 +144,54 @@ services:
         condition: service_healthy
     command: ["flask", "--app", "app:create_app", "db", "upgrade"]
 
+  # Banco EFÊMERO da suíte.
+  #
+  # Não é o `db` de cima, e isso é deliberado: a suíte aplica migrações e grava,
+  # e não pode ter caminho até o volume com dados reais nem por engano. Sem
+  # volume nomeado -- os dados vivem em tmpfs e somem com o contêiner.
+  #
+  # `uid=70,gid=70,mode=0700` no tmpfs de dados: ele nasce pertencendo ao root,
+  # e o `initdb` roda como `postgres` com `cap_drop: ALL`, sem CAP_CHOWN nem
+  # CAP_FOWNER para tomar posse. 70 é o uid do postgres nesta imagem.
+  #
+  # O arquivo `.secrets/postgres_password` precisa ser LEGÍVEL PELO UID 70: um
+  # segredo de arquivo é montado preservando dono e modo do host, e `uid`/`gid`/
+  # `mode` na sintaxe longa são ignorados fora do Swarm. Com 0600 de outro dono,
+  # este contêiner morre no arranque e o `quality` só reporta "dependency failed
+  # to start". No Docker Desktop do Windows não aparece: lá tudo chega 0777.
+  db-teste:
+    image: postgres:17-alpine
+    profiles: ["quality"]
+    user: postgres
+    cpus: 1.0
+    mem_limit: 512m
+    read_only: true
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m
+      - /var/lib/postgresql/data:rw,nosuid,nodev,mode=0700,uid=70,gid=70,size=512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_DB: investimentos
+      POSTGRES_USER: investimentos
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U investimentos -d investimentos"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   quality:
     build:
       context: .
@@ -151,6 +199,29 @@ services:
       secrets:
         - local_ca
         - github_token
+    # OS NOMES TÊM PREFIXO `TESTE_` DE PROPÓSITO, e não são `POSTGRES_HOST` e
+    # companhia.
+    #
+    # A suíte tem testes que medem o que a aplicação faz quando uma variável
+    # NÃO existe -- `test_producao_recusa_secret_key_ausente` e
+    # `test_producao_recusa_database_url_ausente`, entre outros. Eles apagam a
+    # variável com `monkeypatch.delenv` e esperam a recusa. Uma primeira versão
+    # deste serviço declarava `SECRET_KEY_FILE` e `POSTGRES_*` com os nomes
+    # reais, e seis testes passaram a falhar: o app encontrava pelo arquivo o
+    # que o teste tinha acabado de apagar do ambiente.
+    #
+    # Com prefixo, o ambiente da suíte continua exatamente como era, e só a
+    # fixture `app_com_banco` enxerga estes valores.
+    environment:
+      TESTE_POSTGRES_HOST: db-teste
+      TESTE_POSTGRES_PORT: "5432"
+      TESTE_POSTGRES_DB: investimentos
+      TESTE_POSTGRES_USER: investimentos
+    secrets:
+      - postgres_password
+    depends_on:
+      db-teste:
+        condition: service_healthy
     profiles: ["quality"]
     logging:
       driver: json-file

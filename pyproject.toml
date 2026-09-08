@@ -7,7 +7,14 @@ name = "controle-renda-variavel"
 version = "2.2.0"
 description = "Controle de renda variável com ações, opções e cotações RTD."
 readme = "README.md"
-requires-python = ">=3.12"
+# Piso elevado a 3.14 em 07/09/2026 (achado L03 do LEVANTAMENTO_2026-09.md).
+# A politica da casa e alargar o teto e preservar o piso, e ela continua
+# valendo -- o motivo aqui e outro: o piso declarava uma compatibilidade que
+# NINGUEM verificava. Todas as imagens rodam `python:3.14-slim` e nenhum job
+# jamais executou a suite em 3.12 ou 3.13. Declarar 3.14 e dizer a verdade
+# sobre o unico ambiente exercitado; voltar atras exige uma matriz na CI que
+# realmente rode nas versoes menores.
+requires-python = ">=3.14"
 dependencies = [
   "alembic>=1.16.4,<2",
   "Flask>=3.1.3,<4",
@@ -56,7 +63,7 @@ allow-direct-references = true
 # Python da imagem e do layout de pacotes. Mantenha o resto em sincronia.
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 extend-exclude = [".venv", "backups", "instance"]
 
@@ -102,3 +109,9 @@ addopts = "-q --tb=short"
 # Sem isto o pytest coloca `tests/` no sys.path em vez da raiz, e `import app`
 # falha dentro do conteiner.
 pythonpath = ["."]
+markers = [
+  # A suite tem duas camadas; ver o docstring de `tests/conftest.py`. Esta
+  # marca isola a que exige PostgreSQL, para o laco rapido no venv poder
+  # exclui-la com `-m "not banco"`.
+  "banco: exige um PostgreSQL de verdade (servico `db-teste` do Compose)",
+]
