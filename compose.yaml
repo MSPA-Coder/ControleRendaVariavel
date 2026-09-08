@@ -217,7 +217,6 @@ services:
       TESTE_POSTGRES_PORT: "5432"
       TESTE_POSTGRES_DB: investimentos
       TESTE_POSTGRES_USER: investimentos
-      TESTE_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
     depends_on:

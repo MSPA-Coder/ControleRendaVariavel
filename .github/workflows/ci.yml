@@ -35,6 +35,20 @@ jobs:
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
           printf '%s' "${{ secrets.SHAREDAUTH_READ_TOKEN }}" > .secrets/github_token.txt
+          # O `chmod` na senha do PostgreSQL não é descuido, e o `umask 077`
+          # continua valendo para os outros dois arquivos.
+          #
+          # Um segredo de arquivo do Compose é montado preservando dono e modo
+          # do host -- `uid`, `gid` e `mode` na sintaxe longa são ignorados fora
+          # do Swarm, e o próprio Compose avisa isso. O contêiner `db-teste`
+          # roda como uid 70 e precisa LER esse arquivo para inicializar; com
+          # 0600 pertencendo ao runner, ele morre no arranque e o `quality` só
+          # reporta "dependency failed to start".
+          #
+          # Até a fase F1 isso não aparecia porque nenhum contêiner de banco
+          # subia neste job. O valor é uma constante pública escrita acima e não
+          # protege nada.
+          chmod 0644 .secrets/postgres_password
       - name: Validar Compose
         run: docker compose config --quiet
       - name: Construir quality sem cache

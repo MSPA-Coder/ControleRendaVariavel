@@ -109,7 +109,13 @@ def _url_do_banco_de_teste() -> str:
             f"(faltam {', '.join(faltando)})"
         )
 
-    senha = Path(os.environ["TESTE_POSTGRES_PASSWORD_FILE"]).read_text(encoding="utf-8").strip()
+    # O caminho e CONSTANTE, e nao uma variavel de ambiente, de proposito.
+    # `/run/secrets/<nome>` e onde o Compose monta todo segredo de arquivo, e
+    # ler o caminho do ambiente para depois abri-lo e exatamente o padrao que o
+    # CodeQL sinaliza como "uncontrolled data used in path expression" -- com
+    # razao, ainda que aqui a origem fosse o proprio compose.yaml. Sem o
+    # intermediario nao existe sink, e o codigo fica mais curto.
+    senha = Path("/run/secrets/postgres_password").read_text(encoding="utf-8").strip()
     return (
         "postgresql+psycopg://"
         f"{quote(os.environ['TESTE_POSTGRES_USER'])}:{quote(senha)}"
