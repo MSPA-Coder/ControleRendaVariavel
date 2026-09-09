@@ -74,3 +74,24 @@ def test_excel_aguarda_primeiro_estado_em_vez_de_publicar_zeros(monkeypatch):
     assert values[0].last_price == 10
     assert values[0].previous_close == 9
     assert state == {"cycles": 2, "closed": True, "quit": True}
+
+
+def test_falha_ao_encerrar_o_excel_nao_propaga(monkeypatch):
+    """Com as cotações entregues, um erro COM em Quit/Close não derruba o ciclo."""
+
+    def explode():
+        raise OSError("servidor COM lançou exceção ao sair")
+
+    excel = SimpleNamespace(Quit=explode)
+    workbook = SimpleNamespace(Close=lambda _save: explode())
+    provider = ExcelRtdQuoteProvider(prog_id="fake")
+    provider._excel = excel
+    provider._workbook = workbook
+    uninicializado = []
+    provider._com_uninitialize = lambda: uninicializado.append(True)
+    monkeypatch.setattr(rtd.time, "sleep", lambda _: None)
+
+    provider.close()  # não levanta
+
+    assert provider._excel is None
+    assert uninicializado == [True]

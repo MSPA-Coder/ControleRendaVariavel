@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -156,15 +157,23 @@ class ExcelRtdQuoteProvider:
         self._instrument_signature = ()
         deadline = time.monotonic() + self.timeout_seconds
         try:
-            if workbook is not None:
-                _excel_call(lambda: workbook.Close(False), deadline)
+            # Encerramento é melhor esforço. Com as cotações já entregues, uma
+            # falha ao fechar a pasta ou sair do Excel -- comum quando o RTD
+            # ainda está assentando: o servidor COM devolve DISP_E_EXCEPTION
+            # mesmo terminando o processo -- não pode derrubar o ciclo nem
+            # mascarar um erro real vindo de `fetch`. Soltar as referências e
+            # `CoUninitialize` bastam para o Excel sair.
+            for step in (
+                (lambda: workbook.Close(False)) if workbook is not None else None,
+                excel.Quit if excel is not None else None,
+            ):
+                if step is None:
+                    continue
+                with suppress(Exception):
+                    _excel_call(step, deadline)
         finally:
-            try:
-                if excel is not None:
-                    _excel_call(excel.Quit, deadline)
-            finally:
-                if self._com_uninitialize is not None:
-                    self._com_uninitialize()
+            if self._com_uninitialize is not None:
+                self._com_uninitialize()
 
     def _sync_instruments(self, instruments: list[Instrument]) -> None:
         signature = tuple((item.position_id, item.topic) for item in instruments)
