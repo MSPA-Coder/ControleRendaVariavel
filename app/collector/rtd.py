@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
-from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Protocol
+from typing import Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,20 +47,6 @@ class QuoteProvider(Protocol):
     def fetch(self, instruments: list[Instrument]) -> list[QuoteValue]: ...
 
 
-def _excel_call(action: Callable[[], Any], deadline: float) -> Any:
-    """Excel pode rejeitar COM enquanto inicializa RTD. Só esses erros repetem."""
-    while True:
-        try:
-            return action()
-        except Exception as exc:
-            if getattr(exc, "hresult", None) not in {-2147418111, -2147417846}:
-                raise
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError("Excel permaneceu ocupado durante a inicialização RTD.") from exc
-            time.sleep(min(0.25, remaining))
-
-
 def parse_decimal(value: object) -> Decimal:
     if isinstance(value, bool) or value is None:
         raise ValueError("valor RTD ausente ou inválido")
@@ -81,160 +64,3 @@ def parse_decimal(value: object) -> Decimal:
     if not result.is_finite() or result < 0:
         raise ValueError("valor RTD fora do domínio")
     return result
-
-
-class ExcelRtdQuoteProvider:
-    """Keeps one private Excel/RTD session alive until explicitly closed."""
-
-    def __init__(
-        self,
-        *,
-        prog_id: str,
-        timeout_seconds: float = 10,
-        refresh_seconds: float = 2,
-        visible: bool = False,
-        dispatch_ex: Callable[[str], Any] | None = None,
-        com_initialize: Callable[[], None] | None = None,
-        com_uninitialize: Callable[[], None] | None = None,
-    ) -> None:
-        self.prog_id = prog_id
-        self.timeout_seconds = timeout_seconds
-        self.refresh_seconds = refresh_seconds
-        self.visible = visible
-        self._dispatch_ex = dispatch_ex
-        self._com_initialize = com_initialize
-        self._com_uninitialize = com_uninitialize
-        self._excel: Any | None = None
-        self._workbook: Any | None = None
-        self._sheet: Any | None = None
-        self._instrument_signature: tuple[tuple[int, str], ...] = ()
-
-    def __enter__(self) -> ExcelRtdQuoteProvider:
-        self.open()
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        self.close()
-
-    def open(self) -> None:
-        if self._excel is not None:
-            return
-        if self._dispatch_ex is None:
-            try:
-                import pythoncom
-                import win32com.client
-            except ImportError as exc:
-                raise RuntimeError(
-                    "instale o extra 'rtd' e execute este comando no Windows"
-                ) from exc
-            self._dispatch_ex = win32com.client.DispatchEx
-            self._com_initialize = pythoncom.CoInitialize
-            self._com_uninitialize = pythoncom.CoUninitialize
-
-        if self._com_initialize is not None:
-            self._com_initialize()
-        try:
-            deadline = time.monotonic() + self.timeout_seconds
-            self._excel = _excel_call(lambda: self._dispatch_ex("Excel.Application"), deadline)
-
-            def initialize() -> None:
-                self._excel.Visible = self.visible
-                self._excel.DisplayAlerts = False
-                if self._workbook is None:
-                    self._workbook = self._excel.Workbooks.Add()
-                self._sheet = self._workbook.Worksheets(1)
-
-            _excel_call(initialize, deadline)
-        except Exception:
-            self.close()
-            raise
-
-    def close(self) -> None:
-        workbook, excel = self._workbook, self._excel
-        self._sheet = None
-        self._workbook = None
-        self._excel = None
-        self._instrument_signature = ()
-        deadline = time.monotonic() + self.timeout_seconds
-        try:
-            # Encerramento é melhor esforço. Com as cotações já entregues, uma
-            # falha ao fechar a pasta ou sair do Excel -- comum quando o RTD
-            # ainda está assentando: o servidor COM devolve DISP_E_EXCEPTION
-            # mesmo terminando o processo -- não pode derrubar o ciclo nem
-            # mascarar um erro real vindo de `fetch`. Soltar as referências e
-            # `CoUninitialize` bastam para o Excel sair.
-            for step in (
-                (lambda: workbook.Close(False)) if workbook is not None else None,
-                excel.Quit if excel is not None else None,
-            ):
-                if step is None:
-                    continue
-                with suppress(Exception):
-                    _excel_call(step, deadline)
-        finally:
-            if self._com_uninitialize is not None:
-                self._com_uninitialize()
-
-    def _sync_instruments(self, instruments: list[Instrument]) -> None:
-        signature = tuple((item.position_id, item.topic) for item in instruments)
-        if signature == self._instrument_signature:
-            return
-        if self._sheet is None:
-            raise RuntimeError("sessão Excel RTD não inicializada")
-        self._sheet.Cells.ClearContents()
-        for row, instrument in enumerate(instruments, start=1):
-            topic = instrument.topic.replace('"', '""')
-            prog_id = self.prog_id.replace('"', '""')
-            self._sheet.Cells(row, 1).Formula = f'=RTD("{prog_id}",,"{topic}","ULT")'
-            self._sheet.Cells(row, 2).Formula = f'=RTD("{prog_id}",,"{topic}","FEC")'
-            self._sheet.Cells(row, 3).Formula = f'=RTD("{prog_id}",,"{topic}","EST")'
-            if instrument.book_field is not None:
-                self._sheet.Cells(
-                    row, 4
-                ).Formula = f'=RTD("{prog_id}",,"{topic}","{instrument.book_field}")'
-        self._instrument_signature = signature
-
-    def fetch(self, instruments: list[Instrument]) -> list[QuoteValue]:
-        if not instruments:
-            return []
-        self.open()
-        deadline = time.monotonic() + self.timeout_seconds
-        _excel_call(lambda: self._sync_instruments(instruments), deadline)
-        if self._excel is None or self._sheet is None:
-            raise RuntimeError("sessão Excel RTD não inicializada")
-
-        values: list[QuoteValue] = []
-        while time.monotonic() < deadline:
-            _excel_call(self._excel.Calculate, deadline)
-            values.clear()
-            try:
-                for row, instrument in enumerate(instruments, start=1):
-
-                    def cell(column: int, row: int = row) -> object:
-                        return _excel_call(lambda: self._sheet.Cells(row, column).Value, deadline)
-
-                    last_trade_price = parse_decimal(cell(1))
-                    instrument_status = str(cell(3) or "").strip()[:16]
-                    # Antes da primeira resposta RTD, Excel pode devolver 0
-                    # em todas as células. Isso não é uma cotação válida.
-                    if not instrument_status[:1].isalpha():
-                        raise ValueError("estado RTD ainda indisponível")
-                    price_field = instrument.effective_price_field(instrument_status)
-                    last_price = (
-                        parse_decimal(cell(4)) if price_field != "ULT" else last_trade_price
-                    )
-                    values.append(
-                        QuoteValue(
-                            position_id=instrument.position_id,
-                            last_price=last_price,
-                            previous_close=parse_decimal(cell(2)),
-                            instrument_status=instrument_status,
-                            observed_at=datetime.now(UTC),
-                            last_trade_price=last_trade_price,
-                        )
-                    )
-            except ValueError:
-                time.sleep(min(self.refresh_seconds, 0.25))
-                continue
-            return list(values)
-        raise TimeoutError(f"RTD não respondeu em {self.timeout_seconds:g}s")

@@ -103,11 +103,13 @@ Dois processos independentes leem o ProfitChart na sessão interativa do Windows
 
 - **Produção:** agente automático, sempre para o VPS por HTTPS. Não carrega
   configuração ou credenciais do PostgreSQL local e continua quando o Docker
-  de desenvolvimento está parado. Use RTD direto nas Configurações do VPS.
+  de desenvolvimento está parado.
 - **Local:** iniciado somente quando necessário, sempre para o PostgreSQL
-  desta máquina. Use Excel nas Configurações locais. Ao parar, o processo e
-  sua instância privada do Excel terminam; nenhum vigia fica consultando banco,
-  arquivo ou botão para saber quando reiniciar.
+  desta máquina. Ao parar, o processo termina (com sua sessão RTD); nenhum
+  vigia fica consultando banco, arquivo ou botão para saber quando reiniciar.
+
+Os dois leem o RTD direto do servidor COM do ProfitPro (`IRtdServer`), sem
+Excel; exigem o ProfitChart aberto na sessão interativa do Windows.
 
 Os intervalos e agendas são próprios de cada destino. Como referência, use
 300 segundos no VPS e 120 no local. Consultar configuração não lê RTD; entre
@@ -143,18 +145,18 @@ Para criar atalhos de iniciar/parar em `.docker-local`, execute
 
 A tarefa **ControleRendaVariavel Coletor Local** não tem gatilho automático nem
 reinício automático. Repetir Start não abre outro coletor. Stop acorda o
-processo por um evento do Windows, espera concluir o ciclo em andamento e
-fechar o Excel; não mata sessões pessoais do Excel. Se o banco local ficar
-indisponível, o processo local encerra com erro e deve ser iniciado novamente
-após recuperar o ambiente. O remoto continua independente.
+processo por um evento do Windows e espera concluir o ciclo em andamento antes
+de encerrar. Se o banco local ficar indisponível, o processo local encerra com
+erro e deve ser iniciado novamente após recuperar o ambiente. O remoto continua
+independente.
 
 Os logs ficam em `%LOCALAPPDATA%\ControleRendaVariavel`: `remote-collector.log`
 para os ciclos remotos, `remote-runner.log` para falhas de inicialização e
 `local-runner.log` para o local. Consulte/remova a tarefa remota com
 `rtd-agent.ps1 -Action Status` ou `-Action Uninstall`; isso não para o local.
 
-A tela de Configurações de cada instância controla seu modo, agenda e
-intervalos. A pausa na tela do VPS preserva o agente remoto para retomada.
+A tela de Configurações de cada instância controla sua agenda e intervalos.
+A pausa na tela do VPS preserva o agente remoto para retomada.
 A tela local orienta iniciar/parar no Windows; ela não oferece um checkbox
 que deixe um processo aguardando habilitação. O pedido **Atualizar cotações
 agora** só é atendido se o respectivo coletor estiver iniciado e dentro da agenda.
@@ -164,7 +166,7 @@ para compatibilidade e não decide mais o destino de nenhum processo.
 `poll-rtd` (uma leitura ou `--watch`) sempre grava localmente.
 `python -m app.collector.remote_agent` sempre entrega ao VPS.
 Esses comandos e `probe-rtd-direct` exigem o ambiente RTD do Windows;
-Excel/COM não roda no contêiner web.
+COM/RTD não roda no contêiner web.
 
 ## Segurança e produção
 

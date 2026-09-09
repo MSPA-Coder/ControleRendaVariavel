@@ -174,7 +174,7 @@ outra chamada externa. Proteja invariantes concorrentes no banco.
 
 ## Exceção RTD no Windows
 
-Excel/COM não roda no contêiner Linux. Somente o ambiente Python isolado do
+COM/RTD não roda no contêiner Linux. Somente o ambiente Python isolado do
 agente RTD pode executar no host Windows; o restante continua em Docker.
 
 O agente de produção é instalado por `scripts/rtd-agent.ps1`: uma tarefa
@@ -182,13 +182,14 @@ Windows automática executa `python -m app.collector.remote_agent`, sempre
 entregando ao VPS. Ele não cria Flask nem carrega configuração/segredos do banco
 local. O local é separado e sob demanda: `scripts/rtd-local.ps1 -Action Start`
 executa `poll-rtd --watch`, sempre para PostgreSQL local; `-Action Stop`
-sinaliza um evento Windows, fecha a sessão privada do Excel e encerra o processo.
+sinaliza um evento Windows e encerra o processo (fechando sua sessão RTD).
 Local parado não tem processo, vigia, polling ou reinício automático. Banco
 local indisponível encerra essa coleta; não afeta o agente do VPS.
 
 Os dois usam `app/collector/loop.py`, com locks e controles de parada separados.
-Configurações, agenda e intervalos vêm do respectivo destino. A configuração
-local recomendada usa Excel; o VPS usa RTD direto. A aplicação web não inicia,
+Configurações, agenda e intervalos vêm do respectivo destino. Os dois leem o RTD
+direto do `IRtdServer` do ProfitPro (`app/collector/rtd_direct.py`); não há ponte
+pelo Excel nem escolha de modo. A aplicação web não inicia,
 supervisiona nem encerra processos Windows. No VPS, o botão pausa/retoma a
 coleta pelo campo `collector_paused`; no local, o controle real é Start/Stop
 no Windows. `collector_destination` é legado, mantido no schema e ignorado.

@@ -320,7 +320,6 @@ class DatabaseConfigurationSource:
         positions, option_positions = load_collector_positions()
         instruments, option_keys = instruments_for(positions, option_positions)
         configuration = CollectorConfiguration(
-            collector_mode=settings.collector_mode,
             poll_interval_seconds=settings.poll_interval_seconds,
             agent_check_interval_seconds=settings.agent_check_interval_seconds,
             schedule=schedule_from_settings(settings),

@@ -14,7 +14,7 @@
         {{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
       </div>
     {% else %}
-      <p class="form-help">A coleta local é independente do VPS e só funciona quando iniciada no Windows. Ao parar, o processo e sua instância do Excel são encerrados.</p>
+      <p class="form-help">A coleta local é independente do VPS e só funciona quando iniciada no Windows. Ao parar, o processo é encerrado.</p>
       <p class="form-help">Use os atalhos de coleta local ou <code>scripts/rtd-local.ps1 -Action Start</code> e <code>-Action Stop</code> no Windows. Salvar esta tela não inicia o coletor.</p>
       {{ collector.heartbeat(collector_heartbeat, polling=false) }}
     {% endif %}
@@ -27,24 +27,7 @@
     {% if not remote_collector_enabled %}
       <p class="form-help">A atualização será atendida se o coletor local estiver em execução, dentro da agenda.</p>
     {% endif %}
-    <div class="collector-mode-options" role="radiogroup" aria-label="Modo de leitura do ProfitChart">
-      <label class="radio-option">
-        <input type="radio" name="collector_mode" value="excel"
-               {{ 'checked' if settings.collector_mode.value == 'excel' }}>
-        <span>
-          <strong>Excel</strong>
-          <small>Usa uma instância oculta e persistente do Excel como ponte RTD.</small>
-        </span>
-      </label>
-      <label class="radio-option">
-        <input type="radio" name="collector_mode" value="direct"
-               {{ 'checked' if settings.collector_mode.value == 'direct' }}>
-        <span>
-          <strong>RTD direto</strong>
-          <small>Conecta ao servidor COM do ProfitPro sem iniciar o Excel.</small>
-        </span>
-      </label>
-    </div>
+    <p class="form-help">O coletor lê o RTD direto do servidor COM do ProfitPro (<code>IRtdServer</code>), sem abrir o Excel. Exige o ProfitChart aberto nesta máquina.</p>
     <div class="collector-settings-details">
       <div class="collector-field">
         <label>Intervalo entre leituras (segundos)

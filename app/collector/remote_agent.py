@@ -24,7 +24,7 @@ from app.collector.lock import collector_process_lock
 from app.collector.loop import CollectorConfiguration, run_collector_loop
 from app.collector.profit_detector import ProfitDetector, WindowsProfitDetector
 from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
-from app.collector.rtd import ExcelRtdQuoteProvider, Instrument, QuoteValue
+from app.collector.rtd import Instrument, QuoteValue
 from app.collector.rtd_direct import DirectRtdQuoteProvider
 from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
@@ -34,7 +34,6 @@ from app.collector.settings import (
     valid_agent_check_interval,
     valid_poll_interval,
 )
-from app.models import CollectorMode
 
 CONFIG_PATH = Path(".docker-local") / "remote-collector.env"
 AGENT_LOGGER_NAME = "controle_renda_variavel.remote_collector"
@@ -182,20 +181,11 @@ class CollectorApi:
 
 
 def _provider_factory(config: dict[str, str]):
-    def factory(mode: CollectorMode) -> ManagedQuoteProvider:
-        common = {
-            "prog_id": config.get("RTD_PROG_ID", "rtdtrading.rtdserver"),
-            "timeout_seconds": float(config.get("RTD_TIMEOUT_SECONDS", "10")),
-        }
-        if mode == CollectorMode.DIRECT:
-            return DirectRtdQuoteProvider(
-                **common,
-                refresh_seconds=min(float(config.get("RTD_REFRESH_SECONDS", "2")), 0.25),
-            )
-        return ExcelRtdQuoteProvider(
-            **common,
-            refresh_seconds=float(config.get("RTD_REFRESH_SECONDS", "2")),
-            visible=config.get("RTD_EXCEL_VISIBLE", "false").lower() == "true",
+    def factory() -> ManagedQuoteProvider:
+        return DirectRtdQuoteProvider(
+            prog_id=config.get("RTD_PROG_ID", "rtdtrading.rtdserver"),
+            timeout_seconds=float(config.get("RTD_TIMEOUT_SECONDS", "10")),
+            refresh_seconds=min(float(config.get("RTD_REFRESH_SECONDS", "2")), 0.25),
         )
 
     return factory
@@ -285,7 +275,6 @@ class HttpConfigurationSource:
         payload = self.api.configuration()
         instruments, option_keys = _instrument_sets(payload)
         return CollectorConfiguration(
-            collector_mode=CollectorMode(str(payload["collector_mode"])),
             poll_interval_seconds=valid_poll_interval(payload.get("poll_interval_seconds")),
             agent_check_interval_seconds=valid_agent_check_interval(
                 payload.get("agent_check_interval_seconds")

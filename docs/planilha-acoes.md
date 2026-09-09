@@ -307,8 +307,8 @@ Corretora e prazo não alteram o resultado.
   é a soma dos movimentos, e o custo médio é o do último deles.
 - Um aumento de posição nunca realiza resultado; um encerramento parcial
   nunca altera o custo médio do saldo.
-- O coletor reutiliza uma única sessão Excel/RTD enquanto estiver em modo
-  contínuo.
+- O coletor mantém o provedor RTD aberto entre ciclos e o fecha nos intervalos
+  ociosos (ProfitChart fechado, fora da agenda).
 - Posições reais não são versionadas: são cadastradas pela interface, para
   manter dados pessoais fora do repositório.
 

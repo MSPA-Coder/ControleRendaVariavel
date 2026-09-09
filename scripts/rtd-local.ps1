@@ -1,4 +1,4 @@
-<# Coleta local sob demanda. Start cria um processo; Stop fecha o Excel e sai. #>
+<# Coleta local sob demanda. Start cria um processo; Stop o encerra (com a sessao RTD). #>
 [CmdletBinding(SupportsShouldProcess)]
 param([Parameter(Mandatory=$true)][ValidateSet("Start", "Stop", "Status", "Shortcuts")][string]$Action)
 $ErrorActionPreference = "Stop"
@@ -16,7 +16,7 @@ switch ($Action) {
         }
     }
     "Stop" {
-        if ($PSCmdlet.ShouldProcess($taskName, "encerrar coleta local e seu Excel")) {
+        if ($PSCmdlet.ShouldProcess($taskName, "encerrar a coleta local")) {
             Stop-CollectorTask -Name $taskName -Destination local
             Get-CollectorStatus -Name $taskName
         }

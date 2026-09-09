@@ -4,7 +4,6 @@ from collections.abc import Callable
 from typing import Protocol
 
 from app.collector.rtd import Instrument, QuoteValue
-from app.models import CollectorMode
 
 
 class ManagedQuoteProvider(Protocol):
@@ -16,29 +15,26 @@ class ManagedQuoteProvider(Protocol):
 
 
 class CollectorProviderManager:
-    """Keeps one provider open and swaps it when the configured mode changes."""
+    """Keeps one provider open across cycles and closes it on demand.
 
-    def __init__(
-        self,
-        provider_factory: Callable[[CollectorMode], ManagedQuoteProvider],
-    ) -> None:
+    O laço fecha o provedor nos trechos ociosos (Profit fechado, fora da
+    agenda) e volta a pedir no próximo ciclo; este gerenciador reabre sozinho
+    quando isso acontece, sem o chamador precisar saber se ainda está aberto.
+    """
+
+    def __init__(self, provider_factory: Callable[[], ManagedQuoteProvider]) -> None:
         self.provider_factory = provider_factory
-        self.mode: CollectorMode | None = None
         self.provider: ManagedQuoteProvider | None = None
 
-    def get(self, mode: CollectorMode) -> ManagedQuoteProvider:
-        if self.provider is not None and self.mode == mode:
-            return self.provider
-        self.close()
-        provider = self.provider_factory(mode)
-        provider.open()
-        self.provider = provider
-        self.mode = mode
-        return provider
+    def get(self) -> ManagedQuoteProvider:
+        if self.provider is None:
+            provider = self.provider_factory()
+            provider.open()
+            self.provider = provider
+        return self.provider
 
     def close(self) -> None:
         provider = self.provider
         self.provider = None
-        self.mode = None
         if provider is not None:
             provider.close()

@@ -390,7 +390,6 @@ tbody tr:hover { background: #e1f0f4; }
 .collector-settings-card { display: grid; gap: .9rem; }
 .collector-cycle-card { grid-column: 1 / -1; }
 .settings-card-intro { color: var(--muted); font-size: .9rem; margin: 0; max-width: 76ch; }
-.collector-mode-options { display: grid; gap: .25rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .collector-field { display: grid; gap: .35rem; }
 .agent-sync-card { display: grid; gap: .8rem; }
 .collector-settings-details {
@@ -584,7 +583,7 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   .topbar { align-items: stretch; flex-direction: column; gap: .75rem; }
   .topbar nav { flex-wrap: wrap; }
   .catalog-create, .ticker-fields, .expiration-fields, .contract-fields, .portfolio-fields { grid-template-columns: 1fr; }
-  .collector-mode-options, .collector-settings-details, .schedule-hours { grid-template-columns: 1fr; }
+  .collector-settings-details, .schedule-hours { grid-template-columns: 1fr; }
   .schedule-days .checkbox-option { flex: 1 1 calc(50% - .6rem); }
   .portfolio-ticker-group { align-items: stretch; grid-template-columns: 1fr; }
   .portfolio-ticker-add-form { width: min(22rem, 90vw); }

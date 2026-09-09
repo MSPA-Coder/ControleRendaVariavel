@@ -18,13 +18,12 @@ from app.collector.lock import CollectorAlreadyRunningError, collector_process_l
 from app.collector.loop import run_collector_loop
 from app.collector.profit_detector import WindowsProfitDetector
 from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
-from app.collector.rtd import ExcelRtdQuoteProvider, Instrument
+from app.collector.rtd import Instrument
 from app.collector.rtd_direct import DirectRtdQuoteProvider
 from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
-    CollectorMode,
     QuoteHistory,
     User,
 )
@@ -119,20 +118,11 @@ def poll_rtd(watch: bool) -> None:
 
 
 def _collector_providers() -> CollectorProviderManager:
-    def provider_factory(mode: CollectorMode) -> ManagedQuoteProvider:
-        common = {
-            "prog_id": current_app.config["RTD_PROG_ID"],
-            "timeout_seconds": current_app.config["RTD_TIMEOUT_SECONDS"],
-        }
-        if mode == CollectorMode.DIRECT:
-            return DirectRtdQuoteProvider(
-                **common,
-                refresh_seconds=min(current_app.config["RTD_REFRESH_SECONDS"], 0.25),
-            )
-        return ExcelRtdQuoteProvider(
-            **common,
-            refresh_seconds=current_app.config["RTD_REFRESH_SECONDS"],
-            visible=current_app.config["RTD_EXCEL_VISIBLE"],
+    def provider_factory() -> ManagedQuoteProvider:
+        return DirectRtdQuoteProvider(
+            prog_id=current_app.config["RTD_PROG_ID"],
+            timeout_seconds=current_app.config["RTD_TIMEOUT_SECONDS"],
+            refresh_seconds=min(current_app.config["RTD_REFRESH_SECONDS"], 0.25),
         )
 
     return CollectorProviderManager(provider_factory)
@@ -166,9 +156,7 @@ def _poll_rtd_once() -> None:
     providers = _collector_providers()
     instruments = list(configuration.instruments)
     try:
-        values = (
-            providers.get(configuration.collector_mode).fetch(instruments) if instruments else []
-        )
+        values = providers.get().fetch(instruments) if instruments else []
         sink.publish(values, configuration.option_keys)  # type: ignore[attr-defined]
     except Exception as exc:
         sink.report_failure(exc)  # type: ignore[attr-defined]
@@ -177,7 +165,7 @@ def _poll_rtd_once() -> None:
         providers.close()
     click.echo(
         f"{len(values)} cotações entregues {sink.destination_label} "  # type: ignore[attr-defined]
-        f"via {configuration.collector_mode.value} em {datetime.now(UTC).isoformat()}"
+        f"via RTD direto em {datetime.now(UTC).isoformat()}"
     )
 
 

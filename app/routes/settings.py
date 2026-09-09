@@ -32,7 +32,7 @@ from app.core.themes import (
     get_theme_options_dict,
     parse_theme,
 )
-from app.models import AppSetting, CollectorMode, Ticker
+from app.models import AppSetting, Ticker
 from app.routes import bp
 from app.routes.helpers import ticker_records
 
@@ -54,9 +54,6 @@ def _submitted_settings() -> AppSetting:
     submitted.theme = (
         raw_theme if raw_theme in {theme_id for theme_id, _, _ in THEME_OPTIONS} else DEFAULT_THEME
     )
-    raw_mode = request.form.get("collector_mode", "")
-    if raw_mode in {mode.value for mode in CollectorMode}:
-        submitted.collector_mode = CollectorMode(raw_mode)
     try:
         submitted.poll_interval_seconds = int(request.form.get("poll_interval_seconds", "2"))
     except ValueError:
@@ -179,7 +176,6 @@ def settings() -> ResponseReturnValue:
             return _render_settings(_submitted_settings(), status=422)
         try:
             current_settings = _get_or_create_settings()
-            current_settings.collector_mode = data.collector_mode
             current_settings.theme = theme
             # O tema fica guardado na sessão para não custar uma consulta por
             # render (ver `_theme_context`); trocá-lo aqui exige descartar o

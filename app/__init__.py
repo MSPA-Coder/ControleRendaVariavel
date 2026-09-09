@@ -166,7 +166,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_REFRESH_SECONDS=float(os.getenv("RTD_REFRESH_SECONDS", "2")),
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
-        RTD_EXCEL_VISIBLE=ler_flag("RTD_EXCEL_VISIBLE", estrito=False),
         COLLECTOR_AGENT_TOKEN=resolver_segredo("COLLECTOR_AGENT_TOKEN") or "",
         REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,

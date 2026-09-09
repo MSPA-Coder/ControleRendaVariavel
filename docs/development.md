@@ -147,14 +147,15 @@ destrutiva de dados exige backup validado e autorização explícita.
 
 ## Trabalhar sem o RTD
 
-Excel/COM não roda no contêiner Linux, então o caminho real de coleta não existe
+COM/RTD não roda no contêiner Linux, então o caminho real de coleta não existe
 no ambiente de desenvolvimento. Isso não bloqueia nada: **sem o agente, a
 aplicação continua utilizável**, as cotações aparecem indisponíveis ou
 desatualizadas e nenhum cadastro depende delas.
 
 Para exercitar a coleta, use os provedores determinísticos da suíte em vez de
-COM. `poll-rtd` e `probe-rtd-direct` dependem de Excel e só rodam no ambiente
-Python isolado do Windows — não os execute no contêiner `web`.
+COM. `poll-rtd` e `probe-rtd-direct` falam com o `IRtdServer` do ProfitPro e só
+rodam no ambiente Python isolado do Windows, com o ProfitChart aberto — não os
+execute no contêiner `web`.
 
 A produção é instalada por `scripts/rtd-agent.ps1 -Action Install` e usa
 `python -m app.collector.remote_agent`, sem Flask ou banco local. O local é
@@ -162,12 +163,13 @@ iniciado/parado por `scripts/rtd-local.ps1 -Action Start|Stop`, sempre gravando
 nesta máquina. Não há alternância de destino nem um vigia ocioso. Locks por
 destino permitem coexistência, mas recusam duplicação do mesmo coletor.
 
-Além do quality, valide no Windows: leitura Excel com RTD direto ativo,
-Start repetido sem duplicar processo, Stop fechando somente o Excel do coletor,
-ausência de processo local após Stop e entrega remota com banco local parado.
-A indisponibilidade do banco deve encerrar o local com erro e não disparar
-reinício automático. A suíte usa provedores fake e cobre prazos, isolamento,
-parada e inicialização do Excel; o teste COM real continua específico do Windows.
+Além do quality, valide no Windows: `probe-rtd-direct` e alguns ciclos de
+`poll-rtd`, Start repetido sem duplicar processo, Stop encerrando o processo
+local, ausência de processo local após Stop e entrega remota com banco local
+parado. A indisponibilidade do banco deve encerrar o local com erro e não
+disparar reinício automático. A suíte usa provedores fake e cobre prazos,
+isolamento, parada e a decodificação do RTD direto; o teste COM real continua
+específico do Windows.
 
 O caminho do agente remoto (`REMOTE_COLLECTOR_ENABLED=true`) pode ser exercitado
 sem Windows chamando os endpoints `/api/collector/*` com o Bearer token de

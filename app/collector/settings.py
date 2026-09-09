@@ -21,22 +21,20 @@ DEFAULT_COLLECTOR_SCHEDULE_END_TIME = time(18, 10)
 
 @dataclass(frozen=True, slots=True)
 class CollectorSettingsInput:
-    collector_mode: CollectorMode
     poll_interval_seconds: int
 
 
 def parse_collector_settings(form: Mapping[str, str]) -> CollectorSettingsInput:
     try:
-        collector_mode = CollectorMode(form.get("collector_mode", ""))
         poll_interval_seconds = int(form.get("poll_interval_seconds", ""))
     except (TypeError, ValueError) as exc:
-        raise ValueError("Selecione um coletor e informe um intervalo válido.") from exc
+        raise ValueError("Informe um intervalo entre leituras válido.") from exc
     if not MIN_POLL_INTERVAL_SECONDS <= poll_interval_seconds <= MAX_POLL_INTERVAL_SECONDS:
         raise ValueError(
             f"O intervalo deve ficar entre {MIN_POLL_INTERVAL_SECONDS} e "
             f"{MAX_POLL_INTERVAL_SECONDS} segundos."
         )
-    return CollectorSettingsInput(collector_mode, poll_interval_seconds)
+    return CollectorSettingsInput(poll_interval_seconds)
 
 
 def parse_agent_check_interval(form: Mapping[str, str]) -> int:
@@ -197,7 +195,7 @@ def default_collector_settings() -> AppSetting:
     return AppSetting(
         id=1,
         theme=DEFAULT_THEME,
-        collector_mode=CollectorMode.EXCEL,
+        collector_mode=CollectorMode.DIRECT,  # coluna legada; nada lê este valor
         collector_destination=CollectorDestination.REMOTE,
         poll_interval_seconds=DEFAULT_POLL_INTERVAL_SECONDS,
         agent_check_interval_seconds=DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,

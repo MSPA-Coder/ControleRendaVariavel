@@ -51,7 +51,7 @@ def test_parada_interrompe_espera_e_nao_afeta_outro_destino(tmp_path):
 
 def test_processo_parado_nao_consulta_nem_abre_provedor():
     source = _OrigemFixa(_configuracao())
-    providers = CollectorProviderManager(lambda _: pytest.fail("não deveria abrir COM"))
+    providers = CollectorProviderManager(lambda: pytest.fail("não deveria abrir COM"))
     run_collector_loop(
         source=source,
         sink=_DestinoEspiao(),
@@ -73,7 +73,7 @@ def test_banco_local_indisponivel_encerra_sem_vigia_ou_retentativa():
         run_collector_loop(
             source=source,
             sink=sink,
-            providers=CollectorProviderManager(lambda _: pytest.fail("não deveria abrir COM")),
+            providers=CollectorProviderManager(lambda: pytest.fail("não deveria abrir COM")),
             detector=_ProfitFalso(rodando=True),
             logger=logging.getLogger("teste.local"),
             initial_schedule=ABERTA,

@@ -17,7 +17,6 @@ from app.collector.loop import CollectorConfiguration, run_collector_loop
 from app.collector.providers import CollectorProviderManager
 from app.collector.rtd import Instrument, QuoteValue
 from app.collector.settings import CollectorSchedule
-from app.models import CollectorMode
 
 ABERTA = CollectorSchedule(frozenset({0, 1, 2, 3, 4}), time(9, 45), time(18, 10))
 DENTRO_DA_JANELA = datetime(2026, 8, 17, 12, 45, tzinfo=UTC)
@@ -90,7 +89,6 @@ class _ProfitFalso:
 
 def _configuracao(**overrides) -> CollectorConfiguration:
     valores: dict[str, object] = {
-        "collector_mode": CollectorMode.DIRECT,
         "poll_interval_seconds": 5,
         "agent_check_interval_seconds": 30,
         "schedule": ABERTA,
@@ -118,7 +116,7 @@ def _rodar(origem, destino, detector, *, agora=DENTRO_DA_JANELA, ciclos=1):
         run_collector_loop(
             source=origem,
             sink=destino,
-            providers=CollectorProviderManager(lambda _mode: provedor),
+            providers=CollectorProviderManager(lambda: provedor),
             detector=detector,
             logger=logging.getLogger("teste.collector_loop"),
             initial_schedule=ABERTA,

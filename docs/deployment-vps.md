@@ -2,7 +2,7 @@
 
 O VPS executa a aplicação Flask e o PostgreSQL em Docker. O Nginx do host é o
 único componente exposto e publica `https://renda-mspa.duckdns.org`; as portas
-5301 e 5302 permanecem em localhost. Excel, ProfitChart e o agente RTD ficam no
+5301 e 5302 permanecem em localhost. O ProfitChart e o agente RTD ficam no
 Windows.
 
 O código no servidor é um espelho do branch `main`. Mudanças nascem na máquina

@@ -211,12 +211,12 @@ normativos estão em [`docs/planilha-acoes.md`](planilha-acoes.md) e
 
 ### Coleta de cotações
 
-`rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` fala COM
-com o servidor RTD; `collector.py` mantém um provedor aberto e o troca quando o
-modo muda; `collector_loop.py` é o laço único de coleta e
-`profit_detector.py` responde se o ProfitChart está aberto;
-`collector_heartbeat.py` resume a última leitura persistida **sem expor valor de
-cotação**; `collector_settings.py` valida modo, intervalos e agenda.
+`rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` lê o RTD
+direto do `IRtdServer` do ProfitPro (sem Excel) e é o único provedor;
+`providers.py` mantém um provedor aberto entre ciclos; `loop.py` é o laço único
+de coleta e `profit_detector.py` responde se o ProfitChart está aberto;
+`heartbeat.py` resume a última leitura persistida **sem expor valor de
+cotação**; `settings.py` valida intervalos e agenda.
 
 `quote_history_import.py` é a outra fonte de preço: séries diárias do Yahoo,
 usadas por performance e risco. Ele decide qual preço gravar — ajustado só para
@@ -232,11 +232,11 @@ e `cli.py` (`poll-rtd`, `probe-rtd-direct`, `import-position-history`, `users`).
 
 ## O agente RTD no Windows
 
-Excel/COM não roda no contêiner Linux. Essa é a única exceção ao runtime em
+COM/RTD não roda no contêiner Linux. Essa é a única exceção ao runtime em
 Docker, e ela foi desenhada para não ampliar a superfície do servidor:
 
 ```text
-Excel/ProfitChart → agente Windows → HTTPS autenticado → aplicação → PostgreSQL
+ProfitChart (RTD/COM) → agente Windows → HTTPS autenticado → aplicação → PostgreSQL
 ```
 
 ### Produção contínua e coleta local sob demanda
@@ -255,8 +255,8 @@ origem, destino, lock e evento de parada próprios:
 acorda sem polling, o laço fecha seu provedor e o processo termina. Um ciclo
 em andamento conclui antes de sair. O local parado não mantém um serviço ou
 thread verificando se deve voltar. Início/parada pertencem ao Windows,
-nunca aos workers Flask. O isolamento local de COM usa uma instância privada
-do Excel; produção pode continuar com RTD direto.
+nunca aos workers Flask. Os dois processos leem o RTD direto do `IRtdServer`
+do ProfitPro; não há ponte pelo Excel nem escolha de modo.
 
 Ambas as tarefas usam token interativo e `conhost.exe --headless`: COM depende
 da sessão do usuário, e não da sessão 0. A instalação remota migra a antiga
@@ -297,9 +297,8 @@ O POST legado de troca de destino responde 410.
 O arquivo de estado remoto só é regravado se agenda ou intervalo de
 verificação mudarem. Em indisponibilidade remota o agente espera o próximo
 prazo de configuração; um prazo de cotação vencido não provoca laço ocupado.
-O provedor Excel limita as retentativas de COM ocupado e aguarda um estado RTD
-textual antes de aceitar as células: os zeros provisórios da inicialização
-não são publicados como cotações.
+O provedor RTD reconecta os tópicos a cada ciclo e espera o primeiro snapshot
+completo antes de publicar: um campo ainda ausente não vira cotação.
 
 **Sem o coletor, a aplicação continua utilizável.** Cotações aparecem
 indisponíveis ou desatualizadas, e nenhum cadastro depende delas. O estado
