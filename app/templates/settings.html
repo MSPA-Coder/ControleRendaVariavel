@@ -9,42 +9,23 @@
     <legend>Ciclo de cotações</legend>
     <p class="settings-card-intro">Define quando o agente lê o ProfitChart, envia as cotações e permite que Ações recalcule a carteira.</p>
     {% if remote_collector_enabled %}
-      <p class="form-help">
-        O agente está no Windows e conversa com este servidor por HTTPS. Ele não abre nenhuma porta no computador local.
-      </p>
-      <div class="form-actions">
-        <button class="button button-primary" type="submit"
-                formaction="{{ url_for('portfolio.request_collector_refresh') }}"
-                data-sa-confirmar="Solicitar uma atualização das cotações agora?"
-                data-sa-titulo="Atualizar cotações" data-sa-severidade="warning">Atualizar cotações agora</button>
+      <p class="form-help">O agente Windows envia cotações para este VPS independentemente do ambiente local.</p>
+      <div class="rtd-toggle-row">
+        {{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
       </div>
     {% else %}
-    {# O liga/desliga fala com o gerenciador RTD por conta propria
-       (hx-post para a sua rota), entao o botao "Salvar" desta pagina nao
-       participa: o efeito e imediato e nao ha o que confirmar. O `enabled`
-       viaja junto num envio do formulario, e o handler o ignora. #}
-    <div class="rtd-toggle-row">
-      {{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
+      <p class="form-help">A coleta local é independente do VPS e só funciona quando iniciada no Windows. Ao parar, o processo e sua instância do Excel são encerrados.</p>
+      <p class="form-help">Use os atalhos de coleta local ou <code>scripts/rtd-local.ps1 -Action Start</code> e <code>-Action Stop</code> no Windows. Salvar esta tela não inicia o coletor.</p>
+      {{ collector.heartbeat(collector_heartbeat, polling=false) }}
+    {% endif %}
+    <div class="form-actions">
+      <button class="button button-primary" type="submit"
+              formaction="{{ url_for('portfolio.request_collector_refresh') }}"
+              data-sa-confirmar="Solicitar uma atualização das cotações agora?"
+              data-sa-titulo="Atualizar cotações" data-sa-severidade="warning">Atualizar cotações agora</button>
     </div>
-    {# Destino da coleta. So aparece aqui, na instancia que roda na maquina
-       do ProfitChart: e ela que o coletor consulta. No VPS o botao nao
-       existe e a rota recusa, porque o valor daquela linha nao e lido por
-       ninguem e o botao mentiria sobre ter efeito. #}
-    <div class="collector-destination-row">
-      <p class="form-help">
-        Destino da coleta:
-        <strong>{{ 'este computador' if collector_destination.value == 'local' else 'o VPS' }}</strong>.
-        Os dois se excluem: com o destino local as cotações não são enviadas ao VPS, e vice-versa.
-      </p>
-      <div class="form-actions">
-        <button class="button" type="submit"
-                formaction="{{ url_for('portfolio.switch_collector_destination') }}"
-                data-sa-confirmar="{{ 'Passar a gravar as cotações no banco deste computador? O VPS deixa de receber.' if collector_destination.value == 'remote' else 'Voltar a entregar as cotações ao VPS? Este computador deixa de gravar.' }}"
-                data-sa-titulo="Trocar destino da coleta" data-sa-severidade="warning">
-          {{ 'Passar a coletar neste computador' if collector_destination.value == 'remote' else 'Voltar a entregar ao VPS' }}
-        </button>
-      </div>
-    </div>
+    {% if not remote_collector_enabled %}
+      <p class="form-help">A atualização será atendida se o coletor local estiver em execução, dentro da agenda.</p>
     {% endif %}
     <div class="collector-mode-options" role="radiogroup" aria-label="Modo de leitura do ProfitChart">
       <label class="radio-option">

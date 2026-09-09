@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import ctypes
 import logging
-import os
 import sys
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -15,24 +12,18 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app import db
 from app.accounts.users import UserManagementError, set_active, upsert_from_cli
-from app.collector.database import (
-    DestinationWatcher,
-    local_loop_arguments,
-    read_collector_destination,
-)
+from app.collector.control import CollectorStop
+from app.collector.database import local_loop_arguments
 from app.collector.lock import CollectorAlreadyRunningError, collector_process_lock
 from app.collector.loop import run_collector_loop
 from app.collector.profit_detector import WindowsProfitDetector
 from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
-from app.collector.remote_agent import remote_loop_arguments
 from app.collector.rtd import ExcelRtdQuoteProvider, Instrument
 from app.collector.rtd_direct import DirectRtdQuoteProvider
-from app.collector.settings import DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
 from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
-    CollectorDestination,
     CollectorMode,
     QuoteHistory,
     User,
@@ -51,47 +42,6 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
     app.cli.add_command(users_group)
-
-
-def _windows_process_is_alive(process_id: int) -> bool:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    process_query_limited_information = 0x1000
-    still_active = 259
-    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_bool, ctypes.c_ulong]
-    kernel32.OpenProcess.restype = ctypes.c_void_p
-    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-    kernel32.GetExitCodeProcess.restype = ctypes.c_bool
-    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-    kernel32.CloseHandle.restype = ctypes.c_bool
-    handle = kernel32.OpenProcess(process_query_limited_information, False, process_id)
-    if not handle:
-        return False
-    try:
-        exit_code = ctypes.c_ulong()
-        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-            return False
-        return exit_code.value == still_active
-    finally:
-        kernel32.CloseHandle(handle)
-
-
-def supervisor_process_is_alive(supervisor_pid: str | None) -> bool:
-    """Mantém o coletor apenas enquanto seu processo supervisor existir."""
-    if not supervisor_pid:
-        return True
-    try:
-        process_id = int(supervisor_pid)
-    except ValueError:
-        return False
-    if process_id <= 0:
-        return False
-    if os.name == "nt":
-        return _windows_process_is_alive(process_id)
-    try:
-        os.kill(process_id, 0)
-    except OSError:
-        return False
-    return True
 
 
 @click.command("auditoria")
@@ -118,9 +68,7 @@ def auditoria(limite: int, entidade: str | None, acao: str | None, usuario: str 
     if acao:
         consulta = consulta.where(AuditLog.action == acao)
     if usuario:
-        consulta = consulta.join(User, AuditLog.user_id == User.id).where(
-            User.username == usuario
-        )
+        consulta = consulta.join(User, AuditLog.user_id == User.id).where(User.username == usuario)
 
     linhas = list(db.session.scalars(consulta.limit(limite)))
     if not linhas:
@@ -162,11 +110,11 @@ def probe_rtd_direct(ticker: str, market_code: str) -> None:
 @click.command("poll-rtd")
 @click.option("--watch", is_flag=True, help="Continua atualizando até ser interrompido.")
 def poll_rtd(watch: bool) -> None:
-    """Refreshes quotes with the collector selected on the Settings page."""
+    """Coleta somente para o banco local, independentemente do agente do VPS."""
     try:
-        with collector_process_lock(Path(current_app.root_path).parent, wait=watch):
+        with collector_process_lock(Path(current_app.root_path).parent, wait=False):
             _poll_rtd(watch)
-    except CollectorAlreadyRunningError as exc:
+    except (CollectorAlreadyRunningError, RuntimeError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
@@ -207,22 +155,9 @@ def _collector_logger() -> logging.Logger:
     return logger
 
 
-def _loop_arguments(destination: CollectorDestination, project_dir: Path) -> dict[str, object]:
-    if destination is CollectorDestination.LOCAL:
-        return local_loop_arguments()
-    return remote_loop_arguments(project_dir)
-
-
-def _poll_rtd_once(destination: CollectorDestination, project_dir: Path) -> None:
-    """Uma leitura e sai -- o modo de diagnóstico, sem supervisão nem espera.
-
-    Entrega ao mesmo destino configurado na tela: um ciclo manual não é
-    desculpa para gravar no banco local enquanto a coleta está indo para o
-    VPS. Ao contrário do ``--watch``, não espera o ProfitChart abrir -- quem
-    roda um ciclo à mão prefere ver o erro de COM a ver o comando terminar
-    em silêncio.
-    """
-    arguments = _loop_arguments(destination, project_dir)
+def _poll_rtd_once() -> None:
+    """Uma leitura manual para o banco local, respeitando a agenda."""
+    arguments = local_loop_arguments()
     source = arguments["source"]
     sink = arguments["sink"]
     configuration = source.configuration()  # type: ignore[attr-defined]
@@ -247,37 +182,19 @@ def _poll_rtd_once(destination: CollectorDestination, project_dir: Path) -> None
 
 
 def _poll_rtd(watch: bool) -> None:
-    project_dir = Path(current_app.root_path).parent
     if not watch:
-        _poll_rtd_once(read_collector_destination(), project_dir)
+        _poll_rtd_once()
         return
-    # O coletor local é filho de quem o iniciou: se aquele processo morrer, o
-    # laço para em vez de continuar segurando COM sem ninguém supervisionando.
-    supervisor_pid = os.getenv("RTD_SUPERVISOR_PID")
-    logger = _collector_logger()
-    while supervisor_process_is_alive(supervisor_pid):
-        destination = read_collector_destination()
-        watcher = DestinationWatcher(destination)
-        try:
-            arguments = _loop_arguments(destination, project_dir)
-        except RuntimeError as exc:
-            # Destino remoto escolhido sem URL ou token: reclamar e esperar,
-            # em vez de reiniciar em laço fechado. Voltar o destino para
-            # local na tela recupera sem mexer no host.
-            logger.warning("Destino %s indisponível: %s", destination.value, exc)
-            time.sleep(DEFAULT_AGENT_CHECK_INTERVAL_SECONDS)
-            continue
-        logger.info("Coleta ativa com destino %s.", destination.value)
+    project_dir = Path(current_app.root_path).parent
+    with CollectorStop(project_dir, "local") as stop:
         run_collector_loop(
             providers=_collector_providers(),
             detector=WindowsProfitDetector(),
-            logger=logger,
-            # `watcher` é religado a cada destino; prendê-lo no argumento
-            # evita a captura tardia da variável do laço.
-            should_continue=lambda observador=watcher: (
-                supervisor_process_is_alive(supervisor_pid) and observador.unchanged()
-            ),
-            **arguments,  # type: ignore[arg-type]
+            logger=_collector_logger(),
+            should_continue=stop.running,
+            sleep=stop.wait,
+            stop_on_configuration_error=True,
+            **local_loop_arguments(),
         )
 
 
@@ -318,7 +235,6 @@ def import_position_history() -> None:
     click.echo(f"{len(imported)} daily quotes imported for {len(targets) - len(failures)} tickers.")
     if failures:
         click.echo("No Yahoo history for: " + ", ".join(failures), err=True)
-
 
 
 @click.group("users")

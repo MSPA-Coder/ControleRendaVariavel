@@ -11,7 +11,7 @@ app. O cabeçalho ``HX-Request`` nunca é consultado aqui como permissão.
 
 from __future__ import annotations
 
-from flask import render_template, request
+from flask import abort, current_app, render_template, request
 from flask.typing import ResponseReturnValue
 
 from app import db
@@ -25,9 +25,7 @@ from app.routes.helpers import collector_is_enabled, quote_stale_after_seconds
 def _render_heartbeat() -> str:
     return render_template(
         "partials/collector_heartbeat.html",
-        collector_heartbeat=collector_heartbeat(
-            stale_after_seconds=quote_stale_after_seconds()
-        ),
+        collector_heartbeat=collector_heartbeat(stale_after_seconds=quote_stale_after_seconds()),
     )
 
 
@@ -35,9 +33,8 @@ def _render_rtd_toggle() -> str:
     return render_template(
         "partials/rtd_toggle.html",
         collector_enabled=collector_is_enabled(),
-        collector_heartbeat=collector_heartbeat(
-            stale_after_seconds=quote_stale_after_seconds()
-        ),
+        remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
+        collector_heartbeat=collector_heartbeat(stale_after_seconds=quote_stale_after_seconds()),
     )
 
 
@@ -55,12 +52,12 @@ def rtd_service_partial() -> ResponseReturnValue:
     ``hx-headers`` definido em ``base.html``. O corpo do POST vem do próprio
     checkbox: presente significa coletar, ausente significa pausar.
 
-    A pausa vale para a coleta que esta instância dirige. Na máquina do
-    ProfitChart isso é a coleta com destino local; no VPS, a que o agente
-    entrega por HTTPS. Em nenhum dos casos há processo sendo iniciado ou
-    encerrado daqui.
+    Somente o VPS oferece pausa/retomada. No local, iniciar e parar são
+    ações explícitas do Windows; não há processo esperando um checkbox.
     """
     if request.method == "POST":
+        if not current_app.config["REMOTE_COLLECTOR_ENABLED"]:
+            abort(409, description="Inicie ou pare a coleta local no Windows.")
         settings = collector_settings_row()
         settings.collector_paused = request.form.get("enabled") is None
         db.session.commit()

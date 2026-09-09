@@ -1,10 +1,4 @@
-"""O controle de destino da coleta, na parte que não precisa de banco.
-
-O que estes casos protegem é a recusa no VPS. Esconder o botão no template
-não basta: o POST continua alcançável, e trocar aquela linha lá não teria
-efeito nenhum -- só deixaria os dois bancos discordando sobre para onde a
-coleta está indo.
-"""
+"""Destinos fixos: URLs antigas não podem reativar a alternância ou um vigia."""
 
 from __future__ import annotations
 
@@ -12,9 +6,8 @@ import pytest
 from conftest import CONFIG_DE_TESTE
 
 from app import CHAVE_TEMA_NA_SESSAO, create_app, login_manager
-from app.collector.database import DestinationWatcher
 from app.core.themes import DEFAULT_THEME
-from app.models import ROLE_ADMIN, CollectorDestination, User
+from app.models import ROLE_ADMIN, User
 
 # Deriva da configuração do conftest em vez de repeti-la: é dela que vem o
 # `creator` que recusa a conexão sem abrir socket. Sem ele, o POST que este
@@ -51,24 +44,17 @@ def _login_as_admin(client, monkeypatch) -> None:
         session[CHAVE_TEMA_NA_SESSAO] = DEFAULT_THEME
 
 
-def test_vps_recusa_a_troca_de_destino_mesmo_para_admin(monkeypatch) -> None:
-    client = _app(remoto=True).test_client()
+@pytest.mark.parametrize("remoto", [True, False])
+def test_rota_antiga_recusa_troca_sem_consultar_banco(monkeypatch, remoto) -> None:
+    client = _app(remoto=remoto).test_client()
     _login_as_admin(client, monkeypatch)
-
-    resposta = client.post("/settings/collector/destination")
-
-    assert resposta.status_code == 403
+    assert client.post("/settings/collector/destination").status_code == 410
 
 
-def test_instancia_local_nao_recusa_a_rota_de_destino(monkeypatch) -> None:
-    """Sem 403 na instância local -- o que vem depois já depende do banco."""
+def test_local_recusa_checkbox_que_nao_poderia_iniciar_processo(monkeypatch) -> None:
     client = _app(remoto=False).test_client()
     _login_as_admin(client, monkeypatch)
-
-    with pytest.raises(Exception) as erro:
-        client.post("/settings/collector/destination")
-
-    assert "403" not in str(erro.value)
+    assert client.post("/partials/rtd-service", data={"enabled": "on"}).status_code == 409
 
 
 def test_troca_de_destino_exige_sessao_de_admin() -> None:
@@ -77,43 +63,3 @@ def test_troca_de_destino_exige_sessao_de_admin() -> None:
     resposta = client.post("/settings/collector/destination")
 
     assert resposta.status_code in (302, 401, 403)
-
-
-def test_observador_so_reconsulta_o_destino_no_intervalo_de_verificacao() -> None:
-    leituras = {"total": 0}
-    relogio = {"agora": 0.0}
-
-    def ler() -> CollectorDestination:
-        leituras["total"] += 1
-        return CollectorDestination.REMOTE
-
-    observador = DestinationWatcher(
-        CollectorDestination.REMOTE,
-        interval_seconds=30,
-        read=ler,
-        monotonic=lambda: relogio["agora"],
-    )
-
-    assert observador.unchanged() is True
-    assert leituras["total"] == 1
-
-    # Vinte e nove segundos depois ainda é a mesma janela: o laço pode ter
-    # girado dezenas de vezes, e nenhuma delas custa uma consulta.
-    relogio["agora"] = 29.0
-    assert observador.unchanged() is True
-    assert leituras["total"] == 1
-
-    relogio["agora"] = 30.0
-    assert observador.unchanged() is True
-    assert leituras["total"] == 2
-
-
-def test_observador_para_o_laco_quando_o_destino_muda() -> None:
-    observador = DestinationWatcher(
-        CollectorDestination.REMOTE,
-        interval_seconds=0,
-        read=lambda: CollectorDestination.LOCAL,
-        monotonic=lambda: 0.0,
-    )
-
-    assert observador.unchanged() is False

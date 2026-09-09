@@ -12,9 +12,9 @@ transacional, como no resto do projeto.
 
 from __future__ import annotations
 
-import time as time_module
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+import socket
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -34,7 +34,6 @@ from app.collector.settings import (
 from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     AppSetting,
-    CollectorDestination,
     OptionContract,
     OptionPosition,
     OptionQuote,
@@ -266,10 +265,54 @@ def record_agent_failure(settings: AppSetting, error: str) -> None:
     settings.collector_agent_error = error[:250]
 
 
+#: Prazo do probe TCP antes de cada leitura de configuração local. Curto de
+#: propósito: um Postgres local no ar responde na primeira tentativa, e o que
+#: este número limita é quanto tempo o coletor demora a desistir quando o
+#: contêiner está parado.
+DATABASE_PROBE_TIMEOUT_SECONDS = 3.0
+
+
+class LocalDatabaseUnavailableError(RuntimeError):
+    """O Postgres local não respondeu ao probe TCP dentro do prazo."""
+
+
+def _database_endpoint() -> tuple[str, int]:
+    url = db.engine.url
+    return (url.host or "127.0.0.1", url.port or 5432)
+
+
+def ensure_local_database_reachable(
+    endpoint: tuple[str, int], *, timeout: float = DATABASE_PROBE_TIMEOUT_SECONDS
+) -> None:
+    """Recusa em segundos uma conexão que o psycopg do Windows penduraria.
+
+    No Windows do usuário, ``psycopg.connect()`` para um Postgres ausente
+    nunca retorna e ``connect_timeout`` na URI não corta a espera -- o prazo
+    é conferido dentro do mesmo laço travado. Sem esta checagem, parar o
+    contêiner local deixaria o coletor preso na primeira consulta, segurando
+    a sessão COM do Excel para sempre em vez de encerrar com erro. Um probe
+    TCP cru com ``timeout`` falha de forma previsível e igual em toda
+    plataforma; quem chama trata a exceção como configuração indisponível.
+    """
+    host, port = endpoint
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return
+    except OSError as exc:
+        raise LocalDatabaseUnavailableError(
+            f"Banco local não respondeu em {host}:{port} em {timeout:g}s ({exc}). "
+            "Suba o ambiente local e inicie o coletor novamente."
+        ) from exc
+
+
 class DatabaseConfigurationSource:
     """Configuração lida da própria tabela, sem passar pela rede."""
 
     def configuration(self) -> CollectorConfiguration:
+        # Antes de qualquer consulta: um probe TCP com prazo curto, para o
+        # coletor local encerrar com erro em vez de travar quando o contêiner
+        # do PostgreSQL está parado (ver ``ensure_local_database_reachable``).
+        ensure_local_database_reachable(_database_endpoint())
         # A sessão do processo é longa; sem expirar, ele leria para sempre o
         # snapshot da primeira consulta e nunca veria uma posição nova.
         db.session.expire_all()
@@ -284,7 +327,7 @@ class DatabaseConfigurationSource:
             instruments=tuple(instruments),
             option_keys=option_keys,
             refresh_requested=settings.collector_refresh_requested_at is not None,
-            paused=settings.collector_paused,
+            paused=False,  # O processo local existe somente entre Start e Stop.
         )
         # Nada foi escrito: encerrar a transação de leitura evita segurar um
         # snapshot do PostgreSQL entre um ciclo e o próximo.
@@ -299,9 +342,7 @@ class DatabaseQuoteSink:
     def destination_label(self) -> str:
         return "ao banco local"
 
-    def publish(
-        self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]
-    ) -> None:
+    def publish(self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]) -> None:
         persist_readings(*split_readings(values, option_keys))
         record_agent_online(collector_settings_row())
         db.session.commit()
@@ -313,46 +354,6 @@ class DatabaseQuoteSink:
         db.session.query(OptionQuote).update({"source_status": "error", "error_message": message})
         record_agent_failure(collector_settings_row(), message)
         db.session.commit()
-
-
-def read_collector_destination() -> CollectorDestination:
-    """O destino escolhido na tela, lido sempre fresco.
-
-    Só esta máquina consulta a coluna: é a instância local que tem o botão.
-    A leitura descarta a transação anterior de propósito -- um processo de
-    vida longa que não faça isso continuaria vendo o snapshot da primeira
-    consulta e nunca perceberia a troca.
-    """
-    db.session.rollback()
-    destination = db.session.scalar(
-        select(AppSetting.collector_destination).where(AppSetting.id == 1)
-    )
-    db.session.rollback()
-    return destination or CollectorDestination.REMOTE
-
-
-@dataclass(slots=True)
-class DestinationWatcher:
-    """Percebe a troca de destino sem consultar o banco a cada volta do laço.
-
-    O laço gira a cada intervalo de leitura, que pode ser de um segundo; o
-    destino muda quando alguém clica num botão. Reler no ritmo do laço seria
-    uma consulta por segundo para responder a um evento raro, então a
-    releitura acompanha o intervalo de verificação.
-    """
-
-    current: CollectorDestination
-    interval_seconds: float = float(DEFAULT_AGENT_CHECK_INTERVAL_SECONDS)
-    read: Callable[[], CollectorDestination] = read_collector_destination
-    monotonic: Callable[[], float] = time_module.monotonic
-    _next_check_at: float = field(default=0.0, init=False)
-
-    def unchanged(self) -> bool:
-        now = self.monotonic()
-        if now < self._next_check_at:
-            return True
-        self._next_check_at = now + self.interval_seconds
-        return self.read() == self.current
 
 
 def local_loop_arguments() -> dict[str, object]:

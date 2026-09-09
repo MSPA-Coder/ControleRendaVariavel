@@ -206,3 +206,21 @@ def test_leitura_e_configuracao_correm_em_relogios_independentes() -> None:
 
     assert len(destino.entregas) == 5
     assert origem.chamadas == 1
+
+
+def test_configuracao_perdida_descarta_prazo_vencido_sem_laco_ocupado() -> None:
+    class OrigemIntermitente(_OrigemFixa):
+        def configuration(self):
+            if self.chamadas:
+                self.chamadas += 1
+                raise RuntimeError("origem fora do ar")
+            return super().configuration()
+
+    origem = OrigemIntermitente(_configuracao())
+    destino = _DestinoEspiao()
+    _rodar(origem, destino, _ProfitFalso(rodando=True), ciclos=9)
+    # Coleta em 0, 5, 10, 15, 20, 25; depois só tenta configuração em
+    # 30, 60 e 90. Sem descartar o prazo de cotação em 30, fica girando em 30.
+    assert len(destino.entregas) == 6
+    assert origem.chamadas == 4
+    assert len(destino.falhas) == 3

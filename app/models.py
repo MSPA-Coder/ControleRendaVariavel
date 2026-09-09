@@ -49,12 +49,7 @@ class CollectorMode(StrEnum):
 
 
 class CollectorDestination(StrEnum):
-    """Para onde o coletor Windows entrega as cotações que lê.
-
-    Os dois destinos sao mutuamente exclusivos por desenho: um processo so,
-    um destino por vez. `REMOTE` e o padrao para que uma instalacao nova
-    continue entregando ao VPS sem ninguem precisar escolher nada.
-    """
+    """Enum legado do schema; os processos agora têm destinos fixos."""
 
     REMOTE = "remote"
     LOCAL = "local"
@@ -119,7 +114,9 @@ class User(Base, UserMixin):  # type: ignore[misc]
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(80), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(20), default=ROLE_OPERADOR, server_default=ROLE_OPERADOR)
+    role: Mapped[str] = mapped_column(
+        String(20), default=ROLE_OPERADOR, server_default=ROLE_OPERADOR
+    )
     is_active_user: Mapped[bool] = mapped_column(Boolean, default=True)
     #: Ligada por quem redefine a senha de outra pessoa (e pela criação de
     #: conta), desligada só pela troca feita pelo próprio dono. Enquanto está
@@ -201,10 +198,13 @@ class AppSetting(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    theme: Mapped[str] = mapped_column(String(24), default=DEFAULT_THEME, server_default=DEFAULT_THEME)
+    theme: Mapped[str] = mapped_column(
+        String(24), default=DEFAULT_THEME, server_default=DEFAULT_THEME
+    )
     collector_mode: Mapped[CollectorMode] = mapped_column(
         Enum(CollectorMode, name="collector_mode"), default=CollectorMode.EXCEL
     )
+    # Legado: preservado no schema, sem efeito sobre os destinos fixos.
     collector_destination: Mapped[CollectorDestination] = mapped_column(
         Enum(CollectorDestination, name="collector_destination"),
         default=CollectorDestination.REMOTE,
@@ -522,9 +522,7 @@ class PositionMovement(Base):
     __table_args__ = (
         CheckConstraint("price >= 0", name="price_non_negative"),
         CheckConstraint("resulting_quantity > 0", name="resulting_quantity_positive"),
-        CheckConstraint(
-            "resulting_average_cost >= 0", name="resulting_average_cost_non_negative"
-        ),
+        CheckConstraint("resulting_average_cost >= 0", name="resulting_average_cost_non_negative"),
         CheckConstraint(
             "quantity_delta NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="quantity_delta_finite",
@@ -534,8 +532,7 @@ class PositionMovement(Base):
             name="price_finite",
         ),
         CheckConstraint(
-            "resulting_quantity NOT IN "
-            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            "resulting_quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="resulting_quantity_finite",
         ),
         CheckConstraint(
@@ -625,9 +622,7 @@ class PositionLedgerArchive(Base):
 
     __tablename__ = "position_ledger_archive"
     __table_args__ = (
-        CheckConstraint(
-            "instrument IN ('stock', 'option')", name="instrument_valid"
-        ),
+        CheckConstraint("instrument IN ('stock', 'option')", name="instrument_valid"),
         CheckConstraint(
             "resulting_signed_quantity NOT IN "
             "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
@@ -680,15 +675,11 @@ class OptionContract(Base):
     ticker_id: Mapped[int] = mapped_column(
         ForeignKey("tickers.id", ondelete="RESTRICT"), unique=True
     )
-    underlying_ticker_id: Mapped[int] = mapped_column(
-        ForeignKey("tickers.id", ondelete="RESTRICT")
-    )
+    underlying_ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="RESTRICT"))
     expiration_id: Mapped[int] = mapped_column(
         ForeignKey("option_expirations.id", ondelete="RESTRICT")
     )
-    option_type: Mapped[OptionType] = mapped_column(
-        Enum(OptionType, name="option_type")
-    )
+    option_type: Mapped[OptionType] = mapped_column(Enum(OptionType, name="option_type"))
     strike: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     ticker_ref: Mapped[Ticker] = relationship(
         back_populates="option_contract", foreign_keys=[ticker_id]
@@ -820,9 +811,7 @@ class OptionPositionMovement(Base):
     __table_args__ = (
         CheckConstraint("price >= 0", name="price_non_negative"),
         CheckConstraint("resulting_quantity > 0", name="resulting_quantity_positive"),
-        CheckConstraint(
-            "resulting_average_cost >= 0", name="resulting_average_cost_non_negative"
-        ),
+        CheckConstraint("resulting_average_cost >= 0", name="resulting_average_cost_non_negative"),
         CheckConstraint(
             "quantity_delta NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="quantity_delta_finite",
@@ -832,8 +821,7 @@ class OptionPositionMovement(Base):
             name="price_finite",
         ),
         CheckConstraint(
-            "resulting_quantity NOT IN "
-            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            "resulting_quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="resulting_quantity_finite",
         ),
         CheckConstraint(
@@ -925,9 +913,7 @@ class Transaction(Base):
     __table_args__ = (
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
-        CheckConstraint(
-            "exit_price IS NULL OR exit_price >= 0", name="exit_price_non_negative"
-        ),
+        CheckConstraint("exit_price IS NULL OR exit_price >= 0", name="exit_price_non_negative"),
         CheckConstraint(
             "closed_on IS NULL OR closed_on >= opened_on",
             name="closed_on_not_before_opened_on",
@@ -1147,9 +1133,7 @@ class QuoteHistory(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    ticker_id: Mapped[int] = mapped_column(
-        ForeignKey("tickers.id", ondelete="CASCADE"), index=True
-    )
+    ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="CASCADE"), index=True)
     price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     recorded_date: Mapped[date] = mapped_column(Date, index=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

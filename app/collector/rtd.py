@@ -49,6 +49,20 @@ class QuoteProvider(Protocol):
     def fetch(self, instruments: list[Instrument]) -> list[QuoteValue]: ...
 
 
+def _excel_call(action: Callable[[], Any], deadline: float) -> Any:
+    """Excel pode rejeitar COM enquanto inicializa RTD. Só esses erros repetem."""
+    while True:
+        try:
+            return action()
+        except Exception as exc:
+            if getattr(exc, "hresult", None) not in {-2147418111, -2147417846}:
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Excel permaneceu ocupado durante a inicialização RTD.") from exc
+            time.sleep(min(0.25, remaining))
+
+
 def parse_decimal(value: object) -> Decimal:
     if isinstance(value, bool) or value is None:
         raise ValueError("valor RTD ausente ou inválido")
@@ -119,15 +133,19 @@ class ExcelRtdQuoteProvider:
         if self._com_initialize is not None:
             self._com_initialize()
         try:
-            self._excel = self._dispatch_ex("Excel.Application")
-            self._excel.Visible = self.visible
-            self._excel.DisplayAlerts = False
-            self._workbook = self._excel.Workbooks.Add()
-            self._sheet = self._workbook.Worksheets(1)
+            deadline = time.monotonic() + self.timeout_seconds
+            self._excel = _excel_call(lambda: self._dispatch_ex("Excel.Application"), deadline)
+
+            def initialize() -> None:
+                self._excel.Visible = self.visible
+                self._excel.DisplayAlerts = False
+                if self._workbook is None:
+                    self._workbook = self._excel.Workbooks.Add()
+                self._sheet = self._workbook.Worksheets(1)
+
+            _excel_call(initialize, deadline)
         except Exception:
-            if self._com_uninitialize is not None:
-                self._com_uninitialize()
-            self._excel = None
+            self.close()
             raise
 
     def close(self) -> None:
@@ -136,13 +154,14 @@ class ExcelRtdQuoteProvider:
         self._workbook = None
         self._excel = None
         self._instrument_signature = ()
+        deadline = time.monotonic() + self.timeout_seconds
         try:
             if workbook is not None:
-                workbook.Close(False)
+                _excel_call(lambda: workbook.Close(False), deadline)
         finally:
             try:
                 if excel is not None:
-                    excel.Quit()
+                    _excel_call(excel.Quit, deadline)
             finally:
                 if self._com_uninitialize is not None:
                     self._com_uninitialize()
@@ -161,39 +180,45 @@ class ExcelRtdQuoteProvider:
             self._sheet.Cells(row, 2).Formula = f'=RTD("{prog_id}",,"{topic}","FEC")'
             self._sheet.Cells(row, 3).Formula = f'=RTD("{prog_id}",,"{topic}","EST")'
             if instrument.book_field is not None:
-                self._sheet.Cells(row, 4).Formula = (
-                    f'=RTD("{prog_id}",,"{topic}","{instrument.book_field}")'
-                )
+                self._sheet.Cells(
+                    row, 4
+                ).Formula = f'=RTD("{prog_id}",,"{topic}","{instrument.book_field}")'
         self._instrument_signature = signature
 
     def fetch(self, instruments: list[Instrument]) -> list[QuoteValue]:
         if not instruments:
             return []
         self.open()
-        self._sync_instruments(instruments)
+        deadline = time.monotonic() + self.timeout_seconds
+        _excel_call(lambda: self._sync_instruments(instruments), deadline)
         if self._excel is None or self._sheet is None:
             raise RuntimeError("sessão Excel RTD não inicializada")
 
-        deadline = time.monotonic() + self.timeout_seconds
         values: list[QuoteValue] = []
         while time.monotonic() < deadline:
-            self._excel.Calculate()
+            _excel_call(self._excel.Calculate, deadline)
             values.clear()
             try:
                 for row, instrument in enumerate(instruments, start=1):
-                    last_trade_price = parse_decimal(self._sheet.Cells(row, 1).Value)
-                    instrument_status = str(self._sheet.Cells(row, 3).Value or "")[:16]
+
+                    def cell(column: int, row: int = row) -> object:
+                        return _excel_call(lambda: self._sheet.Cells(row, column).Value, deadline)
+
+                    last_trade_price = parse_decimal(cell(1))
+                    instrument_status = str(cell(3) or "").strip()[:16]
+                    # Antes da primeira resposta RTD, Excel pode devolver 0
+                    # em todas as células. Isso não é uma cotação válida.
+                    if not instrument_status[:1].isalpha():
+                        raise ValueError("estado RTD ainda indisponível")
                     price_field = instrument.effective_price_field(instrument_status)
                     last_price = (
-                        parse_decimal(self._sheet.Cells(row, 4).Value)
-                        if price_field != "ULT"
-                        else last_trade_price
+                        parse_decimal(cell(4)) if price_field != "ULT" else last_trade_price
                     )
                     values.append(
                         QuoteValue(
                             position_id=instrument.position_id,
                             last_price=last_price,
-                            previous_close=parse_decimal(self._sheet.Cells(row, 2).Value),
+                            previous_close=parse_decimal(cell(2)),
                             instrument_status=instrument_status,
                             observed_at=datetime.now(UTC),
                             last_trade_price=last_trade_price,

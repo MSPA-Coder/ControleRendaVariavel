@@ -156,15 +156,18 @@ Para exercitar a coleta, use os provedores determinísticos da suíte em vez de
 COM. `poll-rtd` e `probe-rtd-direct` dependem de Excel e só rodam no ambiente
 Python isolado do Windows — não os execute no contêiner `web`.
 
-A tarefa única é instalada no logon do Windows por
-`scripts/rtd-agent.ps1 -Action Install`. Ela executa `poll-rtd --watch` de
-forma invisível e termina com o logoff do Windows. Esse é um ciclo do sistema
-operacional, não da sessão web; não se deve iniciar ou parar o processo a cada
-login/logout HTTP. O destino -- VPS ou banco local -- vem de
-`app_settings.collector_destination` e é relido a cada intervalo de
-verificação; quando muda, o laço reinicia contra a outra ponta, fechando o
-provedor COM antes. O comando `poll-rtd` também possui exclusão interprocesso,
-cobrindo o toggle administrativo e múltiplos workers.
+A produção é instalada por `scripts/rtd-agent.ps1 -Action Install` e usa
+`python -m app.collector.remote_agent`, sem Flask ou banco local. O local é
+iniciado/parado por `scripts/rtd-local.ps1 -Action Start|Stop`, sempre gravando
+nesta máquina. Não há alternância de destino nem um vigia ocioso. Locks por
+destino permitem coexistência, mas recusam duplicação do mesmo coletor.
+
+Além do quality, valide no Windows: leitura Excel com RTD direto ativo,
+Start repetido sem duplicar processo, Stop fechando somente o Excel do coletor,
+ausência de processo local após Stop e entrega remota com banco local parado.
+A indisponibilidade do banco deve encerrar o local com erro e não disparar
+reinício automático. A suíte usa provedores fake e cobre prazos, isolamento,
+parada e inicialização do Excel; o teste COM real continua específico do Windows.
 
 O caminho do agente remoto (`REMOTE_COLLECTOR_ENABLED=true`) pode ser exercitado
 sem Windows chamando os endpoints `/api/collector/*` com o Bearer token de

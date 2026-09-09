@@ -19,6 +19,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from app.collector.control import CollectorStop
+from app.collector.lock import collector_process_lock
 from app.collector.loop import CollectorConfiguration, run_collector_loop
 from app.collector.profit_detector import ProfitDetector, WindowsProfitDetector
 from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
@@ -52,9 +54,8 @@ def _read_dotenv(path: Path) -> dict[str, str]:
 
 
 def _environment(project_dir: Path) -> dict[str, str]:
-    values = _read_dotenv(project_dir / ".env")
-    values.update(_read_dotenv(project_dir / CONFIG_PATH))
-    return values
+    # O agente de produção nunca carrega credenciais/configuração do banco local.
+    return _read_dotenv(project_dir / CONFIG_PATH)
 
 
 def _read_token(project_dir: Path, config: dict[str, str]) -> str:
@@ -307,9 +308,7 @@ class HttpQuoteSink:
     def destination_label(self) -> str:
         return "ao VPS"
 
-    def publish(
-        self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]
-    ) -> None:
+    def publish(self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]) -> None:
         self.api.send_quotes(_quotes_payload(values, option_keys))
 
     def report_failure(self, error: Exception) -> None:
@@ -330,38 +329,44 @@ def remote_loop_arguments(project_dir: Path) -> dict[str, object]:
     config = _environment(project_dir)
     api = CollectorApi(config.get("COLLECTOR_REMOTE_URL", ""), _read_token(project_dir, config))
     state_path = _state_path(project_dir)
+    saved = (_load_agent_check_interval(state_path), _load_collector_schedule(state_path))
+
+    def store_if_changed(configuration: CollectorConfiguration) -> None:
+        nonlocal saved
+        current = (configuration.agent_check_interval_seconds, configuration.schedule)
+        if current != saved:
+            _store_agent_state(state_path, *current)
+            saved = current
+
     return {
         "source": HttpConfigurationSource(api),
         "sink": HttpQuoteSink(api),
-        "initial_schedule": _load_collector_schedule(state_path),
-        "initial_check_interval": _load_agent_check_interval(state_path),
-        "on_configuration": lambda configuration: _store_agent_state(
-            state_path,
-            configuration.agent_check_interval_seconds,
-            configuration.schedule,
-        ),
+        "initial_schedule": saved[1],
+        "initial_check_interval": saved[0],
+        "on_configuration": store_if_changed,
     }
 
 
 def run(project_dir: Path, *, profit_detector: ProfitDetector | None = None) -> None:
-    """Entrada dedicada ao modo remoto, sem criar a aplicação Flask.
-
-    A tarefa unificada do Windows usa ``poll-rtd``, que decide o destino pela
-    configuração. Este caminho continua para a máquina que só entrega ao VPS
-    e prefere não ter credencial de banco alguma no processo.
-    """
-    run_collector_loop(
-        providers=CollectorProviderManager(_provider_factory(_environment(project_dir))),
-        detector=profit_detector or WindowsProfitDetector(),
-        logger=_logger(project_dir),
-        **remote_loop_arguments(project_dir),  # type: ignore[arg-type]
-    )
+    """Produção fixa no VPS, com lock e parada independentes da coleta local."""
+    with (
+        collector_process_lock(project_dir, destination="remote"),
+        CollectorStop(project_dir, "remote") as stop,
+    ):
+        run_collector_loop(
+            providers=CollectorProviderManager(_provider_factory(_environment(project_dir))),
+            detector=profit_detector or WindowsProfitDetector(),
+            logger=_logger(project_dir),
+            should_continue=stop.running,
+            sleep=stop.wait,
+            **remote_loop_arguments(project_dir),  # type: ignore[arg-type]
+        )
 
 
 def main() -> None:
     if os.name != "nt":
         raise SystemExit("O agente remoto de cotações deve ser executado no Windows.")
-    run(Path(__file__).resolve().parent.parent)
+    run(Path(__file__).resolve().parents[2])
 
 
 if __name__ == "__main__":
