@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
-from flask import abort, current_app, flash, redirect, render_template, request, url_for
+from flask import current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -239,10 +239,3 @@ def request_collector_refresh() -> ResponseReturnValue:
     db.session.commit()
     flash("Atualização solicitada ao coletor Windows.", "success")
     return redirect(url_for("portfolio.settings"))
-
-
-@bp.post("/settings/collector/destination")
-@requer_admin
-def switch_collector_destination() -> ResponseReturnValue:
-    """URL antiga: destinos agora são fixos e independentes."""
-    abort(410, description="A troca de destino foi removida. Use o controle local no Windows.")

@@ -44,20 +44,6 @@ class Side(StrEnum):
     SELL = "V"
 
 
-class CollectorMode(StrEnum):
-    """Enum legado do schema; o coletor lê o RTD direto do IRtdServer, sem Excel."""
-
-    EXCEL = "excel"
-    DIRECT = "direct"
-
-
-class CollectorDestination(StrEnum):
-    """Enum legado do schema; os processos agora têm destinos fixos."""
-
-    REMOTE = "remote"
-    LOCAL = "local"
-
-
 class OptionType(StrEnum):
     CALL = "call"
     PUT = "put"
@@ -204,19 +190,6 @@ class AppSetting(Base):
     theme: Mapped[str] = mapped_column(
         String(24), default=DEFAULT_THEME, server_default=DEFAULT_THEME
     )
-    # Legado: preservado no schema, sem efeito. O coletor lê o RTD direto do
-    # IRtdServer do ProfitPro; não há mais escolha de modo nem ponte pelo Excel.
-    collector_mode: Mapped[CollectorMode] = mapped_column(
-        Enum(CollectorMode, name="collector_mode"), default=CollectorMode.DIRECT
-    )
-    # Legado: preservado no schema, sem efeito sobre os destinos fixos.
-    collector_destination: Mapped[CollectorDestination] = mapped_column(
-        Enum(CollectorDestination, name="collector_destination"),
-        default=CollectorDestination.REMOTE,
-        server_default=CollectorDestination.REMOTE.name,
-    )
-    """Destino da coleta. So a instancia que roda na maquina do ProfitChart
-    tem o controle na tela; no VPS o valor desta linha nao e consultado."""
     collector_paused: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )

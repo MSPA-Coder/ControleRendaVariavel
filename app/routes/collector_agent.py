@@ -97,10 +97,6 @@ def collector_agent_configuration():
     _record_agent_seen(settings)
     positions, option_positions = load_collector_positions()
     return jsonify(
-        # Legado: o agente não usa mais este campo (RTD direto é o único
-        # caminho). Mantido por uma release para um agente antigo que ainda
-        # o lê do payload não quebrar durante o deploy.
-        collector_mode=settings.collector_mode.value,
         poll_interval_seconds=settings.poll_interval_seconds,
         agent_check_interval_seconds=settings.agent_check_interval_seconds,
         collector_schedule=schedule_from_settings(settings).as_payload(),

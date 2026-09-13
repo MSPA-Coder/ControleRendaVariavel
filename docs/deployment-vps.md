@@ -135,6 +135,17 @@ Os timestamps nulos recebem `CURRENT_TIMESTAMP` na própria transação antes da
 restrição `NOT NULL`. A implantação habitual pelo `~/deploy.sh` aplica a
 revisão; confirme depois `flask --app app:create_app db check` sem operações
 pendentes e o health check público antes de encerrar a janela.
+
+### Limpeza do coletor — revisão 20260913_0018
+
+Esta revisão remove os campos sem efeito `collector_mode` e
+`collector_destination`, seus tipos PostgreSQL e a rota de alternância já
+desativada. Aplique somente depois de confirmar que a tarefa Windows usa
+`scripts/rtd-agent-run.ps1 -Destination remote` e executa
+`app.collector.remote_agent`; esse agente ignora o campo removido da resposta
+de configuração. A revisão não usa `CASCADE` ao remover os tipos: uma
+dependência inesperada interrompe a transação integralmente.
+
 ### Fluxo operacional usual
 
 Use o script de implantação do VPS:
