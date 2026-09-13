@@ -25,13 +25,20 @@ def _render_users(status: int = 200, **extra: object) -> ResponseReturnValue:
 
 
 def _render_results(status: int = 200, **extra: object) -> ResponseReturnValue:
-    return render_template(
+    content = render_template(
         "partials/users_results.html",
         users=list_users(),
         valid_roles=("admin", "operador"),
         include_toast=True,
         **extra,
-    ), status
+    )
+    # HTMX não troca respostas 4xx por padrão. Esta é uma resposta de
+    # validação esperada, renderizada pelo próprio servidor para o alvo que a
+    # solicitou; o cabeçalho permite ao cliente mostrar o aviso sem liberar
+    # trocas para CSRF ou outros erros 4xx.
+    if status == 422:
+        return content, status, {"X-App-Request-Error": "1"}
+    return content, status
 
 
 def _response(status: int = 200, **extra: object) -> ResponseReturnValue:
@@ -113,4 +120,3 @@ def change_active(user_id: int) -> ResponseReturnValue:
         db.session.rollback()
         flash(str(exc), "error")
         return _response(422)
-

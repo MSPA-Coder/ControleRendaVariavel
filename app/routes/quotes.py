@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import delete
 
 from app import db
+from app.accounts.authorization import requer_admin
 from app.core.validation import parse_finite_decimal
 from app.models import QuoteHistory, Ticker
 from app.quotes.history_import import (
@@ -19,9 +20,10 @@ from app.routes import bp
 from app.routes.helpers import (
     benchmark_candidates,
     is_htmx_request,
+    parse_positive_id,
+    quote_ticker_records,
     quote_update_target_tickers,
     quote_update_targets,
-    stock_ticker_records,
     ticker_price_series,
     upsert_quote_history,
 )
@@ -69,12 +71,14 @@ def _quote_history_context(
     montam: eles respondem ao HTMX com esta mesma regiao ja atualizada, em vez
     de mandar o navegador recarregar a pagina inteira.
     """
-    tickers = stock_ticker_records()
+    tickers = quote_ticker_records()
     selected_ticker: Ticker | None = None
     if ticker_id is not None:
         selected_ticker = next(
             (ticker for ticker in tickers if ticker.id == ticker_id), None
         )
+        if selected_ticker is None:
+            abort(404)
     if selected_ticker is None and tickers:
         selected_ticker = tickers[0]
     history = ticker_price_series(selected_ticker.id) if selected_ticker else []
@@ -87,6 +91,8 @@ def _quote_history_context(
         selected_benchmark = next(
             (ticker for ticker in candidates if ticker.id == benchmark_id), None
         )
+        if selected_benchmark is None:
+            abort(404)
     benchmark_history = (
         ticker_price_series(selected_benchmark.id) if selected_benchmark else []
     )
@@ -127,10 +133,7 @@ def _quote_history_context(
 
 
 def _int_or_none(raw: str | None) -> int | None:
-    try:
-        return int(raw) if raw else None
-    except ValueError:
-        return None
+    return parse_positive_id(raw, allow_all=True)
 
 
 def _quote_management_response(
@@ -180,10 +183,11 @@ def quote_history() -> str:
 
 
 @bp.post("/quotes")
+@requer_admin
 def create_quote_history_entry() -> ResponseReturnValue:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        ticker_id = int(raw["ticker_id"])
+        ticker_id = parse_positive_id(raw["ticker_id"])
         recorded_date = date.fromisoformat(raw["recorded_date"])
         price = parse_finite_decimal(raw["price"], field_name="um preço")
     except (KeyError, ValueError, ArithmeticError):
@@ -210,6 +214,7 @@ def create_quote_history_entry() -> ResponseReturnValue:
 
 
 @bp.post("/quotes/import")
+@requer_admin
 def import_quote_history() -> ResponseReturnValue:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
@@ -250,6 +255,7 @@ def import_quote_history() -> ResponseReturnValue:
 
 
 @bp.post("/quotes/import-position-history")
+@requer_admin
 def import_position_quote_history() -> ResponseReturnValue:
     """Refresh action and option history from each ticker's earliest
     open-position date, plus every comparison benchmark."""
@@ -282,10 +288,11 @@ def import_position_quote_history() -> ResponseReturnValue:
 
 
 @bp.post("/quotes/delete-by-date")
+@requer_admin
 def delete_quote_history_by_date() -> ResponseReturnValue:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        ticker_id = int(raw["ticker_id"])
+        ticker_id = parse_positive_id(raw["ticker_id"])
         recorded_date = date.fromisoformat(raw["recorded_date"])
     except (KeyError, ValueError):
         flash("Informe um ticker e uma data de cotacao validos.", "error")

@@ -174,6 +174,19 @@ htmx.config.includeIndicatorStyles = false;
   });
 
   document.addEventListener("htmx:beforeSwap", (event) => {
+    // HTMX rejeita respostas 4xx por padrão. Só a resposta marcada pelo
+    // servidor como erro de validação é segura para anexar o aviso; CSRF e
+    // outros erros 4xx continuam sem troca automática.
+    const errorXhr = event.detail && event.detail.xhr;
+    if (
+      errorXhr &&
+      [400, 422].includes(errorXhr.status) &&
+      errorXhr.getResponseHeader("X-App-Request-Error") === "1"
+    ) {
+      event.detail.shouldSwap = true;
+      event.detail.isError = false;
+      return;
+    }
     if (!targetsPortfolioResults(event.detail)) return;
     const xhr = event.detail && event.detail.xhr;
     const generation = xhr && portfolioRequestGenerations.get(xhr);

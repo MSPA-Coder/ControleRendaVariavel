@@ -83,15 +83,17 @@ def create_open_transaction_for_position(position: Position) -> Transaction:
         status=TransactionStatus.OPEN,
         portfolio_id=position.portfolio_id,
         source_position_id=position.id,
+        owner_id=position.owner_id,
     )
     db.session.add(transaction)
     return transaction
 
 
-def _open_transaction_for(position_id: int) -> Transaction | None:
+def _open_transaction_for(position_id: int, owner_id: int) -> Transaction | None:
     return db.session.scalar(
         select(Transaction).where(
             Transaction.source_position_id == position_id,
+            Transaction.owner_id == owner_id,
             Transaction.status == TransactionStatus.OPEN,
             # ``Position`` e ``OptionPosition`` têm sequências de id
             # independentes: sem este filtro, uma posição de opção com o
@@ -112,7 +114,7 @@ def sync_open_transaction_for_position(position: Position) -> None:
 
     if position.simulated:
         return
-    transaction = _open_transaction_for(position.id)
+    transaction = _open_transaction_for(position.id, position.owner_id)
     if transaction is None:
         create_open_transaction_for_position(position)
         return
@@ -124,13 +126,14 @@ def sync_open_transaction_for_position(position: Position) -> None:
     transaction.opened_on = position.opened_on
     transaction.result_mode = position.result_mode
     transaction.portfolio_id = position.portfolio_id
+    transaction.owner_id = position.owner_id
 
 
-def delete_open_transaction_for_position(position_id: int) -> None:
+def delete_open_transaction_for_position(position_id: int, owner_id: int) -> None:
     """Remove a linha aberta espelhada quando a posição é excluída sem
     encerramento (ver ``routes.positions.delete_position``)."""
 
-    transaction = _open_transaction_for(position_id)
+    transaction = _open_transaction_for(position_id, owner_id)
     if transaction is not None:
         db.session.delete(transaction)
 
@@ -162,6 +165,7 @@ def record_movement(
         transaction_id=transaction_id,
         resulting_quantity=position.quantity,
         resulting_average_cost=position.average_cost,
+        owner_id=position.owner_id,
     )
     db.session.add(movement)
     return movement
@@ -215,7 +219,12 @@ def partial_close_of_open_position(transaction: Transaction) -> Position | None:
         or transaction.ticker_id is None
     ):
         return None
-    return db.session.get(Position, transaction.source_position_id)
+    return db.session.scalar(
+        select(Position).where(
+            Position.id == transaction.source_position_id,
+            Position.owner_id == transaction.owner_id,
+        )
+    )
 
 
 def revert_partial_close(transaction: Transaction) -> Position | None:
@@ -230,7 +239,10 @@ def revert_partial_close(transaction: Transaction) -> Position | None:
 
     position = db.session.scalar(
         select(Position)
-        .where(Position.id == transaction.source_position_id)
+        .where(
+            Position.id == transaction.source_position_id,
+            Position.owner_id == transaction.owner_id,
+        )
         .with_for_update()
     )
     if position is None:
@@ -266,6 +278,7 @@ def _mergeable_statement(candidate: Position) -> Select[tuple[Position]]:
             Position.ticker_id == candidate.ticker_id,
             Position.side == candidate.side,
             Position.portfolio_id == candidate.portfolio_id,
+            Position.owner_id == candidate.owner_id,
         )
         .order_by(Position.id)
         .limit(1)
@@ -435,7 +448,7 @@ def discard_simulation_history(position: Position) -> None:
     deixá-las agir assim que a carteira deixa de ser a Simulada.
     """
 
-    delete_open_transaction_for_position(position.id)
+    delete_open_transaction_for_position(position.id, position.owner_id)
     for movement in list(position.movements):
         position.movements.remove(movement)
 
@@ -445,6 +458,8 @@ def close_open_position(
     exit_price: Decimal,
     closed_on: date,
     quantity: Decimal | None = None,
+    *,
+    owner_id: int,
 ) -> Transaction | None:
     """Encerra uma posição aberta, por inteiro ou em parte, de forma atômica.
     Devolve ``None`` quando a posição não existe mais.
@@ -468,7 +483,9 @@ def close_open_position(
     """
 
     position = db.session.scalar(
-        select(Position).where(Position.id == position_id).with_for_update()
+        select(Position)
+        .where(Position.id == position_id, Position.owner_id == owner_id)
+        .with_for_update()
     )
     if position is None:
         return None
@@ -503,7 +520,7 @@ def close_open_position(
 def _close_entirely(
     position: Position, exit_price: Decimal, closed_on: date, result: Decimal
 ) -> Transaction:
-    transaction = _open_transaction_for(position.id)
+    transaction = _open_transaction_for(position.id, position.owner_id)
     if transaction is None:
         transaction = Transaction(source_position_id=position.id)
         db.session.add(transaction)
@@ -519,6 +536,7 @@ def _close_entirely(
     transaction.result = result
     transaction.status = TransactionStatus.CLOSED
     transaction.portfolio_id = position.portfolio_id
+    transaction.owner_id = position.owner_id
     transaction.notes = f"Encerrada a partir da posição #{position.id}."
     # Antes de apagar: a exclusão leva o extrato em cascata, e sem ele a
     # posição encerrada sumiria do relatório de performance, que reconstrói a
@@ -529,6 +547,7 @@ def _close_entirely(
         ticker_id=position.ticker_id,
         portfolio_id=position.portfolio_id,
         broker_id=position.broker_id,
+        owner_id=position.owner_id,
         side=position.side,
         entries=[
             (movement.occurred_on, movement.resulting_quantity)
@@ -549,6 +568,7 @@ def _close_partially(
 ) -> Transaction:
     transaction = Transaction(
         broker_id=position.broker_id,
+        owner_id=position.owner_id,
         ticker_id=position.ticker_id,
         quantity=closing_quantity,
         average_cost=position.average_cost,

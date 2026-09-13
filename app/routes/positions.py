@@ -8,6 +8,7 @@ from typing import Any
 
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
+from sqlalchemy import select
 
 from app import db
 from app.core.validation import parse_finite_decimal
@@ -21,7 +22,12 @@ from app.positions.closure import (
     record_position_adjustment,
     sync_open_transaction_for_position,
 )
-from app.positions.portfolio import PortfolioView, build_portfolio, position_movement_results
+from app.positions.portfolio import (
+    PortfolioView,
+    build_portfolio,
+    effective_position_quote,
+    position_movement_results,
+)
 from app.routes import bp
 from app.routes.helpers import (
     agent_check_interval_seconds,
@@ -32,12 +38,16 @@ from app.routes.helpers import (
     converted_allocation_chart_data,
     converted_broker_exposure_chart_data,
     converted_market_exposure_chart_data,
+    current_owner_id,
     exposure_group_rows,
+    grant_ticker_entitlement,
     investable_ticker_records,
     is_htmx_request,
     latest_usd_brl_quote,
     market_exposure_chart_data,
     missing_quote_rows,
+    owned_or_404,
+    parse_positive_id,
     poll_interval_seconds,
     portfolio_records,
     positions_query,
@@ -73,8 +83,8 @@ class PositionInput:
 def _parse_form() -> PositionInput:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        broker_id = int(raw["broker_id"])
-        ticker_id = int(raw["ticker_id"])
+        broker_id = parse_positive_id(raw["broker_id"])
+        ticker_id = parse_positive_id(raw["ticker_id"])
         quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
         average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
         quote_multiplier = parse_finite_decimal(
@@ -101,10 +111,10 @@ def _parse_form() -> PositionInput:
         )
     result_mode = raw.get("result_mode", "").upper()
     try:
-        portfolio_id = int(raw["portfolio_id"])
+        portfolio_id = parse_positive_id(raw["portfolio_id"])
     except (KeyError, ValueError) as exc:
         raise ValueError("Selecione uma carteira.") from exc
-    if db.session.get(Portfolio, portfolio_id) is None:
+    if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
     if result_mode not in {"L", "B"}:
         raise ValueError("Modo de resultado inválido.")
@@ -136,8 +146,8 @@ def expanded_position_ids() -> set[int]:
     ids = set()
     for part in raw.split(","):
         part = part.strip()
-        if part.isdigit():
-            ids.add(int(part))
+        if part:
+            ids.add(parse_positive_id(part))
     return ids
 
 
@@ -252,7 +262,7 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
-    candidate = Position(**asdict(data))
+    candidate = Position(owner_id=current_owner_id(), **asdict(data))
     # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
     # indistinguível de um aporte real. Só o usuário sabe qual dos dois é.
     if request.form.get("confirm_duplicate") != "1" and duplicate_entry(candidate) is not None:
@@ -271,6 +281,7 @@ def create_position() -> ResponseReturnValue:
         # caso porque uma posição simulada nunca tem movimento algum no
         # extrato, então nunca é vista como "idêntica ao anterior".
         position, merged = create_or_merge_position(candidate)
+        grant_ticker_entitlement(user_id=position.owner_id, ticker_id=position.ticker_id, held_on=position.opened_on)
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
@@ -298,7 +309,7 @@ def create_position() -> ResponseReturnValue:
 
 @bp.get("/positions/<int:position_id>/edit")
 def edit_position(position_id: int) -> str:
-    position = db.get_or_404(Position, position_id)
+    position = owned_or_404(Position, position_id)
     return render_template(
         "position_form.html",
         position=position,
@@ -312,7 +323,8 @@ def edit_position(position_id: int) -> str:
 
 @bp.post("/positions/<int:position_id>")
 def update_position(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(Position, position_id)
+    position = owned_or_404(Position, position_id)
+    previous_ticker_id = position.ticker_id
     try:
         data = _parse_form()
     except ValueError as exc:
@@ -333,6 +345,12 @@ def update_position(position_id: int) -> ResponseReturnValue:
     was_simulated = position.simulated
     for key, value in asdict(data).items():
         setattr(position, key, value)
+    if position.ticker_id != previous_ticker_id:
+        grant_ticker_entitlement(
+            user_id=position.owner_id,
+            ticker_id=position.ticker_id,
+            held_on=position.opened_on,
+        )
     # `position.simulated` lê `portfolio_ref.simulated`: um relacionamento
     # já carregado (pelo `was_simulated` acima) fica em cache no objeto e
     # não percebe sozinho que `portfolio_id` acabou de mudar — expirar
@@ -357,8 +375,8 @@ def update_position(position_id: int) -> ResponseReturnValue:
 
 @bp.post("/positions/<int:position_id>/delete")
 def delete_position(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(Position, position_id)
-    delete_open_transaction_for_position(position.id)
+    position = owned_or_404(Position, position_id)
+    delete_open_transaction_for_position(position.id, position.owner_id)
     db.session.delete(position)
     db.session.commit()
     flash("Posição excluída.", "success")
@@ -367,7 +385,7 @@ def delete_position(position_id: int) -> ResponseReturnValue:
 
 @bp.get("/positions/<int:position_id>/close")
 def close_position_form(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(Position, position_id)
+    position = owned_or_404(Position, position_id)
     if position.simulated:
         # O botão já não aparece na grade (apresentação); isso cobre quem
         # chega direto pela URL. A guarda que realmente vale está no POST
@@ -377,7 +395,7 @@ def close_position_form(position_id: int) -> ResponseReturnValue:
             "error",
         )
         return redirect(url_for("portfolio.index"))
-    default_price = position.quote.last_price if position.quote else position.average_cost
+    default_price = effective_position_quote(position)[0] if position.quote else position.average_cost
     return render_template(
         "close_position_form.html",
         position=position,
@@ -397,6 +415,9 @@ def close_position(position_id: int) -> ResponseReturnValue:
     conferir aqui, antes do lock, aceitaria um valor que deixou de ser válido
     no meio do caminho.
     """
+    # A camada de domínio recebe apenas um id; confira o dono antes de ela
+    # adquirir o lock e transformar a posição em transação.
+    owned_or_404(Position, position_id)
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
         exit_price = parse_finite_decimal(raw["exit_price"], field_name="um preço de saída")
@@ -413,14 +434,20 @@ def close_position(position_id: int) -> ResponseReturnValue:
         flash("O preço de saída não pode ser negativo.", "error")
         return redirect(url_for("portfolio.close_position_form", position_id=position_id))
     try:
-        transaction = close_open_position(position_id, exit_price, closed_on, quantity)
+        transaction = close_open_position(
+            position_id,
+            exit_price,
+            closed_on,
+            quantity,
+            owner_id=current_owner_id(),
+        )
     except ValueError as exc:
         flash(str(exc), "error")
         return redirect(url_for("portfolio.close_position_form", position_id=position_id))
     if transaction is None:
         flash("A posição já foi encerrada ou não existe.", "error")
         return redirect(url_for("portfolio.transactions"))
-    position = db.session.get(Position, position_id)
+    position = db.session.scalar(select(Position).where(Position.id == position_id, Position.owner_id == current_owner_id()))
     if position is None:
         flash("Posição encerrada e registrada em Transações.", "success")
     else:

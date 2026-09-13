@@ -41,4 +41,7 @@ def test_listas_administrativas_podem_incluir_arquivados(monkeypatch) -> None:
     helpers.broker_records(include_inactive=True)
     helpers.ticker_records(include_inactive=True)
 
-    assert all(not statement._where_criteria for statement in statements)
+    # Carteiras são privadas mesmo quando se incluem as arquivadas; referências
+    # globais continuam sem filtro de proprietário.
+    assert statements[0]._where_criteria
+    assert all(not statement._where_criteria for statement in statements[1:])

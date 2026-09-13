@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import case, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
@@ -39,6 +39,7 @@ from app.models import (
     OptionQuote,
     Position,
     Quote,
+    Side,
 )
 from app.routes.helpers import upsert_quote_history
 
@@ -175,37 +176,46 @@ def persist_readings(
 
     ticker_prices: dict[int, tuple[Decimal, datetime]] = {}
     for value in stock_values:
+        prefix = "buy" if positions[value.position_id].side == Side.BUY else "sell"
+        side_price = f"{prefix}_price"
+        side_time = f"{prefix}_observed_at"
         statement = insert(Quote).values(
-            position_id=value.position_id,
-            last_price=value.last_price,
+            ticker_id=positions[value.position_id].ticker_id,
+            last_price=value.quote_history_price,
             previous_close=value.previous_close,
             instrument_status=value.instrument_status,
             source_status="online",
             error_message=None,
             observed_at=value.observed_at,
+            **{side_price: value.last_price, side_time: value.observed_at},
         )
+        latest_market = statement.excluded.observed_at >= Quote.observed_at
+        latest_side = or_(getattr(Quote, side_time).is_(None),
+                          statement.excluded.observed_at >= getattr(Quote, side_time))
+        updates = {
+            field: case((latest_market, getattr(statement.excluded, field)), else_=getattr(Quote, field))
+            for field in ("last_price", "previous_close", "instrument_status", "source_status", "error_message", "observed_at")
+        }
+        updates.update({
+            field: case((latest_side, getattr(statement.excluded, field)), else_=getattr(Quote, field))
+            for field in (side_price, side_time)
+        })
         db.session.execute(
             statement.on_conflict_do_update(
-                index_elements=[Quote.position_id],
-                set_={
-                    "last_price": statement.excluded.last_price,
-                    "previous_close": statement.excluded.previous_close,
-                    "instrument_status": statement.excluded.instrument_status,
-                    "source_status": "online",
-                    "error_message": None,
-                    "observed_at": statement.excluded.observed_at,
-                },
+                index_elements=[Quote.ticker_id],
+                set_=updates,
+                where=or_(latest_market, latest_side),
             )
         )
-        ticker_prices[positions[value.position_id].ticker_id] = (
-            value.quote_history_price,
-            value.observed_at,
-        )
+        ticker_id = positions[value.position_id].ticker_id
+        previous = ticker_prices.get(ticker_id)
+        if previous is None or value.observed_at >= previous[1]:
+            ticker_prices[ticker_id] = (value.quote_history_price, value.observed_at)
 
     for reading in option_readings:
         option_value = reading.option
         statement = insert(OptionQuote).values(
-            option_position_id=reading.option_position_id,
+            contract_id=option_positions[reading.option_position_id].contract_id,
             last_price=option_value.last_price,
             previous_close=option_value.previous_close,
             underlying_price=reading.underlying_last_price,
@@ -216,7 +226,7 @@ def persist_readings(
         )
         db.session.execute(
             statement.on_conflict_do_update(
-                index_elements=[OptionQuote.option_position_id],
+                index_elements=[OptionQuote.contract_id],
                 set_={
                     "last_price": statement.excluded.last_price,
                     "previous_close": statement.excluded.previous_close,
@@ -226,17 +236,14 @@ def persist_readings(
                     "error_message": None,
                     "observed_at": statement.excluded.observed_at,
                 },
+                where=statement.excluded.observed_at >= OptionQuote.observed_at,
             )
         )
         contract = option_positions[reading.option_position_id].contract
-        ticker_prices[contract.ticker_id] = (
-            option_value.quote_history_price,
-            option_value.observed_at,
-        )
-        ticker_prices[contract.underlying_ticker_id] = (
-            reading.underlying_history_price,
-            option_value.observed_at,
-        )
+        for ticker_id, price in ((contract.ticker_id, option_value.quote_history_price), (contract.underlying_ticker_id, reading.underlying_history_price)):
+            previous = ticker_prices.get(ticker_id)
+            if previous is None or option_value.observed_at >= previous[1]:
+                ticker_prices[ticker_id] = (price, option_value.observed_at)
 
     # Um snapshot por ticker por dia, não a cada poll -- ver a docstring de
     # QuoteHistory para o porquê.

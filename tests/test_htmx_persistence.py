@@ -58,6 +58,7 @@ def test_botoes_de_persistencia_tem_confirmacao_visual():
 
 def test_update_position_retorna_formulario_em_modo_edicao_apos_erro(monkeypatch, app):
     class Position:
+        ticker_id = 1
         movements = [object(), object()]
 
     capturado: dict[str, object] = {}
@@ -88,6 +89,7 @@ def test_update_position_retorna_formulario_em_modo_edicao_apos_erro(monkeypatch
 
 def test_update_option_position_retorna_formulario_em_modo_edicao_apos_erro(monkeypatch, app):
     class Position:
+        contract_id = 1
         movements = [object()]
 
     capturado: dict[str, object] = {}

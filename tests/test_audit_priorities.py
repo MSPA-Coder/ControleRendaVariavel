@@ -68,6 +68,7 @@ def test_new_option_position_rejects_expired_contract(app, monkeypatch):
         return _reference(model, identifier)
 
     monkeypatch.setattr(options.db.session, "get", get)
+    monkeypatch.setattr(options.db.session, "scalar", lambda *_args: 3)
     form = {
         "broker_id": "1",
         "contract_id": "2",
@@ -99,7 +100,7 @@ def test_manual_quote_rejects_zero_before_touching_database(app, monkeypatch):
         "price": "0",
     }
     with app.test_request_context("/quotes", method="POST", data=form):
-        response = quotes.create_quote_history_entry()
+        response = quotes.create_quote_history_entry.__wrapped__()
     assert response == "2"
 
 

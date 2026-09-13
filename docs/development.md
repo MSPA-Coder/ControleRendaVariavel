@@ -70,17 +70,12 @@ Do domínio, ela cobre o que decide número na tela: quantidade histórica e flu
 do extrato de posição encerrada (`position_ledger`), o coletor único e o agente
 remoto.
 
-**A suíte não toca o banco, e isso é desenho, não limitação.** Tudo o que ela
-protege é decidido antes de qualquer consulta, e mantê-la sem banco é o que a
-faz caber em segundos, sem infraestrutura de teste. Duas consequências
-práticas, que valem mais do que qualquer contagem de casos:
-
-- rodar `quality` **não** prova que o schema sobe. O bootstrap em PostgreSQL
-  vazio continua sendo verificação manual obrigatória para toda mudança de
-  schema;
-- regra financeira nova deve nascer testável sem requisição e sem ORM. Uma
-  regra que só possa ser exercitada com banco atrás fica fora da rede — o que é
-  argumento para movê-la ao domínio puro, não para relaxar a suíte.
+**A suíte usa PostgreSQL efêmero no perfil `quality`.** Ela cobre as regras
+puramente funcionais e os contratos que precisam do ORM, inclusive ownership,
+restrições e a cadeia Alembic. Para mudança de schema, acrescente um ensaio que
+crie dados legados sintéticos em schema descartável e confirme tanto a migração
+quanto a recusa segura da pré-condição. Nunca aponte esse perfil para o banco
+operacional.
 
 A CI valida o Compose, reconstrói a imagem `quality` sem cache, executa o
 estágio, audita com `pip-audit` as dependências instaladas — pergunta diferente

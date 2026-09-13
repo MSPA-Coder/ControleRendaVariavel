@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from flask import Flask, request, session
+from flask import Flask, render_template, request, session
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
@@ -23,6 +23,7 @@ from sharedauth.session import (
 from sharedauth.ui import registrar_ui
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.routing import IntegerConverter
 
 from app.core.privacy import values_hidden
 
@@ -40,6 +41,18 @@ convention = {
 
 class Base(DeclarativeBase):
     pass
+
+
+class BoundedIntegerConverter(IntegerConverter):
+    """Aceita somente chaves PostgreSQL antes de o roteador chamar ``int``."""
+
+    regex = r"[1-9][0-9]{0,9}"
+
+    def to_python(self, value: str) -> int:
+        result = super().to_python(value)
+        if result > 2_147_483_647:
+            raise ValueError("identificador fora da faixa")
+        return result
 
 
 Base.metadata.naming_convention = convention
@@ -73,6 +86,7 @@ PUBLIC_ENDPOINTS = frozenset({
 #: `_theme_context`: sem esse cache, descobrir o tema custava uma consulta em
 #: todo render autenticado.
 CHAVE_TEMA_NA_SESSAO = "app_theme"
+CHAVE_USUARIO_TEMA_NA_SESSAO = "app_theme_user_id"
 
 
 def esquecer_tema_da_sessao() -> None:
@@ -82,6 +96,7 @@ def esquecer_tema_da_sessao() -> None:
     trocaria o tema e continuaria vendo o antigo até a sessão terminar.
     """
     session.pop(CHAVE_TEMA_NA_SESSAO, None)
+    session.pop(CHAVE_USUARIO_TEMA_NA_SESSAO, None)
 
 
 # Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
@@ -131,6 +146,7 @@ def _load_user(identificador: str) -> User | None:
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
+    app.url_map.converters["int"] = BoundedIntegerConverter
     # `estrito=False` preserva o comportamento deste app: valor irreconhecível
     # cai no padrão em vez de impedir a subida. `FORCE_HTTPS` e
     # `TRUST_PROXY_HEADERS` são propriedades da implantação, e um typo aqui não
@@ -262,6 +278,27 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     register_commands(app)
     register_filters(app)
 
+    @app.errorhandler(400)
+    def _bad_request_feedback(error):
+        """Mostra erro de filtro também para uma troca HTMX recusada.
+
+        HTMX não troca respostas 400 por padrão. O fragmento traz o mesmo
+        aviso consumido pelo componente de toast e é inserido no ``main``,
+        sem substituir a tabela que originou a requisição.
+        """
+        if request.headers.get("HX-Request") == "true":
+            message = getattr(error, "description", "Requisição inválida.")
+            return (
+                render_template("partials/request_error.html", message=message),
+                400,
+                {
+                    "HX-Retarget": "main",
+                    "HX-Reswap": "beforeend",
+                    "X-App-Request-Error": "1",
+                },
+            )
+        return error
+
     # `csrf`/`limiter` só existem depois de `iniciar_csrf`/`iniciar_limiter`
     # (uma instância por `create_app()`, não singleton de módulo — evita o
     # vazamento de isenção CSRF e o zeramento de contador de rate-limit entre
@@ -343,14 +380,18 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             return {"app_theme": DEFAULT_THEME}
 
         em_cache = session.get(CHAVE_TEMA_NA_SESSAO)
-        if em_cache in THEME_IDS:
+        if (
+            session.get(CHAVE_USUARIO_TEMA_NA_SESSAO) == int(current_user.id)
+            and em_cache in THEME_IDS
+        ):
             return {"app_theme": em_cache}
 
-        from app.models import AppSetting
+        from app.models import UserPreference
 
-        settings = db.session.get(AppSetting, 1)
-        theme = settings.theme if settings and settings.theme in THEME_IDS else DEFAULT_THEME
+        preference = db.session.get(UserPreference, int(current_user.id))
+        theme = preference.theme if preference and preference.theme in THEME_IDS else DEFAULT_THEME
         session[CHAVE_TEMA_NA_SESSAO] = theme
+        session[CHAVE_USUARIO_TEMA_NA_SESSAO] = int(current_user.id)
         return {"app_theme": theme}
 
     @app.context_processor

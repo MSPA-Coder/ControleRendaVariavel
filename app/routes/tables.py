@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.accounts.auditoria import registrar
+from app.accounts.authorization import requer_admin
 from app.models import Broker, Market, Portfolio, PortfolioTicker, Ticker
 from app.quotes.reference_data import (
     parse_broker,
@@ -19,8 +20,11 @@ from app.quotes.reference_data import (
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
+    current_owner_id,
     investable_ticker_records,
     is_htmx_request,
+    owned_or_404,
+    parse_positive_id,
     portfolio_records,
     portfolio_ticker_has_positions,
     ticker_has_holdings,
@@ -33,18 +37,17 @@ def _tables_redirect(endpoint: str) -> ResponseReturnValue:
 
 
 def _int_or_none(raw: str | None) -> int | None:
-    try:
-        return int(raw) if raw else None
-    except ValueError:
-        return None
+    return parse_positive_id(raw, allow_all=True)
 
 
 @bp.get("/tables/brokers")
+@requer_admin
 def table_brokers() -> str:
     return render_template("table_brokers.html", brokers=broker_records(include_inactive=True))
 
 
 @bp.get("/tables/tickers")
+@requer_admin
 def table_tickers() -> str:
     return render_template(
         "table_tickers.html", tickers=ticker_records(include_inactive=True), markets=Market
@@ -52,6 +55,7 @@ def table_tickers() -> str:
 
 
 @bp.post("/tables/brokers")
+@requer_admin
 def create_broker() -> ResponseReturnValue:
     try:
         data = parse_broker(request.form)
@@ -76,6 +80,7 @@ def create_broker() -> ResponseReturnValue:
 
 
 @bp.post("/tables/brokers/<int:broker_id>")
+@requer_admin
 def update_broker(broker_id: int) -> ResponseReturnValue:
     broker = db.get_or_404(Broker, broker_id)
     if not broker.is_active:
@@ -106,6 +111,7 @@ def update_broker(broker_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/brokers/<int:broker_id>/delete")
+@requer_admin
 def delete_broker(broker_id: int) -> ResponseReturnValue:
     broker = db.get_or_404(Broker, broker_id)
     db.session.delete(broker)
@@ -127,6 +133,7 @@ def delete_broker(broker_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/tickers")
+@requer_admin
 def create_ticker() -> ResponseReturnValue:
     try:
         data = parse_ticker(request.form)
@@ -145,6 +152,7 @@ def create_ticker() -> ResponseReturnValue:
 
 
 @bp.post("/tables/tickers/<int:ticker_id>")
+@requer_admin
 def update_ticker(ticker_id: int) -> ResponseReturnValue:
     ticker = db.get_or_404(Ticker, ticker_id)
     if not ticker.is_active:
@@ -176,6 +184,7 @@ def update_ticker(ticker_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/tickers/<int:ticker_id>/delete")
+@requer_admin
 def delete_ticker(ticker_id: int) -> ResponseReturnValue:
     ticker = db.get_or_404(Ticker, ticker_id)
     db.session.delete(ticker)
@@ -211,6 +220,8 @@ def _portfolios_results_context(
         selected_portfolio = next(
             (portfolio for portfolio in portfolios if portfolio.id == selected_portfolio_id), None
         )
+        if selected_portfolio is None:
+            abort(404)
     if selected_portfolio is None and portfolios:
         selected_portfolio = portfolios[0]
 
@@ -222,6 +233,8 @@ def _portfolios_results_context(
     for portfolio_id, ticker in db.session.execute(
         select(PortfolioTicker.portfolio_id, Ticker)
         .join(Ticker, Ticker.id == PortfolioTicker.ticker_id)
+        .join(Portfolio, Portfolio.id == PortfolioTicker.portfolio_id)
+        .where(Portfolio.owner_id == current_owner_id())
         .order_by(PortfolioTicker.portfolio_id, Ticker.symbol)
     ):
         associated_tickers_by_portfolio.setdefault(portfolio_id, []).append(ticker)
@@ -305,11 +318,14 @@ def create_portfolio() -> ResponseReturnValue:
     try:
         data = parse_portfolio_create(request.form)
         duplicate = db.session.scalar(
-            select(Portfolio).where(func.lower(Portfolio.name) == data.name.lower())
+            select(Portfolio).where(
+                Portfolio.owner_id == current_owner_id(),
+                func.lower(Portfolio.name) == data.name.lower(),
+            )
         )
         if duplicate is not None:
             raise ValueError("Já existe uma carteira com esse nome.")
-        portfolio = Portfolio(**asdict(data))
+        portfolio = Portfolio(owner_id=current_owner_id(), **asdict(data))
         db.session.add(portfolio)
         db.session.commit()
         flash("Carteira criada.", "success")
@@ -353,7 +369,7 @@ def update_portfolio(portfolio_id: int) -> ResponseReturnValue:
     O formulário legítimo nunca envia ``simulated``; uma tentativa direta
     (POST manual) é recusada com 422 explícito, em vez de ser ignorada em
     silêncio como antes."""
-    portfolio = db.get_or_404(Portfolio, portfolio_id)
+    portfolio = owned_or_404(Portfolio, portfolio_id)
     if not portfolio.is_active:
         flash("Reative a carteira antes de editá-la.", "error")
         return _portfolios_response(portfolio_id, status=422)
@@ -369,6 +385,7 @@ def update_portfolio(portfolio_id: int) -> ResponseReturnValue:
         data = parse_portfolio_update(request.form)
         duplicate = db.session.scalar(
             select(Portfolio).where(
+                Portfolio.owner_id == current_owner_id(),
                 func.lower(Portfolio.name) == data.name.lower(), Portfolio.id != portfolio.id
             )
         )
@@ -390,7 +407,7 @@ def update_portfolio(portfolio_id: int) -> ResponseReturnValue:
 
 @bp.post("/tables/portfolios/<int:portfolio_id>/delete")
 def delete_portfolio(portfolio_id: int) -> ResponseReturnValue:
-    portfolio = db.get_or_404(Portfolio, portfolio_id)
+    portfolio = owned_or_404(Portfolio, portfolio_id)
     db.session.delete(portfolio)
     try:
         db.session.commit()
@@ -398,7 +415,7 @@ def delete_portfolio(portfolio_id: int) -> ResponseReturnValue:
         return _portfolios_response(None)
     except IntegrityError:
         db.session.rollback()
-        portfolio = db.get_or_404(Portfolio, portfolio_id)
+        portfolio = owned_or_404(Portfolio, portfolio_id)
         portfolio.is_active = False
         registrar("carteira", "arquivar", entidade_id=portfolio.id, detalhes={"nome": portfolio.name})
         db.session.commit()
@@ -418,6 +435,7 @@ def _reactivate(model: type[Broker] | type[Ticker] | type[Portfolio], record_id:
 
 
 @bp.post("/tables/brokers/<int:broker_id>/activate")
+@requer_admin
 def activate_broker(broker_id: int) -> ResponseReturnValue:
     _reactivate(Broker, broker_id, "corretora")
     flash("Corretora reativada.", "success")
@@ -425,6 +443,7 @@ def activate_broker(broker_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/tickers/<int:ticker_id>/activate")
+@requer_admin
 def activate_ticker(ticker_id: int) -> ResponseReturnValue:
     _reactivate(Ticker, ticker_id, "ticker")
     flash("Ticker reativado.", "success")
@@ -433,14 +452,17 @@ def activate_ticker(ticker_id: int) -> ResponseReturnValue:
 
 @bp.post("/tables/portfolios/<int:portfolio_id>/activate")
 def activate_portfolio(portfolio_id: int) -> ResponseReturnValue:
-    _reactivate(Portfolio, portfolio_id, "carteira")
+    portfolio = owned_or_404(Portfolio, portfolio_id)
+    portfolio.is_active = True
+    registrar("carteira", "ativar", entidade_id=portfolio_id)
+    db.session.commit()
     flash("Carteira reativada.", "success")
     return _portfolios_response(portfolio_id)
 
 
 @bp.post("/tables/portfolios/<int:portfolio_id>/tickers")
 def add_portfolio_ticker(portfolio_id: int) -> ResponseReturnValue:
-    portfolio = db.get_or_404(Portfolio, portfolio_id)
+    portfolio = owned_or_404(Portfolio, portfolio_id)
     ticker_id = _int_or_none(request.form.get("ticker_id"))
     ticker = db.session.get(Ticker, ticker_id) if ticker_id is not None else None
     if ticker is None or not ticker.is_active:
@@ -464,7 +486,7 @@ def add_portfolio_ticker(portfolio_id: int) -> ResponseReturnValue:
 
 @bp.post("/tables/portfolios/<int:portfolio_id>/tickers/<int:ticker_id>/delete")
 def remove_portfolio_ticker(portfolio_id: int, ticker_id: int) -> ResponseReturnValue:
-    portfolio = db.get_or_404(Portfolio, portfolio_id)
+    portfolio = owned_or_404(Portfolio, portfolio_id)
     link = db.session.get(PortfolioTicker, (portfolio_id, ticker_id))
     if link is None:
         flash("Esse ticker não está associado a essa carteira.", "error")

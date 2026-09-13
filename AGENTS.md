@@ -13,8 +13,8 @@
 
 ## Escopo e fontes de verdade
 
-Este repositório contém uma aplicação Flask de uso pessoal do mantenedor para
-controlar ações, opções, cotações, risco e performance. PostgreSQL é a fonte
+Este repositório contém uma aplicação Flask com dados financeiros privados por
+usuário para controlar ações, opções, cotações, risco e performance. PostgreSQL é a fonte
 operacional de dados e configurações; Docker Compose é a interface de execução.
 A planilha `Trades.xlsm` é somente referência funcional de leitura.
 

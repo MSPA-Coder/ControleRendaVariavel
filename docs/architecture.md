@@ -311,13 +311,16 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | Tabela | Papel |
 |---|---|
 | `users` | contas, papel e estado de acesso |
-| `app_settings` | preferências: coletor, agenda, tema, taxa livre de risco |
-| `brokers`, `tickers`, `portfolios`, `portfolio_tickers` | cadastros; os três primeiros podem ser arquivados sem romper fatos históricos |
+| `app_settings` | infraestrutura e agenda globais do coletor; campos pessoais antigos preservados para adoção do legado |
+| `user_preferences` | tema, taxa de cálculo, comparação e alerta privados por usuário |
+| `user_ticker_entitlements` | primeira posse confirmada; preserva acesso à cotação após encerramento ou exclusão |
+| `brokers`, `tickers` | referências globais, mantidas por administradores |
+| `portfolios`, `portfolio_tickers` | carteiras privadas e seus catálogos; associação de catálogo não concede acesso a preços |
 | `positions`, `position_movements` | posição de ações e seu extrato |
 | `option_expirations`, `option_contracts`, `option_positions`, `option_position_movements` | o mesmo par, para opções |
 | `transactions` | o que a aba Transações mostra |
 | `dividends` | proventos, por tipo de renda |
-| `quotes`, `option_quotes` | última leitura do coletor |
+| `quotes`, `option_quotes` | última leitura global por ticker ou contrato; leituras atrasadas não substituem as mais recentes |
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
 
@@ -357,23 +360,31 @@ aqui.
   subir com `TRUST_PROXY_HEADERS=true` e `FORCE_HTTPS=false` juntos (CRV-03):
   confiar no proxy sem exigir HTTPS deixaria o cookie de sessão sem `Secure`.
 
-**Decisão registrada (CRV-04, 02/09/2026): `operador` não particiona dados, e
-isso é intencional.** Das 79 rotas, 47 gravam dado financeiro — posição,
-transação, provento, cotação, contrato de opção, corretora, carteira —, e
-nenhuma delas exige papel: uma conta `operador` cria, edita e encerra
-qualquer item de qualquer carteira, exatamente como `admin`. A diferença
-entre os dois papéis é só a linha 300-305 acima: administração de contas,
-Configurações e o controle do coletor. Optou-se por **manter o comportamento e
-só documentá-lo aqui** (não restringir as escritas por papel) — a aplicação é
-declaradamente de uso pessoal (ver `README.md`), o schema não tem coluna de
-dono, e a trilha de auditoria (`app/accounts/auditoria.py`) já registra toda escrita
-financeira por evento, então a ação fica rastreada mesmo sem ser impedida.
-**Gatilho para reabrir esta decisão: a primeira vez que uma SEGUNDA pessoa
-receber uma conta `operador`** — nesse momento, "não administra o sistema"
-deixa de ser sinônimo aceitável de "acesso irrestrito aos dados financeiros de
-todo mundo", e a alternativa (restringir exclusões destrutivas a `admin`, ou
-renomear o papel para não sugerir isolamento que não existe) deve ser
-reavaliada.
+**Isolamento financeiro (12/09/2026):** carteira, posições, transações,
+proventos, movimentos e arquivos pertencem ao usuário autenticado. Toda rota
+financeira consulta e altera somente esse escopo; `admin` não ganha leitura de
+outro usuário por seu papel. Referências de mercado e sua manutenção são
+globais: administração e coletor podem escrevê-las, enquanto a leitura de
+cotações exige o vínculo histórico usuário–ticker. Preferências de apresentação
+e análise também pertencem ao usuário; agenda e infraestrutura do coletor são
+globais.
+
+Para ações, a cotação global preserva separadamente OCP (posição comprada) e
+OVD (posição vendida), com o horário observado de cada lado. A carteira usa o
+lado da posição e uma leitura atrasada não substitui um valor mais recente. O
+último negócio e seu histórico continuam globais por ticker.
+
+Cada usuário altera tema, taxa de cálculo, referência para Beta e prazo de alerta
+em **Preferências** (`/preferences`). A configuração administrativa do coletor
+continua em `/settings`. FKs compostas impedem relações financeiras entre donos
+distintos, inclusive em escritas fora das rotas; nomes de carteira são únicos
+por usuário. IDs explícitos fora do escopo recebem 404, e IDs de filtro/formulário
+malformados recebem 400 com aviso também em HTMX. IDs fora da faixa no caminho
+da rota não chegam ao banco.
+
+Os relatórios em `docs/security-audit/` registram decisões históricas. Suas
+declarações de acervo comum ou exceções de “uso pessoal” foram substituídas por
+este contrato de isolamento e não autorizam exceções de segurança.
 
 O botão de olho é **Modo discreto**: mascara a leitura casual da tela e cobre
 os gráficos. Ele não é uma fronteira de segurança; os dados continuam na

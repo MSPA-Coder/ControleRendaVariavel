@@ -16,9 +16,13 @@ from app.performance.dividends import build_dividend_report
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
+    current_owner_id,
+    grant_ticker_entitlement,
     investable_ticker_records,
     is_htmx_request,
     open_real_cost_basis_by_ticker,
+    owned_or_404,
+    parse_positive_id,
 )
 
 
@@ -35,8 +39,8 @@ class DividendInput:
 def _parse_form() -> DividendInput:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        broker_id = int(raw["broker_id"])
-        ticker_id = int(raw["ticker_id"])
+        broker_id = parse_positive_id(raw["broker_id"])
+        ticker_id = parse_positive_id(raw["ticker_id"])
         amount = parse_finite_decimal(raw["amount"], field_name="um valor de provento")
         payment_date = date.fromisoformat(raw["payment_date"])
         kind = IncomeKind(raw.get("kind", IncomeKind.DIVIDENDO.value))
@@ -59,8 +63,8 @@ def _parse_int_set(raw: str) -> set[int]:
     ids = set()
     for part in raw.split(","):
         part = part.strip()
-        if part.isdigit():
-            ids.add(int(part))
+        if part:
+            ids.add(parse_positive_id(part))
     return ids
 
 
@@ -98,6 +102,7 @@ def dividends_results_context() -> dict[str, object]:
 
     statement = (
         select(Dividend)
+        .where(Dividend.owner_id == current_owner_id())
         .join(Dividend.broker_ref)
         .join(Dividend.ticker_ref)
         .order_by(Dividend.payment_date.desc(), Dividend.id.desc())
@@ -191,7 +196,11 @@ def create_dividend() -> ResponseReturnValue:
             tickers=investable_ticker_records(),
             income_kinds=list(IncomeKind),
         ), 422
-    db.session.add(Dividend(**asdict(data)))
+    dividend = Dividend(owner_id=current_owner_id(), **asdict(data))
+    db.session.add(dividend)
+    grant_ticker_entitlement(
+        user_id=dividend.owner_id, ticker_id=dividend.ticker_id, held_on=dividend.payment_date
+    )
     db.session.commit()
     flash("Renda registrada.", "success")
     return redirect(url_for("portfolio.dividends"))
@@ -199,7 +208,7 @@ def create_dividend() -> ResponseReturnValue:
 
 @bp.get("/dividends/<int:dividend_id>/edit")
 def edit_dividend(dividend_id: int) -> str:
-    dividend = db.get_or_404(Dividend, dividend_id)
+    dividend = owned_or_404(Dividend, dividend_id)
     return render_template(
         "dividend_form.html",
         dividend=dividend,
@@ -211,7 +220,7 @@ def edit_dividend(dividend_id: int) -> str:
 
 @bp.post("/dividends/<int:dividend_id>")
 def update_dividend(dividend_id: int) -> ResponseReturnValue:
-    dividend = db.get_or_404(Dividend, dividend_id)
+    dividend = owned_or_404(Dividend, dividend_id)
     try:
         data = _parse_form()
     except ValueError as exc:
@@ -227,6 +236,9 @@ def update_dividend(dividend_id: int) -> ResponseReturnValue:
         ), 422
     for key, value in asdict(data).items():
         setattr(dividend, key, value)
+    grant_ticker_entitlement(
+        user_id=dividend.owner_id, ticker_id=dividend.ticker_id, held_on=dividend.payment_date
+    )
     db.session.commit()
     flash("Renda atualizada.", "success")
     return redirect(url_for("portfolio.dividends"))
@@ -234,7 +246,7 @@ def update_dividend(dividend_id: int) -> ResponseReturnValue:
 
 @bp.post("/dividends/<int:dividend_id>/delete")
 def delete_dividend(dividend_id: int) -> ResponseReturnValue:
-    dividend = db.get_or_404(Dividend, dividend_id)
+    dividend = owned_or_404(Dividend, dividend_id)
     db.session.delete(dividend)
     db.session.commit()
     flash("Renda excluída.", "success")

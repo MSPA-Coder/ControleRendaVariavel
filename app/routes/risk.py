@@ -7,7 +7,7 @@ from flask import render_template
 from sqlalchemy import select
 
 from app import db
-from app.models import AppSetting, Ticker
+from app.models import Ticker
 from app.performance.risk import (
     MIN_OBSERVATIONS_FOR_CONFIDENCE,
     PortfolioDrawdown,
@@ -22,15 +22,19 @@ from app.routes.helpers import (
     open_real_quantities_by_ticker,
     position_movement_events,
     price_series_by_ticker,
+    ticker_is_entitled,
     ticker_price_series,
+    user_preferences,
 )
 
 
 @bp.get("/risk")
 def risk_report() -> str:
-    app_settings = db.session.get(AppSetting, 1)
-    risk_free_rate = app_settings.risk_free_rate_annual if app_settings else Decimal("0")
-    benchmark_ticker_id = app_settings.benchmark_ticker_id if app_settings else None
+    preferences = user_preferences()
+    risk_free_rate = preferences.risk_free_rate_annual
+    benchmark_ticker_id = preferences.benchmark_ticker_id
+    if benchmark_ticker_id is not None and not ticker_is_entitled(benchmark_ticker_id):
+        benchmark_ticker_id = None
 
     quantities_by_ticker = open_real_quantities_by_ticker()
     tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}

@@ -1,9 +1,9 @@
 # Controle de Renda Variável
 
-Aplicação web de uso pessoal do mantenedor para acompanhar ações e opções:
+Aplicação web para acompanhar ações e opções por usuário autenticado:
 posições, transações, proventos, cotações, histórico de preços, risco,
 performance mensal e exposição. Não é plataforma de negociação, custódia ou
-serviço multiusuário. Dados financeiros e configurações persistem no
+corretagem. Dados financeiros persistem no
 PostgreSQL; a planilha `Trades.xlsm` é apenas referência funcional e não faz
 parte do runtime.
 
@@ -21,11 +21,18 @@ As páginas cobrem carteira de ações e opções, transações, proventos, cota
 risco, performance, exposições, cadastros e configurações. Os contratos
 detalhados de cálculos e comportamento ficam na documentação funcional.
 
-Toda posição pertence a uma carteira. Carteiras simuladas servem apenas para
+Toda posição e carteira pertence ao usuário autenticado. Corretoras, tickers,
+contratos, vencimentos e cotações são referências globais; cotações só ficam
+visíveis para tickers que o usuário já possuiu. Carteiras simuladas servem apenas para
 insight: não geram movimentos ou transações, não consolidam novas entradas e
 não podem ser encerradas. Totais permanecem separados por moeda e por natureza
 real ou simulada. Tickers de referência alimentam comparadores e cálculos de
 risco, mas não são negociáveis.
+
+Tema, taxa de cálculo, comparação e alerta são alterados em **Preferências**
+pela própria conta. Administração do coletor e manutenção das referências
+globais exigem o papel administrativo. Antes de atualizar uma instalação
+existente para o isolamento por usuário, siga o [roteiro de migração](docs/deployment-vps.md#isolamento-financeiro--revisão-20260912_0016).
 
 ## Execução com Docker
 

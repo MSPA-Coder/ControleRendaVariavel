@@ -81,6 +81,47 @@ memória dos workers não deve ser tratado como limite global.
 
 ## Atualização
 
+### Isolamento financeiro — revisão 20260912_0016
+
+Esta revisão altera o contrato dos dados e requer janela de manutenção. Não
+permita processos da versão antiga atendendo requisições ou gravando no banco
+depois da migração. O procedimento abaixo é um roteiro de implantação; os
+testes de desenvolvimento usam exclusivamente PostgreSQL descartável.
+
+1. Valide um backup pelo fluxo do BackupRestore e ensaie sua restauração em
+   ambiente separado. Registre contagens, valores e datas das carteiras,
+   posições, opções, transações, proventos, movimentos e arquivos históricos.
+2. Confirme o login exato `mspa` na cópia restaurada. Todos os registros
+   financeiros legados serão atribuídos a essa conta, conforme decisão do
+   mantenedor. Havendo legado sem esse login, a migração para antes de atribuir
+   dados; não crie uma conta arbitrária para contornar a recusa. Banco vazio
+   inicializa sem inventar um dono. Carteiras padrão personalizadas também
+   exigem o proprietário confirmado.
+3. Na janela autorizada, interrompa escritas e o envio do coletor e retire todos
+   os workers web antigos. Aplique a nova imagem e `flask db upgrade` pelo
+   serviço `migrate` do Compose operacional. Não use apenas uma troca gradual
+   de workers: o código antigo não respeita o novo isolamento.
+4. Compare o inventário financeiro antes/depois para `mspa`. Outras contas
+   começam sem fatos financeiros legados. Corretoras e instrumentos continuam
+   globais. Os snapshots antes repetidos por posição são consolidados por
+   ticker/contrato, preservando a leitura mais recente e usando o ID da posição
+   para desempatar timestamps iguais; a redução dessa contagem é esperada.
+5. Confirme o health check e, com duas contas, a recusa de IDs alheios, a
+   separação dos relatórios e das preferências e o acesso às cotações somente
+   após posse atual ou histórica. Benchmarks seguem essa mesma regra.
+6. Retome o coletor. O protocolo remoto continua usando IDs de posição, e o
+   receptor resolve esses IDs para o instrumento global: isso preserva a
+   compatibilidade com o agente existente. A coleta local que grava diretamente
+   no banco deve usar o código novo. Verifique pulso, horários e atualização de
+   ações e opções antes de reabrir o uso normal.
+
+A revisão não oferece `downgrade` de dados. Se for necessário recuar, mantenha
+o serviço fechado e restaure banco e código compatíveis a partir do backup
+validado. Voltar somente a imagem antiga reintroduz leitura global indevida e
+não constitui rollback seguro.
+
+### Fluxo operacional usual
+
 Use o script de implantação do VPS:
 
 ```bash

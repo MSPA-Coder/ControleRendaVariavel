@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -25,7 +26,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app import Base
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
@@ -343,10 +344,13 @@ class Portfolio(Base):
     __table_args__ = (
         CheckConstraint("length(btrim(name)) > 0", name="name_not_blank"),
         CheckConstraint("currency IS NULL OR currency IN ('BRL', 'USD')", name="currency_valid"),
+        UniqueConstraint("id", "owner_id", name="uq_portfolios_id_owner"),
+        UniqueConstraint("owner_id", "name", name="uq_portfolios_owner_name"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(80), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     simulated: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(
@@ -357,6 +361,7 @@ class Portfolio(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    owner_ref: Mapped[User] = relationship()
 
 
 class PortfolioTicker(Base):
@@ -375,7 +380,7 @@ class PortfolioTicker(Base):
         ForeignKey("tickers.id", ondelete="RESTRICT"), primary_key=True
     )
 
-    portfolio_ref: Mapped[Portfolio] = relationship()
+    portfolio_ref: Mapped[Portfolio] = relationship(foreign_keys=[portfolio_id])
     ticker_ref: Mapped[Ticker] = relationship()
 
 
@@ -413,9 +418,13 @@ class Position(Base):
             name="target_multiplier_finite",
         ),
         CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
+        UniqueConstraint("id", "owner_id", name="uq_positions_id_owner"),
+        ForeignKeyConstraint(["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
+                             name="fk_positions_portfolio_owner", ondelete="RESTRICT"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     broker_id: Mapped[int] = mapped_column(
         ForeignKey("brokers.id", ondelete="RESTRICT"), index=True
     )
@@ -438,16 +447,18 @@ class Position(Base):
     )
 
     quote: Mapped[Quote | None] = relationship(
-        back_populates="position", cascade="all, delete-orphan", uselist=False
+        primaryjoin=lambda: Position.ticker_id == foreign(Quote.ticker_id), viewonly=True, uselist=False
     )
     movements: Mapped[list[PositionMovement]] = relationship(
         back_populates="position",
+        foreign_keys="PositionMovement.position_id",
         cascade="all, delete-orphan",
         order_by="PositionMovement.occurred_on, PositionMovement.id",
     )
     broker_ref: Mapped[Broker] = relationship(back_populates="positions")
     ticker_ref: Mapped[Ticker] = relationship(back_populates="positions")
-    portfolio_ref: Mapped[Portfolio] = relationship()
+    portfolio_ref: Mapped[Portfolio] = relationship(foreign_keys=[portfolio_id])
+    owner_ref: Mapped[User] = relationship()
 
     @property
     def broker(self) -> str:
@@ -483,6 +494,8 @@ class Quote(Base):
     __table_args__ = (
         CheckConstraint("last_price >= 0", name="last_price_non_negative"),
         CheckConstraint("previous_close >= 0", name="previous_close_non_negative"),
+        CheckConstraint("buy_price IS NULL OR (buy_price >= 0 AND buy_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric))", name="buy_price_valid"),
+        CheckConstraint("sell_price IS NULL OR (sell_price >= 0 AND sell_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric))", name="sell_price_valid"),
         CheckConstraint(
             "last_price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="last_price_finite",
@@ -493,8 +506,8 @@ class Quote(Base):
         ),
     )
 
-    position_id: Mapped[int] = mapped_column(
-        ForeignKey("positions.id", ondelete="CASCADE"), primary_key=True
+    ticker_id: Mapped[int] = mapped_column(
+        ForeignKey("tickers.id", ondelete="CASCADE"), primary_key=True
     )
     last_price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     previous_close: Mapped[Decimal] = mapped_column(Numeric(24, 8))
@@ -503,7 +516,14 @@ class Quote(Base):
     error_message: Mapped[str | None] = mapped_column(String(250))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
-    position: Mapped[Position] = relationship(back_populates="quote")
+    # OCP/OVD são dados de mercado globais, mas o preço efetivo depende do
+    # lado da posição. Uma leitura de venda não substitui o preço de compra.
+    buy_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    sell_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    buy_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sell_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    ticker_ref: Mapped[Ticker] = relationship()
 
 
 class PositionMovement(Base):
@@ -524,6 +544,10 @@ class PositionMovement(Base):
 
     __tablename__ = "position_movements"
     __table_args__ = (
+        ForeignKeyConstraint(["position_id", "owner_id"], ["positions.id", "positions.owner_id"],
+                             name="fk_position_movements_position_owner", ondelete="CASCADE"),
+        ForeignKeyConstraint(["transaction_id", "owner_id"], ["transactions.id", "transactions.owner_id"],
+                             name="fk_position_movements_transaction_owner", ondelete="CASCADE"),
         CheckConstraint("price >= 0", name="price_non_negative"),
         CheckConstraint("resulting_quantity > 0", name="resulting_quantity_positive"),
         CheckConstraint("resulting_average_cost >= 0", name="resulting_average_cost_non_negative"),
@@ -566,6 +590,7 @@ class PositionMovement(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     position_id: Mapped[int] = mapped_column(
         ForeignKey("positions.id", ondelete="CASCADE"), index=True
     )
@@ -595,7 +620,8 @@ class PositionMovement(Base):
     resulting_average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    position: Mapped[Position] = relationship(back_populates="movements")
+    position: Mapped[Position] = relationship(back_populates="movements", foreign_keys=[position_id])
+    owner_ref: Mapped[User] = relationship()
 
     @property
     def quantity(self) -> Decimal:
@@ -627,6 +653,8 @@ class PositionLedgerArchive(Base):
     __tablename__ = "position_ledger_archive"
     __table_args__ = (
         CheckConstraint("instrument IN ('stock', 'option')", name="instrument_valid"),
+        ForeignKeyConstraint(["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
+                             name="fk_position_ledger_archive_portfolio_owner", ondelete="RESTRICT"),
         CheckConstraint(
             "resulting_signed_quantity NOT IN "
             "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
@@ -635,6 +663,7 @@ class PositionLedgerArchive(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     occurred_on: Mapped[date] = mapped_column(Date, index=True)
     ticker_id: Mapped[int] = mapped_column(
         ForeignKey("tickers.id", ondelete="RESTRICT"), index=True
@@ -653,6 +682,7 @@ class PositionLedgerArchive(Base):
     source_position_id: Mapped[int] = mapped_column(Integer)
     resulting_signed_quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    owner_ref: Mapped[User] = relationship()
 
 
 class OptionExpiration(Base):
@@ -716,9 +746,13 @@ class OptionPosition(Base):
             name="target_finite",
         ),
         CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
+        UniqueConstraint("id", "owner_id", name="uq_option_positions_id_owner"),
+        ForeignKeyConstraint(["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
+                             name="fk_option_positions_portfolio_owner", ondelete="RESTRICT"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     broker_id: Mapped[int] = mapped_column(
         ForeignKey("brokers.id", ondelete="RESTRICT"), index=True
     )
@@ -741,14 +775,16 @@ class OptionPosition(Base):
     broker_ref: Mapped[Broker] = relationship()
     contract: Mapped[OptionContract] = relationship(back_populates="positions")
     quote: Mapped[OptionQuote | None] = relationship(
-        back_populates="position", cascade="all, delete-orphan", uselist=False
+        primaryjoin=lambda: OptionPosition.contract_id == foreign(OptionQuote.contract_id), viewonly=True, uselist=False
     )
     movements: Mapped[list[OptionPositionMovement]] = relationship(
         back_populates="position",
+        foreign_keys="OptionPositionMovement.option_position_id",
         cascade="all, delete-orphan",
         order_by="OptionPositionMovement.occurred_on, OptionPositionMovement.id",
     )
-    portfolio_ref: Mapped[Portfolio] = relationship()
+    portfolio_ref: Mapped[Portfolio] = relationship(foreign_keys=[portfolio_id])
+    owner_ref: Mapped[User] = relationship()
 
     @property
     def broker(self) -> str:
@@ -788,8 +824,8 @@ class OptionQuote(Base):
         ),
     )
 
-    option_position_id: Mapped[int] = mapped_column(
-        ForeignKey("option_positions.id", ondelete="CASCADE"), primary_key=True
+    contract_id: Mapped[int] = mapped_column(
+        ForeignKey("option_contracts.id", ondelete="CASCADE"), primary_key=True
     )
     last_price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     previous_close: Mapped[Decimal] = mapped_column(Numeric(24, 8))
@@ -798,7 +834,7 @@ class OptionQuote(Base):
     source_status: Mapped[str] = mapped_column(String(16), default="online")
     error_message: Mapped[str | None] = mapped_column(String(250))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    position: Mapped[OptionPosition] = relationship(back_populates="quote")
+    contract_ref: Mapped[OptionContract] = relationship()
 
 
 class OptionPositionMovement(Base):
@@ -813,6 +849,10 @@ class OptionPositionMovement(Base):
 
     __tablename__ = "option_position_movements"
     __table_args__ = (
+        ForeignKeyConstraint(["option_position_id", "owner_id"], ["option_positions.id", "option_positions.owner_id"],
+                             name="fk_option_position_movements_position_owner", ondelete="CASCADE"),
+        ForeignKeyConstraint(["transaction_id", "owner_id"], ["transactions.id", "transactions.owner_id"],
+                             name="fk_option_position_movements_transaction_owner", ondelete="CASCADE"),
         CheckConstraint("price >= 0", name="price_non_negative"),
         CheckConstraint("resulting_quantity > 0", name="resulting_quantity_positive"),
         CheckConstraint("resulting_average_cost >= 0", name="resulting_average_cost_non_negative"),
@@ -855,6 +895,7 @@ class OptionPositionMovement(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     option_position_id: Mapped[int] = mapped_column(
         ForeignKey("option_positions.id", ondelete="CASCADE"), index=True
     )
@@ -881,7 +922,8 @@ class OptionPositionMovement(Base):
     resulting_average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    position: Mapped[OptionPosition] = relationship(back_populates="movements")
+    position: Mapped[OptionPosition] = relationship(back_populates="movements", foreign_keys=[option_position_id])
+    owner_ref: Mapped[User] = relationship()
 
     @property
     def quantity(self) -> Decimal:
@@ -952,6 +994,9 @@ class Transaction(Base):
             "num_nonnulls(ticker_id, option_contract_id) = 1",
             name="exactly_one_instrument",
         ),
+        UniqueConstraint("id", "owner_id", name="uq_transactions_id_owner"),
+        ForeignKeyConstraint(["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
+                             name="fk_transactions_portfolio_owner", ondelete="RESTRICT"),
         # A unicidade de "no máximo uma transação aberta por posição" é
         # particionada por tipo de instrumento (ação/opção). ``Position`` e
         # ``OptionPosition`` têm sequências de id independentes, então o
@@ -973,6 +1018,7 @@ class Transaction(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     broker_id: Mapped[int] = mapped_column(
         ForeignKey("brokers.id", ondelete="RESTRICT"), index=True
     )
@@ -1026,7 +1072,8 @@ class Transaction(Base):
     broker_ref: Mapped[Broker] = relationship()
     ticker_ref: Mapped[Ticker | None] = relationship()
     option_contract_ref: Mapped[OptionContract | None] = relationship()
-    portfolio_ref: Mapped[Portfolio] = relationship()
+    portfolio_ref: Mapped[Portfolio] = relationship(foreign_keys=[portfolio_id])
+    owner_ref: Mapped[User] = relationship()
 
     @property
     def broker(self) -> str:
@@ -1084,6 +1131,7 @@ class Dividend(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     kind: Mapped[IncomeKind] = mapped_column(
         Enum(IncomeKind, name="income_kind"), default=IncomeKind.DIVIDENDO
     )
@@ -1100,6 +1148,7 @@ class Dividend(Base):
 
     broker_ref: Mapped[Broker] = relationship()
     ticker_ref: Mapped[Ticker] = relationship()
+    owner_ref: Mapped[User] = relationship()
 
     @property
     def broker(self) -> str:
@@ -1112,6 +1161,36 @@ class Dividend(Base):
     @property
     def currency(self) -> str:
         return self.ticker_ref.currency
+
+
+class UserTickerEntitlement(Base):
+    """Direito persistente de consultar a cotação de um ticker negociado.
+
+    Nasce de um fato financeiro confirmado, e não de catálogo ou de associação
+    a carteira. Assim o encerramento não apaga o histórico de consulta.
+    """
+
+    __tablename__ = "user_ticker_entitlements"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="RESTRICT"), primary_key=True)
+    first_held_on: Mapped[date] = mapped_column(Date)
+    user_ref: Mapped[User] = relationship()
+    ticker_ref: Mapped[Ticker] = relationship()
+
+
+class UserPreference(Base):
+    """Preferências de apresentação e análise, isoladas do coletor global."""
+
+    __tablename__ = "user_preferences"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    theme: Mapped[str] = mapped_column(String(24), default=DEFAULT_THEME, server_default=DEFAULT_THEME)
+    benchmark_ticker_id: Mapped[int | None] = mapped_column(ForeignKey("tickers.id", ondelete="SET NULL"))
+    risk_free_rate_annual: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL
+    )
+    stale_alert_seconds: Mapped[int | None] = mapped_column(Integer)
+    user_ref: Mapped[User] = relationship()
+    benchmark_ticker_ref: Mapped[Ticker | None] = relationship()
 
 
 class QuoteHistory(Base):

@@ -449,6 +449,11 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   align-items: end; display: grid; gap: .75rem; grid-template-columns: minmax(180px, 1fr) auto;
   margin-bottom: 1rem;
 }
+.user-create-form {
+  grid-template-columns: minmax(12rem, 1.3fr) 9rem minmax(12rem, 1fr) minmax(12rem, 1fr) auto;
+}
+.user-create-form .button { justify-self: start; }
+.user-create-password-help { grid-column: 1 / -1; }
 .ticker-fields { grid-template-columns: 1.4fr repeat(3, minmax(110px, .7fr)) auto; }
 .catalog-table th { background: var(--navy); color: white; text-align: left; }
 .catalog-table input, .catalog-table select { min-width: 100%; }
@@ -589,6 +594,10 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   .portfolio-ticker-add-form { width: min(22rem, 90vw); }
   .portfolio-ticker-card-heading { align-items: flex-start; flex-direction: column; }
   .portfolio-create-form { grid-template-columns: 1fr; width: 100%; }
+}
+
+@media (min-width: 701px) and (max-width: 1150px) {
+  .user-create-form { grid-template-columns: repeat(2, minmax(12rem, 1fr)); }
 }
 
 .topbar { gap: 1.25rem; }

@@ -4,7 +4,8 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from flask import current_app, request
+from flask import abort, current_app, request
+from flask_login import current_user  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload, selectinload
@@ -29,6 +30,9 @@ from app.models import (
     QuoteHistory,
     Side,
     Ticker,
+    Transaction,
+    UserPreference,
+    UserTickerEntitlement,
 )
 from app.positions.holdings_history import DividendEvent, HoldingEvent
 from app.positions.portfolio import BrokerGroup, MarketGroup, PositionView
@@ -41,6 +45,73 @@ cadastrada no app (portanto sem uma data real para ancorar o início do
 histórico) — ver ``quote_update_targets``."""
 
 
+def current_owner_id() -> int:
+    """Dono financeiro da requisição autenticada, nunca decidido pelo cliente."""
+    owner_id = getattr(current_user, "id", None)
+    # As rotas financeiras passam por ``requer_login`` antes de chegar aqui.
+    # O zero só mantém auxiliares puros testáveis fora de uma sessão; ele não
+    # corresponde a nenhum usuário real e portanto não autoriza registro.
+    return int(owner_id) if owner_id is not None else 0
+
+
+def user_preferences() -> UserPreference:
+    """Preferências privadas do usuário autenticado, criadas sob demanda."""
+    preference = db.session.get(UserPreference, current_owner_id())
+    if preference is None:
+        # Duas abas podem consultar a primeira preferência simultaneamente.
+        # A unicidade resolve a corrida sem quebrar a transação da segunda.
+        db.session.execute(
+            insert(UserPreference).values(user_id=current_owner_id()).on_conflict_do_nothing(
+                index_elements=[UserPreference.user_id]
+            )
+        )
+        preference = db.session.get(UserPreference, current_owner_id())
+    return preference
+
+
+def owned_or_404(model: type[Portfolio] | type[Position] | type[OptionPosition] | type[Transaction] | type[Dividend], record_id: int):
+    if not 0 < record_id <= 2_147_483_647:
+        abort(400, description="Identificador inválido.")
+    record = db.get_or_404(model, record_id)
+    if getattr(record, "owner_id", current_owner_id()) != current_owner_id():
+        abort(404)
+    return record
+
+
+def grant_ticker_entitlement(*, user_id: int, ticker_id: int, held_on: date) -> None:
+    """Registra a primeira posse confirmada sem revogar histórico ao encerrar."""
+    statement = insert(UserTickerEntitlement).values(
+        user_id=user_id, ticker_id=ticker_id, first_held_on=held_on
+    )
+    db.session.execute(
+        statement.on_conflict_do_update(
+            index_elements=[UserTickerEntitlement.user_id, UserTickerEntitlement.ticker_id],
+            set_={"first_held_on": func.least(UserTickerEntitlement.first_held_on, statement.excluded.first_held_on)},
+        )
+    )
+
+
+def ticker_is_entitled(ticker_id: int) -> bool:
+    return db.session.scalar(
+        select(UserTickerEntitlement.ticker_id).where(
+            UserTickerEntitlement.user_id == current_owner_id(),
+            UserTickerEntitlement.ticker_id == ticker_id,
+        )
+    ) is not None
+
+
+def entitled_tickers(*, include_inactive: bool = False) -> list[Ticker]:
+    statement = (
+        select(Ticker)
+        .join(UserTickerEntitlement)
+        .where(UserTickerEntitlement.user_id == current_owner_id())
+        .order_by(Ticker.symbol)
+    )
+    if not include_inactive:
+        statement = statement.where(Ticker.is_active.is_(True))
+    return list(db.session.scalars(statement))
+
+
 def portfolio_records(*, include_inactive: bool = False) -> list[Portfolio]:
     """Carteiras cadastradas, em ordem alfabética.
 
@@ -49,7 +120,7 @@ def portfolio_records(*, include_inactive: bool = False) -> list[Portfolio]:
     derivada da moeda do ticker) e pelo filtro homônimo de Ações, Opções e
     Transações, que oferece as simuladas como escolha explícita. O que não
     as inclui é a opção "Todas" do filtro: ver ``positions_query``."""
-    statement = select(Portfolio).order_by(Portfolio.name)
+    statement = select(Portfolio).where(Portfolio.owner_id == current_owner_id()).order_by(Portfolio.name)
     if not include_inactive:
         statement = statement.where(Portfolio.is_active.is_(True))
     return list(db.session.scalars(statement))
@@ -64,7 +135,7 @@ def real_portfolio_records() -> list[Portfolio]:
     return list(
         db.session.scalars(
             select(Portfolio)
-            .where(Portfolio.simulated.is_(False), Portfolio.is_active.is_(True))
+            .where(Portfolio.owner_id == current_owner_id(), Portfolio.simulated.is_(False), Portfolio.is_active.is_(True))
             .order_by(Portfolio.name)
         )
     )
@@ -83,12 +154,31 @@ def selected_filters() -> tuple[int | None, str | None, str]:
     Sem parâmetro `portfolio_id`, ou com um valor que não corresponde ao id
     de nenhuma carteira, o filtro é "Todas" (``None``, sem filtro).
     """
-    raw_portfolio = request.args.get("portfolio_id", "all")
-    portfolio_id = int(raw_portfolio) if raw_portfolio.isdigit() else None
-    if portfolio_id is None:
-        raw_portfolio = "all"
+    raw_portfolio = request.args.get("portfolio_id")
+    if raw_portfolio in (None, "", "all"):
+        portfolio_id, raw_portfolio = None, "all"
+    else:
+        portfolio_id = parse_positive_id(raw_portfolio)
+        if not db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())):
+            abort(404)
     broker = request.args.get("broker") or None
     return portfolio_id, broker, raw_portfolio
+
+
+MAX_ID_DECIMAL_DIGITS = 10
+MAX_DATABASE_ID = 2_147_483_647
+
+
+def parse_positive_id(raw: str | None, *, allow_all: bool = False) -> int | None:
+    """Parseia somente decimal ASCII antes de chamar int, evitando Unicode/DoS."""
+    if allow_all and raw in (None, "", "all"):
+        return None
+    if raw is None or not raw.isascii() or not raw.isdecimal() or len(raw) > MAX_ID_DECIMAL_DIGITS:
+        abort(400, description="Identificador inválido.")
+    value = int(raw)
+    if not 0 < value <= MAX_DATABASE_ID:
+        abort(400, description="Identificador inválido.")
+    return value
 
 
 def positions_query(
@@ -105,6 +195,7 @@ def positions_query(
     )
     statement = (
         select(Position)
+        .where(Position.owner_id == current_owner_id())
         .join(Position.broker_ref)
         .join(Position.ticker_ref)
         .options(
@@ -158,14 +249,13 @@ def ticker_records(*, include_inactive: bool = False) -> list[Ticker]:
     return list(db.session.scalars(statement))
 
 
-def stock_ticker_records() -> list[Ticker]:
-    """Tickers de ações e índices, excluindo os que representam contratos de opção."""
-    statement = (
-        select(Ticker)
-        .where(~Ticker.option_contract.has(), Ticker.is_active.is_(True))
-        .order_by(Ticker.symbol)
-    )
-    return list(db.session.scalars(statement))
+def quote_ticker_records() -> list[Ticker]:
+    """Ações e opções já detidas, inclusive instrumentos arquivados.
+
+    Arquivar o cadastro impede novos lançamentos, mas preserva a consulta do
+    preço histórico de uma posição encerrada.
+    """
+    return entitled_tickers(include_inactive=True)
 
 
 def investable_ticker_records() -> list[Ticker]:
@@ -244,7 +334,8 @@ def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
     oferecer comparar um ticker consigo mesmo."""
     statement = (
         select(Ticker)
-        .where(Ticker.is_benchmark.is_(True), Ticker.is_active.is_(True))
+        .join(UserTickerEntitlement)
+        .where(UserTickerEntitlement.user_id == current_owner_id(), Ticker.is_benchmark.is_(True), Ticker.is_active.is_(True))
         .order_by(Ticker.symbol)
     )
     return [
@@ -379,6 +470,7 @@ def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]])
                     "price": statement.excluded.price,
                     "recorded_at": statement.excluded.recorded_at,
                 },
+                where=statement.excluded.recorded_at >= QuoteHistory.recorded_at,
             )
         )
 
@@ -406,6 +498,8 @@ def ticker_price_series(ticker_id: int) -> list[QuoteHistory]:
     """Série histórica de cotações de um ticker, em ordem cronológica
     (também usada pelos KPIs de risco, que precisam dos mesmos retornos
     diários)."""
+    if not ticker_is_entitled(ticker_id):
+        abort(404)
     statement = (
         select(QuoteHistory)
         .where(QuoteHistory.ticker_id == ticker_id)
@@ -426,6 +520,16 @@ def price_series_by_ticker(ticker_ids: Iterable[int]) -> dict[int, list[tuple[da
     series: dict[int, list[tuple[date, Decimal]]] = {ticker_id: [] for ticker_id in ids}
     if not ids:
         return series
+    entitled = set(
+        db.session.scalars(
+            select(UserTickerEntitlement.ticker_id).where(
+                UserTickerEntitlement.user_id == current_owner_id(),
+                UserTickerEntitlement.ticker_id.in_(ids),
+            )
+        )
+    )
+    if entitled != set(ids):
+        abort(404)
     rows = db.session.execute(
         select(QuoteHistory.ticker_id, QuoteHistory.recorded_date, QuoteHistory.price)
         .where(QuoteHistory.ticker_id.in_(ids))
@@ -444,7 +548,9 @@ def ticker_position_start_date(ticker_id: int) -> date | None:
     (que costuma remontar a muito antes da compra) — ver
     ``app.routes.helpers.benchmark_candidates``."""
     return db.session.scalar(
-        select(func.min(Position.opened_on)).where(Position.ticker_id == ticker_id)
+        select(func.min(Position.opened_on)).where(
+            Position.ticker_id == ticker_id, Position.owner_id == current_owner_id()
+        )
     )
 
 
@@ -454,9 +560,9 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     a aproximação "posições atuais constantes no passado" (ver
     ``app.performance.risk.portfolio_value_series``)."""
     statement = (
-        select(Position.ticker_id, Position.quantity, Position.side)
+        select(Position.ticker_id, Position.quantity, Position.side).where(Position.owner_id == current_owner_id())
         .join(Position.portfolio_ref)
-        .where(Portfolio.simulated.is_(False))
+        .where(Position.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
     )
     totals: dict[int, Decimal] = {}
     for ticker_id, quantity, side in db.session.execute(statement):
@@ -493,9 +599,9 @@ def open_real_cost_basis_by_ticker() -> dict[int, Decimal]:
     corretora que o pagou. Tickers sem posição REAL aberta simplesmente
     não aparecem no mapeamento resultante."""
     statement = (
-        select(Position.ticker_id, Position.quantity, Position.average_cost)
+        select(Position.ticker_id, Position.quantity, Position.average_cost).where(Position.owner_id == current_owner_id())
         .join(Position.portfolio_ref)
-        .where(Portfolio.simulated.is_(False))
+        .where(Position.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
     )
     totals: dict[int, Decimal] = {}
     for ticker_id, quantity, average_cost in db.session.execute(statement):
@@ -564,7 +670,7 @@ def position_movement_events(
         .join(PositionMovement.position)
         .join(Position.broker_ref)
         .join(Position.portfolio_ref)
-        .where(Portfolio.simulated.is_(False))
+        .where(Position.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
         .order_by(PositionMovement.occurred_on, PositionMovement.id)
     )
     if portfolio_id is not None:
@@ -593,7 +699,7 @@ def position_movement_events(
             OptionPositionMovement,
             OptionPositionMovement.option_position_id == OptionPosition.id,
         )
-        .where(Portfolio.simulated.is_(False))
+        .where(OptionPosition.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
         .order_by(option_event_date, OptionPositionMovement.id)
     )
     if portfolio_id is not None:
@@ -648,7 +754,10 @@ def position_movement_events(
         )
         .join(Broker, Broker.id == PositionLedgerArchive.broker_id)
         .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
-        .where(Portfolio.simulated.is_(False))
+        .where(
+            PositionLedgerArchive.owner_id == current_owner_id(),
+            Portfolio.simulated.is_(False),
+        )
         .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
     )
     if portfolio_id is not None:
@@ -704,7 +813,7 @@ def dividend_events(ticker_ids: Iterable[int]) -> list[DividendEvent]:
         return []
     statement = (
         select(Dividend.payment_date, Dividend.ticker_id, Dividend.amount, Dividend.kind)
-        .where(Dividend.ticker_id.in_(ids))
+        .where(Dividend.owner_id == current_owner_id(), Dividend.ticker_id.in_(ids))
         .order_by(Dividend.payment_date)
     )
     return [
@@ -731,9 +840,9 @@ def agent_check_interval_seconds() -> int:
 
 def quote_stale_after_seconds() -> int:
     floor = poll_interval_seconds() * 2 + 5
-    settings = db.session.get(AppSetting, 1)
-    if settings is not None and settings.stale_alert_seconds is not None:
-        return max(settings.stale_alert_seconds, floor)
+    preference = user_preferences()
+    if preference.stale_alert_seconds is not None:
+        return max(preference.stale_alert_seconds, floor)
     configured = int(current_app.config["RTD_STALE_AFTER_SECONDS"])
     return max(configured, floor)
 

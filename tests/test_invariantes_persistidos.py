@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import DataError, IntegrityError
 
-from app.models import Broker, Market, Portfolio, Position, Side, Ticker
+from app.models import Broker, Market, Portfolio, Position, Side, Ticker, User
 
 pytestmark = pytest.mark.banco
 
@@ -35,6 +35,7 @@ pytestmark = pytest.mark.banco
 
 @pytest.fixture
 def cenario(sessao):
+    usuario = User(username="tester", password_hash="hash")
     corretora = Broker(name="Corretora de teste", acronym="CTST")
     papel = Ticker(
         symbol="TSTE3",
@@ -43,18 +44,19 @@ def cenario(sessao):
         rtd_market_code="B",
         currency="BRL",
     )
-    carteira = Portfolio(name="Carteira de teste", currency="BRL")
-    sessao.add_all([corretora, papel, carteira])
+    carteira = Portfolio(name="Carteira de teste", owner_ref=usuario, currency="BRL")
+    sessao.add_all([usuario, corretora, papel, carteira])
     sessao.flush()
-    return corretora, papel, carteira
+    return usuario, corretora, papel, carteira
 
 
 def _posicao(cenario, **campos):
-    corretora, papel, carteira = cenario
+    usuario, corretora, papel, carteira = cenario
     padrao = {
         "broker_id": corretora.id,
         "ticker_id": papel.id,
         "portfolio_id": carteira.id,
+        "owner_id": usuario.id,
         "quantity": Decimal("100"),
         "average_cost": Decimal("10.50"),
         "side": Side.BUY,
@@ -139,14 +141,16 @@ def test_banco_recusa_quantidade_infinita(sessao, cenario):
         sessao.flush()
 
 
-def test_banco_recusa_moeda_fora_do_vocabulario(sessao):
-    sessao.add(Portfolio(name="Carteira em moeda inválida", currency="EUR"))
+def test_banco_recusa_moeda_fora_do_vocabulario(sessao, cenario):
+    usuario, *_ = cenario
+    sessao.add(Portfolio(name="Carteira em moeda inválida", owner_id=usuario.id, currency="EUR"))
     with pytest.raises(IntegrityError, match="currency_valid"):
         sessao.flush()
 
 
-def test_banco_recusa_nome_de_carteira_em_branco(sessao):
-    sessao.add(Portfolio(name="   ", currency="BRL"))
+def test_banco_recusa_nome_de_carteira_em_branco(sessao, cenario):
+    usuario, *_ = cenario
+    sessao.add(Portfolio(name="   ", owner_id=usuario.id, currency="BRL"))
     with pytest.raises(IntegrityError, match="name_not_blank"):
         sessao.flush()
 

@@ -24,6 +24,7 @@ def register_blueprints(app: Flask) -> None:
         partials,
         performance,
         positions,
+        preferences,
         privacy,
         quotes,
         risk,
