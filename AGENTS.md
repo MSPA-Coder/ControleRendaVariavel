@@ -192,7 +192,7 @@ direto do `IRtdServer` do ProfitPro (`app/collector/rtd_direct.py`); não há po
 pelo Excel nem escolha de modo. A aplicação web não inicia,
 supervisiona nem encerra processos Windows. No VPS, o botão pausa/retoma a
 coleta pelo campo `collector_paused`; no local, o controle real é Start/Stop
-no Windows. `collector_destination` é legado, mantido no schema e ignorado.
+no Windows.
 `REMOTE_COLLECTOR_ENABLED` identifica o servidor receptor; no destino remoto
 nunca há conexão iniciada pelo servidor para o Windows. O estado exibido vem
 do pulso persistido, alimentado separadamente pelos dois destinos.

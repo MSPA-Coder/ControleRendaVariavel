@@ -18,7 +18,9 @@ pytestmark = pytest.mark.banco
 
 _PRE_HYGIENE_REVISION = "20260912_0016"
 _HYGIENE_REVISION = "20260913_0017"
+_COLLECTOR_CLEANUP_REVISION = "20260913_0018"
 _LEGACY_POSITION_COLUMNS = ("broker", "ticker", "market", "rtd_market_code", "currency")
+_LEGACY_COLLECTOR_COLUMNS = ("collector_mode", "collector_destination")
 _TIMESTAMP_COLUMNS = (
     ("users", "created_at"),
     ("users", "updated_at"),
@@ -67,7 +69,7 @@ def test_empty_bootstrap_does_not_invent_owner(legacy_app, remove_defaults):
         upgrade()
         assert db.session.scalar(text('SELECT count(*) FROM users')) == 0
         assert db.session.scalar(text('SELECT count(*) FROM portfolios')) == 0
-        assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == _HYGIENE_REVISION
+        assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == _COLLECTOR_CLEANUP_REVISION
 
 
 @pytest.mark.parametrize('customization', ["description='preservar configuração'", 'is_active=false'])
@@ -88,7 +90,7 @@ def test_schema_hygiene_migrates_drifted_legacy_schema_without_differences(legac
 
     with legacy_app.app_context():
         upgrade()
-        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _HYGIENE_REVISION
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _COLLECTOR_CLEANUP_REVISION
         remaining_columns = db.session.scalars(
             text(
                 """
@@ -145,6 +147,45 @@ def test_newly_migrated_schema_matches_models(legacy_app):
             context = MigrationContext.configure(connection, opts={"compare_type": True})
             differences = compare_metadata(context, db.metadata)
         assert differences == []
+
+
+def test_collector_legacy_configuration_is_removed_after_agent_upgrade(legacy_app):
+    with legacy_app.app_context():
+        upgrade(revision=_HYGIENE_REVISION)
+        columns_before = set(
+            db.session.scalars(
+                text(
+                    """
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema=current_schema() AND table_name='app_settings'
+                    """
+                )
+            ).all()
+        )
+        assert set(_LEGACY_COLLECTOR_COLUMNS).issubset(columns_before)
+
+        upgrade()
+        columns_after = set(
+            db.session.scalars(
+                text(
+                    """
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema=current_schema() AND table_name='app_settings'
+                    """
+                )
+            ).all()
+        )
+        assert not set(_LEGACY_COLLECTOR_COLUMNS).intersection(columns_after)
+        assert db.session.scalar(text("SELECT to_regtype('collector_mode')")) is None
+        assert db.session.scalar(text("SELECT to_regtype('collector_destination')")) is None
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _COLLECTOR_CLEANUP_REVISION
+
+        legacy_app.config["COLLECTOR_AGENT_TOKEN"] = "a" * 32
+        response = legacy_app.test_client().get(
+            "/api/collector/configuration", headers={"Authorization": "Bearer " + "a" * 32}
+        )
+        assert response.status_code == 200
+        assert "collector_mode" not in response.json
 
 
 def test_database_rejects_financial_links_between_owners(legacy_app):

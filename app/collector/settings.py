@@ -6,7 +6,7 @@ from datetime import datetime, time
 
 from app.core.domain import MARKET_TIMEZONE
 from app.core.themes import DEFAULT_THEME
-from app.models import AppSetting, CollectorDestination, CollectorMode
+from app.models import AppSetting
 
 MIN_POLL_INTERVAL_SECONDS = 1
 MAX_POLL_INTERVAL_SECONDS = 3600
@@ -195,8 +195,6 @@ def default_collector_settings() -> AppSetting:
     return AppSetting(
         id=1,
         theme=DEFAULT_THEME,
-        collector_mode=CollectorMode.DIRECT,  # coluna legada; nada lê este valor
-        collector_destination=CollectorDestination.REMOTE,
         poll_interval_seconds=DEFAULT_POLL_INTERVAL_SECONDS,
         agent_check_interval_seconds=DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
         collector_schedule_weekdays=DEFAULT_COLLECTOR_SCHEDULE_WEEKDAYS,

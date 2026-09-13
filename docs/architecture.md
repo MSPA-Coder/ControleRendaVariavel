@@ -260,9 +260,8 @@ do ProfitPro; não há ponte pelo Excel nem escolha de modo.
 
 Ambas as tarefas usam token interativo e `conhost.exe --headless`: COM depende
 da sessão do usuário, e não da sessão 0. A instalação remota migra a antiga
-tarefa única. A coluna `collector_destination` permanece apenas por
-compatibilidade de schema; não há alternância de destino, nem consulta
-periódica ao banco local feita pela produção.
+tarefa única. Não há alternância de destino, nem consulta periódica ao banco
+local feita pela produção.
 
 A escrita de um ciclo continua centralizada em `persist_readings`, incluindo
 o snapshot diário. O remoto consulta `/api/collector/configuration`, envia
