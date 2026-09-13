@@ -11,9 +11,51 @@ from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.models import Broker, Market, Portfolio, Position, Side, Ticker, User
+from tests.test_financial_ownership_migration import _legacy_rows
 from tests.test_financial_ownership_migration import legacy_app as legacy_app
 
 pytestmark = pytest.mark.banco
+
+_PRE_HYGIENE_REVISION = "20260912_0016"
+_HYGIENE_REVISION = "20260913_0017"
+_LEGACY_POSITION_COLUMNS = ("broker", "ticker", "market", "rtd_market_code", "currency")
+_TIMESTAMP_COLUMNS = (
+    ("users", "created_at"),
+    ("users", "updated_at"),
+    ("portfolios", "created_at"),
+    ("portfolios", "updated_at"),
+    ("positions", "created_at"),
+    ("positions", "updated_at"),
+    ("position_movements", "created_at"),
+    ("option_positions", "created_at"),
+    ("option_positions", "updated_at"),
+    ("option_position_movements", "created_at"),
+    ("transactions", "created_at"),
+    ("dividends", "created_at"),
+)
+
+
+def _create_schema_drift(app, *, populate_legacy_column: bool) -> None:
+    """Reproduz o banco implantado antes da revisão de higienização."""
+    with app.app_context(), db.engine.begin() as connection:
+        connection.execute(text("ALTER TABLE positions ADD COLUMN broker varchar(40)"))
+        connection.execute(text("ALTER TABLE positions ADD COLUMN ticker varchar(24)"))
+        connection.execute(text("ALTER TABLE positions ADD COLUMN market market"))
+        connection.execute(text("ALTER TABLE positions ADD COLUMN rtd_market_code varchar(1)"))
+        connection.execute(text("ALTER TABLE positions ADD COLUMN currency varchar(3)"))
+        connection.execute(text("CREATE INDEX ix_positions_ticker ON positions(ticker)"))
+        for table_name, column_name in _TIMESTAMP_COLUMNS:
+            connection.execute(text(f"ALTER TABLE {table_name} ALTER COLUMN {column_name} DROP NOT NULL"))
+            connection.execute(text(f"UPDATE {table_name} SET {column_name}=NULL"))
+        if populate_legacy_column:
+            connection.execute(text("UPDATE positions SET broker='dado legado' WHERE id=1"))
+
+
+def _upgrade_to_pre_hygiene(app) -> None:
+    _legacy_rows(app)
+    with app.app_context():
+        upgrade(revision=_PRE_HYGIENE_REVISION)
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _PRE_HYGIENE_REVISION
 
 
 @pytest.mark.parametrize('remove_defaults', [False, True])
@@ -25,7 +67,7 @@ def test_empty_bootstrap_does_not_invent_owner(legacy_app, remove_defaults):
         upgrade()
         assert db.session.scalar(text('SELECT count(*) FROM users')) == 0
         assert db.session.scalar(text('SELECT count(*) FROM portfolios')) == 0
-        assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == '20260912_0016'
+        assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == _HYGIENE_REVISION
 
 
 @pytest.mark.parametrize('customization', ["description='preservar configuração'", 'is_active=false'])
@@ -40,11 +82,67 @@ def test_customized_baseline_is_not_discarded_without_mspa(legacy_app, customiza
         assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == '20260904_0015'
 
 
+def test_schema_hygiene_migrates_drifted_legacy_schema_without_differences(legacy_app):
+    _upgrade_to_pre_hygiene(legacy_app)
+    _create_schema_drift(legacy_app, populate_legacy_column=False)
+
+    with legacy_app.app_context():
+        upgrade()
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _HYGIENE_REVISION
+        remaining_columns = db.session.scalars(
+            text(
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema=current_schema() AND table_name='positions'
+                """
+            )
+        ).all()
+        assert not set(_LEGACY_POSITION_COLUMNS).intersection(remaining_columns)
+        assert db.session.scalar(text("SELECT to_regclass('ix_positions_ticker')")) is None
+        null_timestamps = db.session.execute(
+            text(
+                " UNION ALL ".join(
+                    f"SELECT '{table_name}.{column_name}' "
+                    f"WHERE EXISTS (SELECT 1 FROM {table_name} WHERE {column_name} IS NULL)"
+                    for table_name, column_name in _TIMESTAMP_COLUMNS
+                )
+            )
+        ).all()
+        assert null_timestamps == []
+        not_null = set(
+            db.session.execute(
+                text(
+                    """
+                    SELECT table_name, column_name FROM information_schema.columns
+                    WHERE table_schema=current_schema() AND is_nullable='NO'
+                    """
+                )
+            ).all()
+        )
+        assert set(_TIMESTAMP_COLUMNS).issubset(not_null)
+        with db.engine.connect() as connection:
+            context = MigrationContext.configure(connection, opts={'compare_type': True})
+            differences = compare_metadata(context, db.metadata)
+        assert differences == []
+
+
+def test_schema_hygiene_refuses_to_drop_unmapped_legacy_values(legacy_app):
+    _upgrade_to_pre_hygiene(legacy_app)
+    _create_schema_drift(legacy_app, populate_legacy_column=True)
+
+    with legacy_app.app_context(), pytest.raises(SystemExit):
+        upgrade()
+
+    with legacy_app.app_context():
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _PRE_HYGIENE_REVISION
+        assert db.session.scalar(text("SELECT broker FROM positions WHERE id=1")) == "dado legado"
+
+
 def test_newly_migrated_schema_matches_models(legacy_app):
     with legacy_app.app_context():
         upgrade()
         with db.engine.connect() as connection:
-            context = MigrationContext.configure(connection, opts={'compare_type': True})
+            context = MigrationContext.configure(connection, opts={"compare_type": True})
             differences = compare_metadata(context, db.metadata)
         assert differences == []
 

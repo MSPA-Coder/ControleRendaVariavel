@@ -120,6 +120,21 @@ o serviço fechado e restaure banco e código compatíveis a partir do backup
 validado. Voltar somente a imagem antiga reintroduz leitura global indevida e
 não constitui rollback seguro.
 
+### Higienização do schema — revisão 20260913_0017
+
+Esta revisão conclui a normalização anterior removendo cinco colunas obsoletas
+em `positions`, o índice associado, e tornando obrigatórios timestamps já
+exigidos pelos modelos. Antes de aplicá-la, valide backup e restauração pelo
+BackupRestore. A revisão verifica que as colunas obsoletas estão vazias antes
+de removê-las; se detectar qualquer valor, ela interrompe toda a transação sem
+apagar schema ou dados. Nesse caso, mantenha o serviço fechado, investigue a
+origem do valor e prepare uma migração explícita — não remova a pré-condição
+nem altere a revisão publicada.
+
+Os timestamps nulos recebem `CURRENT_TIMESTAMP` na própria transação antes da
+restrição `NOT NULL`. A implantação habitual pelo `~/deploy.sh` aplica a
+revisão; confirme depois `flask --app app:create_app db check` sem operações
+pendentes e o health check público antes de encerrar a janela.
 ### Fluxo operacional usual
 
 Use o script de implantação do VPS:
