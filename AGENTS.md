@@ -13,8 +13,8 @@
 
 ## Escopo e fontes de verdade
 
-Este repositório contém uma aplicação Flask de uso pessoal do mantenedor para
-controlar ações, opções, cotações, risco e performance. PostgreSQL é a fonte
+Este repositório contém uma aplicação Flask com dados financeiros privados por
+usuário para controlar ações, opções, cotações, risco e performance. PostgreSQL é a fonte
 operacional de dados e configurações; Docker Compose é a interface de execução.
 A planilha `Trades.xlsm` é somente referência funcional de leitura.
 
@@ -174,22 +174,28 @@ outra chamada externa. Proteja invariantes concorrentes no banco.
 
 ## Exceção RTD no Windows
 
-Excel/COM não roda no contêiner Linux. Somente o ambiente Python isolado do
+COM/RTD não roda no contêiner Linux. Somente o ambiente Python isolado do
 agente RTD pode executar no host Windows; o restante continua em Docker.
 
-O mecanismo operacional é `scripts/rtd-agent.ps1` → uma tarefa Windows que
-executa `poll-rtd --watch`. Uma tarefa, um processo, um destino por vez: o
-laço (`app/collector/loop.py`) é o mesmo, e a tela de Configurações escolhe se
-as cotações vão ao VPS por HTTPS (`app/collector/remote_agent.py`) ou ao
-PostgreSQL desta máquina (`app/collector/database.py`). No destino remoto o
-servidor nunca abre conexão para o Windows. `REMOTE_COLLECTOR_ENABLED` habilita
-os endpoints e o estado remoto -- e é o que decide se esta instância mostra o
-botão de destino, porque só o banco da máquina do ProfitChart é consultado pelo
-coletor. A aplicacao web nao inicia, supervisiona nem encerra coletor algum:
-o que a tela oferece e pausar e retomar a coleta, gravando
-`app_settings.collector_paused`, que o coletor le no proximo intervalo de
-verificacao. O estado exibido vem do pulso persistido
-(`collector_heartbeat.py`), alimentado pelos dois destinos.
+O agente de produção é instalado por `scripts/rtd-agent.ps1`: uma tarefa
+Windows automática executa `python -m app.collector.remote_agent`, sempre
+entregando ao VPS. Ele não cria Flask nem carrega configuração/segredos do banco
+local. O local é separado e sob demanda: `scripts/rtd-local.ps1 -Action Start`
+executa `poll-rtd --watch`, sempre para PostgreSQL local; `-Action Stop`
+sinaliza um evento Windows e encerra o processo (fechando sua sessão RTD).
+Local parado não tem processo, vigia, polling ou reinício automático. Banco
+local indisponível encerra essa coleta; não afeta o agente do VPS.
+
+Os dois usam `app/collector/loop.py`, com locks e controles de parada separados.
+Configurações, agenda e intervalos vêm do respectivo destino. Os dois leem o RTD
+direto do `IRtdServer` do ProfitPro (`app/collector/rtd_direct.py`); não há ponte
+pelo Excel nem escolha de modo. A aplicação web não inicia,
+supervisiona nem encerra processos Windows. No VPS, o botão pausa/retoma a
+coleta pelo campo `collector_paused`; no local, o controle real é Start/Stop
+no Windows. `collector_destination` é legado, mantido no schema e ignorado.
+`REMOTE_COLLECTOR_ENABLED` identifica o servidor receptor; no destino remoto
+nunca há conexão iniciada pelo servidor para o Windows. O estado exibido vem
+do pulso persistido, alimentado separadamente pelos dois destinos.
 
 Sem o agente, a aplicação continua utilizável e informa cotações indisponíveis
 ou desatualizadas; cadastros não dependem de RTD. Normalize e valide leituras

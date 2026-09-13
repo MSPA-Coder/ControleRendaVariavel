@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import suppress
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
@@ -32,9 +33,14 @@ from app.core.themes import (
     get_theme_options_dict,
     parse_theme,
 )
-from app.models import AppSetting, CollectorDestination, CollectorMode, Ticker
+from app.models import AppSetting, Ticker
 from app.routes import bp
-from app.routes.helpers import ticker_records
+from app.routes.helpers import (
+    parse_positive_id,
+    ticker_is_entitled,
+    ticker_records,
+    user_preferences,
+)
 
 _WEEKDAY_OPTIONS = (
     (0, "Segunda-feira"),
@@ -50,21 +56,10 @@ _WEEKDAY_OPTIONS = (
 def _submitted_settings() -> AppSetting:
     """Re-render an invalid submission without changing persisted settings."""
     submitted = default_collector_settings()
-    # O destino não vem deste formulário -- tem botão próprio. Reexibir o
-    # padrão aqui mostraria "entregando ao VPS" para quem está coletando
-    # localmente, só porque outro campo da tela ficou inválido.
-    persisted = db.session.get(AppSetting, 1)
-    if persisted is not None:
-        submitted.collector_destination = persisted.collector_destination
     raw_theme = request.form.get("theme", DEFAULT_THEME).strip().lower()
     submitted.theme = (
-        raw_theme
-        if raw_theme in {theme_id for theme_id, _, _ in THEME_OPTIONS}
-        else DEFAULT_THEME
+        raw_theme if raw_theme in {theme_id for theme_id, _, _ in THEME_OPTIONS} else DEFAULT_THEME
     )
-    raw_mode = request.form.get("collector_mode", "")
-    if raw_mode in {mode.value for mode in CollectorMode}:
-        submitted.collector_mode = CollectorMode(raw_mode)
     try:
         submitted.poll_interval_seconds = int(request.form.get("poll_interval_seconds", "2"))
     except ValueError:
@@ -75,11 +70,14 @@ def _submitted_settings() -> AppSetting:
         )
     except ValueError:
         submitted.agent_check_interval_seconds = DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
-    submitted.collector_schedule_weekdays = ",".join(
-        value
-        for value in request.form.getlist("collector_schedule_weekdays")
-        if value in {str(day) for day, _ in _WEEKDAY_OPTIONS}
-    ) or DEFAULT_COLLECTOR_SCHEDULE_WEEKDAYS
+    submitted.collector_schedule_weekdays = (
+        ",".join(
+            value
+            for value in request.form.getlist("collector_schedule_weekdays")
+            if value in {str(day) for day, _ in _WEEKDAY_OPTIONS}
+        )
+        or DEFAULT_COLLECTOR_SCHEDULE_WEEKDAYS
+    )
     try:
         submitted.collector_schedule_start_time = datetime.strptime(
             request.form.get("collector_schedule_start_time", ""), "%H:%M"
@@ -116,10 +114,24 @@ def _get_or_create_settings() -> AppSetting:
 
 
 def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseReturnValue:
+    preference = user_preferences()
+    # A página ainda usa o singleton como veículo para a configuração global
+    # do coletor. Os quatro campos pessoais são projetados nele somente para
+    # manter o contrato do template, sem voltar a persistir no singleton.
+    # Nunca atribua valores privados à instância gerenciada do singleton:
+    # qualquer consulta posterior poderia autoflush e transformar a mera
+    # renderização em alteração global. A cópia é somente um DTO do template.
+    settings_view = SimpleNamespace(
+        **{column.key: getattr(settings, column.key) for column in AppSetting.__table__.columns}
+    )
+    settings_view.theme = preference.theme
+    settings_view.benchmark_ticker_id = preference.benchmark_ticker_id
+    settings_view.risk_free_rate_annual = preference.risk_free_rate_annual
+    settings_view.stale_alert_seconds = preference.stale_alert_seconds
     return (
         render_template(
             "settings.html",
-            settings=settings,
+            settings=settings_view,
             min_interval=MIN_POLL_INTERVAL_SECONDS,
             max_interval=MAX_POLL_INTERVAL_SECONDS,
             min_agent_check_interval=MIN_AGENT_CHECK_INTERVAL_SECONDS,
@@ -130,13 +142,12 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
                 for value in settings.collector_schedule_weekdays.split(",")
                 if value.isdigit()
             },
-            tickers=ticker_records(),
+            tickers=[ticker for ticker in ticker_records() if ticker_is_entitled(ticker.id)],
             theme_options=get_theme_options_dict(),
             theme_descriptions=THEME_DESCRIPTIONS,
-            current_theme=settings.theme,
+            current_theme=settings_view.theme,
             collector_enabled=not settings.collector_paused,
             remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
-            collector_destination=settings.collector_destination,
         ),
         status,
     )
@@ -160,11 +171,13 @@ def settings() -> ResponseReturnValue:
             )
             theme = parse_theme(request.form)
             raw_benchmark_id = request.form.get("benchmark_ticker_id", "").strip()
-            benchmark_ticker_id = int(raw_benchmark_id) if raw_benchmark_id else None
+            benchmark_ticker_id = parse_positive_id(raw_benchmark_id, allow_all=True)
             if benchmark_ticker_id is not None and (
                 db.session.get(Ticker, benchmark_ticker_id) is None
             ):
                 raise ValueError("Selecione um ticker cadastrado como referência para o Beta.")
+            if benchmark_ticker_id is not None and not ticker_is_entitled(benchmark_ticker_id):
+                raise ValueError("Selecione uma referência que pertença ao seu histórico de investimentos.")
             raw_stale_alert = request.form.get("stale_alert_seconds", "").strip()
             if raw_stale_alert:
                 try:
@@ -185,8 +198,8 @@ def settings() -> ResponseReturnValue:
             return _render_settings(_submitted_settings(), status=422)
         try:
             current_settings = _get_or_create_settings()
-            current_settings.collector_mode = data.collector_mode
-            current_settings.theme = theme
+            preference = user_preferences()
+            preference.theme = theme
             # O tema fica guardado na sessão para não custar uma consulta por
             # render (ver `_theme_context`); trocá-lo aqui exige descartar o
             # valor guardado, senão a pessoa continuaria vendo o tema antigo.
@@ -198,9 +211,9 @@ def settings() -> ResponseReturnValue:
                 current_settings.collector_schedule_start_time,
                 current_settings.collector_schedule_end_time,
             ) = schedule
-            current_settings.risk_free_rate_annual = pricing_data.risk_free_rate_annual
-            current_settings.benchmark_ticker_id = benchmark_ticker_id
-            current_settings.stale_alert_seconds = stale_alert_seconds
+            preference.risk_free_rate_annual = pricing_data.risk_free_rate_annual
+            preference.benchmark_ticker_id = benchmark_ticker_id
+            preference.stale_alert_seconds = stale_alert_seconds
             db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()
@@ -231,25 +244,5 @@ def request_collector_refresh() -> ResponseReturnValue:
 @bp.post("/settings/collector/destination")
 @requer_admin
 def switch_collector_destination() -> ResponseReturnValue:
-    """Alterna o destino da coleta entre o VPS e o banco desta máquina.
-
-    Recusa fora da instância local. O `REMOTE_COLLECTOR_ENABLED` já separa os
-    dois deploys, e só o banco da máquina do ProfitChart é consultado pelo
-    coletor -- trocar o valor no VPS não teria efeito nenhum e deixaria as
-    duas linhas discordando sobre o que está acontecendo. Esconder o botão no
-    template não basta: a recusa precisa estar aqui, onde o POST chega.
-    """
-    if current_app.config["REMOTE_COLLECTOR_ENABLED"]:
-        abort(403)
-    settings = _get_or_create_settings()
-    settings.collector_destination = (
-        CollectorDestination.LOCAL
-        if settings.collector_destination is CollectorDestination.REMOTE
-        else CollectorDestination.REMOTE
-    )
-    db.session.commit()
-    if settings.collector_destination is CollectorDestination.LOCAL:
-        flash("A coleta passa a gravar no banco deste computador.", "success")
-    else:
-        flash("A coleta volta a ser entregue ao VPS.", "success")
-    return redirect(url_for("portfolio.settings"))
+    """URL antiga: destinos agora são fixos e independentes."""
+    abort(410, description="A troca de destino foi removida. Use o controle local no Windows.")

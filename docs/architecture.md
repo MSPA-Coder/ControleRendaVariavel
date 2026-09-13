@@ -211,12 +211,12 @@ normativos estão em [`docs/planilha-acoes.md`](planilha-acoes.md) e
 
 ### Coleta de cotações
 
-`rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` fala COM
-com o servidor RTD; `collector.py` mantém um provedor aberto e o troca quando o
-modo muda; `collector_loop.py` é o laço único de coleta e
-`profit_detector.py` responde se o ProfitChart está aberto;
-`collector_heartbeat.py` resume a última leitura persistida **sem expor valor de
-cotação**; `collector_settings.py` valida modo, intervalos e agenda.
+`rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` lê o RTD
+direto do `IRtdServer` do ProfitPro (sem Excel) e é o único provedor;
+`providers.py` mantém um provedor aberto entre ciclos; `loop.py` é o laço único
+de coleta e `profit_detector.py` responde se o ProfitChart está aberto;
+`heartbeat.py` resume a última leitura persistida **sem expor valor de
+cotação**; `settings.py` valida intervalos e agenda.
 
 `quote_history_import.py` é a outra fonte de preço: séries diárias do Yahoo,
 usadas por performance e risco. Ele decide qual preço gravar — ajustado só para
@@ -232,68 +232,41 @@ e `cli.py` (`poll-rtd`, `probe-rtd-direct`, `import-position-history`, `users`).
 
 ## O agente RTD no Windows
 
-Excel/COM não roda no contêiner Linux. Essa é a única exceção ao runtime em
+COM/RTD não roda no contêiner Linux. Essa é a única exceção ao runtime em
 Docker, e ela foi desenhada para não ampliar a superfície do servidor:
 
 ```text
-Excel/ProfitChart → agente Windows → HTTPS autenticado → aplicação → PostgreSQL
+ProfitChart (RTD/COM) → agente Windows → HTTPS autenticado → aplicação → PostgreSQL
 ```
 
-### Um coletor, dois destinos
+### Produção contínua e coleta local sob demanda
 
-`scripts/rtd-agent.ps1` registra uma tarefa Windows única que executa
-`flask --app app:create_app poll-rtd --watch` no ambiente Python do projeto.
-O laço vive em `app/collector/loop.py` e não sabe para onde entrega: ele fala
-com dois protocolos, `ConfigurationSource` e `QuoteSink`. As implementações
-são `HttpConfigurationSource`/`HttpQuoteSink` (VPS, em
-`app/collector/remote_agent.py`) e `DatabaseConfigurationSource`/
-`DatabaseQuoteSink` (banco local, em `app/collector/database.py`).
+Dois processos usam o mesmo laço de `app/collector/loop.py`, cada um com
+origem, destino, lock e evento de parada próprios:
 
-A tarefa roda na sessão interativa do mantenedor e sem janela de console.
-As duas são exigências, não preferência estética: o RTD chega por COM do
-Excel aberto na área de trabalho, então marcar “executar estando o usuário
-conectado ou não” colocaria o processo na sessão 0 e ele subiria sem nunca
-ler cotação alguma. E o `-WindowStyle Hidden` do PowerShell não esconde nada
-onde o Windows Terminal é o terminal padrão, que o ignora; por isso a ação da
-tarefa é `conhost.exe --headless`, que hospeda o processo sem console visível
-sem depender dessa preferência do usuário.
+- `app.collector.remote_agent` consulta a configuração por HTTPS e entrega
+  ao VPS. A tarefa remota inicia no logon/09:40 e pode reiniciar em falha.
+  Não cria Flask, não lê `.env` nem depende de PostgreSQL local.
+- `poll-rtd` consulta e grava exclusivamente no banco local. A tarefa local
+  só começa com `scripts/rtd-local.ps1 -Action Start`, sem gatilhos nem
+  reinício automático. Banco/configuração local indisponível encerra o processo.
 
-`app_settings.collector_destination` escolhe o par. O processo relê a coluna a
-cada intervalo de verificação -- e não a cada volta do laço, que pode girar a
-cada segundo -- e, quando ela muda, o laço termina e reinicia contra a outra
-ponta, fechando o provedor COM na saída. O padrão é `remote`, de modo que uma
-instalação existente continua entregando ao VPS sem que ninguém escolha nada.
+`-Action Stop` sinaliza um evento Windows: a espera pelo próximo prazo
+acorda sem polling, o laço fecha seu provedor e o processo termina. Um ciclo
+em andamento conclui antes de sair. O local parado não mantém um serviço ou
+thread verificando se deve voltar. Início/parada pertencem ao Windows,
+nunca aos workers Flask. Os dois processos leem o RTD direto do `IRtdServer`
+do ProfitPro; não há ponte pelo Excel nem escolha de modo.
 
-Só a instância que roda na máquina do ProfitChart mostra o controle na tela, e
-a rota recusa com 403 onde `REMOTE_COLLECTOR_ENABLED` está ligado: é o banco
-local que o coletor consulta, e trocar o valor no VPS não teria efeito além de
-deixar as duas linhas discordando.
+Ambas as tarefas usam token interativo e `conhost.exe --headless`: COM depende
+da sessão do usuário, e não da sessão 0. A instalação remota migra a antiga
+tarefa única. A coluna `collector_destination` permanece apenas por
+compatibilidade de schema; não há alternância de destino, nem consulta
+periódica ao banco local feita pela produção.
 
-A exclusão entre destinos é estrutural: uma tarefa, um processo, um destino por
-vez. Antes eram duas tarefas com scripts checando a existência um do outro.
-Além disso, `poll-rtd` adquire o lock interprocesso do projeto antes de abrir o
-provedor, cobrindo o toggle administrativo e workers diferentes; o lock é
-liberado pelo sistema operacional quando o processo termina.
-
-Esse ciclo não é o login/logout da aplicação web. O coletor é global à máquina
-e não deve ser iniciado por cada requisição ou worker do Flask. O Docker
-continua sem executar COM: o processo roda fora do contêiner e, no destino
-local, usa a porta publicada do PostgreSQL.
-
-A escrita de um ciclo é uma só (`persist_readings`), usada tanto pelo destino
-local quanto pelo endpoint que recebe as cotações do agente. Um terceiro
-destino não pode virar uma terceira cópia dos upserts e do snapshot diário de
-`quote_history`.
-
-No destino remoto, a origem consulta `/api/collector/configuration` para saber
-quais instrumentos estão abertos e o destino devolve as leituras em
-`/api/collector/quotes`; falhas vão para `/api/collector/failure`.
-`app/collector/remote_agent.py` **não cria a aplicação Flask e não acessa o
-PostgreSQL** -- e `python -m app.remote_collector_agent` continua sendo a
-entrada para a máquina que só entrega ao VPS e prefere não ter credencial de
-banco alguma no processo. A tarefa unificada, por atender aos dois destinos,
-carrega a credencial do PostgreSQL local: é ela que guarda a escolha. Essa
-credencial nunca alcança o banco do VPS.
+A escrita de um ciclo continua centralizada em `persist_readings`, incluindo
+o snapshot diário. O remoto consulta `/api/collector/configuration`, envia
+`/api/collector/quotes` e reporta falhas em `/api/collector/failure`.
 
 Há dois relógios independentes, configurados em **Configurações**. O
 **intervalo entre leituras** determina quando o agente pode consultar o
@@ -315,21 +288,17 @@ ao ambiente local. Os três endpoints exigem Bearer token próprio, comparado co
 `hmac.compare_digest`, e são os únicos isentos de CSRF — não há navegador nem
 sessão do outro lado. O corpo é limitado a 512 KB.
 
-`REMOTE_COLLECTOR_ENABLED` diz o que esta instância é: com ele ligado, a
-aplicação é o VPS que recebe cotações do agente; desligado, é a instância que
-roda na máquina do ProfitChart e mostra o controle de destino.
+`REMOTE_COLLECTOR_ENABLED` identifica a instância receptora no VPS. Sua tela
+pode pausar/retomar via `collector_paused`, mantendo o agente disponível.
+A instância local orienta Start/Stop no Windows e recusa a antiga escrita de
+pausa. Não existe controle web capaz de iniciar um processo local parado.
+O POST legado de troca de destino responde 410.
 
-**A aplicação web não é dona de coletor nenhum.** Ela não inicia, não
-supervisiona e não encerra processo de coleta -- isso é da tarefa do Windows.
-Já foi diferente: `RtdServiceManager` iniciava e matava um `poll-rtd` a partir
-da tela, e com Gunicorn criando uma fábrica por worker aquilo significava um
-candidato a coletor por worker disputando a mesma sessão COM.
-
-O que a tela oferece é **pausar e retomar**: `app_settings.collector_paused` é
-lido pela origem ativa -- a linha local quando a coleta grava aqui, o payload
-do VPS quando ela entrega lá -- de modo que o botão de cada tela pausa a coleta
-que aquela instância está dirigindo. Pausa não é parada: o processo continua
-vivo e voltando a perguntar, e retoma sozinho quando a tela religa.
+O arquivo de estado remoto só é regravado se agenda ou intervalo de
+verificação mudarem. Em indisponibilidade remota o agente espera o próximo
+prazo de configuração; um prazo de cotação vencido não provoca laço ocupado.
+O provedor RTD reconecta os tópicos a cada ciclo e espera o primeiro snapshot
+completo antes de publicar: um campo ainda ausente não vira cotação.
 
 **Sem o coletor, a aplicação continua utilizável.** Cotações aparecem
 indisponíveis ou desatualizadas, e nenhum cadastro depende delas. O estado
@@ -342,13 +311,16 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | Tabela | Papel |
 |---|---|
 | `users` | contas, papel e estado de acesso |
-| `app_settings` | preferências: coletor, agenda, tema, taxa livre de risco |
-| `brokers`, `tickers`, `portfolios`, `portfolio_tickers` | cadastros; os três primeiros podem ser arquivados sem romper fatos históricos |
+| `app_settings` | infraestrutura e agenda globais do coletor; campos pessoais antigos preservados para adoção do legado |
+| `user_preferences` | tema, taxa de cálculo, comparação e alerta privados por usuário |
+| `user_ticker_entitlements` | primeira posse confirmada; preserva acesso à cotação após encerramento ou exclusão |
+| `brokers`, `tickers` | referências globais, mantidas por administradores |
+| `portfolios`, `portfolio_tickers` | carteiras privadas e seus catálogos; associação de catálogo não concede acesso a preços |
 | `positions`, `position_movements` | posição de ações e seu extrato |
 | `option_expirations`, `option_contracts`, `option_positions`, `option_position_movements` | o mesmo par, para opções |
 | `transactions` | o que a aba Transações mostra |
 | `dividends` | proventos, por tipo de renda |
-| `quotes`, `option_quotes` | última leitura do coletor |
+| `quotes`, `option_quotes` | última leitura global por ticker ou contrato; leituras atrasadas não substituem as mais recentes |
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
 
@@ -388,23 +360,31 @@ aqui.
   subir com `TRUST_PROXY_HEADERS=true` e `FORCE_HTTPS=false` juntos (CRV-03):
   confiar no proxy sem exigir HTTPS deixaria o cookie de sessão sem `Secure`.
 
-**Decisão registrada (CRV-04, 02/09/2026): `operador` não particiona dados, e
-isso é intencional.** Das 79 rotas, 47 gravam dado financeiro — posição,
-transação, provento, cotação, contrato de opção, corretora, carteira —, e
-nenhuma delas exige papel: uma conta `operador` cria, edita e encerra
-qualquer item de qualquer carteira, exatamente como `admin`. A diferença
-entre os dois papéis é só a linha 300-305 acima: administração de contas,
-Configurações e o controle do coletor. Optou-se por **manter o comportamento e
-só documentá-lo aqui** (não restringir as escritas por papel) — a aplicação é
-declaradamente de uso pessoal (ver `README.md`), o schema não tem coluna de
-dono, e a trilha de auditoria (`app/accounts/auditoria.py`) já registra toda escrita
-financeira por evento, então a ação fica rastreada mesmo sem ser impedida.
-**Gatilho para reabrir esta decisão: a primeira vez que uma SEGUNDA pessoa
-receber uma conta `operador`** — nesse momento, "não administra o sistema"
-deixa de ser sinônimo aceitável de "acesso irrestrito aos dados financeiros de
-todo mundo", e a alternativa (restringir exclusões destrutivas a `admin`, ou
-renomear o papel para não sugerir isolamento que não existe) deve ser
-reavaliada.
+**Isolamento financeiro (12/09/2026):** carteira, posições, transações,
+proventos, movimentos e arquivos pertencem ao usuário autenticado. Toda rota
+financeira consulta e altera somente esse escopo; `admin` não ganha leitura de
+outro usuário por seu papel. Referências de mercado e sua manutenção são
+globais: administração e coletor podem escrevê-las, enquanto a leitura de
+cotações exige o vínculo histórico usuário–ticker. Preferências de apresentação
+e análise também pertencem ao usuário; agenda e infraestrutura do coletor são
+globais.
+
+Para ações, a cotação global preserva separadamente OCP (posição comprada) e
+OVD (posição vendida), com o horário observado de cada lado. A carteira usa o
+lado da posição e uma leitura atrasada não substitui um valor mais recente. O
+último negócio e seu histórico continuam globais por ticker.
+
+Cada usuário altera tema, taxa de cálculo, referência para Beta e prazo de alerta
+em **Preferências** (`/preferences`). A configuração administrativa do coletor
+continua em `/settings`. FKs compostas impedem relações financeiras entre donos
+distintos, inclusive em escritas fora das rotas; nomes de carteira são únicos
+por usuário. IDs explícitos fora do escopo recebem 404, e IDs de filtro/formulário
+malformados recebem 400 com aviso também em HTMX. IDs fora da faixa no caminho
+da rota não chegam ao banco.
+
+Os relatórios em `docs/security-audit/` registram decisões históricas. Suas
+declarações de acervo comum ou exceções de “uso pessoal” foram substituídas por
+este contrato de isolamento e não autorizam exceções de segurança.
 
 O botão de olho é **Modo discreto**: mascara a leitura casual da tela e cobre
 os gráficos. Ele não é uma fronteira de segurança; os dados continuam na

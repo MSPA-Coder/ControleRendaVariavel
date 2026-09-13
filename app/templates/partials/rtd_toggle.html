@@ -1,1 +1,7 @@
-{% import "partials/collector.html" as collector %}{{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
+{% import "partials/collector.html" as collector %}
+{% if remote_collector_enabled %}
+  {{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
+{% else %}
+  <span>Controle a coleta local pelos atalhos no Windows.</span>
+  {{ collector.heartbeat(collector_heartbeat, polling=false) }}
+{% endif %}

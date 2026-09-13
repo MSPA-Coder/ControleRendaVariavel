@@ -90,10 +90,12 @@ known-first-party = ["app", "migrations", "scripts", "tests"]
 # Alembic gera expressões de schema longas; quebrá-las manualmente só reduz a
 # legibilidade da baseline sem mudar o banco criado.
 "migrations/versions/*.py" = ["E501", "I001"]
-# A ponte RTD implementa uma interface COM do Excel: os nomes dos métodos e das
-# propriedades são ditados pela API do lado do Windows, não escolhidos aqui.
-# Renomeá-los para snake_case quebraria a integração.
+# A ponte RTD implementa a interface COM `IRtdServer` do ProfitPro: os nomes dos
+# métodos e das propriedades são ditados pela API do lado do Windows, não
+# escolhidos aqui. Renomeá-los para snake_case quebraria a integração; o fake
+# da suíte precisa dos mesmos nomes para casar com o contrato.
 "app/collector/rtd_direct.py" = ["N802", "N803", "N806"]
+"tests/test_rtd_direct.py" = ["N802"]
 # `Bucket = tuple[int, str]` é um alias de tipo; PascalCase é a convenção para
 # aliases e o N806 não distingue alias de variável comum.
 "app/options/portfolio.py" = ["N806"]

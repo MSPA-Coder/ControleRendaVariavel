@@ -19,7 +19,17 @@ from app.collector.database import (
 )
 from app.collector.remote_agent import _quotes_payload
 from app.collector.rtd import QuoteValue
-from app.models import Market, OptionContract, OptionPosition, OptionType, Position, Side, Ticker
+from app.models import (
+    Market,
+    OptionContract,
+    OptionPosition,
+    OptionType,
+    Position,
+    Quote,
+    Side,
+    Ticker,
+)
+from app.positions.portfolio import effective_position_quote
 from app.routes.collector_agent import _option_reading, _stock_reading
 
 OBSERVADO_EM = datetime(2026, 8, 17, 15, 30, tzinfo=UTC)
@@ -140,3 +150,38 @@ def test_leitura_recusa_cotacao_que_nao_e_objeto() -> None:
         _stock_reading("nao e um objeto")
     with pytest.raises(ValueError, match="cotação inválida"):
         _option_reading(["tambem nao"])
+
+
+def test_protocolo_recusa_id_fora_da_faixa_antes_do_banco() -> None:
+    import pytest
+
+    for invalid in (True, "²", "1" * 5000, 9_223_372_036_854_775_808):
+        with pytest.raises(ValueError, match="identificador de posição inválido"):
+            _stock_reading({
+                "position_id": invalid,
+                "last_price": "1",
+                "previous_close": "1",
+                "instrument_status": "A",
+                "observed_at": OBSERVADO_EM.isoformat(),
+                "history_price": "1",
+            })
+
+
+def test_cada_lado_da_posicao_usa_seu_preco_global_do_livro() -> None:
+    compra = Position(side=Side.BUY)
+    venda = Position(side=Side.SELL)
+    quote = Quote(
+        ticker_id=1,
+        last_price=Decimal("10.00"),
+        previous_close=Decimal("9.80"),
+        buy_price=Decimal("9.95"),
+        sell_price=Decimal("10.05"),
+        observed_at=OBSERVADO_EM,
+        buy_observed_at=OBSERVADO_EM,
+        sell_observed_at=OBSERVADO_EM,
+    )
+    compra.quote = quote
+    venda.quote = quote
+
+    assert effective_position_quote(compra) == (Decimal("9.95"), OBSERVADO_EM)
+    assert effective_position_quote(venda) == (Decimal("10.05"), OBSERVADO_EM)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import render_template, request
+from flask import abort, render_template, request
 from sqlalchemy import select
 
 from app import db
@@ -25,6 +25,7 @@ from app.routes.helpers import (
     brokers,
     dividend_events,
     is_htmx_request,
+    parse_positive_id,
     position_movement_events,
     price_series_by_ticker,
     real_portfolio_records,
@@ -121,13 +122,12 @@ def monthly_performance() -> str:
     selected_benchmark: Ticker | None = None
     raw_benchmark_id = request.args.get("benchmark_ticker_id")
     if raw_benchmark_id:
-        try:
-            benchmark_id = int(raw_benchmark_id)
-            selected_benchmark = next(
-                (ticker for ticker in candidates if ticker.id == benchmark_id), None
-            )
-        except ValueError:
-            selected_benchmark = None
+        benchmark_id = parse_positive_id(raw_benchmark_id)
+        selected_benchmark = next(
+            (ticker for ticker in candidates if ticker.id == benchmark_id), None
+        )
+        if selected_benchmark is None:
+            abort(404)
 
     # No modo de comparação, o gráfico (só o gráfico — a tabela "Dados"
     # abaixo continua mostrando o histórico completo) fica restrito a

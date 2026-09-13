@@ -1,9 +1,9 @@
 # Controle de Renda Variável
 
-Aplicação web de uso pessoal do mantenedor para acompanhar ações e opções:
+Aplicação web para acompanhar ações e opções por usuário autenticado:
 posições, transações, proventos, cotações, histórico de preços, risco,
 performance mensal e exposição. Não é plataforma de negociação, custódia ou
-serviço multiusuário. Dados financeiros e configurações persistem no
+corretagem. Dados financeiros persistem no
 PostgreSQL; a planilha `Trades.xlsm` é apenas referência funcional e não faz
 parte do runtime.
 
@@ -21,11 +21,18 @@ As páginas cobrem carteira de ações e opções, transações, proventos, cota
 risco, performance, exposições, cadastros e configurações. Os contratos
 detalhados de cálculos e comportamento ficam na documentação funcional.
 
-Toda posição pertence a uma carteira. Carteiras simuladas servem apenas para
+Toda posição e carteira pertence ao usuário autenticado. Corretoras, tickers,
+contratos, vencimentos e cotações são referências globais; cotações só ficam
+visíveis para tickers que o usuário já possuiu. Carteiras simuladas servem apenas para
 insight: não geram movimentos ou transações, não consolidam novas entradas e
 não podem ser encerradas. Totais permanecem separados por moeda e por natureza
 real ou simulada. Tickers de referência alimentam comparadores e cálculos de
 risco, mas não são negociáveis.
+
+Tema, taxa de cálculo, comparação e alerta são alterados em **Preferências**
+pela própria conta. Administração do coletor e manutenção das referências
+globais exigem o papel administrativo. Antes de atualizar uma instalação
+existente para o isolamento por usuário, siga o [roteiro de migração](docs/deployment-vps.md#isolamento-financeiro--revisão-20260912_0016).
 
 ## Execução com Docker
 
@@ -99,20 +106,24 @@ docker compose exec web flask --app app:create_app import-position-history
 
 ## Cotações RTD no Windows
 
-Excel/COM não existe no contêiner Linux. Essa é a única exceção ao runtime em
-Docker: uma tarefa Windows lê o RTD do Excel/ProfitChart e entrega as cotações
-ao destino escolhido na tela de Configurações. São dois destinos possíveis, e
-eles se excluem -- um coletor, um destino por vez:
+Dois processos independentes leem o ProfitChart na sessão interativa do Windows:
 
-```text
-Excel/ProfitChart -> coletor Windows -> HTTPS autenticado -> aplicação no VPS -> PostgreSQL
-Excel/ProfitChart -> coletor Windows -> PostgreSQL local (127.0.0.1:5302)
-```
+- **Produção:** agente automático, sempre para o VPS por HTTPS. Não carrega
+  configuração ou credenciais do PostgreSQL local e continua quando o Docker
+  de desenvolvimento está parado.
+- **Local:** iniciado somente quando necessário, sempre para o PostgreSQL
+  desta máquina. Ao parar, o processo termina (com sua sessão RTD); nenhum
+  vigia fica consultando banco, arquivo ou botão para saber quando reiniciar.
 
-No destino remoto, o servidor nunca inicia conexão com o Windows nem recebe
-acesso ao ambiente local.
+Os dois leem o RTD direto do servidor COM do ProfitPro (`IRtdServer`), sem
+Excel; exigem o ProfitChart aberto na sessão interativa do Windows.
 
-Para preparar e instalar o coletor:
+Os intervalos e agendas são próprios de cada destino. Como referência, use
+300 segundos no VPS e 120 no local. Consultar configuração não lê RTD; entre
+prazos os processos dormem. O arquivo de estado remoto só é gravado quando a
+agenda ou o intervalo de verificação muda.
+
+Prepare o ambiente isolado do agente, se ainda não existir:
 
 ```powershell
 py -3.14 -m venv .venv
@@ -121,52 +132,48 @@ py -3.14 -m venv .venv
 .\scripts\rtd-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
 ```
 
-`-ApiUrl` só é necessária para o destino remoto e pode ser omitida em uma
-instalação que vá coletar apenas no banco local. O mesmo conteúdo de
-`.secrets/collector_agent_token` deve existir no Windows e no servidor,
-transferido por canal seguro. A tarefa guarda apenas a URL e o caminho do
-segredo em `.docker-local/remote-collector.env`; os demais segredos são lidos
-de `.secrets/` e não entram nos argumentos da tarefa nem no log. A saída fica
-em `%LOCALAPPDATA%\ControleRendaVariavel\collector.log`. Consulte ou remova a
-tarefa com `-Action Status` ou `-Action Uninstall`.
+A instalação substitui a antiga tarefa única pela tarefa **ControleRendaVariavel
+Coletor Remoto**, com gatilhos no logon e às 09:40 e reinício em caso de falha.
+Ela guarda somente URL, caminho do token e opções RTD em
+`.docker-local/remote-collector.env`. O mesmo token deve existir nos dois
+lados, provisionado por canal seguro. Nenhum segredo vai aos argumentos ou logs.
+O VPS nunca inicia conexão para o Windows.
 
-A tarefa começa no **logon do Windows**, com um segundo gatilho diário antes do
-pregão, e termina quando a sessão do Windows termina. Isso não acompanha o
-login ou o logout da sessão web: o coletor é um recurso da máquina, não de uma
-aba. Instalar a tarefa unificada remove as tarefas separadas das versões
-anteriores.
+Para consultar localmente, com Docker e ProfitChart disponíveis:
 
-### Escolher o destino
+```powershell
+.\scripts\rtd-local.ps1 -Action Start
+.\scripts\rtd-local.ps1 -Action Status
+.\scripts\rtd-local.ps1 -Action Stop
+```
 
-O botão fica na tela **Configurações**, e só existe na instância que roda na
-máquina do ProfitChart -- é o banco dela que o coletor consulta. No VPS o
-controle não aparece e a rota recusa: trocar o valor lá não teria efeito e
-deixaria as duas instalações discordando sobre para onde a coleta está indo.
+Para criar atalhos de iniciar/parar em `.docker-local`, execute
+`./scripts/rtd-local.ps1 -Action Shortcuts`.
 
-Uma instalação nova começa entregando ao VPS. Ao trocar para o destino local,
-as cotações passam a ser gravadas no PostgreSQL desta máquina e param de ser
-enviadas ao VPS; ao voltar, o inverso. A troca é percebida no próximo
-intervalo de verificação, sem reinstalar nada.
+A tarefa **ControleRendaVariavel Coletor Local** não tem gatilho automático nem
+reinício automático. Repetir Start não abre outro coletor. Stop acorda o
+processo por um evento do Windows e espera concluir o ciclo em andamento antes
+de encerrar. Se o banco local ficar indisponível, o processo local encerra com
+erro e deve ser iniciado novamente após recuperar o ambiente. O remoto continua
+independente.
 
-A exclusão entre os destinos é estrutural: uma tarefa, um processo, um destino
-por vez. Além disso `poll-rtd` mantém um lock interprocesso, de modo que o
-toggle administrativo ou outro worker não consegue manter um segundo coletor
-ativo; o lock é do sistema operacional e é liberado mesmo se o processo morrer.
+Os logs ficam em `%LOCALAPPDATA%\ControleRendaVariavel`: `remote-collector.log`
+para os ciclos remotos, `remote-runner.log` para falhas de inicialização e
+`local-runner.log` para o local. Consulte/remova a tarefa remota com
+`rtd-agent.ps1 -Action Status` ou `-Action Uninstall`; isso não para o local.
 
-### Ritmos da coleta
+A tela de Configurações de cada instância controla sua agenda e intervalos.
+A pausa na tela do VPS preserva o agente remoto para retomada.
+A tela local orienta iniciar/parar no Windows; ela não oferece um checkbox
+que deixe um processo aguardando habilitação. O pedido **Atualizar cotações
+agora** só é atendido se o respectivo coletor estiver iniciado e dentro da agenda.
+A antiga troca de destino foi retirada. A coluna legada permanece no banco
+para compatibilidade e não decide mais o destino de nenhum processo.
 
-A tela **Configurações** separa os dois ritmos: o **intervalo entre leituras**
-define quando o coletor consulta o RTD e entrega cotações; o **intervalo de
-verificação do agente** define somente quando ele busca pedidos e alterações de
-configuração, sem consultar o ProfitChart. A agenda restringe as leituras RTD.
-O botão de atualização manual é percebido na próxima verificação e antecipa uma
-leitura -- vale para os dois destinos. Em **Ações**, a tela se atualiza perto da
-próxima leitura esperada, em vez de consultar o servidor continuamente. Sem o
-coletor, a aplicação permanece utilizável; as cotações aparecem indisponíveis ou
-desatualizadas e cadastros continuam funcionando.
-
-`poll-rtd` e `probe-rtd-direct` dependem de Excel/COM e rodam no ambiente Python
-isolado do Windows. Não os execute no contêiner `web`.
+`poll-rtd` (uma leitura ou `--watch`) sempre grava localmente.
+`python -m app.collector.remote_agent` sempre entrega ao VPS.
+Esses comandos e `probe-rtd-direct` exigem o ambiente RTD do Windows;
+COM/RTD não roda no contêiner web.
 
 ## Segurança e produção
 

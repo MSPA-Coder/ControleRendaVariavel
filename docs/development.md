@@ -70,17 +70,12 @@ Do domínio, ela cobre o que decide número na tela: quantidade histórica e flu
 do extrato de posição encerrada (`position_ledger`), o coletor único e o agente
 remoto.
 
-**A suíte não toca o banco, e isso é desenho, não limitação.** Tudo o que ela
-protege é decidido antes de qualquer consulta, e mantê-la sem banco é o que a
-faz caber em segundos, sem infraestrutura de teste. Duas consequências
-práticas, que valem mais do que qualquer contagem de casos:
-
-- rodar `quality` **não** prova que o schema sobe. O bootstrap em PostgreSQL
-  vazio continua sendo verificação manual obrigatória para toda mudança de
-  schema;
-- regra financeira nova deve nascer testável sem requisição e sem ORM. Uma
-  regra que só possa ser exercitada com banco atrás fica fora da rede — o que é
-  argumento para movê-la ao domínio puro, não para relaxar a suíte.
+**A suíte usa PostgreSQL efêmero no perfil `quality`.** Ela cobre as regras
+puramente funcionais e os contratos que precisam do ORM, inclusive ownership,
+restrições e a cadeia Alembic. Para mudança de schema, acrescente um ensaio que
+crie dados legados sintéticos em schema descartável e confirme tanto a migração
+quanto a recusa segura da pré-condição. Nunca aponte esse perfil para o banco
+operacional.
 
 A CI valida o Compose, reconstrói a imagem `quality` sem cache, executa o
 estágio, audita com `pip-audit` as dependências instaladas — pergunta diferente
@@ -147,24 +142,29 @@ destrutiva de dados exige backup validado e autorização explícita.
 
 ## Trabalhar sem o RTD
 
-Excel/COM não roda no contêiner Linux, então o caminho real de coleta não existe
+COM/RTD não roda no contêiner Linux, então o caminho real de coleta não existe
 no ambiente de desenvolvimento. Isso não bloqueia nada: **sem o agente, a
 aplicação continua utilizável**, as cotações aparecem indisponíveis ou
 desatualizadas e nenhum cadastro depende delas.
 
 Para exercitar a coleta, use os provedores determinísticos da suíte em vez de
-COM. `poll-rtd` e `probe-rtd-direct` dependem de Excel e só rodam no ambiente
-Python isolado do Windows — não os execute no contêiner `web`.
+COM. `poll-rtd` e `probe-rtd-direct` falam com o `IRtdServer` do ProfitPro e só
+rodam no ambiente Python isolado do Windows, com o ProfitChart aberto — não os
+execute no contêiner `web`.
 
-A tarefa única é instalada no logon do Windows por
-`scripts/rtd-agent.ps1 -Action Install`. Ela executa `poll-rtd --watch` de
-forma invisível e termina com o logoff do Windows. Esse é um ciclo do sistema
-operacional, não da sessão web; não se deve iniciar ou parar o processo a cada
-login/logout HTTP. O destino -- VPS ou banco local -- vem de
-`app_settings.collector_destination` e é relido a cada intervalo de
-verificação; quando muda, o laço reinicia contra a outra ponta, fechando o
-provedor COM antes. O comando `poll-rtd` também possui exclusão interprocesso,
-cobrindo o toggle administrativo e múltiplos workers.
+A produção é instalada por `scripts/rtd-agent.ps1 -Action Install` e usa
+`python -m app.collector.remote_agent`, sem Flask ou banco local. O local é
+iniciado/parado por `scripts/rtd-local.ps1 -Action Start|Stop`, sempre gravando
+nesta máquina. Não há alternância de destino nem um vigia ocioso. Locks por
+destino permitem coexistência, mas recusam duplicação do mesmo coletor.
+
+Além do quality, valide no Windows: `probe-rtd-direct` e alguns ciclos de
+`poll-rtd`, Start repetido sem duplicar processo, Stop encerrando o processo
+local, ausência de processo local após Stop e entrega remota com banco local
+parado. A indisponibilidade do banco deve encerrar o local com erro e não
+disparar reinício automático. A suíte usa provedores fake e cobre prazos,
+isolamento, parada e a decodificação do RTD direto; o teste COM real continua
+específico do Windows.
 
 O caminho do agente remoto (`REMOTE_COLLECTOR_ENABLED=true`) pode ser exercitado
 sem Windows chamando os endpoints `/api/collector/*` com o Bearer token de

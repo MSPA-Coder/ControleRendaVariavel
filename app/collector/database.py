@@ -12,13 +12,13 @@ transacional, como no resto do projeto.
 
 from __future__ import annotations
 
-import time as time_module
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+import socket
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import case, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
@@ -34,12 +34,12 @@ from app.collector.settings import (
 from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     AppSetting,
-    CollectorDestination,
     OptionContract,
     OptionPosition,
     OptionQuote,
     Position,
     Quote,
+    Side,
 )
 from app.routes.helpers import upsert_quote_history
 
@@ -176,37 +176,46 @@ def persist_readings(
 
     ticker_prices: dict[int, tuple[Decimal, datetime]] = {}
     for value in stock_values:
+        prefix = "buy" if positions[value.position_id].side == Side.BUY else "sell"
+        side_price = f"{prefix}_price"
+        side_time = f"{prefix}_observed_at"
         statement = insert(Quote).values(
-            position_id=value.position_id,
-            last_price=value.last_price,
+            ticker_id=positions[value.position_id].ticker_id,
+            last_price=value.quote_history_price,
             previous_close=value.previous_close,
             instrument_status=value.instrument_status,
             source_status="online",
             error_message=None,
             observed_at=value.observed_at,
+            **{side_price: value.last_price, side_time: value.observed_at},
         )
+        latest_market = statement.excluded.observed_at >= Quote.observed_at
+        latest_side = or_(getattr(Quote, side_time).is_(None),
+                          statement.excluded.observed_at >= getattr(Quote, side_time))
+        updates = {
+            field: case((latest_market, getattr(statement.excluded, field)), else_=getattr(Quote, field))
+            for field in ("last_price", "previous_close", "instrument_status", "source_status", "error_message", "observed_at")
+        }
+        updates.update({
+            field: case((latest_side, getattr(statement.excluded, field)), else_=getattr(Quote, field))
+            for field in (side_price, side_time)
+        })
         db.session.execute(
             statement.on_conflict_do_update(
-                index_elements=[Quote.position_id],
-                set_={
-                    "last_price": statement.excluded.last_price,
-                    "previous_close": statement.excluded.previous_close,
-                    "instrument_status": statement.excluded.instrument_status,
-                    "source_status": "online",
-                    "error_message": None,
-                    "observed_at": statement.excluded.observed_at,
-                },
+                index_elements=[Quote.ticker_id],
+                set_=updates,
+                where=or_(latest_market, latest_side),
             )
         )
-        ticker_prices[positions[value.position_id].ticker_id] = (
-            value.quote_history_price,
-            value.observed_at,
-        )
+        ticker_id = positions[value.position_id].ticker_id
+        previous = ticker_prices.get(ticker_id)
+        if previous is None or value.observed_at >= previous[1]:
+            ticker_prices[ticker_id] = (value.quote_history_price, value.observed_at)
 
     for reading in option_readings:
         option_value = reading.option
         statement = insert(OptionQuote).values(
-            option_position_id=reading.option_position_id,
+            contract_id=option_positions[reading.option_position_id].contract_id,
             last_price=option_value.last_price,
             previous_close=option_value.previous_close,
             underlying_price=reading.underlying_last_price,
@@ -217,7 +226,7 @@ def persist_readings(
         )
         db.session.execute(
             statement.on_conflict_do_update(
-                index_elements=[OptionQuote.option_position_id],
+                index_elements=[OptionQuote.contract_id],
                 set_={
                     "last_price": statement.excluded.last_price,
                     "previous_close": statement.excluded.previous_close,
@@ -227,17 +236,14 @@ def persist_readings(
                     "error_message": None,
                     "observed_at": statement.excluded.observed_at,
                 },
+                where=statement.excluded.observed_at >= OptionQuote.observed_at,
             )
         )
         contract = option_positions[reading.option_position_id].contract
-        ticker_prices[contract.ticker_id] = (
-            option_value.quote_history_price,
-            option_value.observed_at,
-        )
-        ticker_prices[contract.underlying_ticker_id] = (
-            reading.underlying_history_price,
-            option_value.observed_at,
-        )
+        for ticker_id, price in ((contract.ticker_id, option_value.quote_history_price), (contract.underlying_ticker_id, reading.underlying_history_price)):
+            previous = ticker_prices.get(ticker_id)
+            if previous is None or option_value.observed_at >= previous[1]:
+                ticker_prices[ticker_id] = (price, option_value.observed_at)
 
     # Um snapshot por ticker por dia, não a cada poll -- ver a docstring de
     # QuoteHistory para o porquê.
@@ -266,10 +272,54 @@ def record_agent_failure(settings: AppSetting, error: str) -> None:
     settings.collector_agent_error = error[:250]
 
 
+#: Prazo do probe TCP antes de cada leitura de configuração local. Curto de
+#: propósito: um Postgres local no ar responde na primeira tentativa, e o que
+#: este número limita é quanto tempo o coletor demora a desistir quando o
+#: contêiner está parado.
+DATABASE_PROBE_TIMEOUT_SECONDS = 3.0
+
+
+class LocalDatabaseUnavailableError(RuntimeError):
+    """O Postgres local não respondeu ao probe TCP dentro do prazo."""
+
+
+def _database_endpoint() -> tuple[str, int]:
+    url = db.engine.url
+    return (url.host or "127.0.0.1", url.port or 5432)
+
+
+def ensure_local_database_reachable(
+    endpoint: tuple[str, int], *, timeout: float = DATABASE_PROBE_TIMEOUT_SECONDS
+) -> None:
+    """Recusa em segundos uma conexão que o psycopg do Windows penduraria.
+
+    No Windows do usuário, ``psycopg.connect()`` para um Postgres ausente
+    nunca retorna e ``connect_timeout`` na URI não corta a espera -- o prazo
+    é conferido dentro do mesmo laço travado. Sem esta checagem, parar o
+    contêiner local deixaria o coletor preso na primeira consulta, segurando
+    a sessão COM do Excel para sempre em vez de encerrar com erro. Um probe
+    TCP cru com ``timeout`` falha de forma previsível e igual em toda
+    plataforma; quem chama trata a exceção como configuração indisponível.
+    """
+    host, port = endpoint
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return
+    except OSError as exc:
+        raise LocalDatabaseUnavailableError(
+            f"Banco local não respondeu em {host}:{port} em {timeout:g}s ({exc}). "
+            "Suba o ambiente local e inicie o coletor novamente."
+        ) from exc
+
+
 class DatabaseConfigurationSource:
     """Configuração lida da própria tabela, sem passar pela rede."""
 
     def configuration(self) -> CollectorConfiguration:
+        # Antes de qualquer consulta: um probe TCP com prazo curto, para o
+        # coletor local encerrar com erro em vez de travar quando o contêiner
+        # do PostgreSQL está parado (ver ``ensure_local_database_reachable``).
+        ensure_local_database_reachable(_database_endpoint())
         # A sessão do processo é longa; sem expirar, ele leria para sempre o
         # snapshot da primeira consulta e nunca veria uma posição nova.
         db.session.expire_all()
@@ -277,14 +327,13 @@ class DatabaseConfigurationSource:
         positions, option_positions = load_collector_positions()
         instruments, option_keys = instruments_for(positions, option_positions)
         configuration = CollectorConfiguration(
-            collector_mode=settings.collector_mode,
             poll_interval_seconds=settings.poll_interval_seconds,
             agent_check_interval_seconds=settings.agent_check_interval_seconds,
             schedule=schedule_from_settings(settings),
             instruments=tuple(instruments),
             option_keys=option_keys,
             refresh_requested=settings.collector_refresh_requested_at is not None,
-            paused=settings.collector_paused,
+            paused=False,  # O processo local existe somente entre Start e Stop.
         )
         # Nada foi escrito: encerrar a transação de leitura evita segurar um
         # snapshot do PostgreSQL entre um ciclo e o próximo.
@@ -299,9 +348,7 @@ class DatabaseQuoteSink:
     def destination_label(self) -> str:
         return "ao banco local"
 
-    def publish(
-        self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]
-    ) -> None:
+    def publish(self, values: list[QuoteValue], option_keys: dict[int, tuple[int, int]]) -> None:
         persist_readings(*split_readings(values, option_keys))
         record_agent_online(collector_settings_row())
         db.session.commit()
@@ -313,46 +360,6 @@ class DatabaseQuoteSink:
         db.session.query(OptionQuote).update({"source_status": "error", "error_message": message})
         record_agent_failure(collector_settings_row(), message)
         db.session.commit()
-
-
-def read_collector_destination() -> CollectorDestination:
-    """O destino escolhido na tela, lido sempre fresco.
-
-    Só esta máquina consulta a coluna: é a instância local que tem o botão.
-    A leitura descarta a transação anterior de propósito -- um processo de
-    vida longa que não faça isso continuaria vendo o snapshot da primeira
-    consulta e nunca perceberia a troca.
-    """
-    db.session.rollback()
-    destination = db.session.scalar(
-        select(AppSetting.collector_destination).where(AppSetting.id == 1)
-    )
-    db.session.rollback()
-    return destination or CollectorDestination.REMOTE
-
-
-@dataclass(slots=True)
-class DestinationWatcher:
-    """Percebe a troca de destino sem consultar o banco a cada volta do laço.
-
-    O laço gira a cada intervalo de leitura, que pode ser de um segundo; o
-    destino muda quando alguém clica num botão. Reler no ritmo do laço seria
-    uma consulta por segundo para responder a um evento raro, então a
-    releitura acompanha o intervalo de verificação.
-    """
-
-    current: CollectorDestination
-    interval_seconds: float = float(DEFAULT_AGENT_CHECK_INTERVAL_SECONDS)
-    read: Callable[[], CollectorDestination] = read_collector_destination
-    monotonic: Callable[[], float] = time_module.monotonic
-    _next_check_at: float = field(default=0.0, init=False)
-
-    def unchanged(self) -> bool:
-        now = self.monotonic()
-        if now < self._next_check_at:
-            return True
-        self._next_check_at = now + self.interval_seconds
-        return self.read() == self.current
 
 
 def local_loop_arguments() -> dict[str, object]:

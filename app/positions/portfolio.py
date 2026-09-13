@@ -6,7 +6,20 @@ from decimal import Decimal
 
 from app.core.domain import PositionMetrics, calculate_position, operation_result, safe_div
 from app.core.instrument_status import instrument_status_class, instrument_status_letter
-from app.models import Market, Position, PositionMovementKind
+from app.models import Market, Position, PositionMovementKind, Side
+
+
+def effective_position_quote(position: Position) -> tuple[Decimal, datetime]:
+    """Preço e instante do lado detido, sem misturar OCP e OVD compartilhados."""
+    quote = position.quote
+    assert quote is not None
+    prefix = "buy" if position.side == Side.BUY else "sell"
+    price = getattr(quote, f"{prefix}_price", None)
+    observed_at = getattr(quote, f"{prefix}_observed_at", None)
+    return (
+        price if price is not None else quote.last_price,
+        observed_at if observed_at is not None else quote.observed_at,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,13 +179,14 @@ def build_portfolio(
             calculated.append((position, None, "missing"))
             continue
         status = quote.source_status
-        if observed_now - quote.observed_at > timedelta(seconds=stale_after_seconds):
+        effective_price, effective_observed_at = effective_position_quote(position)
+        if observed_now - effective_observed_at > timedelta(seconds=stale_after_seconds):
             status = "stale"
         metrics = calculate_position(
             side=position.side.value,
             quantity=position.quantity,
             average_cost=position.average_cost,
-            raw_price=quote.last_price,
+            raw_price=effective_price,
             previous_close=quote.previous_close,
             quote_multiplier=position.quote_multiplier,
             target_multiplier=position.target_multiplier,

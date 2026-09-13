@@ -20,10 +20,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
+from app.accounts.authorization import requer_admin
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 from app.core.validation import parse_finite_decimal
 from app.models import (
-    AppSetting,
     Broker,
     OptionContract,
     OptionExpiration,
@@ -45,12 +45,18 @@ from app.options.closure import (
 from app.options.portfolio import build_option_portfolio
 from app.routes.helpers import (
     brokers,
+    current_owner_id,
+    grant_ticker_entitlement,
     investable_ticker_records,
     is_htmx_request,
     option_contracts,
     option_expirations,
+    owned_or_404,
+    parse_positive_id,
+    poll_interval_seconds,
     portfolio_records,
     selected_filters,
+    user_preferences,
 )
 
 bp = Blueprint("options", __name__)
@@ -74,6 +80,7 @@ def _positions(
 ) -> list[OptionPosition]:
     statement = (
         select(OptionPosition)
+        .where(OptionPosition.owner_id == current_owner_id())
         .join(OptionPosition.broker_ref)
         .options(
             joinedload(OptionPosition.broker_ref),
@@ -114,8 +121,8 @@ def expanded_position_ids() -> set[int]:
     ids = set()
     for part in raw.split(","):
         part = part.strip()
-        if part.isdigit():
-            ids.add(int(part))
+        if part:
+            ids.add(parse_positive_id(part))
     return ids
 
 
@@ -151,8 +158,8 @@ def _contracts() -> list[OptionContract]:
 def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositionInput:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        broker_id = int(raw["broker_id"])
-        contract_id = int(raw["contract_id"])
+        broker_id = parse_positive_id(raw["broker_id"])
+        contract_id = parse_positive_id(raw["contract_id"])
         quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
         average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
         target_price = (
@@ -162,7 +169,7 @@ def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositio
         )
         side = Side(raw["side"])
         opened_on = date.fromisoformat(raw["opened_on"])
-        portfolio_id = int(raw["portfolio_id"])
+        portfolio_id = parse_positive_id(raw["portfolio_id"])
     except (KeyError, ValueError, ArithmeticError) as exc:
         raise ValueError("Há um valor ausente ou inválido no formulário.") from exc
     if db.session.get(Broker, broker_id) is None:
@@ -175,7 +182,7 @@ def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositio
         and contract.expiration.exercise_date < date.today()
     ):
         raise ValueError("Não é possível abrir uma posição em um contrato já vencido.")
-    if db.session.get(Portfolio, portfolio_id) is None:
+    if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
     if quantity <= 0 or average_cost < 0 or (
         target_price is not None and target_price < 0
@@ -205,9 +212,9 @@ def index() -> str:
     (``selected_filters``), com padrão "Todas" — só Ações abre já filtrada na
     carteira BRL (ver ``routes.positions.portfolio_results_context``).
     """
-    settings = db.session.get(AppSetting, 1)
+    preferences = user_preferences()
     risk_free_rate = (
-        settings.risk_free_rate_annual if settings else DEFAULT_RISK_FREE_RATE_ANNUAL
+        preferences.risk_free_rate_annual if preferences else DEFAULT_RISK_FREE_RATE_ANNUAL
     )
     portfolio_id, broker, selected_portfolio_id = selected_filters()
     portfolio = build_option_portfolio(
@@ -218,7 +225,7 @@ def index() -> str:
     expanded = expanded_position_ids()
     context = {
         "portfolio": portfolio,
-        "poll_interval_seconds": settings.poll_interval_seconds if settings else 2,
+        "poll_interval_seconds": poll_interval_seconds(),
         "expanded_positions": expanded,
         "expand_urls": {
             view.position.id: toggle_expanded_url(expanded, view.position.id)
@@ -260,7 +267,7 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
-    candidate = OptionPosition(**asdict(data))
+    candidate = OptionPosition(owner_id=current_owner_id(), **asdict(data))
     # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
     # indistinguível de um aporte real. Só o usuário sabe qual dos dois é
     # (mesmo mecanismo de ``routes.positions.create_position``, para ações).
@@ -278,6 +285,7 @@ def create_position() -> ResponseReturnValue:
         # Carteira Simulada não funde uma segunda entrada — mesma
         # guarda de ``routes.positions.create_position``, para ações.
         position, merged = create_or_merge_position(candidate)
+        grant_ticker_entitlement(user_id=position.owner_id, ticker_id=position.contract.ticker_id, held_on=position.opened_on)
     except ValueError as exc:
         db.session.rollback()
         flash(str(exc), "error")
@@ -305,7 +313,7 @@ def create_position() -> ResponseReturnValue:
 
 @bp.get("/options/positions/<int:position_id>/edit")
 def edit_position(position_id: int) -> str:
-    position = db.get_or_404(OptionPosition, position_id)
+    position = owned_or_404(OptionPosition, position_id)
     return render_template(
         "option_form.html",
         position=position,
@@ -319,7 +327,8 @@ def edit_position(position_id: int) -> str:
 
 @bp.post("/options/positions/<int:position_id>")
 def update_position(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(OptionPosition, position_id)
+    position = owned_or_404(OptionPosition, position_id)
+    previous_contract_id = position.contract_id
     try:
         data = _parse_position(permitir_contrato_vencido=True)
     except ValueError as exc:
@@ -340,6 +349,13 @@ def update_position(position_id: int) -> ResponseReturnValue:
     was_simulated = position.simulated
     for key, value in asdict(data).items():
         setattr(position, key, value)
+    if position.contract_id != previous_contract_id:
+        contract = db.get_or_404(OptionContract, position.contract_id)
+        grant_ticker_entitlement(
+            user_id=position.owner_id,
+            ticker_id=contract.ticker_id,
+            held_on=position.opened_on,
+        )
     # Relacionamento em cache não percebe sozinho a troca de FK — mesmo
     # motivo de ``routes.positions.update_position``, para ações.
     db.session.expire(position, ["portfolio_ref"])
@@ -356,8 +372,8 @@ def update_position(position_id: int) -> ResponseReturnValue:
 
 @bp.post("/options/positions/<int:position_id>/delete")
 def delete_position(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(OptionPosition, position_id)
-    delete_open_transaction_for_position(position.id)
+    position = owned_or_404(OptionPosition, position_id)
+    delete_open_transaction_for_position(position.id, position.owner_id)
     db.session.delete(position)
     db.session.commit()
     flash("Posição de opção excluída.", "success")
@@ -366,7 +382,7 @@ def delete_position(position_id: int) -> ResponseReturnValue:
 
 @bp.get("/options/positions/<int:position_id>/close")
 def close_position_form(position_id: int) -> ResponseReturnValue:
-    position = db.get_or_404(OptionPosition, position_id)
+    position = owned_or_404(OptionPosition, position_id)
     if position.simulated:
         # Mesma guarda de ``routes.positions.close_position_form``, para
         # ações; a que vale de fato é a do POST (``close_open_position``).
@@ -390,6 +406,7 @@ def close_position(position_id: int) -> ResponseReturnValue:
     """Encerra uma posição de opção por inteiro ou apenas a quantidade
     informada (ver ``routes.positions.close_position``, o mesmo fluxo para
     ações)."""
+    owned_or_404(OptionPosition, position_id)
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
         exit_price = parse_finite_decimal(raw["exit_price"], field_name="um preço de saída")
@@ -406,14 +423,20 @@ def close_position(position_id: int) -> ResponseReturnValue:
         flash("O preço de saída não pode ser negativo.", "error")
         return redirect(url_for("options.close_position_form", position_id=position_id))
     try:
-        transaction = close_open_position(position_id, exit_price, closed_on, quantity)
+        transaction = close_open_position(
+            position_id,
+            exit_price,
+            closed_on,
+            quantity,
+            owner_id=current_owner_id(),
+        )
     except ValueError as exc:
         flash(str(exc), "error")
         return redirect(url_for("options.close_position_form", position_id=position_id))
     if transaction is None:
         flash("A posição já foi encerrada ou não existe.", "error")
         return redirect(url_for("portfolio.transactions"))
-    position = db.session.get(OptionPosition, position_id)
+    position = db.session.scalar(select(OptionPosition).where(OptionPosition.id == position_id, OptionPosition.owner_id == current_owner_id()))
     if position is None:
         flash("Posição de opção encerrada e registrada em Transações.", "success")
     else:
@@ -426,11 +449,13 @@ def close_position(position_id: int) -> ResponseReturnValue:
 
 
 @bp.get("/tables/options/expirations")
+@requer_admin
 def table_expirations() -> ResponseReturnValue:
     return render_template("table_expirations.html", expirations=option_expirations())
 
 
 @bp.get("/tables/options/contracts")
+@requer_admin
 def table_contracts() -> ResponseReturnValue:
     return render_template(
         "table_contracts.html",
@@ -442,6 +467,7 @@ def table_contracts() -> ResponseReturnValue:
 
 
 @bp.post("/tables/options/expirations")
+@requer_admin
 def create_expiration() -> ResponseReturnValue:
     try:
         call_code = request.form["call_code"].strip().upper()
@@ -465,6 +491,7 @@ def create_expiration() -> ResponseReturnValue:
 
 
 @bp.post("/tables/options/expirations/<int:expiration_id>/delete")
+@requer_admin
 def delete_expiration(expiration_id: int) -> ResponseReturnValue:
     db.session.delete(db.get_or_404(OptionExpiration, expiration_id))
     try:
@@ -477,6 +504,7 @@ def delete_expiration(expiration_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/options/expirations/<int:expiration_id>")
+@requer_admin
 def update_expiration(expiration_id: int) -> ResponseReturnValue:
     expiration = db.get_or_404(OptionExpiration, expiration_id)
     try:
@@ -497,11 +525,12 @@ def update_expiration(expiration_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/options/contracts")
+@requer_admin
 def create_contract() -> ResponseReturnValue:
     try:
-        ticker_id = int(request.form["ticker_id"])
-        underlying_ticker_id = int(request.form["underlying_ticker_id"])
-        expiration_id = int(request.form["expiration_id"])
+        ticker_id = parse_positive_id(request.form["ticker_id"])
+        underlying_ticker_id = parse_positive_id(request.form["underlying_ticker_id"])
+        expiration_id = parse_positive_id(request.form["expiration_id"])
         option_type = OptionType(request.form["option_type"])
         strike = parse_finite_decimal(request.form["strike"], field_name="um strike")
         if strike < 0 or ticker_id == underlying_ticker_id:
@@ -530,6 +559,7 @@ def create_contract() -> ResponseReturnValue:
 
 
 @bp.post("/tables/options/contracts/<int:contract_id>/delete")
+@requer_admin
 def delete_contract(contract_id: int) -> ResponseReturnValue:
     db.session.delete(db.get_or_404(OptionContract, contract_id))
     try:
@@ -542,11 +572,12 @@ def delete_contract(contract_id: int) -> ResponseReturnValue:
 
 
 @bp.post("/tables/options/contracts/<int:contract_id>")
+@requer_admin
 def update_contract(contract_id: int) -> ResponseReturnValue:
     contract = db.get_or_404(OptionContract, contract_id)
     try:
-        ticker_id = int(request.form["ticker_id"])
-        underlying_ticker_id = int(request.form["underlying_ticker_id"])
+        ticker_id = parse_positive_id(request.form["ticker_id"])
+        underlying_ticker_id = parse_positive_id(request.form["underlying_ticker_id"])
         strike = parse_finite_decimal(request.form["strike"], field_name="um strike")
         if strike < 0 or ticker_id == underlying_ticker_id:
             raise ValueError
@@ -558,7 +589,7 @@ def update_contract(contract_id: int) -> ResponseReturnValue:
             raise ValueError
         contract.ticker_id = ticker_id
         contract.underlying_ticker_id = underlying_ticker_id
-        contract.expiration_id = int(request.form["expiration_id"])
+        contract.expiration_id = parse_positive_id(request.form["expiration_id"])
         contract.option_type = OptionType(request.form["option_type"])
         contract.strike = strike
         db.session.commit()

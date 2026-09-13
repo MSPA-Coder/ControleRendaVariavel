@@ -20,14 +20,12 @@ from app.collector.providers import CollectorProviderManager
 from app.collector.rtd import Instrument, QuoteValue
 from app.collector.settings import CollectorSchedule
 from app.core.domain import MARKET_TIMEZONE
-from app.models import CollectorMode
 
 
 @dataclass(frozen=True, slots=True)
 class CollectorConfiguration:
     """Tudo que um ciclo precisa saber, já validado pela origem."""
 
-    collector_mode: CollectorMode
     poll_interval_seconds: int
     agent_check_interval_seconds: int
     schedule: CollectorSchedule
@@ -45,7 +43,6 @@ class CollectorConfiguration:
         dispara a leitura por conta própria.
         """
         return (
-            self.collector_mode,
             self.poll_interval_seconds,
             self.schedule,
             self.instruments,
@@ -112,6 +109,7 @@ def run_collector_loop(
     logger: Logger,
     initial_schedule: CollectorSchedule,
     initial_check_interval: int,
+    stop_on_configuration_error: bool = False,
     on_configuration: Callable[[CollectorConfiguration], None] = lambda _: None,
     should_continue: Callable[[], bool] = lambda: True,
     monotonic: Callable[[], float] = time_module.monotonic,
@@ -164,7 +162,13 @@ def run_collector_loop(
                     ):
                         deadlines.request_quote_now()
                 except Exception as exc:
+                    if stop_on_configuration_error:
+                        raise RuntimeError(
+                            "Configuração/banco local indisponível; coletor local encerrado. "
+                            "Inicie novamente depois de subir o ambiente local."
+                        ) from None
                     configuration = None
+                    deadlines.next_quote_at = float("inf")
                     logger.warning("Não foi possível consultar a configuração do coletor: %s", exc)
                     sink.report_failure(exc)
                     deadlines.schedule_configuration(now, check_interval)
@@ -195,11 +199,7 @@ def run_collector_loop(
                                 idle_reason = "profit-closed"
                         else:
                             instruments = list(configuration.instruments)
-                            values = (
-                                providers.get(configuration.collector_mode).fetch(instruments)
-                                if instruments
-                                else []
-                            )
+                            values = providers.get().fetch(instruments) if instruments else []
                             sink.publish(values, configuration.option_keys)
                             logger.info(
                                 "Ciclo de cotações entregue %s (%s instrumentos).",

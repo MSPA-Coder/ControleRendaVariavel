@@ -14,8 +14,11 @@ class CollectorAlreadyRunningError(RuntimeError):
     """Indica que outra instância já detém o lock do coletor."""
 
 
-def _lock_path(project_dir: Path) -> Path:
-    return project_dir / ".docker-local" / "rtd-collector.lock"
+def _lock_path(project_dir: Path, destination: str) -> Path:
+    if destination not in {"local", "remote"}:
+        raise ValueError("Destino inválido.")
+    name = "rtd-collector.lock" if destination == "local" else "rtd-remote-collector.lock"
+    return project_dir / ".docker-local" / name
 
 
 def _acquire(lock_file: BinaryIO, *, wait: bool) -> None:
@@ -74,15 +77,17 @@ def _release(lock_file: BinaryIO) -> None:
 
 
 @contextmanager
-def collector_process_lock(project_dir: Path, *, wait: bool = False) -> Iterator[None]:
-    """Mantém uma única coleta local ativa para este projeto.
+def collector_process_lock(
+    project_dir: Path, *, wait: bool = False, destination: str = "local"
+) -> Iterator[None]:
+    """Mantém uma coleta por destino ativa para este projeto.
 
     O arquivo é somente um identificador persistente; a exclusão é mantida
     pelo sistema operacional e é liberada automaticamente quando o processo
-    termina, inclusive em caso de crash. O agente remoto não usa este caminho.
+    termina, inclusive em caso de crash. Os destinos têm locks independentes.
     """
 
-    path = _lock_path(project_dir)
+    path = _lock_path(project_dir, destination)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch(exist_ok=True)
     with path.open("r+b") as lock_file:

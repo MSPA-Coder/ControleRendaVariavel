@@ -33,8 +33,12 @@ from app.positions.closure import partial_close_of_open_position, revert_partial
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
+    current_owner_id,
+    grant_ticker_entitlement,
     investable_ticker_records,
     is_htmx_request,
+    owned_or_404,
+    parse_positive_id,
     portfolio_records,
     selected_filters,
 )
@@ -133,8 +137,8 @@ def _transaction_performance_by_currency(
 def _parse_form() -> TransactionInput:
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
-        broker_id = int(raw["broker_id"])
-        ticker_id = int(raw["ticker_id"])
+        broker_id = parse_positive_id(raw["broker_id"])
+        ticker_id = parse_positive_id(raw["ticker_id"])
         quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
         average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
         exit_price = parse_finite_decimal(raw["exit_price"], field_name="um preço de saída")
@@ -163,10 +167,10 @@ def _parse_form() -> TransactionInput:
     if result_mode not in {"L", "B"}:
         raise ValueError("Modo de resultado inválido.")
     try:
-        portfolio_id = int(raw["portfolio_id"])
+        portfolio_id = parse_positive_id(raw["portfolio_id"])
     except (KeyError, ValueError) as exc:
         raise ValueError("Selecione uma carteira.") from exc
-    if db.session.get(Portfolio, portfolio_id) is None:
+    if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
     notes = raw.get("notes") or None
     return TransactionInput(
@@ -190,7 +194,7 @@ def _build_transaction(data: TransactionInput) -> Transaction:
     )
     fields = asdict(data)
     fields["result"] = result
-    return Transaction(status=TransactionStatus.CLOSED, **fields)
+    return Transaction(owner_id=current_owner_id(), status=TransactionStatus.CLOSED, **fields)
 
 
 def transactions_results_context() -> dict[str, object]:
@@ -207,6 +211,7 @@ def transactions_results_context() -> dict[str, object]:
     status_order = case((Transaction.status == TransactionStatus.OPEN, 0), else_=1)
     statement = (
         select(Transaction)
+        .where(Transaction.owner_id == current_owner_id())
         .join(Transaction.broker_ref)
         .options(
             joinedload(Transaction.ticker_ref),
@@ -242,8 +247,8 @@ def transactions_results_context() -> dict[str, object]:
     # tabela. ``source_position_id`` é ambíguo sozinho — ``Position`` e
     # ``OptionPosition`` têm sequências de id independentes — por isso o
     # cruzamento é feito separadamente por tipo de instrumento.
-    live_position_ids = set(db.session.scalars(select(Position.id)))
-    live_option_position_ids = set(db.session.scalars(select(OptionPosition.id)))
+    live_position_ids = set(db.session.scalars(select(Position.id).where(Position.owner_id == current_owner_id())))
+    live_option_position_ids = set(db.session.scalars(select(OptionPosition.id).where(OptionPosition.owner_id == current_owner_id())))
     partial_close_ids = {
         transaction.id
         for transaction in records
@@ -323,7 +328,9 @@ def create_transaction() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
-    db.session.add(_build_transaction(data))
+    transaction = _build_transaction(data)
+    db.session.add(transaction)
+    grant_ticker_entitlement(user_id=transaction.owner_id, ticker_id=transaction.ticker_id, held_on=transaction.opened_on)
     db.session.commit()
     flash("Transação registrada.", "success")
     return redirect(url_for("portfolio.transactions"))
@@ -367,7 +374,7 @@ def _option_edit_guard(transaction: Transaction) -> ResponseReturnValue | None:
 
 @bp.get("/transactions/<int:transaction_id>/edit")
 def edit_transaction(transaction_id: int) -> ResponseReturnValue:
-    transaction = db.get_or_404(Transaction, transaction_id)
+    transaction = owned_or_404(Transaction, transaction_id)
     if transaction.status == TransactionStatus.OPEN:
         if transaction.source_position_id is not None:
             edit_endpoint = (
@@ -396,7 +403,7 @@ def edit_transaction(transaction_id: int) -> ResponseReturnValue:
 
 @bp.post("/transactions/<int:transaction_id>")
 def update_transaction(transaction_id: int) -> ResponseReturnValue:
-    transaction = db.get_or_404(Transaction, transaction_id)
+    transaction = owned_or_404(Transaction, transaction_id)
     if transaction.status == TransactionStatus.OPEN:
         flash("Essa transação está aberta; edite-a pela posição.", "error")
         return redirect(url_for("portfolio.transactions"))
@@ -421,6 +428,9 @@ def update_transaction(transaction_id: int) -> ResponseReturnValue:
     for key, value in asdict(data).items():
         setattr(transaction, key, value)
     transaction.result = updated.result
+    grant_ticker_entitlement(
+        user_id=transaction.owner_id, ticker_id=transaction.ticker_id, held_on=transaction.opened_on
+    )
     db.session.commit()
     flash("Transação atualizada.", "success")
     return redirect(url_for("portfolio.transactions"))
@@ -436,7 +446,7 @@ def delete_transaction(transaction_id: int) -> ResponseReturnValue:
     continuaria reduzida — Carteira e Transações passariam a mostrar uma
     quantidade que não corresponde a nenhum lançamento.
     """
-    transaction = db.get_or_404(Transaction, transaction_id)
+    transaction = owned_or_404(Transaction, transaction_id)
     if transaction.status == TransactionStatus.OPEN:
         flash("Essa transação está aberta; exclua a posição.", "error")
         return redirect(url_for("portfolio.transactions"))

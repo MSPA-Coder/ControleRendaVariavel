@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 from sharedauth.session import marca_de_sessao
 
-from app import CHAVE_TEMA_NA_SESSAO, PUBLIC_ENDPOINTS, login_manager
+from app import CHAVE_TEMA_NA_SESSAO, CHAVE_USUARIO_TEMA_NA_SESSAO, PUBLIC_ENDPOINTS, login_manager
 from app.accounts import users as um
 from app.core.themes import DEFAULT_THEME
 from app.models import ROLE_ADMIN, ROLE_OPERADOR, User
@@ -38,6 +38,7 @@ def _login_as(client, user, monkeypatch):
         # banco. Uma sessao de verdade chega aqui com o tema ja em cache
         # depois do primeiro render.
         session[CHAVE_TEMA_NA_SESSAO] = DEFAULT_THEME
+        session[CHAVE_USUARIO_TEMA_NA_SESSAO] = user.id
 
 
 def _usuario(**kwargs) -> User:

@@ -17,7 +17,6 @@ from app.collector.loop import CollectorConfiguration, run_collector_loop
 from app.collector.providers import CollectorProviderManager
 from app.collector.rtd import Instrument, QuoteValue
 from app.collector.settings import CollectorSchedule
-from app.models import CollectorMode
 
 ABERTA = CollectorSchedule(frozenset({0, 1, 2, 3, 4}), time(9, 45), time(18, 10))
 DENTRO_DA_JANELA = datetime(2026, 8, 17, 12, 45, tzinfo=UTC)
@@ -90,7 +89,6 @@ class _ProfitFalso:
 
 def _configuracao(**overrides) -> CollectorConfiguration:
     valores: dict[str, object] = {
-        "collector_mode": CollectorMode.DIRECT,
         "poll_interval_seconds": 5,
         "agent_check_interval_seconds": 30,
         "schedule": ABERTA,
@@ -118,7 +116,7 @@ def _rodar(origem, destino, detector, *, agora=DENTRO_DA_JANELA, ciclos=1):
         run_collector_loop(
             source=origem,
             sink=destino,
-            providers=CollectorProviderManager(lambda _mode: provedor),
+            providers=CollectorProviderManager(lambda: provedor),
             detector=detector,
             logger=logging.getLogger("teste.collector_loop"),
             initial_schedule=ABERTA,
@@ -206,3 +204,21 @@ def test_leitura_e_configuracao_correm_em_relogios_independentes() -> None:
 
     assert len(destino.entregas) == 5
     assert origem.chamadas == 1
+
+
+def test_configuracao_perdida_descarta_prazo_vencido_sem_laco_ocupado() -> None:
+    class OrigemIntermitente(_OrigemFixa):
+        def configuration(self):
+            if self.chamadas:
+                self.chamadas += 1
+                raise RuntimeError("origem fora do ar")
+            return super().configuration()
+
+    origem = OrigemIntermitente(_configuracao())
+    destino = _DestinoEspiao()
+    _rodar(origem, destino, _ProfitFalso(rodando=True), ciclos=9)
+    # Coleta em 0, 5, 10, 15, 20, 25; depois só tenta configuração em
+    # 30, 60 e 90. Sem descartar o prazo de cotação em 30, fica girando em 30.
+    assert len(destino.entregas) == 6
+    assert origem.chamadas == 4
+    assert len(destino.falhas) == 3

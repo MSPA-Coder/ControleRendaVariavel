@@ -97,6 +97,9 @@ def collector_agent_configuration():
     _record_agent_seen(settings)
     positions, option_positions = load_collector_positions()
     return jsonify(
+        # Legado: o agente não usa mais este campo (RTD direto é o único
+        # caminho). Mantido por uma release para um agente antigo que ainda
+        # o lê do payload não quebrar durante o deploy.
         collector_mode=settings.collector_mode.value,
         poll_interval_seconds=settings.poll_interval_seconds,
         agent_check_interval_seconds=settings.agent_check_interval_seconds,
@@ -129,7 +132,7 @@ def _stock_reading(item: object) -> QuoteValue:
     if not isinstance(item, dict):
         raise ValueError("cotação inválida")
     return QuoteValue(
-        position_id=int(item["position_id"]),
+        position_id=_bounded_position_id(item.get("position_id")),
         last_price=_decimal(item, "last_price"),
         previous_close=_decimal(item, "previous_close"),
         instrument_status=_string(item, "instrument_status"),
@@ -142,7 +145,7 @@ def _option_reading(item: object) -> OptionReading:
     if not isinstance(item, dict):
         raise ValueError("cotação inválida")
     observed_at = _as_aware_datetime(item.get("observed_at"))
-    option_position_id = int(item["option_position_id"])
+    option_position_id = _bounded_position_id(item.get("option_position_id"))
     return OptionReading(
         option_position_id=option_position_id,
         option=QuoteValue(
@@ -158,6 +161,22 @@ def _option_reading(item: object) -> OptionReading:
         underlying_last_price=_decimal(item, "underlying_price"),
         underlying_history_price=_decimal(item, "underlying_history_price"),
     )
+
+
+def _bounded_position_id(value: object) -> int:
+    """ID do protocolo legado, validado antes de consultar PostgreSQL."""
+    raw = str(value) if isinstance(value, int) and not isinstance(value, bool) else value
+    if (
+        not isinstance(raw, str)
+        or not raw.isascii()
+        or not raw.isdecimal()
+        or len(raw) > 10
+    ):
+        raise ValueError("identificador de posição inválido")
+    identifier = int(raw)
+    if not 0 < identifier <= 2_147_483_647:
+        raise ValueError("identificador de posição inválido")
+    return identifier
 
 
 @bp.post("/api/collector/quotes")

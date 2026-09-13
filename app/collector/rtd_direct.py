@@ -77,7 +77,11 @@ def decode_refresh_data(value: object) -> dict[int, object]:
 
 
 class DirectRtdQuoteProvider:
-    """Experimental IRTDServer client that does not instantiate Excel."""
+    """IRtdServer client that reads RTD without instantiating Excel.
+
+    Fala com o mesmo servidor COM (`rtdtrading.rtdserver`) que o Excel usaria
+    por dentro. É o único caminho de leitura -- não há ponte pelo Excel.
+    """
 
     def __init__(
         self,
