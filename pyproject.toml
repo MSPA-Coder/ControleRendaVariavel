@@ -58,7 +58,7 @@ packages = ["app"]
 [tool.hatch.metadata]
 allow-direct-references = true
 
-# A secao [tool.ruff] e comum aos quatro projetos do mantenedor; so
+# A secao [tool.ruff] e comum aos projetos irmaos; so
 # `target-version` e `known-first-party` variam, porque dependem da versao de
 # Python da imagem e do layout de pacotes. Mantenha o resto em sincronia.
 

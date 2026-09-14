@@ -2,8 +2,8 @@
 # Dropbox. Cobre o que e reconstruivel localmente (ambientes virtuais, caches,
 # artefatos de build) e o que e sensivel (.env, estado do RTD).
 #
-# `backups/` NAO esta aqui de proposito: os dumps do PostgreSQL devem
-# continuar com copia no Dropbox.
+# O backup dos bancos e do BackupRestore, que grava fora desta pasta;
+# `backups/` nao guarda nada que precise sincronizar.
 
 .git/
 
@@ -35,10 +35,6 @@ tmp/
 .secrets/
 .certs/
 .docker-local/
-
-# Planilhas exportadas (regeneraveis)
-sheet-acoes.json
-sheet-acoes.pdf
 
 # Ferramentas de agente
 .codex/

@@ -39,18 +39,12 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
    docker compose --env-file .env.vps -f compose.yaml up --build -d
    ```
 
-4. Instale o vhost deste projeto a partir de `deploy/nginx/controle-renda-variavel.conf`
-   (`sudo cp deploy/nginx/controle-renda-variavel.conf /etc/nginx/sites-available/controle-renda-variavel`
-   e o link em `sites-enabled/`). Ele contém TLS e o HSTS, e depende dos dois
-   arquivos verdadeiramente compartilhados entre os quatro projetos --
-   `conf.d/00-comum.conf` (compressão, zona do limitador de login) e
-   `snippets/proxy-app.conf` (cabeçalhos de proxy) --, mantidos em
-   `../../_manutencao/vps/nginx/`, que precisam estar instalados primeiro. Valide com
-   `sudo nginx -t` antes de recarregar, e confira com `sha256sum` dos dois
-   lados que o arquivo do servidor é o que está versionado aqui (CRV-03: até
-   02/09/2026 este era o único dos quatro projetos cujo vhost de produção
-   existia só na memória do servidor, sem cópia versionada para restaurar
-   numa recriação).
+4. Instale o vhost pelo instalador central do nginx, a partir de
+   `_manutencao/vps/nginx/`: o arquivo `controle-renda-variavel` (TLS e HSTS),
+   junto das peças compartilhadas `conf.d/00-comum.conf` (compressão e zona do
+   limitador de login) e `snippets/proxy-app.conf` (cabeçalhos de proxy). O
+   procedimento — backup, `nginx -t`, habilitação e conferência — está no
+   `README.md` daquela pasta.
 5. No Windows, instale o agente RTD com a URL HTTPS pública:
 
    ```powershell
@@ -62,8 +56,8 @@ lados. O servidor apenas recebe chamadas HTTPS autenticadas; ele nunca tenta
 alcançar o computador Windows.
 
 `.env.vps` precisa trazer `FORCE_HTTPS=true` junto de `TRUST_PROXY_HEADERS=true`
--- a aplicação recusa subir com a segunda ligada e a primeira desligada
-(CRV-03): confiar em `X-Forwarded-*` só faz sentido atrás de um proxy que
+-- a aplicação recusa subir com a segunda ligada e a primeira desligada:
+confiar em `X-Forwarded-*` só faz sentido atrás de um proxy que
 termina TLS, e sem `FORCE_HTTPS` o cookie de sessão sairia sem `Secure`.
 
 ## Topologia e rate limiting
@@ -80,6 +74,10 @@ storage compartilhado compatível para o limitador da aplicação. O contador em
 memória dos workers não deve ser tratado como limite global.
 
 ## Atualização
+
+As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
+roteiros continuam valendo para qualquer instalação que ainda esteja antes
+delas — a local, por exemplo.
 
 ### Isolamento financeiro — revisão 20260912_0016
 

@@ -407,15 +407,14 @@ de dados é a única área gravável persistente. O Compose publica a aplicaçã
 O rate limit da aplicação usa `memory://`: com dois workers, o contador é por
 processo, não é compartilhado e zera a cada reinício. **A proteção coordenada
 fica na borda** — o vhost deste projeto, versionado em
-[`deploy/nginx/controle-renda-variavel.conf`](../deploy/nginx/controle-renda-variavel.conf)
-(CRV-03: até 02/09/2026 existia só na memória do servidor, sem cópia
-recuperável numa recriação), aplica uma zona `limit_req` compartilhada ao
-`POST /login` definida em `../_manutencao/vps/nginx/conf.d/00-comum.conf`, e
-isso é requisito da implantação atual. Outra topologia precisa manter proteção
-equivalente na borda ou adotar armazenamento compartilhado para o limitador.
-As três rotas do agente coletor (`/api/collector/*`), que ficam fora do gate de
-sessão, têm limite próprio de `60 per minute; 2000 per hour` aplicado pela
-própria aplicação (CRV-02) — são a única superfície alcançável sem sessão.
+`../_manutencao/vps/nginx/controle-renda-variavel`, aplica uma zona
+`limit_req` compartilhada ao `POST /login` definida em
+`../_manutencao/vps/nginx/conf.d/00-comum.conf`, e isso é requisito da
+implantação atual. Outra topologia precisa manter proteção equivalente na borda
+ou adotar armazenamento compartilhado para o limitador. As três rotas do agente
+coletor (`/api/collector/*`), que ficam fora do gate de sessão, têm limite
+próprio de `60 per minute; 2000 per hour` aplicado pela própria aplicação — são
+a única superfície alcançável sem sessão.
 
 Detalhes de operação, publicação e verificação estão em
 [`docs/deployment-vps.md`](deployment-vps.md).
@@ -433,4 +432,5 @@ Detalhes de operação, publicação e verificação estão em
 - nova abstração precisa reduzir complexidade concreta do código atual, não
   antecipar uma futura;
 - código que sirva a dois ou mais dos projetos irmãos e não dependa de banco ou
-  domínio é candidato ao SharedAuth, não a uma cópia local.
+  domínio é candidato ao SharedAuth; pode nascer aqui e subir quando provar
+  que serve aos outros.

@@ -1,8 +1,9 @@
 # Desenvolvimento e validação
 
 O projeto usa Docker para aplicação, PostgreSQL, migrações, lint e testes. No
-host são necessários apenas Docker Desktop, Git e um editor. A única exceção é o
-agente RTD, que roda no Windows — ver a última seção.
+host são necessários apenas Docker Desktop, Git e um editor; o venv do laço
+rápido, descrito no `AGENTS.md`, é opcional. A exceção obrigatória é o agente
+RTD, que roda no Windows — ver a última seção.
 
 ## Ambiente
 
@@ -19,8 +20,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build -d
 padrão o script recusa sobrescrever arquivo existente; `-Force` rotaciona, e
 exige tratar a senha do banco e a invalidação das sessões abertas.
 
-Faltam dois arquivos que o script não cria, porque não são segredos gerados
-aqui:
+Falta um arquivo que o script não cria, porque não é segredo gerado aqui:
 
 - `.certs/local-root-ca.crt` — o Compose declara esse arquivo como secret, então
   ele **precisa existir** ou `docker compose config` falha antes de qualquer
