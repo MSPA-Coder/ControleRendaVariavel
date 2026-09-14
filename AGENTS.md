@@ -2,8 +2,9 @@
 
 > **A frota é este projeto, o ControleBancario e o MegaSena.** Os três
 > compartilham o `SharedAuth`, o mesmo formato de Compose e Dockerfile e o mesmo
-> portão `quality`; servem de referência uns aos outros, e uma divergência entre
-> eles é candidata a correção.
+> portão `quality`, e servem de referência uns aos outros. Divergir é permitido
+> quando for uma escolha consciente: experimente num deles e, se der certo, leve
+> aos outros.
 >
 > **O ConfortoTermico não está na frota** e segue trilha própria desde
 > 07/09/2026: a arquitetura dele é livre, e diferença em relação a ele **não é
@@ -77,13 +78,6 @@ do projeto no Python global do Windows.
 no commit que o `uv.lock` registra. O repositório é **público**: o build precisa
 só de `git` no PATH, nenhuma credencial.
 
-A engrenagem de token que existia aqui — secret do BuildKit, `git config
-url...insteadOf` para injetar um PAT, e `.secrets/github_token.txt` — **saiu em
-08/09/2026** (achado L23 do `LEVANTAMENTO_2026-09.md`). Era herança da época em
-que o repositório era privado, e o efeito que importa é fora deste arquivo:
-enquanto qualquer build da frota exigisse o token, ele tinha de existir no VPS
-também.
-
 Os dois ambientes acham defeitos diferentes, então nenhum substitui o outro.
 Foi o venv que revelou dois defeitos só-Windows que o contêiner nunca
 mostrou (ver o docstring de `tests/conftest.py`); e é o contêiner que tem
@@ -135,8 +129,10 @@ legado é procedimento administrativo explícito.
   senha temporária e trava de troca pendente, destino pós-login seguro e a
   marca que amarra a sessão à senha em vigor,
   cabeçalhos de segurança, CSP, formatação pt-BR e health vêm de SharedAuth.
-  Não reimplemente localmente. `_number` em `presentation.py` é apenas um
-  adaptador para regras de apresentação deste projeto.
+  O padrão é usar a biblioteca; uma variação pode nascer aqui para
+  experimentar e, se servir aos outros, sobe para ela com tag nova. `_number`
+  em `presentation.py` é apenas um adaptador para regras de apresentação deste
+  projeto.
 - `SECRET_KEY`, senha do banco e token do agente vêm de arquivos de segredo
   (`*_FILE` no contêiner e `.secrets/` no host). Não os registre em código,
   imagem, logs, documentação, diffs ou commits. `.env`, `.secrets/`,
@@ -242,7 +238,8 @@ edite, faça commit ou merge no VPS. Consulte `docs/deployment-vps.md` antes de
 operá-lo.
 
 Ao atualizar dependências, alargue o teto compatível e preserve o piso mínimo
-já verificado. O Dependabot usa `versioning-strategy: widen`. Elevar o piso
+já verificado. O Dependabot acompanha o `uv.lock` pelo ecossistema `uv`, com
+`versioning-strategy: widen`. Elevar o piso
 declara uma incompatibilidade e só deve ocorrer com justificativa e validação.
 Toda ampliação de faixa reconstrói a imagem e roda `quality`. Migrações são
 aditivas e imutáveis depois de aplicadas; mudanças incompatíveis usam nova

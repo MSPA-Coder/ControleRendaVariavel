@@ -132,8 +132,8 @@ py -3.14 -m venv .venv
 .\scripts\rtd-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
 ```
 
-A instalação substitui a antiga tarefa única pela tarefa **ControleRendaVariavel
-Coletor Remoto**, com gatilhos no logon e às 09:40 e reinício em caso de falha.
+A instalação cria a tarefa **ControleRendaVariavel Coletor Remoto**, com
+gatilhos no logon e às 09:40 e reinício em caso de falha.
 Ela guarda somente URL, caminho do token e opções RTD em
 `.docker-local/remote-collector.env`. O mesmo token deve existir nos dois
 lados, provisionado por canal seguro. Nenhum segredo vai aos argumentos ou logs.
@@ -167,8 +167,7 @@ A pausa na tela do VPS preserva o agente remoto para retomada.
 A tela local orienta iniciar/parar no Windows; ela não oferece um checkbox
 que deixe um processo aguardando habilitação. O pedido **Atualizar cotações
 agora** só é atendido se o respectivo coletor estiver iniciado e dentro da agenda.
-A antiga troca de destino foi retirada. A coluna legada permanece no banco
-para compatibilidade e não decide mais o destino de nenhum processo.
+Não há troca de destino: cada processo tem o seu, fixo.
 
 `poll-rtd` (uma leitura ou `--watch`) sempre grava localmente.
 `python -m app.collector.remote_agent` sempre entrega ao VPS.
