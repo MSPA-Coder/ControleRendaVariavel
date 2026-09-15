@@ -63,10 +63,11 @@ def _to_decimal(value: float, places: str = "0.000001") -> Decimal | None:
     representável — não-finito (``nan``/``inf``) ou grande demais para a
     precisão padrão do Decimal. Isso acontece de verdade: o retorno
     anualizado extrapola janelas curtas para 365 dias (ver
-    ``annualized_return_from_prices``), e uma variação de -20% em 1 dia
-    projetada para um ano vira uma fração astronômica sem nenhum
-    significado prático — melhor reportar "indisponível" do que um número
-    inutilizável (ou derrubar a página).
+    ``annualized_return_from_prices``), e uma alta de 20% em 1 dia projetada
+    para um ano vira uma fração astronômica sem nenhum significado prático —
+    melhor reportar "indisponível" do que um número inutilizável (ou derrubar
+    a página). Com a capitalização composta, a queda não chega a esse ponto:
+    ela converge para -100%.
     """
     if not math.isfinite(value):
         return None
@@ -133,7 +134,15 @@ def historical_var(returns: Sequence[float], confidence: float = 0.95) -> float 
 
 
 def annualized_return_from_prices(series: Sequence[tuple[date, Decimal]]) -> float | None:
-    """CAGR entre a primeira e a última cotação disponível na série."""
+    """CAGR entre a primeira e a última cotação disponível na série:
+    ``(último / primeiro) ** (365 / dias) - 1``.
+
+    Até 15/09/2026 a queda era anualizada pela forma simétrica da planilha,
+    ``sinal(r) * ((1 + |r|) ** (365 / dias) - 1)``, e -30% em 100 dias virava
+    -160,6% ao ano. Preço não fica negativo, então a base nunca é negativa e o
+    CAGR nunca passa de -100%. Sharpe e Sortino, que partem deste número,
+    mudam junto quando o ativo caiu.
+    """
     ordered = sorted(series)
     if len(ordered) < 2:
         return None
@@ -144,10 +153,8 @@ def annualized_return_from_prices(series: Sequence[tuple[date, Decimal]]) -> flo
     elapsed_days = (last_date - first_date).days
     if elapsed_days <= 0:
         return None
-    total_return = float(last_price / first_price) - 1.0
-    sign = -1.0 if total_return < 0 else 1.0
-    base = 1.0 + abs(total_return)
-    return sign * (float(base ** (365.0 / elapsed_days)) - 1.0)
+    growth = float(last_price / first_price)
+    return float(growth ** (365.0 / elapsed_days)) - 1.0
 
 
 def sharpe_ratio(
