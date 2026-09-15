@@ -256,11 +256,11 @@ Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
 | Saída | Fórmula |
 |---|---|
 | Atual | `delta * preço RTD` |
-| Var. dia | `s * (1 - f / p)` |
+| Var. dia | `s * (p / f - 1)` |
 | Bruto | `s * q * (p - c)` |
 | Líquido | `Bruto * 0,9996` |
 | Retorno | `Resultado / (q * c)` |
-| Retorno no período | `sinal(r) * ((1 + abs(r)) ** (período / d) - 1)` |
+| Retorno no período | `(1 + r) ** (período / d) - 1` |
 | Stop gain | `c * 1,5` |
 | Distância do target | `Stop gain / p - 1` |
 | Breakeven | `p/c - 1` quando `c < p`; caso contrário `-(c/p - 1)` |
@@ -271,7 +271,19 @@ Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
 | Dias | `hoje - início` |
 
 Divisões por zero e anualização com zero dias produzem "não aplicável"
-(`None`), nunca erro nem infinito.
+(`None`), nunca erro nem infinito. Perda maior que o valor investido (`r < -1`,
+possível numa venda) também: não há projeção composta com sentido.
+
+**Duas fórmulas divergem da planilha, de propósito** (decisão de 15/09/2026):
+
+- **Var. dia.** A planilha usa `s * (1 - f / p)`, que mede a variação contra o
+  preço atual: fechamento 100 e preço 110 davam +9,09%, onde qualquer cotação
+  mostra +10%. O sistema mede contra o fechamento. Vale também para as opções.
+- **Retorno no período.** A planilha usa
+  `sinal(r) * ((1 + abs(r)) ** (período / d) - 1)`. Para ganho é a
+  capitalização composta; para perda, não: -30% em 100 dias virava -160,6% ao
+  ano, perda maior que o investido numa compra. Pela composta, -72,8%. O
+  retorno anualizado da aba **Risco** usava a mesma forma e passou junto.
 
 O período é selecionável como semanal (`7` dias), mensal (`30`), trimestral
 (`90`), semestral (`182`) ou anual (`365`, padrão).

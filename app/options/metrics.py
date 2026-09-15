@@ -71,11 +71,11 @@ def calculate_option(
     result = operation_result(
         side, quantity, average_cost, current_price, result_mode
     )
-    daily = (
-        direction * (Decimal("1") - previous_close / current_price)
-        if current_price
-        else None
-    )
+    # Mesma convenção das ações (`app.core.domain.calculate_position`): variação
+    # do dia contra o fechamento. A planilha media contra o preço atual.
+    daily = safe_div(current_price, previous_close)
+    if daily is not None:
+        daily = direction * (daily - Decimal("1"))
     total_variation = (
         safe_div(average_cost, current_price)
         if side == "V"

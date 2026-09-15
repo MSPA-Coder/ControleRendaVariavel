@@ -43,7 +43,9 @@ ativo-objeto, strike e vencimento.
 
 Para direção `s = 1` em compra e `-1` em venda:
 
-- variação diária: `s * (1 - fechamento / preço atual)`;
+- variação diária: `s * (preço atual / fechamento - 1)`, contra o fechamento,
+  como nas ações — a planilha usa `s * (1 - fechamento / preço atual)`, e a
+  divergência está explicada em `planilha-acoes.md`;
 - variação total: `preço atual / custo - 1` em compra e
   `custo / preço atual - 1` em venda;
 - resultado: mesma função líquida/bruta usada nas ações;
