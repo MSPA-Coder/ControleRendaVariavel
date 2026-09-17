@@ -12,7 +12,7 @@ navegador
     ↓  HTML completo ou fragmento HTMX
 app/routes                     adaptação HTTP: formulário, filtro, template
     ↓
-app/domain e os módulos de cálculo    regras financeiras, sem Flask e sem ORM
+app/core/domain e os módulos de cálculo    regras financeiras, sem Flask e sem ORM
     ↓
 app/models → SQLAlchemy → PostgreSQL
 ```
@@ -178,8 +178,8 @@ guarda de custo, porque o que roda em toda página roda muitas vezes:
 ### `app/routes`
 
 Recebe requisições, interpreta formulário e filtro, chama o domínio e monta a
-resposta. Quatro blueprints: `portfolio` (a maior parte das telas), `options`,
-`auth` e `users`.
+resposta. Cinco blueprints: `portfolio` (a maior parte das telas), `options`,
+`auth`, `users` e `account`.
 
 O blueprint `portfolio` é definido em `app/routes/__init__.py`, e não em um dos
 módulos, de propósito: `positions.py`, `transactions.py`, `tables.py`,
@@ -204,14 +204,14 @@ Em volta dele:
 
 | Módulo | Responsabilidade |
 |---|---|
-| `position_closure.py`, `option_position_closure.py` | ciclo de vida da posição: abertura, aumento, ajuste e encerramento total ou parcial |
-| `position_ledger.py` | preserva o extrato antes de a posição encerrada ser apagada |
-| `holdings_history.py` | quantidade histórica e fluxo, base do TWR |
-| `monthly_performance.py` | reduz a série diária a um ponto por mês |
-| `risk.py`, `greeks.py` | KPIs de risco e sensibilidades de opção |
-| `portfolio.py`, `option_portfolio.py` | agregação para exibição, por corretora e por mercado |
-| `dividend_report.py` | proventos por período e por ticker |
-| `validation.py`, `presentation.py` | entrada e saída: parse de decimal, filtros Jinja |
+| `app/positions/closure.py`, `app/options/closure.py` | ciclo de vida da posição: abertura, aumento, ajuste e encerramento total ou parcial |
+| `app/positions/ledger.py` | preserva o extrato antes de a posição encerrada ser apagada |
+| `app/positions/holdings_history.py` | quantidade histórica e fluxo, base do TWR |
+| `app/performance/monthly.py` | reduz a série diária a um ponto por mês |
+| `app/performance/risk.py`, `app/options/greeks.py` | KPIs de risco e sensibilidades de opção |
+| `app/positions/portfolio.py`, `app/options/portfolio.py` | agregação para exibição, por corretora e por mercado |
+| `app/performance/dividends.py` | proventos por período e por ticker |
+| `app/core/validation.py`, `app/core/presentation.py` | entrada e saída: parse de decimal, filtros Jinja |
 
 Os dois módulos de encerramento mantêm **três registros em dia, sempre juntos e
 nunca nas rotas**: `Position` (o estado consolidado), `PositionMovement` (o
@@ -219,10 +219,10 @@ extrato que explica como se chegou nele) e `Transaction` (o que a aba Transaçõ
 mostra). Uma rota que atualizasse um deles sozinha produziria uma carteira que
 não bate com o próprio extrato.
 
-`position_ledger.py` existe porque encerrar uma posição por inteiro a apaga, e o
-extrato vai junto em cascata. O relatório de performance precisa desses
-lançamentos para incluir posições encerradas — sem eles a série teria viés de
-sobrevivência, mostrando só o que deu certo.
+`app/positions/ledger.py` existe porque encerrar uma posição por inteiro a
+apaga, e o extrato vai junto em cascata. O relatório de performance precisa
+desses lançamentos para incluir posições encerradas — sem eles a série teria
+viés de sobrevivência, mostrando só o que deu certo.
 
 Duas convenções valem para todo o cálculo estatístico: contabilidade é
 `Decimal`; modelo contínuo (desvio padrão, percentil, covariância) é `float`
@@ -235,24 +235,29 @@ normativos estão em [`docs/planilha-acoes.md`](planilha-acoes.md) e
 
 ### Coleta de cotações
 
-`rtd.py` define o instrumento e a leitura normalizada; `rtd_direct.py` lê o RTD
-direto do `IRtdServer` do ProfitPro (sem Excel) e é o único provedor;
-`providers.py` mantém um provedor aberto entre ciclos; `loop.py` é o laço único
-de coleta e `profit_detector.py` responde se o ProfitChart está aberto;
-`heartbeat.py` resume a última leitura persistida **sem expor valor de
-cotação**; `settings.py` valida intervalos e agenda.
+Em `app/collector/`, `rtd.py` define o instrumento e a leitura normalizada;
+`rtd_direct.py` lê o RTD direto do `IRtdServer` do ProfitPro (sem Excel) e é o
+único provedor; `providers.py` mantém um provedor aberto entre ciclos;
+`loop.py` é o laço único de coleta e `profit_detector.py` responde se o
+ProfitChart está aberto; `heartbeat.py` resume a última leitura persistida
+**sem expor valor de cotação**; `settings.py` valida intervalos e agenda.
 
-`quote_history_import.py` é a outra fonte de preço: séries diárias do Yahoo,
-usadas por performance e risco. Ele decide qual preço gravar — ajustado só para
-ticker de referência, que ninguém detém e contra o qual nunca haverá renda
-cadastrada.
+`app/quotes/history_import.py` é a outra fonte de preço: séries diárias do
+Yahoo, usadas por performance e risco. Ele decide qual preço gravar — ajustado
+só para ticker de referência, que ninguém detém e contra o qual nunca haverá
+renda cadastrada. A data de cada barra é a do fuso da bolsa informado pelo
+próprio Yahoo (o câmbio é carimbado à meia-noite de Londres, não em UTC), e o
+dia corrente não é importado: só entram dias encerrados. O dia de hoje dos
+tickers com RTD continua chegando pelo coletor.
 
 ### Apoio
 
-`authorization.py` (papel `admin`, sobre `sharedauth.access.requer_papel`),
-`user_management.py` (contas), `privacy.py` (ocultação de valores na tela),
-`themes.py`, `instrument_status.py`, `pricing_settings.py`, `reference_data.py`
-e `cli.py` (`poll-rtd`, `probe-rtd-direct`, `import-position-history`, `users`).
+`app/accounts/authorization.py` (papel `admin`, sobre
+`sharedauth.access.requer_papel`), `app/accounts/users.py` (contas),
+`app/core/privacy.py` (ocultação de valores na tela), `app/core/themes.py`,
+`app/core/instrument_status.py`, `app/core/pricing_settings.py`,
+`app/quotes/reference_data.py` e `app/cli.py` (`auditoria`, `poll-rtd`,
+`probe-rtd-direct`, `import-position-history`, `users`).
 
 ## O agente RTD no Windows
 
