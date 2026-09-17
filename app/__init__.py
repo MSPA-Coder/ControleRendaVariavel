@@ -71,6 +71,11 @@ PUBLIC_ENDPOINTS = frozenset({
     "portfolio.collector_agent_configuration",
     "portfolio.collector_agent_quotes",
     "portfolio.collector_agent_failure",
+    # Integração máquina a máquina: quem chama é o consolidador de patrimônio,
+    # que não tem sessão nem usuário aqui. A permissão dela é o token
+    # compartilhado, conferido em tempo constante dentro da própria view, e sem
+    # ele a rota não devolve dado nenhum.
+    "portfolio.patrimonio_resumo",
     "static",
     # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
     # tela de login é a única página fora da sessão que precisa de um
@@ -183,6 +188,13 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
         COLLECTOR_AGENT_TOKEN=resolver_segredo("COLLECTOR_AGENT_TOKEN") or "",
+        # Publicação do resumo de patrimônio, lida pelo consolidador. As duas
+        # são exigidas juntas: sem token a rota não autentica ninguém, e sem
+        # titular ela não sabe de quem é o dinheiro que publica -- aqui
+        # `owner_id` aponta para o USUÁRIO do aplicativo, não para a pessoa
+        # dona do dinheiro, e são conceitos diferentes com o mesmo nome.
+        PATRIMONIO_TOKEN=resolver_segredo("PATRIMONIO_TOKEN") or "",
+        PATRIMONIO_TITULAR=os.getenv("PATRIMONIO_TITULAR", "").strip(),
         REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),
@@ -332,6 +344,18 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             "portfolio.collector_agent_failure",
         ),
         "60 per minute; 2000 per hour",
+        override_defaults=True,
+    )
+    # O resumo de patrimônio é a quarta superfície alcançável sem sessão, e a
+    # mais cara das quatro: cada chamada percorre a carteira inteira e os
+    # proventos do período antes de qualquer 401 sair. O consolidador consulta
+    # uma vez por tela; este teto é folgado para ele e estreito para quem
+    # estiver martelando.
+    aplicar_limite(
+        app,
+        limiter,
+        "portfolio.patrimonio_resumo",
+        "30 per minute; 600 per hour",
         override_defaults=True,
     )
     for endpoint in (
