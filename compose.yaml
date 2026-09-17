@@ -72,6 +72,11 @@ services:
       SECRET_KEY_FILE: /run/secrets/secret_key
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       COLLECTOR_AGENT_TOKEN_FILE: /run/secrets/collector_agent_token
+      # Publicacao do resumo de patrimonio, lida pelo consolidador. As duas
+      # andam juntas: sem token a rota nao autentica, sem titular ela nao sabe
+      # de quem e o dinheiro que publica.
+      PATRIMONIO_TOKEN_FILE: /run/secrets/patrimonio_token
+      PATRIMONIO_TITULAR: ${PATRIMONIO_TITULAR:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
@@ -86,6 +91,7 @@ services:
       - secret_key
       - postgres_password
       - collector_agent_token
+      - patrimonio_token
     ports:
       - "127.0.0.1:5301:5003"
     depends_on:
@@ -238,3 +244,5 @@ secrets:
     file: .secrets/postgres_password
   collector_agent_token:
     file: .secrets/collector_agent_token
+  patrimonio_token:
+    file: .secrets/patrimonio_token

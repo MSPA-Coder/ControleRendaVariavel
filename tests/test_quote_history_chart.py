@@ -22,3 +22,14 @@ def test_zoom_da_comparacao_usa_a_mesma_data_final_nas_duas_series():
     assert "zoomedSeries(primaryDates, primaryPrices, zoom, comparisonLatest)" in SCRIPT
     assert "zoomedSeries(benchmarkDates, benchmarkPrices, zoom, comparisonLatest)" in SCRIPT
     assert "value >= cutoffDate && (!sharedLatest || value <= sharedLatest)" in SCRIPT
+
+
+def test_cada_aporte_de_posicao_aberta_vira_referencia_tracejada():
+    template = (
+        ROOT / "app" / "templates" / "partials" / "quotes_results.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'parseData(container, "openPositionLines")' in SCRIPT
+    assert "borderDash: [7, 4]" in SCRIPT
+    assert "label >= line.openedOn ? entryPrice : null" in SCRIPT
+    assert "data-open-position-lines" in template

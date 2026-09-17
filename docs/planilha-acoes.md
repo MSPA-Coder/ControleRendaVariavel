@@ -130,6 +130,14 @@ excluível sem efeito colateral.
 
 ## Comparação de cotações
 
+No gráfico normal da aba **Cotações**, cada abertura ou aumento que ainda compõe
+uma posição aberta do usuário no ticker selecionado gera uma linha horizontal
+tracejada. A linha usa a data e o preço unitário daquele aporte e termina na
+última cotação disponível; portanto, uma posição consolidada com vários
+aportes mostra uma referência para cada um deles. Não há linha quando a última
+cotação for anterior ao aporte. A comparação com benchmark permanece em
+evolução percentual e, portanto, não mostra referências de preço absoluto.
+
 Na aba **Cotações**, ao comparar dois ativos, o gráfico começa na primeira
 data de calendário em que há cotação registrada para **ambos**. A data é a
 primeira interseção exata dos históricos; não se usa a data de abertura da

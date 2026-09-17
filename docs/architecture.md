@@ -54,6 +54,30 @@ e mantém favorito, F5 e link compartilhado válidos.
 origem: o cliente o define e pode forjá-lo. A autorização é aplicada no
 servidor, igual para os dois tipos de requisição.
 
+### As duas exceções: rotas que não devolvem HTML
+
+O agente RTD (`/api/collector/*`) e o resumo de patrimônio
+(`GET /patrimonio/v1/resumo`) falam JSON, e as duas são máquina a máquina:
+não têm sessão, e a permissão delas é um token conferido em tempo constante
+dentro da própria view. Estão declaradas em `PUBLIC_ENDPOINTS` — uma rota nova
+nasce protegida, e entrar nessa lista é decisão consciente, com o motivo
+escrito.
+
+O resumo de patrimônio publica **posições e proventos** para um consolidador
+externo, que soma isto ao caixa publicado pelo Controle Bancário. Ele não
+escreve nada, não recebe nada e não conhece o consolidador. O contrato é
+`patrimonio/v1`: todo valor viaja como **texto** (`float` não representa 0,10),
+titular e instituição são identificados pelo **nome normalizado** — o que os
+dois sistemas compartilham — e nada é somado entre moedas.
+
+Três coisas ficam **sempre** de fora, com a contagem no envelope: carteira
+simulada (não é patrimônio), opções (ainda não publicadas) e posição sem
+cotação. Omissão contada é omissão visível.
+
+`PATRIMONIO_TITULAR` é obrigatório para publicar. Aqui `owner_id` aponta para o
+**usuário** do aplicativo, e do outro lado titular é a pessoa dona do dinheiro:
+são conceitos diferentes com o mesmo nome, e a rota prefere recusar a adivinhar.
+
 ### O endereço que chega à barra
 
 Um formulário HTML serializa todos os seus campos ao ser enviado, inclusive os

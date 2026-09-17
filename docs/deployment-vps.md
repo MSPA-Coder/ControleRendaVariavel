@@ -29,10 +29,16 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 
 1. Crie `.env.vps` a partir de `.env.vps.example`.
 2. Restaure por canal seguro `.secrets/secret_key`,
-   `.secrets/postgres_password`, `.secrets/collector_agent_token` e o material
-   de `.certs/` exigido pelo build. Nunca registre ou exiba seus conteúdos. No
-   Docker Compose não-Swarm, use modo `700` no diretório `.secrets` e `644` nos
-   arquivos, pois PostgreSQL e Flask usam usuários Linux diferentes.
+   `.secrets/postgres_password`, `.secrets/collector_agent_token`,
+   `.secrets/patrimonio_token` e o material de `.certs/` exigido pelo build.
+   Nunca registre ou exiba seus conteúdos. No Docker Compose não-Swarm, use modo
+   `700` no diretório `.secrets` e `644` nos arquivos, pois PostgreSQL e Flask
+   usam usuários Linux diferentes.
+
+   **`patrimonio_token` precisa existir mesmo sem a integração em uso**: o
+   Compose recusa subir com um segredo declarado e ausente, e o `deploy.sh`
+   faria rollback de uma implantação sem defeito nenhum. Gere um valor novo com
+   `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
 3. Suba a pilha:
 
    ```bash

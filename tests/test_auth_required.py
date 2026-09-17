@@ -83,6 +83,13 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         "portfolio.collector_agent_configuration",
         "portfolio.collector_agent_quotes",
         "portfolio.collector_agent_failure",
+        # Publicação do resumo de patrimônio, lida pelo consolidador -- outro
+        # aplicativo, sem sessão nem usuário aqui. A permissão dela é o token
+        # compartilhado, conferido em tempo constante dentro da view, e sem ele
+        # a rota não devolve dado nenhum. Escopo por usuário seria pior que
+        # inútil: produziria um patrimônio consolidado que esconde posições sem
+        # avisar.
+        "portfolio.patrimonio_resumo",
         "static",
         # CSS do banner de mensagem, que `login.html` usa. Sem isto o
         # `requer_login` bloquearia o próprio arquivo que estiliza "Usuário ou
