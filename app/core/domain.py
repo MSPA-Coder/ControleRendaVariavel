@@ -68,15 +68,27 @@ def signed_period_return(
     elapsed_days: int,
     period_days: int,
 ) -> Decimal | None:
-    """Project a position return to the selected workbook horizon."""
+    """Projeta o retorno da posição para o horizonte escolhido, por
+    capitalização composta: ``(1 + r) ** (período / dias) - 1``.
+
+    DIVERGE DA PLANILHA de propósito (decisão de 15/09/2026). A planilha usa
+    ``sinal(r) * ((1 + |r|) ** (período / dias) - 1)``, que coincide com a
+    composta para ganho e erra para perda: -30% em 100 dias virava -160,6% ao
+    ano, perda impossível para uma posição comprada. Pela composta, -72,8%.
+
+    Perda total (``r = -1``) projeta -100%. Perda maior que o investido
+    (``r < -1``, possível numa venda) não tem projeção composta com sentido e
+    devolve ``None`` -- "não aplicável", como as divisões por zero.
+    """
     if total_return is None or elapsed_days <= 0 or period_days <= 0:
         return None
-    sign = -ONE if total_return < ZERO else ONE
-    base = ONE + abs(total_return)
+    base = ONE + total_return
+    if base < ZERO:
+        return None
     with localcontext() as context:
         context.prec = 28
         exponent = Decimal(period_days) / Decimal(elapsed_days)
-        return sign * (base**exponent - ONE)
+        return base**exponent - ONE
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,9 +138,12 @@ def calculate_position(
     )
     if breakeven is not None:
         breakeven = breakeven - ONE if average_cost < current else -(breakeven - ONE)
-    daily = safe_div(previous, current)
+    # Variação do dia contra o FECHAMENTO, como em qualquer cotação: fechamento
+    # 100 e preço 110 é +10%. A planilha media contra o preço atual
+    # (`1 - f / p`, que dava +9,09%) -- divergência decidida em 15/09/2026.
+    daily = safe_div(current, previous)
     if daily is not None:
-        daily = direction * (ONE - daily)
+        daily = direction * (daily - ONE)
     return PositionMetrics(
         days=days,
         current_price=current,
