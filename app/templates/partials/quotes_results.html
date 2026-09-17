@@ -75,6 +75,7 @@
     <div id="quote-history-chart" class="chart-box"
          data-dates='{{ chart_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
          data-prices='{{ chart_history|map(attribute='price')|map('string')|list|tojson }}'
+         data-open-position-lines='{{ open_position_lines|tojson }}'
          data-currency="{{ selected_ticker.currency }}"
          data-label="{{ selected_ticker.symbol }}"
          {% if selected_benchmark %}

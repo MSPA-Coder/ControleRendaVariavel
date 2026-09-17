@@ -29,6 +29,32 @@
     });
     return latest;
   }
+  function openPositionLines(container) {
+    return parseData(container, "openPositionLines").filter(function (line) {
+      return line && typeof line.openedOn === "string" && Number.isFinite(Number(line.entryPrice));
+    });
+  }
+  function lineColor(index) {
+    return ["#7c3aed", "#c2410c", "#047857", "#be123c"][index % 4];
+  }
+  function chartLabels(rows, lines) {
+    var latest = rows.length ? rows[rows.length - 1].label : null;
+    return Array.from(new Set(rows.map(function (row) { return row.label; }).concat(
+      lines.filter(function (line) { return latest && line.openedOn <= latest; }).map(function (line) { return line.openedOn; })
+    ))).sort();
+  }
+  function positionEntryDatasets(labels, lines) {
+    var latest = labels.length ? labels[labels.length - 1] : null;
+    return lines.filter(function (line) { return latest && line.openedOn <= latest; }).map(function (line, index) {
+      var color = lineColor(index), entryPrice = Number(line.entryPrice);
+      return {
+        type: "line", label: line.label || "Aporte em posição aberta",
+        data: labels.map(function (label) { return label >= line.openedOn ? entryPrice : null; }),
+        borderColor: color, backgroundColor: color, borderDash: [7, 4], borderWidth: 2,
+        pointRadius: 0, pointHoverRadius: 3, spanGaps: false,
+      };
+    });
+  }
   function zoomedSeries(dates, prices, zoom, sharedLatest) {
     if (zoom === "all") return { dates: dates, prices: prices };
     var months = { "1m": 1, "3m": 3, "6m": 6, "1y": 12 }[zoom];
@@ -65,14 +91,18 @@
       return (value / base - 1) * 100;
     });
   }
-  function drawCandles(container, rows, currency) {
+  function drawCandles(container, rows, currency, lines, period) {
     container.replaceChildren();
     var canvas = document.createElement("canvas"), ratio = window.devicePixelRatio || 1, width = 900, height = 300;
     canvas.width = width * ratio; canvas.height = height * ratio; canvas.style.width = "100%"; canvas.style.height = "100%";
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Candles de cotacoes");
     container.appendChild(canvas);
     var ctx = canvas.getContext("2d"); ctx.scale(ratio, ratio);
-    var values = rows.flatMap(function (row) { return [row.low, row.high]; });
+    var latest = rows.length ? rows[rows.length - 1].label : null;
+    var visibleLines = lines.filter(function (line) { return latest && periodKey(line.openedOn, period) <= latest; });
+    var values = rows.flatMap(function (row) { return [row.low, row.high]; }).concat(
+      visibleLines.map(function (line) { return Number(line.entryPrice); })
+    );
     var min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
     var left = 54, right = 16, top = 16, bottom = 38, plotWidth = width - left - right, plotHeight = height - top - bottom;
     function y(value) { return top + (max - value) / span * plotHeight; }
@@ -86,6 +116,14 @@
       var yOpen = y(row.open), yClose = y(row.close), bodyTop = Math.min(yOpen, yClose), bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
       ctx.fillRect(x - body / 2, bodyTop, body, bodyHeight);
       if (rows.length <= 18 || index % Math.ceil(rows.length / 8) === 0) { ctx.fillStyle = "#5c7180"; ctx.fillText(row.label, x - body, height - 14); }
+    });
+    visibleLines.forEach(function (line, index) {
+      var start = periodKey(line.openedOn, period);
+      var startIndex = rows.findIndex(function (row) { return row.label >= start; });
+      if (startIndex < 0) return;
+      ctx.save(); ctx.strokeStyle = lineColor(index); ctx.lineWidth = 2; ctx.setLineDash([7, 4]);
+      ctx.beginPath(); ctx.moveTo(left + step * (startIndex + .5), y(Number(line.entryPrice)));
+      ctx.lineTo(left + step * (rows.length - .5), y(Number(line.entryPrice))); ctx.stroke(); ctx.restore();
     });
   }
   // Modo comparação: duas linhas (ticker selecionado x índice de
@@ -136,6 +174,7 @@
     var container = document.getElementById("quote-history-chart"); if (!container) return;
     var primaryDates = parseData(container, "dates"), primaryPrices = parseData(container, "prices").map(Number);
     var currency = container.dataset.currency || "BRL";
+    var positionLines = openPositionLines(container);
     var benchmarkLabel = container.dataset.benchmarkLabel;
     if (benchmarkLabel) {
       var benchmarkDates = parseData(container, "benchmarkDates"), benchmarkPrices = parseData(container, "benchmarkPrices").map(Number);
@@ -159,10 +198,12 @@
     var dates = primary.dates, prices = primary.prices;
     var rows = aggregate(dates, prices, period);
     if (!rows.length) return;
-    if (period !== "daily") { drawCandles(container, rows, currency); return; }
+    if (period !== "daily") { drawCandles(container, rows, currency, positionLines, period); return; }
     if (typeof Chart === "undefined") return;
+    var labels = chartLabels(rows, positionLines);
+    var positionEntryLines = positionEntryDatasets(labels, positionLines);
     container.replaceChildren(); var canvas = document.createElement("canvas"); container.appendChild(canvas);
-    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: rows.map(function (row) { return row.label; }), datasets: [{ data: rows.map(function (row) { return row.close; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
+    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: false }, ...positionEntryLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: positionEntryLines.length > 0 }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
   }
   function init() {
     var type = document.querySelector("[data-quote-chart-type]"), period = document.querySelector("[data-quote-chart-period]"), zoom = document.querySelector("[data-quote-chart-zoom]");
