@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import click
 from flask import Flask, current_app
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from app import db
 from app.accounts.users import UserManagementError, set_active, upsert_from_cli
@@ -24,7 +23,6 @@ from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
-    QuoteHistory,
     User,
 )
 from app.quotes.history_import import (
@@ -32,7 +30,7 @@ from app.quotes.history_import import (
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
-from app.routes.helpers import quote_update_targets
+from app.routes.helpers import quote_update_targets, upsert_quote_history
 
 
 def register_commands(app: Flask) -> None:
@@ -198,28 +196,17 @@ def import_position_history() -> None:
     failures: list[str] = []
     for target, start_date in targets:
         try:
-            quotes = fetch_yahoo_daily_quotes(target, start_date, datetime.now(UTC).date())
+            quotes = fetch_yahoo_daily_quotes(target, start_date, date.today())
         except QuoteHistoryImportError:
             failures.append(target.symbol)
             continue
         imported.extend((target.id, quote) for quote in quotes)
     if imported:
         with db.session.begin():
-            for ticker_id, quote in imported:
-                statement = insert(QuoteHistory).values(
-                    ticker_id=ticker_id,
-                    price=quote.price,
-                    recorded_date=quote.recorded_date,
-                    recorded_at=quote.recorded_at,
-                )
-                statement = statement.on_conflict_do_update(
-                    index_elements=[QuoteHistory.ticker_id, QuoteHistory.recorded_date],
-                    set_={
-                        "price": statement.excluded.price,
-                        "recorded_at": statement.excluded.recorded_at,
-                    },
-                )
-                db.session.execute(statement)
+            upsert_quote_history(
+                (ticker_id, quote.price, quote.recorded_date, quote.recorded_at)
+                for ticker_id, quote in imported
+            )
     click.echo(f"{len(imported)} daily quotes imported for {len(targets) - len(failures)} tickers.")
     if failures:
         click.echo("No Yahoo history for: " + ", ".join(failures), err=True)
