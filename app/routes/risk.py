@@ -67,7 +67,7 @@ def risk_report() -> str:
 
     # Drawdown por carteira, sempre agrupado por moeda — nunca somando
     # moedas diferentes, mesmo princípio do resto do app (ver
-    # app/portfolio.py).
+    # app/positions/portfolio.py).
     #
     # A quantidade vem do extrato (`position_movement_events`), não do saldo
     # de hoje: medir o passado com a posição atual mostraria um patrimônio

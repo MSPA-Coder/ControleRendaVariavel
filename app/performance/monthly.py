@@ -192,7 +192,7 @@ def build_monthly_performance(
 
     ``events`` já chega filtrado para essa moeda — quem separa por moeda é
     a rota, porque moedas nunca são somadas neste app (mesma regra de
-    ``app/portfolio.py``); este módulo não tenta descobrir moeda, só
+    ``app/positions/portfolio.py``); este módulo não tenta descobrir moeda, só
     recebe o rótulo pronto em ``currency``.
 
     1. ``portfolio_flow_series`` produz a série diária de patrimônio

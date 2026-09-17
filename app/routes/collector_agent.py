@@ -186,7 +186,7 @@ def collector_agent_quotes():
     if len(positions_payload) + len(options_payload) > 2_000:
         abort(400, "Quantidade de cotações inválida.")
     try:
-        # A escrita é a mesma do coletor local (app/collector_database.py); o
+        # A escrita é a mesma do coletor local (app/collector/database.py); o
         # que este endpoint acrescenta é desconfiar de cada campo antes.
         persist_readings(
             [_stock_reading(item) for item in positions_payload],

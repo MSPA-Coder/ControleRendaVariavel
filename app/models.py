@@ -1202,7 +1202,7 @@ class AuditLog(Base):
 
     Só estado e acesso -- entrada, saída, gestão de contas e as escritas que
     alteram a carteira. Consulta não entra; ver o docstring de
-    `app/auditoria.py`.
+    `app/accounts/auditoria.py`.
 
     `user_id` é `SET NULL` e não `CASCADE`: apagar uma conta não pode apagar o
     registro do que ela fez. É o oposto do que o resto do schema faz, e é

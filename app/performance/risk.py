@@ -1,6 +1,6 @@
 """KPIs de risco da carteira.
 
-Segue a mesma convenção de ``app/greeks.py``: os cálculos estatísticos
+Segue a mesma convenção de ``app/options/greeks.py``: os cálculos estatísticos
 contínuos (desvio padrão, percentil, covariância) usam ``float``
 internamente — são matemática de modelo, não contabilidade — e só viram
 ``Decimal`` na fronteira de saída (``_to_decimal``), com a precisão
