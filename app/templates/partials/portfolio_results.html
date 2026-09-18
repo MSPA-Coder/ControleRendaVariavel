@@ -124,6 +124,20 @@
 </div>
 
 <section class="summary portfolio-summary" aria-label="Resumo da carteira">
+  <article class="currency-card" aria-label="Total consolidado em moeda base">
+    <h3 class="currency-card-title">Total consolidado · {{ moeda_base }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Valor atual</span>
+        {% if conversao.possivel %}
+          <strong data-sensitive-value="true">{{ conversao.total|currency(moeda_base, 0) }}</strong>
+          {% if conversao.taxa %}<small>USD/BRL de {{ conversao.taxa.data.strftime('%d/%m/%Y') }}</small>{% endif %}
+        {% else %}
+          <strong>-</strong><small>{{ conversao.motivo }}</small>
+        {% endif %}
+      </article>
+    </div>
+  </article>
   {% for total in portfolio.currency_totals %}
   {# O simbolo acompanha o rotulo de cada valor, nao o numero: como prefixo
      ele consumia a largura do card e quebrava o numero em duas linhas. #}
@@ -162,6 +176,29 @@
   </article>
   {% endfor %}
 </section>
+
+{% if portfolio.ticker_groups %}
+<section class="table-wrap" aria-labelledby="ticker-groups-title">
+  <h2 id="ticker-groups-title">Posições por ativo</h2>
+  <p class="form-help">Leitura agregada entre corretoras; as posições originais continuam separadas acima.</p>
+  <table class="portfolio-table">
+    <thead><tr><th>Carteira</th><th>Ticker</th><th>Corretoras</th><th>Qtde. líquida</th><th>Custo</th><th>Valor atual</th><th>Resultado</th></tr></thead>
+    <tbody>
+    {% for group in portfolio.ticker_groups %}
+      <tr>
+        <td>{{ group.portfolio_name }}</td>
+        <td>{{ group.ticker }}</td>
+        <td>{{ group.brokers|join(', ') }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.net_quantity|quantity(group.currency) }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.cost_total|currency(group.currency, 0) }}</td>
+        <td class="number" data-sensitive-value="true">{{ group.current_total|currency(group.currency, 0) }}</td>
+        <td class="number {{ group.result_total|sign_class }}" data-sensitive-value="true">{{ group.result_total|currency(group.currency, 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 </div>
 {% if include_heartbeat_oob %}
   {{ collector.heartbeat(collector_heartbeat, polling=false, oob=true) }}

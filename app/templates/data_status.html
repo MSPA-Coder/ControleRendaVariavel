@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Status dos dados · Controle de Renda Variável{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <h1>Status dos dados</h1>
+  <p>Leitura da qualidade que sustenta a carteira em {{ referencia.strftime('%d/%m/%Y') }}.</p>
+</section>
+<section class="summary portfolio-summary" aria-label="Qualidade das cotações">
+  <article class="currency-card"><h3 class="currency-card-title">Posições reais</h3><div class="currency-card-grid"><article><span>Monitoradas</span><strong>{{ quality.positions }}</strong></article><article><span>Cotadas</span><strong>{{ quality.quoted }}</strong></article></div></article>
+  <article class="currency-card"><h3 class="currency-card-title">Pendências</h3><div class="currency-card-grid"><article><span>Sem cotação</span><strong class="{{ 'negative' if quality.missing else '' }}">{{ quality.missing }}</strong></article><article><span>Desatualizadas</span><strong class="{{ 'negative' if quality.stale else '' }}">{{ quality.stale }}</strong></article><article><span>Com erro</span><strong class="{{ 'negative' if quality.errors else '' }}">{{ quality.errors }}</strong></article></div></article>
+  <article class="currency-card"><h3 class="currency-card-title">Câmbio para a carteira</h3><div class="currency-card-grid"><article>{% if conversao.possivel %}<span>Conversão em BRL disponível</span><strong class="positive">Íntegra</strong>{% if conversao.taxa %}<small>USD/BRL de {{ conversao.taxa.data.strftime('%d/%m/%Y') }}</small>{% endif %}{% else %}<span>Conversão em BRL indisponível</span><strong class="negative">Atenção</strong><small>{{ conversao.motivo }}</small>{% endif %}</article></div></article>
+</section>
+<p class="form-help">Sem posições não é erro. Uma pendência só aparece quando há uma posição real cujo dado necessário está ausente, atrasado ou em erro.</p>
+{% endblock %}

@@ -15,6 +15,7 @@ from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_POLL_INTERVAL_SECONDS,
 )
+from app.core.currency import TaxaDeCambio
 from app.models import (
     AppSetting,
     Broker,
@@ -1049,12 +1050,25 @@ def converted_market_exposure_chart_data(
     )
 
 
+def usd_brl_rate_on(referencia: date) -> TaxaDeCambio | None:
+    """Último fechamento USD/BRL até a data, jamais uma cotação futura."""
+    row = db.session.execute(
+        select(QuoteHistory.price, QuoteHistory.recorded_date)
+        .join(Ticker, Ticker.id == QuoteHistory.ticker_id)
+        .where(Ticker.symbol == "USDBRL=X", QuoteHistory.recorded_date <= referencia)
+        .order_by(QuoteHistory.recorded_date.desc(), QuoteHistory.recorded_at.desc())
+        .limit(1)
+    ).one_or_none()
+    return TaxaDeCambio(row.price, row.recorded_date) if row is not None else None
+
+
 def latest_usd_brl_quote() -> Decimal | None:
-    """Última cotação manual/importada de USDBRL=X, em BRL por USD."""
-    return db.session.scalar(
+    """Compatibilidade dos gráficos: última cotação USD/BRL disponível."""
+    row = db.session.execute(
         select(QuoteHistory.price)
         .join(Ticker, Ticker.id == QuoteHistory.ticker_id)
         .where(Ticker.symbol == "USDBRL=X")
         .order_by(QuoteHistory.recorded_date.desc(), QuoteHistory.recorded_at.desc())
         .limit(1)
-    )
+    ).scalar_one_or_none()
+    return row

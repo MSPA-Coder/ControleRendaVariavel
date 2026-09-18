@@ -11,6 +11,7 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
 from app import db
+from app.core.currency import converter_totais
 from app.core.validation import parse_finite_decimal
 from app.models import Broker, Portfolio, Position, QuoteHistory, Side, Ticker
 from app.positions.closure import (
@@ -25,6 +26,7 @@ from app.positions.closure import (
 from app.positions.portfolio import (
     PortfolioView,
     build_portfolio,
+    data_quality,
     effective_position_quote,
     position_movement_results,
 )
@@ -54,6 +56,7 @@ from app.routes.helpers import (
     quote_stale_after_seconds,
     real_portfolio_records,
     selected_filters,
+    usd_brl_rate_on,
 )
 
 RETURN_PERIODS = (
@@ -216,9 +219,17 @@ def portfolio_results_context() -> dict[str, object]:
         stale_after_seconds=quote_stale_after_seconds(),
         return_period_days=selected_return_days,
     )
+    data_da_tela = date.today()
+    conversao = converter_totais(
+        [(total.currency, total.current_total) for total in portfolio.currency_totals],
+        referencia=data_da_tela,
+        taxa_usd_brl=usd_brl_rate_on(data_da_tela),
+    )
     expanded = expanded_position_ids()
     return {
         "portfolio": portfolio,
+        "conversao": conversao,
+        "moeda_base": "BRL",
         # Resultado hipotético por aporte é exclusivo do extrato de Ações.
         # Cada mapa usa o mesmo snapshot de cotação já calculado para a linha;
         # não há uma nova consulta por movimento nem escrita dinâmica no ORM.
@@ -262,6 +273,28 @@ def index() -> str:
     # O estado do coletor nao vem mais daqui: o liga/desliga mora em
     # Configuracoes e o pulso, na barra do menu, se atualiza por conta propria.
     return render_template("index.html", brokers=brokers(), **results)
+
+
+@bp.get("/data-status")
+def data_status() -> str:
+    """Qualidade dos dados financeiros que sustentam a leitura da carteira."""
+
+    portfolio = build_portfolio(
+        positions_query(),
+        stale_after_seconds=quote_stale_after_seconds(),
+    )
+    referencia = date.today()
+    conversao = converter_totais(
+        [(total.currency, total.current_total) for total in portfolio.currency_totals],
+        referencia=referencia,
+        taxa_usd_brl=usd_brl_rate_on(referencia),
+    )
+    return render_template(
+        "data_status.html",
+        quality=data_quality(portfolio.positions),
+        conversao=conversao,
+        referencia=referencia,
+    )
 
 
 @bp.get("/positions/<int:position_id>")

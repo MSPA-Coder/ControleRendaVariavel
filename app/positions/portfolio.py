@@ -101,11 +101,94 @@ class MarketGroup:
 
 
 @dataclass(frozen=True, slots=True)
+class TickerGroup:
+    """Leitura somada de um papel mantido em mais de uma corretora.
+
+    A agregação não altera nem funde as posições persistidas. Corretora,
+    extrato, custo e encerramento continuam pertencendo às linhas de origem.
+    """
+
+    ticker: str
+    currency: str
+    portfolio_name: str
+    simulated: bool
+    positions: list[PositionView]
+    net_quantity: Decimal
+    cost_total: Decimal
+    current_total: Decimal
+    result_total: Decimal
+    brokers: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DataQuality:
+    """Estado observável das posições, sem transformar ausência em alarme."""
+
+    positions: int
+    quoted: int
+    missing: int
+    stale: int
+    errors: int
+
+
+def data_quality(views: list[PositionView]) -> DataQuality:
+    """Conta a qualidade das cotações que a própria Carteira está exibindo."""
+
+    return DataQuality(
+        positions=len(views),
+        quoted=sum(view.metrics is not None for view in views),
+        missing=sum(view.quote_status == "missing" for view in views),
+        stale=sum(view.quote_status == "stale" for view in views),
+        errors=sum(view.quote_status == "error" for view in views),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class PortfolioView:
     positions: list[PositionView]
     currency_totals: list[PortfolioTotal]
     broker_groups: list[BrokerGroup]
     market_groups: list[MarketGroup]
+    ticker_groups: list[TickerGroup]
+
+
+def aggregate_by_ticker(views: list[PositionView]) -> list[TickerGroup]:
+    """Agrupa a leitura por papel, sem modificar as linhas de posição."""
+
+    grouped: dict[tuple[int, str, int], list[PositionView]] = {}
+    for view in views:
+        position = view.position
+        grouped.setdefault((position.portfolio_id, position.currency, position.ticker_id), []).append(view)
+    groups = []
+    for (_, currency, _), group_views in grouped.items():
+        sample = group_views[0].position
+        metrics = [view.metrics for view in group_views if view.metrics is not None]
+        groups.append(
+            TickerGroup(
+                ticker=sample.ticker,
+                currency=currency,
+                portfolio_name=sample.portfolio_ref.name,
+                simulated=sample.simulated,
+                positions=group_views,
+                net_quantity=sum(
+                    (
+                        view.position.quantity
+                        if view.position.side == Side.BUY
+                        else -view.position.quantity
+                        for view in group_views
+                    ),
+                    Decimal("0"),
+                ),
+                cost_total=sum((abs(metric.build_value) for metric in metrics), Decimal("0")),
+                current_total=sum((abs(metric.unwind_value) for metric in metrics), Decimal("0")),
+                result_total=sum((metric.result for metric in metrics), Decimal("0")),
+                brokers=tuple(sorted({view.position.broker for view in group_views})),
+            )
+        )
+    return sorted(
+        groups,
+        key=lambda group: (group.simulated, group.portfolio_name, group.currency, group.ticker),
+    )
 
 
 def position_movement_results(
@@ -307,4 +390,10 @@ def build_portfolio(
                 hhi=hhi,
             )
         )
-    return PortfolioView(views, currency_total_views, broker_groups, market_groups)
+    return PortfolioView(
+        views,
+        currency_total_views,
+        broker_groups,
+        market_groups,
+        aggregate_by_ticker(views),
+    )
