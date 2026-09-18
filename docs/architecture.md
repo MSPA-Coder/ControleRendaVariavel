@@ -96,6 +96,25 @@ milhares de chamadas legítimas.
 **usuário** do aplicativo, e do outro lado titular é a pessoa dona do dinheiro:
 são conceitos diferentes com o mesmo nome, e a rota prefere recusar a adivinhar.
 
+### Dashboard patrimonial v2
+
+`GET /patrimonio/v2/resumo` é uma extensão somente-leitura, paralela à v1:
+mantém o envelope e as listas legadas e acrescenta `carteiras`,
+`posicoes_atuais`, desempenho TWR por moeda, ganhos realizados agregados,
+renda por moeda/tipo e `enderecos` para as telas de posição, transação,
+provento, performance e qualidade. Movimentos e transações nunca são enviados
+como linhas brutas; são apenas insumos para os agregados.
+
+Além de `data=AAAA-MM-DD`, aceita `periodo=week|month|quarter|semester|year|all`.
+Para integração com o consolidador, `inicio=AAAA-MM-DD` define o início
+inclusivo do intervalo e prevalece sobre `periodo`; `data` define o fim
+inclusivo. Todos os valores decimais são strings, a autenticação é Bearer e a
+resposta usa `Cache-Control: no-store`. O snapshot histórico deixa custo e
+resultado nulos quando não há reconstrução confiável, acompanhado do motivo.
+As consultas que formam uma resposta v2 compartilham uma transação
+`REPEATABLE READ`, evitando misturar posições, fluxos e desempenho de estados
+concorrentes do banco.
+
 ### O endereço que chega à barra
 
 Um formulário HTML serializa todos os seus campos ao ser enviado, inclusive os

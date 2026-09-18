@@ -160,6 +160,11 @@ def sessao(app_com_banco):
     from app import db
 
     with app_com_banco.app_context():
+        # Os endpoints agregados exigem um snapshot consistente. A transacao
+        # de isolamento dos testes deve reproduzir essa pre-condicao antes de
+        # qualquer fixture inserir dados, em vez de obrigar a aplicacao a ter
+        # um desvio exclusivo para a suite.
+        db.session().connection(execution_options={"isolation_level": "REPEATABLE READ"})
         try:
             yield db.session
         finally:

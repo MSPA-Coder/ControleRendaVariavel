@@ -43,6 +43,7 @@ from app.models import (
 from app.routes.patrimonio import identidade
 
 ROTA = "/patrimonio/v1/resumo"
+ROTA_V2 = "/patrimonio/v2/resumo"
 TOKEN = "token-de-teste-com-mais-de-trinta-e-dois-caracteres"
 
 
@@ -131,6 +132,14 @@ def test_metodo_diferente_de_get_nao_existe(client, app):
     assert client.post(ROTA).status_code == 405
 
 
+def test_v2_exige_o_mesmo_bearer_e_so_responde_get(client, app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_TITULAR"] = "Mariano"
+
+    assert client.get(ROTA_V2).status_code == 401
+    assert client.post(ROTA_V2, headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 405
+
+
 # ---------------------------------------------------------------------------
 # O conteúdo -- com banco
 # ---------------------------------------------------------------------------
@@ -198,6 +207,12 @@ def publicando(app_com_banco):
 def pedir(publicando, **parametros):
     return publicando.get(
         ROTA, query_string=parametros, headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+
+
+def pedir_v2(publicando, **parametros):
+    return publicando.get(
+        ROTA_V2, query_string=parametros, headers={"Authorization": f"Bearer {TOKEN}"}
     )
 
 
@@ -299,6 +314,54 @@ def test_o_envelope_traz_as_listas_que_o_outro_sistema_preenche(sessao, cenario,
 
     assert corpo["contas"] == []
     assert corpo["ativos_alternativos"] == []
+
+
+@banco
+def test_v2_publica_snapshot_enriquecido_sem_simulada(sessao, cenario, publicando):
+    sessao.add(_posicao(cenario, cenario["real"]))
+    sessao.add(_posicao(cenario, cenario["simulada"], quantity=Decimal("1000")))
+    sessao.flush()
+
+    resposta = pedir_v2(publicando, periodo="year")
+    corpo = resposta.get_json()
+
+    assert resposta.status_code == 200
+    assert resposta.headers["Cache-Control"] == "no-store"
+    assert corpo["contrato"] == "patrimonio/v2"
+    assert corpo["periodo"]["nome"] == "year"
+    assert corpo["qualidade"]["status"] == "ok"
+    assert len(corpo["posicoes"]) == 1
+    (linha,) = corpo["posicoes_atuais"]
+    assert linha["instituicao"] == "genial"
+    assert linha["custo_total"] == "12000.00"
+    # A posicao usa o modo liquido por padrao, portanto o contrato publica o
+    # mesmo resultado ajustado que as telas do sistema, nao o ganho bruto.
+    assert linha["resultado_nao_realizado"] == "3628.55"
+    assert corpo["omitidas"]["simuladas"] == 1
+    assert all(not carteira["simulada"] for carteira in corpo["carteiras"])
+
+
+@banco
+def test_v2_historico_usa_quantidade_da_data_e_nao_a_atual(
+    sessao, cenario, com_extrato, publicando
+):
+    corpo = pedir_v2(
+        publicando,
+        data="2026-02-14",
+        inicio="2026-02-01",
+        periodo="week",
+    ).get_json()
+
+    assert corpo["periodo"] == {
+        "nome": "week",
+        "inicio": "2026-02-01",
+        "fim": "2026-02-14",
+    }
+    (linha,) = corpo["posicoes_atuais"]
+    assert linha["quantidade"] == "100"
+    assert linha["valor_a_mercado"] == "4000.00"
+    assert linha["custo_total"] is None
+    assert linha["motivo_valores"] == "custo_historico_nao_confiavel"
 
 
 @banco

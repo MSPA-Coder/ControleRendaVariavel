@@ -90,7 +90,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from flask import abort, current_app, jsonify, request, url_for
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -637,3 +637,60 @@ def _quantas_opcoes() -> int:
         )
         or 0
     )
+
+
+@bp.get("/patrimonio/v2/resumo")
+def patrimonio_resumo_v2():
+    """Dashboard agregado de patrimônio, paralelo e compatível com a v1."""
+    _exigir_token()
+    titular_nome = _titular()
+    from app.patrimonio.dashboard import build_dashboard, parse_period
+
+    # Esta rota combina diversas consultas. Fixe o isolamento antes da primeira
+    # delas para que uma operacao concorrente nao misture posicoes, fluxos e
+    # desempenho de instantes diferentes. Se um chamador deliberadamente ja
+    # abriu uma transacao, ela precisa oferecer a mesma garantia.
+    sessao = db.session()
+    if sessao.in_transaction():
+        isolamento = sessao.execute(text("SHOW transaction_isolation")).scalar_one()
+        if isolamento.replace("_", " ").lower() != "repeatable read":
+            raise RuntimeError(
+                "patrimonio/v2 exige transacao REPEATABLE READ antes da primeira consulta"
+            )
+    else:
+        sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+
+    hoje = datetime.now(MARKET_TIMEZONE).date()
+    pedida = (request.args.get("data") or "").strip()
+    if not pedida:
+        referencia = hoje
+    else:
+        try:
+            referencia = date.fromisoformat(pedida)
+        except ValueError:
+            abort(400, "Data inválida: use AAAA-MM-DD.")
+        if referencia > hoje:
+            abort(400, "Data futura: não há posição nem fechamento para ela.")
+    try:
+        periodo = parse_period(request.args.get("periodo"))
+    except ValueError as exc:
+        abort(400, str(exc))
+    inicio_raw = (request.args.get("inicio") or "").strip()
+    inicio = None
+    if inicio_raw:
+        try:
+            inicio = date.fromisoformat(inicio_raw)
+        except ValueError:
+            abort(400, "Início inválido: use AAAA-MM-DD.")
+        if inicio > referencia:
+            abort(400, "Início posterior à data de referência.")
+    payload = build_dashboard(
+        titular=identidade(titular_nome),
+        titular_nome=titular_nome,
+        reference=referencia,
+        period=periodo,
+        start_override=inicio,
+    )
+    resposta = jsonify(payload)
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
