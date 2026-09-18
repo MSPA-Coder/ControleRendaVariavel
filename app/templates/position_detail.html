@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}{{ position.ticker }} — Controle de Renda Variável{% endblock %}
+
+{% block header_controls %}
+<a class="button" href="{{ url_for('portfolio.index', broker=position.broker, expanded=position.id) }}">Voltar à carteira</a>
+<a class="button button-primary" href="{{ url_for('portfolio.edit_position', position_id=position.id) }}">Editar posição</a>
+{% endblock %}
+
+{% block content %}
+{% set m = item.metrics %}
+<section class="position-detail-heading">
+  <div><p class="eyebrow">{{ position.broker }} · {{ position.portfolio_ref.name }}</p><h1>{{ position.ticker }}</h1></div>
+  <p class="status status-{{ item.quote_status }}">{{ item.quote_status }}</p>
+</section>
+
+{% if m %}
+<section class="summary position-metrics" aria-label="Métricas da posição">
+  <article class="currency-card"><span>Quantidade</span><strong data-sensitive-value="true">{{ position.quantity|quantity(position.currency) }}</strong></article>
+  <article class="currency-card"><span>Preço atual</span><strong data-sensitive-value="true">{{ m.current_price|currency(position.currency, trim=true) }}</strong></article>
+  <article class="currency-card"><span>Resultado</span><strong class="{{ m.result|sign_class }}" data-sensitive-value="true">{{ m.result|currency(position.currency, 0) }}</strong></article>
+  <article class="currency-card"><span>Retorno</span><strong class="{{ m.return_pct|sign_class }}" data-sensitive-value="true">{{ m.return_pct|percent(2) }}</strong></article>
+  <article class="currency-card"><span>Stop gain</span><strong data-sensitive-value="true">{{ m.stop_gain|currency(position.currency, trim=true) }}</strong></article>
+  <article class="currency-card"><span>Breakeven</span><strong class="{{ m.breakeven|sign_class }}" data-sensitive-value="true">{{ m.breakeven|percent(2) }}</strong></article>
+</section>
+{% else %}
+<p class="flash flash-warning">A posição ainda não tem uma cotação utilizável para calcular as métricas.</p>
+{% endif %}
+
+<section class="position-detail-section">
+  <h2>Fechamentos históricos</h2>
+  {% if grafico %}
+  <figure class="quote-chart">
+    <svg viewBox="0 0 {{ grafico.largura }} {{ grafico.altura }}" role="img" aria-label="Variação dos fechamentos de {{ position.ticker }}">
+      <polyline class="quote-chart-line" points="{{ grafico.pontos }}"></polyline>
+    </svg>
+    <figcaption>De {{ grafico.minimo|currency(position.currency, trim=true) }} a {{ grafico.maximo|currency(position.currency, trim=true) }} nos últimos {{ fechamentos|length }} fechamentos.</figcaption>
+  </figure>
+  {% else %}
+  <p class="empty">Ainda não há fechamentos suficientes para desenhar o gráfico.</p>
+  {% endif %}
+</section>
+
+<section class="position-detail-section">
+  <h2>Movimentos</h2>
+  {% with movements = position.movements %}
+    {% include "partials/position_movements.html" %}
+  {% endwith %}
+</section>
+{% endblock %}

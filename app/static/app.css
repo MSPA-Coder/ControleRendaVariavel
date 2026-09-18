@@ -1003,3 +1003,16 @@ tr.transaction-open { background: var(--accent-soft); }
   max-width: 26rem;
   padding: .6rem .8rem;
 }
+
+/* Página de posição: os cartões só organizam métricas que o domínio já
+   calcula; não introduzem uma segunda fórmula na camada visual. */
+.position-detail-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.position-detail-heading h1 { margin: 0; }
+.position-detail-heading .eyebrow { margin: 0 0 .25rem; color: var(--muted); }
+.position-metrics { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.position-metrics .currency-card { min-width: 0; }
+.position-detail-section { margin-top: 2rem; }
+.quote-chart { margin: 0; padding: 1rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); }
+.quote-chart svg { display: block; width: 100%; height: auto; }
+.quote-chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.quote-chart figcaption { margin-top: .5rem; color: var(--muted); font-size: .875rem; }

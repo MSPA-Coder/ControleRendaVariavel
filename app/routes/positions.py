@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from app import db
 from app.core.validation import parse_finite_decimal
-from app.models import Broker, Portfolio, Position, Side, Ticker
+from app.models import Broker, Portfolio, Position, QuoteHistory, Side, Ticker
 from app.positions.closure import (
     close_open_position,
     create_or_merge_position,
@@ -64,6 +64,34 @@ RETURN_PERIODS = (
     (365, "Anual"),
 )
 RETURN_PERIOD_DAYS = tuple(days for days, _ in RETURN_PERIODS)
+
+
+def _grafico_de_fechamentos(fechamentos: list[QuoteHistory]) -> dict[str, str] | None:
+    """Geometria simples do histórico da posição, sem JavaScript.
+
+    O gráfico é só uma leitura dos fechamentos que já existem no banco. Ele
+    não chama o coletor, não preenche dias ausentes e não tenta transformar o
+    preço bruto em valor a mercado: essa transformação continua em
+    ``build_portfolio`` e depende dos parâmetros da posição.
+    """
+    if len(fechamentos) < 2:
+        return None
+    largura, altura, margem = 640, 180, 12
+    valores = [fechamento.price for fechamento in fechamentos]
+    menor, maior = min(valores), max(valores)
+    amplitude = maior - menor or Decimal("1")
+    pontos = []
+    for indice, valor in enumerate(valores):
+        x = margem + (largura - 2 * margem) * indice / (len(valores) - 1)
+        y = altura - margem - (altura - 2 * margem) * float((valor - menor) / amplitude)
+        pontos.append(f"{x:.1f},{y:.1f}")
+    return {
+        "pontos": " ".join(pontos),
+        "largura": str(largura),
+        "altura": str(altura),
+        "minimo": str(menor),
+        "maximo": str(maior),
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +262,36 @@ def index() -> str:
     # O estado do coletor nao vem mais daqui: o liga/desliga mora em
     # Configuracoes e o pulso, na barra do menu, se atualiza por conta propria.
     return render_template("index.html", brokers=brokers(), **results)
+
+
+@bp.get("/positions/<int:position_id>")
+def position_detail(position_id: int) -> str:
+    """A leitura analítica de uma posição que pertence ao usuário logado."""
+    position = owned_or_404(Position, position_id)
+    portfolio = build_portfolio(
+        [position],
+        stale_after_seconds=quote_stale_after_seconds(),
+    )
+    (item,) = portfolio.positions
+    fechamentos = list(
+        db.session.scalars(
+            select(QuoteHistory)
+            .where(QuoteHistory.ticker_id == position.ticker_id)
+            .order_by(QuoteHistory.recorded_date.desc())
+            .limit(60)
+        )
+    )
+    fechamentos.reverse()
+    return render_template(
+        "position_detail.html",
+        item=item,
+        position=position,
+        movement_results=position_movement_results(
+            position, item.metrics.current_price if item.metrics is not None else None
+        ),
+        fechamentos=fechamentos,
+        grafico=_grafico_de_fechamentos(fechamentos),
+    )
 
 
 @bp.get("/positions/new")
