@@ -8,6 +8,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models import Market
 
@@ -62,14 +63,48 @@ def _indicator_values(
     return values
 
 
+def _exchange_timezone(series: dict[str, Any], target: TickerImportTarget) -> ZoneInfo:
+    """Fuso em que o Yahoo marca o dia de cada barra diária.
+
+    A barra diária vem carimbada no início do dia de negociação, no fuso da
+    bolsa: 13:00 UTC na B3 e 13:30/14:30 UTC em Nova York, o que em UTC cai
+    no mesmo dia. Câmbio (`USDBRL=X`) é carimbado à meia-noite de Londres,
+    que no horário de verão britânico é 23:00 UTC do dia ANTERIOR. Lida em
+    UTC, de abril a outubro cada taxa ia para a véspera, e a segunda-feira
+    virava uma taxa de domingo.
+
+    Sem o fuso, a série é recusada. Deduzir pelo mercado cadastrado não
+    serve: `USDBRL=X` está cadastrado como NYSE, e o fuso de Nova York
+    repetiria o mesmo erro.
+    """
+
+    meta = series.get("meta")
+    name = meta.get("exchangeTimezoneName") if isinstance(meta, dict) else None
+    if isinstance(name, str) and name:
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    raise QuoteHistoryImportError(
+        f"Yahoo Finance did not report the exchange timezone for {target.symbol}."
+    )
+
+
 def fetch_yahoo_daily_quotes(
     target: TickerImportTarget,
     start_date: date,
     end_date: date,
     *,
     timeout_seconds: float = 10,
+    now: datetime | None = None,
 ) -> list[DailyQuote]:
-    """Fetch closing prices without holding a database transaction open."""
+    """Fetch closing prices without holding a database transaction open.
+
+    Devolve só dias já encerrados no fuso da bolsa do ticker: o dia corrente
+    fica de fora mesmo quando está dentro do período pedido (ver o comentário
+    do laço). ``now`` é o instante que define esse dia, e por padrão é o
+    atual.
+    """
 
     period_start = int(datetime.combine(start_date, time.min, tzinfo=UTC).timestamp())
     period_end = int(
@@ -125,6 +160,15 @@ def fetch_yahoo_daily_quotes(
     # indice de graca.
     field = ("adjclose", "adjclose") if target.is_benchmark else ("quote", "close")
     closes = _indicator_values(indicators, field[0], field[1], target)
+    exchange_timezone = _exchange_timezone(series, target)
+    # O dia corrente fica de fora. O Yahoo o devolve com o preço do momento no
+    # lugar do fechamento e, no câmbio e em dia sem pregão, numa entrada extra
+    # carimbada com a hora da consulta. Esse carimbo é POSTERIOR ao da barra
+    # definitiva, e `upsert_quote_history` só substitui por um instante igual
+    # ou mais novo: gravado, o preço parcial nunca mais seria trocado pelo
+    # fechamento. O dia corrente dos tickers com RTD continua chegando pelo
+    # coletor, que grava por conta própria (`app.collector.database`).
+    current_exchange_date = (now or datetime.now(UTC)).astimezone(exchange_timezone).date()
 
     quotes_by_date: dict[date, DailyQuote] = {}
     for index, timestamp in enumerate(timestamps):
@@ -133,6 +177,7 @@ def fetch_yahoo_daily_quotes(
             continue
         try:
             recorded_at = datetime.fromtimestamp(int(timestamp), UTC)
+            recorded_date = recorded_at.astimezone(exchange_timezone).date()
             price = Decimal(str(close))
         except (TypeError, ValueError, InvalidOperation, OSError, OverflowError) as exc:
             raise QuoteHistoryImportError(
@@ -140,7 +185,6 @@ def fetch_yahoo_daily_quotes(
             ) from exc
         if not price.is_finite() or price < 0:
             raise QuoteHistoryImportError(f"Invalid Yahoo history received for {target.symbol}.")
-        recorded_date = recorded_at.date()
-        if start_date <= recorded_date <= end_date:
+        if start_date <= recorded_date <= end_date and recorded_date < current_exchange_date:
             quotes_by_date[recorded_date] = DailyQuote(recorded_date, price, recorded_at)
     return [quotes_by_date[recorded_date] for recorded_date in sorted(quotes_by_date)]

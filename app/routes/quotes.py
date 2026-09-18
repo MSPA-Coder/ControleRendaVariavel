@@ -283,11 +283,14 @@ def create_quote_history_entry() -> ResponseReturnValue:
     if db.session.get(Ticker, ticker_id) is None:
         flash("Selecione um ticker cadastrado.", "error")
         return _quote_management_response(None)
-    # Meia-noite UTC do dia informado: um lançamento manual não tem um
-    # horário real de observação (ao contrário do coletor RTD), então usa
-    # um horário representativo determinístico só para preencher a coluna
-    # NOT NULL ``recorded_at``.
-    recorded_at = datetime.combine(recorded_date, time.min, tzinfo=UTC)
+    # Último instante UTC do dia informado: um lançamento manual não tem um
+    # horário real de observação (ao contrário do coletor RTD), então usa um
+    # horário representativo determinístico só para preencher a coluna NOT
+    # NULL ``recorded_at``. Precisa ser o último instante, não o primeiro —
+    # o upsert compartilhado (``upsert_quote_history``) resolve conflito por
+    # ``recorded_at >=``, e uma importação Yahoo carimba a barra do mesmo dia
+    # às 13h UTC (abertura da B3); meia-noite perderia sempre para ela.
+    recorded_at = datetime.combine(recorded_date, time.max, tzinfo=UTC)
     upsert_quote_history([(ticker_id, price, recorded_date, recorded_at)])
     db.session.commit()
     flash("Cotação histórica registrada.", "success")

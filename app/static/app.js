@@ -263,8 +263,8 @@ htmx.config.includeIndicatorStyles = false;
 
   // Trocar a carteira de uma posicao para a Simulada, ao editar, apaga o
   // extrato de movimentos e a transacao aberta espelhada (ver
-  // `discard_simulation_history` em app/position_closure.py e
-  // app/option_position_closure.py). Editar posicao e operacao rotineira e
+  // `discard_simulation_history` em app/positions/closure.py e
+  // app/options/closure.py). Editar posicao e operacao rotineira e
   // reversivel -- nao merece confirmacao sempre --, mas essa combinacao
   // especifica destroi historico sem avisar. Por isso a pergunta e
   // condicional: so quando a carteira escolhida no <select> for a Simulada E

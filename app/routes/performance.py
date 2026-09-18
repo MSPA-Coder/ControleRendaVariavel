@@ -69,7 +69,7 @@ def monthly_performance() -> str:
     tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}
 
     # Mesmo principio do resto do app: nunca somar moedas diferentes (ver
-    # app/portfolio.py e app/routes/risk.py).
+    # app/positions/portfolio.py e app/routes/risk.py).
     events_by_currency: dict[str, list[HoldingEvent]] = {}
     for event in events:
         ticker = tickers.get(event.ticker_id)

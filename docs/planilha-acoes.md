@@ -338,8 +338,10 @@ Os gráficos de alocação, corretora e mercado mostram, em cada item, o valor
 atual e seu percentual, com títulos de coluna. Cada tela conserva as visões
 separadas por moeda e, quando o recorte filtrado tiver BRL e USD, acrescenta
 uma visão consolidada em USD: valores em BRL são divididos pela última cotação
-histórica do ticker de referência `USDBRL=X` (BRL por USD). Sem essa cotação,
-o sistema não mistura moedas e mantém apenas as visões separadas.
+histórica do ticker de referência `USDBRL=X` (BRL por USD). Como a importação
+do Yahoo só grava dias encerrados, essa é a taxa de fechamento do último dia
+importado, salvo lançamento manual mais recente. Sem essa cotação, o sistema
+não mistura moedas e mantém apenas as visões separadas.
 
 Posições sem primeira cotação permanecem visíveis nas três análises em uma
 tabela própria, com a situação **Aguardando primeira cotação RTD**. Elas não
