@@ -32,6 +32,15 @@ TRÊS COISAS QUE ELE OMITE, E DIZ QUE OMITIU
 As três contagens vão em `omitidas`. Omissão contada é omissão visível; omissão
 silenciosa é um patrimônio errado com cara de completo.
 
+O ENDEREÇO É DAQUI
+
+Cada posição leva `endereco`: o caminho, relativo à raiz deste sistema, da
+tela onde ela se explica -- a carteira filtrada pela corretora, com o extrato
+da posição aberto. Quem consome junta o caminho ao endereço público que já
+conhece; o id continua opaco. Posição já encerrada não tem tela, e vai com
+`endereco` nulo. A carteira mostra só as posições de quem está logado, então o
+link de uma posição de outro dono abre a carteira sem ela.
+
 HOJE E UMA DATA PASSADA SÃO DUAS PERGUNTAS
 
 **Hoje** é a carteira que está aberta, pela cotação ao vivo do coletor.
@@ -81,7 +90,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from flask import abort, current_app, jsonify, request
+from flask import abort, current_app, jsonify, request, url_for
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
@@ -269,8 +278,13 @@ class _Foto:
         preco: Decimal,
         preco_em: str,
         situacao_do_preco: str,
+        viva: bool = True,
     ) -> None:
-        """`quantidade` já vem com o sinal do lado, e `preco` já multiplicado."""
+        """`quantidade` já vem com o sinal do lado, e `preco` já multiplicado.
+
+        `viva` diz se a posição ainda existe na carteira, e com isso se há uma
+        tela para onde levar quem clica nela.
+        """
         valor = quantidade * preco
         self.linhas.append(
             {
@@ -287,6 +301,11 @@ class _Foto:
                 "preco_em": preco_em,
                 "fonte_do_preco": SISTEMA,
                 "situacao_do_preco": situacao_do_preco,
+                "endereco": (
+                    url_for("portfolio.index", broker=corretora, expanded=posicao_id)
+                    if viva
+                    else None
+                ),
             }
         )
         bloco = self.totais.setdefault(moeda, {"moeda": moeda, "total": Decimal("0"), "linhas": 0})
@@ -346,6 +365,7 @@ class _Origem:
 
     corretora_id: int
     multiplicador: Decimal
+    viva: bool
 
 
 def _sinal(lado: Side) -> Decimal:
@@ -401,13 +421,15 @@ def _extrato_das_acoes() -> tuple[list[HoldingEvent], dict[tuple[str, int], _Ori
     ):
         chave = ("stock", posicao_id)
         eventos.append(HoldingEvent(dia, ticker_id, _sinal(lado) * quantidade, chave))
-        origens[chave] = _Origem(corretora_id, multiplicador)
+        origens[chave] = _Origem(corretora_id, multiplicador, viva=True)
     for dia, posicao_id, ticker_id, quantidade, corretora_id in db.session.execute(encerradas):
         chave = ("stock", posicao_id)
         # O sinal já foi aplicado quando o arquivo foi gravado. O multiplicador
         # não foi guardado: veja o docstring do módulo.
         eventos.append(HoldingEvent(dia, ticker_id, quantidade, chave))
-        origens[chave] = _Origem(corretora_id, Decimal("1"))
+        # Viva é quem ainda está na carteira; o arquivo não tira isso dela.
+        viva = chave in origens and origens[chave].viva
+        origens[chave] = _Origem(corretora_id, Decimal("1"), viva=viva)
     return eventos, origens
 
 
@@ -543,6 +565,7 @@ def _fotografar_passado(foto: _Foto, referencia: date) -> dict[str, int]:
             # e quem lê precisa poder ver isso.
             preco_em=dia_do_preco.isoformat(),
             situacao_do_preco="fechamento",
+            viva=origem.viva,
         )
     return {
         "simuladas": _simuladas_em(referencia),

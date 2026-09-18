@@ -23,7 +23,9 @@ from decimal import Decimal
 
 import pytest
 
+from app import login_manager
 from app.models import (
+    ROLE_ADMIN,
     Broker,
     Dividend,
     Market,
@@ -562,3 +564,69 @@ def test_hoje_e_o_dia_em_brasilia(sessao, cenario, publicando, monkeypatch):
 @banco
 def test_a_resposta_nao_pode_ser_guardada_por_intermediario(sessao, cenario, publicando):
     assert pedir(publicando).headers["Cache-Control"] == "no-store"
+
+
+# --- O endereço leva à tela de origem --------------------------------------
+
+
+@banco
+def test_a_posicao_leva_a_carteira_com_o_proprio_extrato_aberto(sessao, cenario, publicando):
+    """O caminho é relativo: o endereço público é de quem consome."""
+    posicao = _posicao(cenario, cenario["real"])
+    sessao.add(posicao)
+    sessao.flush()
+
+    (linha,) = pedir(publicando).get_json()["posicoes"]
+
+    assert linha["endereco"] == f"/?broker=Genial&expanded={posicao.id}"
+
+
+@banco
+def test_no_passado_a_posicao_viva_leva_a_mesma_tela(sessao, cenario, com_extrato, publicando):
+    (linha,) = pedir(publicando, data="2026-02-14").get_json()["posicoes"]
+
+    assert linha["endereco"] == f"/?broker=Genial&expanded={com_extrato.id}"
+
+
+@banco
+def test_posicao_encerrada_nao_tem_para_onde_levar(sessao, cenario, publicando):
+    """Ela só existe no arquivo; um link para a carteira abriria sem ela."""
+    sessao.add(
+        PositionLedgerArchive(
+            owner_id=cenario["usuario"].id,
+            occurred_on=date(2025, 6, 2),
+            ticker_id=cenario["papel"].id,
+            portfolio_id=cenario["real"].id,
+            broker_id=cenario["corretora"].id,
+            instrument="stock",
+            source_position_id=987,
+            resulting_signed_quantity=Decimal("200"),
+        )
+    )
+    sessao.add(_fechamento(cenario, date(2025, 7, 1), "30"))
+    sessao.flush()
+
+    (linha,) = pedir(publicando, data="2025-07-01").get_json()["posicoes"]
+
+    assert linha["endereco"] is None
+
+
+@banco
+def test_o_endereco_publicado_abre_o_extrato_da_posicao(
+    sessao, cenario, com_extrato, app_com_banco, monkeypatch
+):
+    """O caminho publicado (conferido acima) é o que a carteira de fato entende."""
+    usuario = cenario["usuario"]
+    usuario.role = ROLE_ADMIN
+    usuario.is_active_user = True
+    usuario.must_change_password = False
+    monkeypatch.setattr(login_manager, "_user_callback", lambda _user_id: usuario)
+    navegador = app_com_banco.test_client()
+    with navegador.session_transaction() as sessao_http:
+        sessao_http["_user_id"] = str(usuario.id)
+        sessao_http["_fresh"] = True
+
+    resposta = navegador.get(f"/?broker=Genial&expanded={com_extrato.id}")
+
+    assert resposta.status_code == 200, resposta.headers.get("Location")
+    assert 'aria-expanded="true"' in resposta.get_data(as_text=True)
