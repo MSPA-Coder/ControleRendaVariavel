@@ -74,6 +74,24 @@ Três coisas ficam **sempre** de fora, com a contagem no envelope: carteira
 simulada (não é patrimônio), opções (ainda não publicadas) e posição sem
 cotação. Omissão contada é omissão visível.
 
+`?data=AAAA-MM-DD` responde **uma data passada**, e isso é outra conta, não a
+de hoje com outro rótulo: a quantidade de cada posição vem do extrato
+(`position_movements` mais o arquivo das encerradas, pela mesma linha do tempo
+que o TWR usa) e o preço é o **fechamento** daquele dia em `quote_history`, ou
+o último antes dele. A data do preço viaja em `preco_em` -- sábado vale o
+fechamento de sexta, e quem lê precisa poder ver isso. Fechamento com mais de
+sete dias não serve, e a posição conta como sem cotação: aplicar o preço de um
+mês antes produziria um valor que nunca existiu. "Hoje" é o dia em **Brasília**,
+e o preço de hoje é a cotação ao vivo do coletor. Duas heranças do extrato
+ficam registradas: `opened_on` de posição antiga costuma ser a data do
+cadastro, não a da compra, e o arquivo das encerradas não guarda o
+multiplicador da cotação (elas entram com 1).
+
+O teto de requisições dessa rota vale para quem chega **sem** o token -- é essa
+a ameaça que ele contém. Quem apresenta o token certo é isento, porque o
+consolidador reconstrói a história uma data por vez, e anos de fotos são
+milhares de chamadas legítimas.
+
 `PATRIMONIO_TITULAR` é obrigatório para publicar. Aqui `owner_id` aponta para o
 **usuário** do aplicativo, e do outro lado titular é a pessoa dona do dinheiro:
 são conceitos diferentes com o mesmo nome, e a rota prefere recusar a adivinhar.
@@ -440,10 +458,11 @@ fica na borda** — o vhost deste projeto, versionado em
 `limit_req` compartilhada ao `POST /login` definida em
 `../_manutencao/vps/nginx/conf.d/00-comum.conf`, e isso é requisito da
 implantação atual. Outra topologia precisa manter proteção equivalente na borda
-ou adotar armazenamento compartilhado para o limitador. As três rotas do agente
-coletor (`/api/collector/*`), que ficam fora do gate de sessão, têm limite
-próprio de `60 per minute; 2000 per hour` aplicado pela própria aplicação — são
-a única superfície alcançável sem sessão.
+ou adotar armazenamento compartilhado para o limitador. As rotas fora do gate de
+sessão têm limite próprio aplicado pela própria aplicação: as três do agente
+coletor (`/api/collector/*`), `60 per minute; 2000 per hour`, e o resumo de
+patrimônio, `30 per minute; 600 per hour` — este último isentando quem
+apresenta o token, pelo motivo escrito na seção do resumo.
 
 Detalhes de operação, publicação e verificação estão em
 [`docs/deployment-vps.md`](deployment-vps.md).

@@ -28,6 +28,10 @@ O modelo, em quatro peças:
   corretora, só ticker: a renda é rateada pela fração da posição que o
   recorte (carteira ou corretora filtrada) detinha na data do pagamento.
 
+O resumo de patrimônio numa data passada (``app.routes.patrimonio``) usa a
+mesma linha do tempo, posição a posição (``QuantityTimeline.quantities_at``),
+com o fechamento vigente naquela data (``closing_price_on``).
+
 Módulo de domínio puro: só ``Decimal`` e biblioteca padrão. Nada de
 SQLAlchemy, Flask ou ``app.models`` — quem monta ``HoldingEvent`` a partir do
 banco é a camada de leitura (``app.routes.helpers``).
@@ -135,6 +139,7 @@ class QuantityTimeline:
             positions_by_ticker.setdefault(ticker_id, []).append(position_key)
 
         self._positions_by_ticker = positions_by_ticker
+        self._ticker_by_position = ticker_by_position
         self._ticker_ids = sorted(positions_by_ticker)
 
     def quantity_at(self, ticker_id: int, on: date) -> Decimal:
@@ -149,10 +154,59 @@ class QuantityTimeline:
                 total += quantities[index]
         return total
 
+    def quantities_at(self, on: date) -> dict[tuple[str, int], Decimal]:
+        """Quantidade de CADA posição em ``on`` (inclusive), com o sinal do lado.
+
+        É ``quantity_at`` sem a soma por ticker: quem publica o patrimônio de
+        uma data precisa da linha de cada posição, porque cada uma tem a sua
+        corretora. Posição sem evento até a data ainda não existia e fica de
+        fora; posição já encerrada aparece com zero, e quem chama decide o que
+        fazer com ela.
+        """
+        result: dict[tuple[str, int], Decimal] = {}
+        for position_key, (dates, quantities) in self._series_by_position.items():
+            index = bisect_right(dates, on) - 1
+            if index >= 0:
+                result[position_key] = quantities[index]
+        return result
+
+    def ticker_of(self, position_key: tuple[str, int]) -> int:
+        return self._ticker_by_position[position_key]
+
     @property
     def ticker_ids(self) -> list[int]:
         """Tickers com pelo menos um evento, ordenados."""
         return list(self._ticker_ids)
+
+
+#: Um fechamento mais velho que isto não vale para a data pedida. Sete dias
+#: cobrem o fim de semana somado ao feriado mais longo da B3 e de Nova York;
+#: passar disso é buraco na série, não mercado fechado. É a mesma validade que
+#: o consolidador aplica à taxa de câmbio.
+CLOSING_PRICE_VALIDITY_DAYS = 7
+
+
+def closing_price_on(
+    series: Sequence[tuple[date, Decimal]], on: date
+) -> tuple[date, Decimal] | None:
+    """O último fechamento conhecido até ``on`` (inclusive), ou ``None``.
+
+    Sábado vale o fechamento de sexta, e a data devolvida diz isso: é a data
+    do PREÇO, não a pedida. Fechamento com mais de
+    ``CLOSING_PRICE_VALIDITY_DAYS`` dias não serve, e a resposta é ``None`` --
+    aplicar o preço de um mês antes a uma posição que continuou negociando
+    produziria um valor que nunca existiu.
+
+    ``series`` precisa estar em ordem crescente de data.
+    """
+    dates = [observed_date for observed_date, _ in series]
+    index = bisect_right(dates, on) - 1
+    if index < 0:
+        return None
+    observed_date, price = series[index]
+    if (on - observed_date).days > CLOSING_PRICE_VALIDITY_DAYS:
+        return None
+    return observed_date, price
 
 
 def prorate_dividends(

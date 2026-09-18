@@ -41,6 +41,36 @@ def test_agente_bloqueia_apos_o_limite(client, caminho) -> None:
     )
 
 
+TOKEN_DE_PATRIMONIO = "token-de-teste-com-mais-de-trinta-e-dois-caracteres"
+
+
+def test_resumo_de_patrimonio_bloqueia_quem_nao_tem_o_token(app) -> None:
+    """Sem titular configurado a rota recusa com 503 antes de tocar o banco,
+    e o teste conta requisições sem precisar de PostgreSQL."""
+    app.config["PATRIMONIO_TOKEN"] = TOKEN_DE_PATRIMONIO
+    cliente = app.test_client()
+    errado = {"Authorization": "Bearer outro"}
+
+    for _ in range(30):
+        assert cliente.get("/patrimonio/v1/resumo", headers=errado).status_code == 401
+    assert cliente.get("/patrimonio/v1/resumo", headers=errado).status_code == 429
+
+
+def test_resumo_de_patrimonio_nao_limita_quem_tem_o_token(app) -> None:
+    """O consolidador reconstrói a história uma data por vez: anos de fotos são
+    milhares de chamadas legítimas. O teto existe para quem martela sem token,
+    e ele continua valendo para esses mesmo depois das chamadas com token."""
+    app.config["PATRIMONIO_TOKEN"] = TOKEN_DE_PATRIMONIO
+    app.config["PATRIMONIO_TITULAR"] = ""
+    cliente = app.test_client()
+    certo = {"Authorization": f"Bearer {TOKEN_DE_PATRIMONIO}"}
+
+    for _ in range(40):
+        # 503: o token passou, e a rota parou na falta de titular.
+        assert cliente.get("/patrimonio/v1/resumo", headers=certo).status_code == 503
+    assert cliente.get("/patrimonio/v1/resumo").status_code == 401
+
+
 def test_agente_nao_compartilha_orcamento_com_outra_rota(client) -> None:
     """Um limite por endpoint, não um balde único para os três.
 

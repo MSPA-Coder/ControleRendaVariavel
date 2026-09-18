@@ -23,7 +23,21 @@ from decimal import Decimal
 
 import pytest
 
-from app.models import Broker, Market, Portfolio, Position, Quote, Side, Ticker, User
+from app.models import (
+    Broker,
+    Dividend,
+    Market,
+    Portfolio,
+    Position,
+    PositionLedgerArchive,
+    PositionMovement,
+    PositionMovementKind,
+    Quote,
+    QuoteHistory,
+    Side,
+    Ticker,
+    User,
+)
 from app.routes.patrimonio import identidade
 
 ROTA = "/patrimonio/v1/resumo"
@@ -286,16 +300,263 @@ def test_o_envelope_traz_as_listas_que_o_outro_sistema_preenche(sessao, cenario,
 
 
 @banco
-def test_data_passada_e_recusada_em_vez_de_respondida_errado(sessao, cenario, publicando):
-    """Aplicar a cotação de hoje a uma carteira de março inventaria o passado."""
-    resposta = pedir(publicando, data="2026-03-31")
+def test_data_invalida_e_recusada(sessao, cenario, publicando):
+    assert pedir(publicando, data="31/03/2026").status_code == 400
 
-    assert resposta.status_code == 400
+
+# ---------------------------------------------------------------------------
+# Uma data passada -- com banco
+#
+# A pergunta é outra: a quantidade vem do extrato e o preço vem do fechamento
+# daquele dia. A cotação ao vivo do cenário (52,10) aparece de propósito: se
+# ela vazar para uma data passada, o valor esperado não fecha.
+# ---------------------------------------------------------------------------
+
+
+def _movimento(cenario, posicao, dia, kind, delta, resultante):
+    return PositionMovement(
+        owner_id=cenario["usuario"].id,
+        position_id=posicao.id,
+        kind=kind,
+        quantity_delta=Decimal(delta),
+        price=Decimal("40"),
+        occurred_on=dia,
+        result=Decimal("0") if kind == PositionMovementKind.DECREASE else None,
+        resulting_quantity=Decimal(resultante),
+        resulting_average_cost=Decimal("40"),
+    )
+
+
+def _fechamento(cenario, dia, preco, ticker=None):
+    return QuoteHistory(
+        ticker_id=(ticker or cenario["papel"]).id,
+        price=Decimal(preco),
+        recorded_date=dia,
+        recorded_at=datetime.combine(dia, datetime.min.time(), tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def com_extrato(sessao, cenario):
+    """100 ações em 10/01, 300 a partir de 01/03; fechamentos em fevereiro e março."""
+    posicao = _posicao(cenario, cenario["real"], opened_on=date(2026, 1, 10))
+    sessao.add(posicao)
+    sessao.flush()
+    sessao.add_all(
+        [
+            _movimento(cenario, posicao, date(2026, 1, 10), PositionMovementKind.OPEN, "100", "100"),
+            _movimento(
+                cenario, posicao, date(2026, 3, 1), PositionMovementKind.INCREASE, "200", "300"
+            ),
+            _fechamento(cenario, date(2026, 2, 12), "39"),
+            _fechamento(cenario, date(2026, 2, 13), "40"),
+            _fechamento(cenario, date(2026, 3, 31), "45"),
+        ]
+    )
+    sessao.flush()
+    return posicao
 
 
 @banco
-def test_data_invalida_e_recusada(sessao, cenario, publicando):
-    assert pedir(publicando, data="31/03/2026").status_code == 400
+def test_data_passada_usa_a_quantidade_e_o_fechamento_daquele_dia(
+    sessao, cenario, com_extrato, publicando
+):
+    """Sábado, 14/02: 100 ações (o aumento é de março) a 40 (o fechamento de sexta)."""
+    corpo = pedir(publicando, data="2026-02-14").get_json()
+
+    assert corpo["data_de_referencia"] == "2026-02-14"
+    (linha,) = corpo["posicoes"]
+    assert linha["id"] == f"controle-renda-variavel:posicao:{com_extrato.id}"
+    assert linha["instituicao"] == "genial"
+    assert Decimal(linha["quantidade"]) == Decimal("100")
+    assert Decimal(linha["preco"]) == Decimal("40")
+    assert Decimal(linha["valor_a_mercado"]) == Decimal("4000.00")
+    # A data do preço, e não a pedida: quem lê vê que é o fechamento de sexta.
+    assert linha["preco_em"] == "2026-02-13"
+    assert linha["situacao_do_preco"] == "fechamento"
+    assert corpo["totais_por_moeda"] == [{"moeda": "BRL", "total": "4000.00", "linhas": 1}]
+
+
+@banco
+def test_o_aumento_entra_na_data_em_que_aconteceu(sessao, cenario, com_extrato, publicando):
+    corpo = pedir(publicando, data="2026-03-31").get_json()
+
+    (linha,) = corpo["posicoes"]
+    assert Decimal(linha["quantidade"]) == Decimal("300")
+    assert Decimal(linha["valor_a_mercado"]) == Decimal("13500.00")
+
+
+@banco
+def test_antes_da_abertura_a_posicao_nao_existia(sessao, cenario, com_extrato, publicando):
+    corpo = pedir(publicando, data="2026-01-09").get_json()
+
+    assert corpo["posicoes"] == []
+    assert corpo["totais_por_moeda"] == []
+    assert corpo["omitidas"]["sem_cotacao"] == 0
+
+
+@banco
+def test_fechamento_velho_nao_vira_valor_e_a_omissao_e_contada(
+    sessao, cenario, com_extrato, publicando
+):
+    """Em 28/02 o último fechamento é de 13/02: quinze dias é buraco na série.
+
+    Publicar a posição a 40 inventaria um valor; omiti-la calada faria o
+    patrimônio encolher sem aviso. Ela sai, e a contagem diz que saiu.
+    """
+    corpo = pedir(publicando, data="2026-02-28").get_json()
+
+    assert corpo["posicoes"] == []
+    assert corpo["omitidas"]["sem_cotacao"] == 1
+
+
+@banco
+def test_posicao_encerrada_aparece_nas_datas_em_que_existia(sessao, cenario, publicando):
+    """O extrato de uma posição encerrada sobrevive no arquivo, e é ele que a
+    devolve ao passado. Sem ele, todo patrimônio antigo mediria só o que
+    continuou na carteira."""
+    sessao.add_all(
+        [
+            PositionLedgerArchive(
+                owner_id=cenario["usuario"].id,
+                occurred_on=dia,
+                ticker_id=cenario["papel"].id,
+                portfolio_id=cenario["real"].id,
+                broker_id=cenario["corretora"].id,
+                instrument="stock",
+                source_position_id=987,
+                resulting_signed_quantity=Decimal(quantidade),
+            )
+            for dia, quantidade in ((date(2025, 6, 2), "200"), (date(2025, 9, 1), "0"))
+        ]
+    )
+    sessao.add_all(
+        [
+            _fechamento(cenario, date(2025, 7, 1), "30"),
+            _fechamento(cenario, date(2025, 10, 1), "31"),
+        ]
+    )
+    sessao.flush()
+
+    julho = pedir(publicando, data="2025-07-01").get_json()
+    outubro = pedir(publicando, data="2025-10-01").get_json()
+
+    (linha,) = julho["posicoes"]
+    assert linha["id"] == "controle-renda-variavel:posicao:987"
+    assert Decimal(linha["valor_a_mercado"]) == Decimal("6000.00")
+    assert outubro["posicoes"] == []
+
+
+@banco
+def test_posicao_vendida_no_passado_entra_com_valor_negativo(sessao, cenario, publicando):
+    posicao = _posicao(cenario, cenario["real"], side=Side.SELL, quantity=Decimal("50"))
+    sessao.add(posicao)
+    sessao.flush()
+    sessao.add_all(
+        [
+            _movimento(cenario, posicao, date(2026, 1, 10), PositionMovementKind.OPEN, "50", "50"),
+            _fechamento(cenario, date(2026, 2, 13), "40"),
+        ]
+    )
+    sessao.flush()
+
+    (linha,) = pedir(publicando, data="2026-02-13").get_json()["posicoes"]
+
+    assert Decimal(linha["quantidade"]) == Decimal("-50")
+    assert Decimal(linha["valor_a_mercado"]) == Decimal("-2000.00")
+
+
+@banco
+def test_posicao_sem_extrato_conta_desde_o_cadastro(sessao, cenario, publicando):
+    """Posição legada, anterior ao extrato: sem a abertura sintética ela sumiria
+    de toda data passada, e o patrimônio encolheria sem aviso."""
+    sessao.add(_posicao(cenario, cenario["real"], opened_on=date(2026, 1, 10)))
+    sessao.add(_fechamento(cenario, date(2026, 2, 13), "40"))
+    sessao.flush()
+
+    antes = pedir(publicando, data="2026-01-09").get_json()
+    depois = pedir(publicando, data="2026-02-13").get_json()
+
+    assert antes["posicoes"] == []
+    (linha,) = depois["posicoes"]
+    assert Decimal(linha["valor_a_mercado"]) == Decimal("12000.00")
+
+
+@banco
+def test_simulada_fica_de_fora_tambem_no_passado(sessao, cenario, com_extrato, publicando):
+    sessao.add(
+        _posicao(
+            cenario, cenario["simulada"], quantity=Decimal("1000"), opened_on=date(2026, 2, 1)
+        )
+    )
+    sessao.flush()
+
+    janeiro = pedir(publicando, data="2026-01-31").get_json()
+    fevereiro = pedir(publicando, data="2026-02-14").get_json()
+
+    assert janeiro["omitidas"]["simuladas"] == 0
+    assert fevereiro["omitidas"]["simuladas"] == 1
+    assert Decimal(fevereiro["totais_por_moeda"][0]["total"]) == Decimal("4000.00")
+
+
+@banco
+def test_proventos_de_depois_da_data_nao_entram(sessao, cenario, com_extrato, publicando):
+    sessao.add_all(
+        [
+            Dividend(
+                owner_id=cenario["usuario"].id,
+                broker_id=cenario["corretora"].id,
+                ticker_id=cenario["papel"].id,
+                amount=Decimal("12.50"),
+                payment_date=dia,
+            )
+            for dia in (date(2026, 2, 10), date(2026, 3, 10))
+        ]
+    )
+    sessao.flush()
+
+    corpo = pedir(publicando, data="2026-02-14").get_json()
+
+    assert [provento["data"] for provento in corpo["proventos"]] == ["2026-02-10"]
+    assert corpo["proventos_desde"] == "2025-02-14"
+
+
+@banco
+def test_data_futura_e_recusada(sessao, cenario, publicando):
+    assert pedir(publicando, data="2999-01-01").status_code == 400
+
+
+class _NoiteDeSetembro(datetime):
+    """17/09/2026 às 22h30 em Brasília, que em UTC já é 18/09."""
+
+    @classmethod
+    def now(cls, tz=None):
+        instante = datetime(2026, 9, 18, 1, 30, tzinfo=UTC)
+        return instante.astimezone(tz) if tz else instante.replace(tzinfo=None)
+
+
+@banco
+def test_hoje_e_o_dia_em_brasilia(sessao, cenario, publicando, monkeypatch):
+    """Às 22h30 de 17/09, "hoje" é 17/09.
+
+    Em UTC já seria 18/09: o dia 17 viraria passado, sairia do fechamento em
+    vez da cotação ao vivo, e o dia 18 seria aceito como se já tivesse
+    acontecido.
+    """
+    import app.routes.patrimonio as rota
+
+    monkeypatch.setattr(rota, "datetime", _NoiteDeSetembro)
+    sessao.add(_posicao(cenario, cenario["real"]))
+    sessao.flush()
+
+    hoje = pedir(publicando, data="2026-09-17").get_json()
+    amanha = pedir(publicando, data="2026-09-18")
+
+    assert hoje["data_de_referencia"] == "2026-09-17"
+    (linha,) = hoje["posicoes"]
+    assert linha["situacao_do_preco"] == "online"
+    assert Decimal(linha["valor_a_mercado"]) == Decimal("15630.00")
+    assert amanha.status_code == 400
 
 
 @banco

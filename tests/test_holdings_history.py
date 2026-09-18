@@ -21,6 +21,7 @@ from app.positions.holdings_history import (
     DividendEvent,
     HoldingEvent,
     QuantityTimeline,
+    closing_price_on,
     portfolio_flow_series,
     prorate_dividends,
     twr_index_series,
@@ -66,6 +67,54 @@ def test_quantity_at_antes_entre_e_depois_dos_eventos():
     assert timeline.quantity_at(1, date(2026, 3, 10)) == Decimal("150")  # no segundo, inclusive
     assert timeline.quantity_at(1, date(2026, 12, 31)) == Decimal("150")  # depois do último
     assert timeline.quantity_at(999, date(2026, 6, 1)) == Decimal("0")  # ticker sem evento algum
+
+
+def test_quantities_at_da_a_quantidade_de_cada_posicao_e_nao_a_soma_do_ticker():
+    """O resumo de patrimônio publica uma linha por posição, porque cada uma tem
+    a sua corretora; somar por ticker apagaria essa informação."""
+    events = [
+        _event(date(2026, 1, 10), resulting_signed_quantity=Decimal("100"), position_key=("stock", 1)),
+        _event(date(2026, 2, 1), resulting_signed_quantity=Decimal("40"), position_key=("stock", 2)),
+        _event(date(2026, 3, 1), resulting_signed_quantity=Decimal("0"), position_key=("stock", 2)),
+        _event(date(2026, 4, 1), resulting_signed_quantity=Decimal("-10"), position_key=("stock", 3)),
+    ]
+    timeline = QuantityTimeline(events)
+
+    assert timeline.quantities_at(date(2026, 1, 9)) == {}
+    assert timeline.quantities_at(date(2026, 2, 1)) == {
+        ("stock", 1): Decimal("100"),
+        ("stock", 2): Decimal("40"),
+    }
+    # Encerrada aparece com zero; posição que ainda não existia não aparece.
+    assert timeline.quantities_at(date(2026, 3, 15)) == {
+        ("stock", 1): Decimal("100"),
+        ("stock", 2): Decimal("0"),
+    }
+    assert timeline.quantities_at(date(2026, 4, 1))[("stock", 3)] == Decimal("-10")
+    assert timeline.ticker_of(("stock", 2)) == 1
+
+
+def test_fechamento_de_sabado_e_o_de_sexta_com_a_data_de_sexta():
+    serie = [(date(2026, 2, 12), Decimal("39")), (date(2026, 2, 13), Decimal("40"))]
+
+    assert closing_price_on(serie, date(2026, 2, 14)) == (date(2026, 2, 13), Decimal("40"))
+    assert closing_price_on(serie, date(2026, 2, 12)) == (date(2026, 2, 12), Decimal("39"))
+
+
+def test_fechamento_so_vale_por_sete_dias():
+    """Mais que isso é buraco na série, não mercado fechado: aplicar o preço de
+    um mês antes produziria um valor que nunca existiu."""
+    serie = [(date(2026, 2, 13), Decimal("40"))]
+
+    assert closing_price_on(serie, date(2026, 2, 20)) == (date(2026, 2, 13), Decimal("40"))
+    assert closing_price_on(serie, date(2026, 2, 21)) is None
+
+
+def test_sem_fechamento_ate_a_data_nao_ha_preco():
+    serie = [(date(2026, 2, 13), Decimal("40"))]
+
+    assert closing_price_on(serie, date(2026, 2, 12)) is None
+    assert closing_price_on([], date(2026, 2, 12)) is None
 
 
 def test_ticker_ids_sao_os_tickers_com_evento_ordenados():
