@@ -31,6 +31,45 @@ TRÊS COISAS QUE ELE OMITE, E DIZ QUE OMITIU
 
 As três contagens vão em `omitidas`. Omissão contada é omissão visível; omissão
 silenciosa é um patrimônio errado com cara de completo.
+
+HOJE E UMA DATA PASSADA SÃO DUAS PERGUNTAS
+
+**Hoje** é a carteira que está aberta, pela cotação ao vivo do coletor.
+
+**Uma data passada** é outra conta, e só pode ser respondida com o que era
+verdade NAQUELE dia:
+
+- a quantidade vem do extrato (`PositionMovement`, mais o arquivo das posições
+  já encerradas), pela mesma linha do tempo que o TWR usa -- nunca a
+  quantidade de hoje aplicada a março;
+- o preço é o **fechamento** daquele dia em `quote_history`, ou o último antes
+  dele, e a data do preço viaja em `preco_em`. Fechamento com mais de sete dias
+  não vale, e a posição conta como sem cotação.
+
+Aplicar a cotação de hoje a uma carteira de março responderia um número que
+nunca existiu; por isso, antes desta rota saber reconstruir a data, ela
+recusava a pergunta.
+
+"Hoje" é o dia em Brasília. Em UTC, das 21h à meia-noite a rota já estaria no
+dia seguinte, e pedir a data do dia seria recusado como data futura.
+
+Dois limites herdados do extrato, os mesmos do relatório de performance:
+
+- `opened_on` de uma posição antiga costuma ser a data em que ela foi
+  **cadastrada**, e não a da compra. Antes dela, a posição não aparece;
+- o arquivo das posições encerradas não guarda o multiplicador da cotação.
+  Elas entram com multiplicador 1, que é o valor de todas as posições desta
+  base.
+
+E um limite herdado da série de cotações: a linha de `quote_history` de um dia é
+a última observação daquele dia, e se a coleta parou no meio do pregão ela é um
+preço **parcial**, não o fechamento. Este módulo não tem como distinguir os dois
+-- fazê-lo exigiria saber o horário de fechamento de cada bolsa, com feriado,
+leilão e fechamento antecipado, e erraria calado. O mesmo parcial contamina o
+TWR e o risco, então o conserto é de lá: apagar o dia e reimportar. Por isso
+`preco_em` leva o DIA do fechamento, e não o instante: a barra diária do Yahoo
+vem carimbada na abertura do pregão, e publicá-la como instante da observação
+seria pior do que publicar o dia.
 """
 
 from __future__ import annotations
@@ -38,15 +77,35 @@ from __future__ import annotations
 import hmac
 import re
 import unicodedata
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from flask import abort, current_app, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app import db
-from app.models import Dividend, Position
+from app.core.domain import MARKET_TIMEZONE
+from app.models import (
+    Broker,
+    Dividend,
+    OptionPosition,
+    OptionPositionMovement,
+    Portfolio,
+    Position,
+    PositionLedgerArchive,
+    PositionMovement,
+    QuoteHistory,
+    Side,
+    Ticker,
+)
+from app.positions.holdings_history import (
+    CLOSING_PRICE_VALIDITY_DAYS,
+    HoldingEvent,
+    QuantityTimeline,
+    closing_price_on,
+)
 from app.positions.portfolio import effective_position_quote
 from app.routes import bp
 
@@ -73,6 +132,20 @@ def identidade(nome: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", sem_acento.lower()).strip("-")
 
 
+def token_valido_apresentado() -> bool:
+    """O pedido traz o token certo? Falso quando nenhum token está configurado.
+
+    Usada também pelo limitador de taxa (`app/__init__.py`), que isenta quem
+    tem o token: comparar em tempo constante custa quase nada, e é a mesma
+    comparação da rota.
+    """
+    configurado = str(current_app.config.get("PATRIMONIO_TOKEN") or "")
+    if not configurado:
+        return False
+    apresentado = request.headers.get("Authorization", "")
+    return hmac.compare_digest(apresentado, f"Bearer {configurado}")
+
+
 def _exigir_token() -> None:
     """Mesmo contrato do agente do coletor, e pelas mesmas razões.
 
@@ -80,11 +153,9 @@ def _exigir_token() -> None:
     errado. A diferença importa: dizer 401 a quem nunca recebeu token mandaria o
     operador procurar por horas um segredo que nunca foi concedido.
     """
-    configurado = str(current_app.config.get("PATRIMONIO_TOKEN") or "")
-    if not configurado:
+    if not current_app.config.get("PATRIMONIO_TOKEN"):
         abort(503, "Publicação de patrimônio não configurada.")
-    apresentado = request.headers.get("Authorization", "")
-    if not hmac.compare_digest(apresentado, f"Bearer {configurado}"):
+    if not token_valido_apresentado():
         abort(401, "Não autorizado.")
 
 
@@ -132,10 +203,10 @@ def _posicoes_reais() -> list[Position]:
     return list(db.session.scalars(consulta).unique().all())
 
 
-def _proventos(desde: date) -> list[Dividend]:
+def _proventos(desde: date, ate: date) -> list[Dividend]:
     consulta = (
         select(Dividend)
-        .where(Dividend.payment_date >= desde)
+        .where(Dividend.payment_date >= desde, Dividend.payment_date <= ate)
         .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
         .order_by(Dividend.payment_date, Dividend.id)
     )
@@ -166,40 +237,80 @@ def _numero(valor: Decimal) -> str:
     return texto.rstrip("0").rstrip(".") if "." in texto else texto
 
 
-@bp.get("/patrimonio/v1/resumo")
-def patrimonio_resumo():
-    _exigir_token()
-    titular_nome = _titular()
-    titular = identidade(titular_nome)
+@dataclass
+class _Foto:
+    """O que a rota vai publicar, montado posição a posição.
 
+    Hoje e uma data passada chegam aqui pelo mesmo caminho: o que muda entre
+    eles é de onde vêm a quantidade e o preço, não como a linha é escrita. Uma
+    forma só de escrever a linha é o que garante que o consolidador leia as
+    duas perguntas do mesmo jeito.
+    """
+
+    titular: str
+    instituicoes: dict[str, dict] = field(default_factory=dict)
+    linhas: list[dict] = field(default_factory=list)
+    totais: dict[str, dict] = field(default_factory=dict)
+
+    def instituicao(self, nome: str) -> str:
+        chave = identidade(nome)
+        self.instituicoes.setdefault(chave, {"id": chave, "nome": nome, "tipo": "Corretora"})
+        return chave
+
+    def posicao(
+        self,
+        *,
+        posicao_id: int,
+        corretora: str,
+        instrumento: str,
+        mercado: str,
+        moeda: str,
+        quantidade: Decimal,
+        preco: Decimal,
+        preco_em: str,
+        situacao_do_preco: str,
+    ) -> None:
+        """`quantidade` já vem com o sinal do lado, e `preco` já multiplicado."""
+        valor = quantidade * preco
+        self.linhas.append(
+            {
+                "id": f"{SISTEMA}:posicao:{posicao_id}",
+                "titular": self.titular,
+                "instituicao": self.instituicao(corretora),
+                "instrumento": instrumento,
+                "classe": "acao",
+                "mercado": mercado,
+                "quantidade": _numero(quantidade),
+                "moeda": moeda,
+                "preco": _numero(preco),
+                "valor_a_mercado": _dinheiro(valor),
+                "preco_em": preco_em,
+                "fonte_do_preco": SISTEMA,
+                "situacao_do_preco": situacao_do_preco,
+            }
+        )
+        bloco = self.totais.setdefault(moeda, {"moeda": moeda, "total": Decimal("0"), "linhas": 0})
+        bloco["total"] += valor
+        bloco["linhas"] += 1
+
+
+def _data_pedida(hoje: date) -> date:
     pedida = (request.args.get("data") or "").strip()
-    hoje = datetime.now(UTC).date()
-    if pedida:
-        try:
-            referencia = date.fromisoformat(pedida)
-        except ValueError:
-            abort(400, "Data inválida: use AAAA-MM-DD.")
-        if referencia != hoje:
-            # Posição a mercado numa data passada exigiria reconstruir a posição
-            # daquele dia E a cotação daquele dia. Aplicar a cotação de hoje a
-            # uma carteira de março responderia um número que nunca existiu.
-            # Publicar só o presente é uma limitação; publicar o passado errado
-            # é um defeito.
-            abort(
-                400,
-                "Este sistema só publica a posição de hoje: valor a mercado em data "
-                "passada exigiria a cotação daquele dia, e aplicar a de hoje seria "
-                "inventar o passado.",
-            )
-    referencia = hoje
+    if not pedida:
+        return hoje
+    try:
+        referencia = date.fromisoformat(pedida)
+    except ValueError:
+        abort(400, "Data inválida: use AAAA-MM-DD.")
+    if referencia > hoje:
+        abort(400, "Data futura: não há posição nem fechamento para ela.")
+    return referencia
 
-    instituicoes: dict[str, dict] = {}
-    linhas: list[dict] = []
-    totais: dict[str, dict] = {}
+
+def _fotografar_hoje(foto: _Foto) -> dict[str, int]:
+    """A carteira aberta agora, pela cotação ao vivo do coletor."""
     simuladas = 0
     sem_cotacao = 0
-    agora = datetime.now(UTC)
-
     for posicao in _posicoes_reais():
         if posicao.simulated:
             simuladas += 1
@@ -209,54 +320,258 @@ def patrimonio_resumo():
             continue
         preco, observado_em = effective_position_quote(posicao)
         direcao = Decimal("1") if posicao.side.value == "C" else Decimal("-1")
-        valor = direcao * posicao.quantity * preco * posicao.quote_multiplier
-        instituicao = identidade(posicao.broker)
-        instituicoes[instituicao] = {
-            "id": instituicao,
-            "nome": posicao.broker,
-            "tipo": "Corretora",
-        }
-        linhas.append(
-            {
-                "id": f"{SISTEMA}:posicao:{posicao.id}",
-                "titular": titular,
-                "instituicao": instituicao,
-                "instrumento": posicao.ticker,
-                "classe": "acao",
-                "mercado": posicao.ticker_ref.market.value,
-                "quantidade": _numero(posicao.quantity * direcao),
-                "moeda": posicao.currency,
-                "preco": _numero(preco * posicao.quote_multiplier),
-                "valor_a_mercado": _dinheiro(valor),
-                "preco_em": observado_em.isoformat(),
-                "fonte_do_preco": SISTEMA,
-                # O estado que o próprio coletor gravou. A idade do preço quem
-                # diz é `preco_em`, e é ela que o consumidor deve usar para
-                # julgar: o limiar de "velho" desta casa é de 30 segundos,
-                # pensado para uma tela ao vivo durante o pregão, e aplicá-lo a
-                # uma foto diária marcaria como velho todo preço fora do horário
-                # de mercado -- um alarme que toca sempre não avisa nada.
-                "situacao_do_preco": posicao.quote.source_status,
-            }
+        foto.posicao(
+            posicao_id=posicao.id,
+            corretora=posicao.broker,
+            instrumento=posicao.ticker,
+            mercado=posicao.ticker_ref.market.value,
+            moeda=posicao.currency,
+            quantidade=posicao.quantity * direcao,
+            preco=preco * posicao.quote_multiplier,
+            preco_em=observado_em.isoformat(),
+            # O estado que o próprio coletor gravou. A idade do preço quem
+            # diz é `preco_em`, e é ela que o consumidor deve usar para
+            # julgar: o limiar de "velho" desta casa é de 30 segundos,
+            # pensado para uma tela ao vivo durante o pregão, e aplicá-lo a
+            # uma foto diária marcaria como velho todo preço fora do horário
+            # de mercado -- um alarme que toca sempre não avisa nada.
+            situacao_do_preco=posicao.quote.source_status,
         )
-        bloco = totais.setdefault(
-            posicao.currency, {"moeda": posicao.currency, "total": Decimal("0"), "linhas": 0}
+    return {"simuladas": simuladas, "opcoes": _quantas_opcoes(), "sem_cotacao": sem_cotacao}
+
+
+@dataclass(frozen=True, slots=True)
+class _Origem:
+    """O que o extrato não carrega e a linha publicada precisa."""
+
+    corretora_id: int
+    multiplicador: Decimal
+
+
+def _sinal(lado: Side) -> Decimal:
+    return Decimal("1") if lado == Side.BUY else Decimal("-1")
+
+
+def _extrato_das_acoes() -> tuple[list[HoldingEvent], dict[tuple[str, int], _Origem]]:
+    """Todo o extrato de ações das carteiras reais, de todos os donos.
+
+    É a mesma leitura de `app.routes.helpers.position_movement_events`, que
+    alimenta o TWR, com três diferenças: não tem escopo de usuário (pelo mesmo
+    motivo de `_posicoes_reais`), carrega a corretora e o multiplicador de cada
+    posição, e dá a uma posição viva SEM extrato uma abertura sintética em
+    `opened_on` com a quantidade atual. Sem ela, essa posição sumiria de toda
+    data passada: um patrimônio menor, calado. Com ela, a posição conta desde a
+    data em que foi cadastrada, que é tudo o que o banco sabe dela.
+    """
+    data_do_evento = func.coalesce(PositionMovement.occurred_on, Position.opened_on)
+    quantidade_do_evento = func.coalesce(PositionMovement.resulting_quantity, Position.quantity)
+    vivas = (
+        select(
+            data_do_evento,
+            Position.id,
+            Position.ticker_id,
+            Position.side,
+            quantidade_do_evento,
+            Position.broker_id,
+            Position.quote_multiplier,
         )
-        bloco["total"] += valor
-        bloco["linhas"] += 1
+        .select_from(Position)
+        .join(Position.portfolio_ref)
+        .outerjoin(PositionMovement, PositionMovement.position_id == Position.id)
+        .where(Portfolio.simulated.is_(False))
+        .order_by(data_do_evento, PositionMovement.id)
+    )
+    encerradas = (
+        select(
+            PositionLedgerArchive.occurred_on,
+            PositionLedgerArchive.source_position_id,
+            PositionLedgerArchive.ticker_id,
+            PositionLedgerArchive.resulting_signed_quantity,
+            PositionLedgerArchive.broker_id,
+        )
+        .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
+        .where(Portfolio.simulated.is_(False), PositionLedgerArchive.instrument == "stock")
+        .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
+    )
+
+    eventos: list[HoldingEvent] = []
+    origens: dict[tuple[str, int], _Origem] = {}
+    for dia, posicao_id, ticker_id, lado, quantidade, corretora_id, multiplicador in (
+        db.session.execute(vivas)
+    ):
+        chave = ("stock", posicao_id)
+        eventos.append(HoldingEvent(dia, ticker_id, _sinal(lado) * quantidade, chave))
+        origens[chave] = _Origem(corretora_id, multiplicador)
+    for dia, posicao_id, ticker_id, quantidade, corretora_id in db.session.execute(encerradas):
+        chave = ("stock", posicao_id)
+        # O sinal já foi aplicado quando o arquivo foi gravado. O multiplicador
+        # não foi guardado: veja o docstring do módulo.
+        eventos.append(HoldingEvent(dia, ticker_id, quantidade, chave))
+        origens[chave] = _Origem(corretora_id, Decimal("1"))
+    return eventos, origens
+
+
+def _opcoes_detidas_em(referencia: date) -> int:
+    """Quantas opções de carteira real estavam abertas na data.
+
+    Opções continuam fora do resumo; a contagem é o que torna a omissão
+    visível, e numa data passada ela tem de ser a daquela data.
+    """
+    data_do_evento = func.coalesce(OptionPositionMovement.occurred_on, OptionPosition.opened_on)
+    quantidade_do_evento = func.coalesce(
+        OptionPositionMovement.resulting_quantity, OptionPosition.quantity
+    )
+    vivas = (
+        select(data_do_evento, OptionPosition.id, quantidade_do_evento)
+        .select_from(OptionPosition)
+        .join(OptionPosition.portfolio_ref)
+        .outerjoin(
+            OptionPositionMovement,
+            OptionPositionMovement.option_position_id == OptionPosition.id,
+        )
+        .where(Portfolio.simulated.is_(False))
+        .order_by(data_do_evento, OptionPositionMovement.id)
+    )
+    encerradas = (
+        select(
+            PositionLedgerArchive.occurred_on,
+            PositionLedgerArchive.source_position_id,
+            PositionLedgerArchive.resulting_signed_quantity,
+        )
+        .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
+        .where(Portfolio.simulated.is_(False), PositionLedgerArchive.instrument == "option")
+        .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
+    )
+    eventos = [
+        HoldingEvent(dia, 0, quantidade, ("option", posicao_id))
+        for dia, posicao_id, quantidade in (
+            *db.session.execute(vivas),
+            *db.session.execute(encerradas),
+        )
+    ]
+    quantidades = QuantityTimeline(eventos).quantities_at(referencia)
+    return sum(1 for quantidade in quantidades.values() if quantidade != 0)
+
+
+def _simuladas_em(referencia: date) -> int:
+    """Posições simuladas abertas até a data.
+
+    Carteira simulada não guarda extrato, então isto conta as que existem hoje
+    e já existiam na data. Uma simulada encerrada antes de hoje não deixa
+    rastro. É uma contagem aproximada, e só serve para mostrar que houve
+    omissão: nenhuma simulada entra no valor, em data nenhuma.
+    """
+    return int(
+        db.session.scalar(
+            select(func.count())
+            .select_from(Position)
+            .join(Position.portfolio_ref)
+            .where(Portfolio.simulated.is_(True), Position.opened_on <= referencia)
+        )
+        or 0
+    )
+
+
+def _fechamentos(
+    ticker_ids: list[int], referencia: date
+) -> dict[int, list[tuple[date, Decimal]]]:
+    """Os fechamentos que ainda valem para a data, por ticker, em ordem.
+
+    A janela é a própria validade do fechamento: o que é mais velho não seria
+    usado de qualquer forma, e ler a série inteira a cada data pedida tornaria
+    cara a reconstrução de anos de história, uma data por vez.
+    """
+    if not ticker_ids:
+        return {}
+    consulta = (
+        select(QuoteHistory.ticker_id, QuoteHistory.recorded_date, QuoteHistory.price)
+        .where(
+            QuoteHistory.ticker_id.in_(ticker_ids),
+            QuoteHistory.recorded_date <= referencia,
+            QuoteHistory.recorded_date
+            >= referencia - timedelta(days=CLOSING_PRICE_VALIDITY_DAYS),
+        )
+        .order_by(QuoteHistory.ticker_id, QuoteHistory.recorded_date)
+    )
+    series: dict[int, list[tuple[date, Decimal]]] = {}
+    for ticker_id, dia, preco in db.session.execute(consulta):
+        series.setdefault(ticker_id, []).append((dia, preco))
+    return series
+
+
+def _fotografar_passado(foto: _Foto, referencia: date) -> dict[str, int]:
+    """A carteira como estava no fim de `referencia`, a preço de fechamento."""
+    eventos, origens = _extrato_das_acoes()
+    linha_do_tempo = QuantityTimeline(eventos)
+    abertas = {
+        chave: quantidade
+        for chave, quantidade in linha_do_tempo.quantities_at(referencia).items()
+        if quantidade != 0
+    }
+
+    ticker_ids = sorted({linha_do_tempo.ticker_of(chave) for chave in abertas})
+    tickers = {
+        ticker.id: ticker
+        for ticker in db.session.scalars(select(Ticker).where(Ticker.id.in_(ticker_ids)))
+    }
+    corretora_ids = sorted({origens[chave].corretora_id for chave in abertas})
+    corretoras = dict(
+        db.session.execute(select(Broker.id, Broker.name).where(Broker.id.in_(corretora_ids)))
+        .tuples()
+        .all()
+    )
+    fechamentos = _fechamentos(ticker_ids, referencia)
+
+    sem_cotacao = 0
+    for chave in sorted(abertas, key=lambda item: item[1]):
+        ticker = tickers[linha_do_tempo.ticker_of(chave)]
+        fechamento = closing_price_on(fechamentos.get(ticker.id, []), referencia)
+        if fechamento is None:
+            sem_cotacao += 1
+            continue
+        dia_do_preco, preco = fechamento
+        origem = origens[chave]
+        foto.posicao(
+            posicao_id=chave[1],
+            corretora=corretoras[origem.corretora_id],
+            instrumento=ticker.symbol,
+            mercado=ticker.market.value,
+            moeda=ticker.currency,
+            quantidade=abertas[chave],
+            preco=preco * origem.multiplicador,
+            # A data do PREÇO, não a pedida: sábado vale o fechamento de sexta,
+            # e quem lê precisa poder ver isso.
+            preco_em=dia_do_preco.isoformat(),
+            situacao_do_preco="fechamento",
+        )
+    return {
+        "simuladas": _simuladas_em(referencia),
+        "opcoes": _opcoes_detidas_em(referencia),
+        "sem_cotacao": sem_cotacao,
+    }
+
+
+@bp.get("/patrimonio/v1/resumo")
+def patrimonio_resumo():
+    _exigir_token()
+    titular_nome = _titular()
+    foto = _Foto(titular=identidade(titular_nome))
+
+    hoje = datetime.now(MARKET_TIMEZONE).date()
+    referencia = _data_pedida(hoje)
+    if referencia == hoje:
+        omitidas = _fotografar_hoje(foto)
+    else:
+        omitidas = _fotografar_passado(foto, referencia)
 
     desde = referencia - timedelta(days=JANELA_DE_PROVENTOS_EM_DIAS)
     proventos = []
-    for provento in _proventos(desde):
-        instituicao = identidade(provento.broker)
-        instituicoes.setdefault(
-            instituicao, {"id": instituicao, "nome": provento.broker, "tipo": "Corretora"}
-        )
+    for provento in _proventos(desde, referencia):
         proventos.append(
             {
                 "id": f"{SISTEMA}:provento:{provento.id}",
-                "titular": titular,
-                "instituicao": instituicao,
+                "titular": foto.titular,
+                "instituicao": foto.instituicao(provento.broker),
                 "instrumento": provento.ticker_ref.symbol,
                 "tipo": provento.kind.value,
                 "moeda": provento.ticker_ref.currency,
@@ -270,26 +585,22 @@ def patrimonio_resumo():
             "contrato": CONTRATO,
             "sistema": SISTEMA,
             "papel": "investimento",
-            "gerado_em": agora.isoformat(),
+            "gerado_em": datetime.now(UTC).isoformat(),
             "data_de_referencia": referencia.isoformat(),
-            "titulares": [{"id": titular, "nome": titular_nome}],
-            "instituicoes": [instituicoes[chave] for chave in sorted(instituicoes)],
+            "titulares": [{"id": foto.titular, "nome": titular_nome}],
+            "instituicoes": [foto.instituicoes[chave] for chave in sorted(foto.instituicoes)],
             # Conta é do outro publicador: o caixa das corretoras vive no
             # Controle Bancário desde a decisão de 16/09/2026.
             "contas": [],
             "totais_por_moeda": [
                 {"moeda": moeda, "total": _dinheiro(dados["total"]), "linhas": dados["linhas"]}
-                for moeda, dados in sorted(totais.items())
+                for moeda, dados in sorted(foto.totais.items())
             ],
-            "posicoes": linhas,
+            "posicoes": foto.linhas,
             "proventos": proventos,
             "proventos_desde": desde.isoformat(),
             "ativos_alternativos": [],
-            "omitidas": {
-                "simuladas": simuladas,
-                "opcoes": _quantas_opcoes(),
-                "sem_cotacao": sem_cotacao,
-            },
+            "omitidas": omitidas,
         }
     )
     # A foto carrega a carteira inteira: nenhum intermediário deve guardá-la.
@@ -298,8 +609,6 @@ def patrimonio_resumo():
 
 
 def _quantas_opcoes() -> int:
-    from app.models import OptionPosition
-
     return int(
         db.session.scalar(
             select(db.func.count())

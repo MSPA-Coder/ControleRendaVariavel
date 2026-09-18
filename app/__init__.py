@@ -346,17 +346,21 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "60 per minute; 2000 per hour",
         override_defaults=True,
     )
-    # O resumo de patrimônio é a quarta superfície alcançável sem sessão, e a
-    # mais cara das quatro: cada chamada percorre a carteira inteira e os
-    # proventos do período antes de qualquer 401 sair. O consolidador consulta
-    # uma vez por tela; este teto é folgado para ele e estreito para quem
-    # estiver martelando.
+    # O resumo de patrimônio é a quarta superfície alcançável sem sessão. O
+    # teto é para quem martela a rota SEM o token: é essa a ameaça que ele
+    # contém. Quem apresenta o token certo fica isento, porque o consolidador
+    # reconstrói a história uma data por vez -- anos de fotos são milhares de
+    # chamadas legítimas, e o teto de 600 por hora transformaria a carga
+    # inicial numa tarde inteira de 429.
+    from app.routes.patrimonio import token_valido_apresentado
+
     aplicar_limite(
         app,
         limiter,
         "portfolio.patrimonio_resumo",
         "30 per minute; 600 per hour",
         override_defaults=True,
+        exempt_when=token_valido_apresentado,
     )
     for endpoint in (
         "portfolio.collector_agent_quotes",
