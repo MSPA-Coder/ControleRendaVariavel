@@ -34,6 +34,7 @@ from app.routes.helpers import (
     quote_ticker_records,
     quote_update_target_tickers,
     quote_update_targets,
+    selected_currency_filter,
     ticker_price_series,
     upsert_quote_history,
 )
@@ -148,7 +149,10 @@ def _quote_history_context(
     montam: eles respondem ao HTMX com esta mesma regiao ja atualizada, em vez
     de mandar o navegador recarregar a pagina inteira.
     """
+    selected_currency = selected_currency_filter()
     tickers = quote_ticker_records()
+    if selected_currency != "ALL":
+        tickers = [ticker for ticker in tickers if ticker.currency == selected_currency]
     selected_ticker: Ticker | None = None
     if ticker_id is not None:
         selected_ticker = next(
@@ -166,6 +170,8 @@ def _quote_history_context(
     candidates = benchmark_candidates(
         exclude_ticker_id=selected_ticker.id if selected_ticker else None
     )
+    if selected_currency != "ALL":
+        candidates = [ticker for ticker in candidates if ticker.currency == selected_currency]
     selected_benchmark: Ticker | None = None
     if benchmark_id is not None:
         selected_benchmark = next(
@@ -238,7 +244,7 @@ def _quote_management_response(
                 ticker_id=ticker_id, benchmark_id=benchmark_id, management_open=True
             ),
         )
-    query: dict[str, int] = {}
+    query: dict[str, int | str] = {"currency": selected_currency_filter()}
     if ticker_id is not None:
         query["ticker_id"] = ticker_id
     if benchmark_id is not None:

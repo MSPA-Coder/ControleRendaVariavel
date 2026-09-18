@@ -21,6 +21,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
 from app.accounts.authorization import requer_admin
+from app.core.currency_filter import ALL
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 from app.core.validation import parse_finite_decimal
 from app.models import (
@@ -55,6 +56,7 @@ from app.routes.helpers import (
     parse_positive_id,
     poll_interval_seconds,
     portfolio_records,
+    selected_currency_filter,
     selected_filters,
     user_preferences,
 )
@@ -107,6 +109,11 @@ def _positions(
         statement = statement.where(OptionPosition.portfolio_id == portfolio_id)
     if broker:
         statement = statement.where(Broker.name == broker)
+    selected_currency = selected_currency_filter()
+    if selected_currency != ALL:
+        statement = statement.join(OptionPosition.contract).join(OptionContract.ticker_ref).where(
+            Ticker.currency == selected_currency
+        )
     return list(db.session.scalars(statement).unique())
 
 

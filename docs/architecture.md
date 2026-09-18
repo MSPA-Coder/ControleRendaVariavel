@@ -110,6 +110,14 @@ ninguém.
 URL quando é um filtro de verdade: `?broker=XP` aparece exatamente quando
 alguém escolheu XP.
 
+O filtro global de moeda usa esse mesmo contrato: `currency=BRL`, `USD` ou
+`ALL`. Sem parâmetro, o recorte é BRL. Ele se propaga por navegação e HTMX e é
+aplicado antes dos cálculos das telas financeiras; `ALL` exibe os dois grupos,
+mas nunca os soma. O estado é da requisição, não da sessão nem do banco: duas
+abas podem escolher moedas distintas, sem que uma resposta atrasada reverta a
+outra. O seletor e o modo discreto ficam no popover aberto pelo ícone de filtro
+do cabeçalho.
+
 Duas decisões de desenho, que o módulo documenta e os testes protegem:
 
 - **parâmetro desconhecido é preservado, não descartado.** Um filtro novo
@@ -358,7 +366,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 |---|---|
 | `users` | contas, papel e estado de acesso |
 | `app_settings` | infraestrutura e agenda globais do coletor; campos pessoais antigos preservados para adoção do legado |
-| `user_preferences` | tema, taxa de cálculo, comparação e alerta privados por usuário |
+| `user_preferences` | tema, taxa de cálculo e comparação privados por usuário |
 | `user_ticker_entitlements` | primeira posse confirmada; preserva acesso à cotação após encerramento ou exclusão |
 | `brokers`, `tickers` | referências globais, mantidas por administradores |
 | `portfolios`, `portfolio_tickers` | carteiras privadas e seus catálogos; associação de catálogo não concede acesso a preços |
@@ -420,9 +428,10 @@ OVD (posição vendida), com o horário observado de cada lado. A carteira usa o
 lado da posição e uma leitura atrasada não substitui um valor mais recente. O
 último negócio e seu histórico continuam globais por ticker.
 
-Cada usuário altera tema, taxa de cálculo, referência para Beta e prazo de alerta
-em **Preferências** (`/preferences`). A configuração administrativa do coletor
-continua em `/settings`. FKs compostas impedem relações financeiras entre donos
+Cada usuário altera tema, taxa de cálculo e referência para Beta em
+**Preferências** (`/preferences`). O prazo de alerta de cotação é global e só
+é alterado por administrador em `/settings`, junto da configuração do coletor.
+FKs compostas impedem relações financeiras entre donos
 distintos, inclusive em escritas fora das rotas; nomes de carteira são únicos
 por usuário. IDs explícitos fora do escopo recebem 404, e IDs de filtro/formulário
 malformados recebem 400 com aviso também em HTMX. IDs fora da faixa no caminho
@@ -432,7 +441,7 @@ Os relatórios em `docs/security-audit/` registram decisões históricas. Suas
 declarações de acervo comum ou exceções de “uso pessoal” foram substituídas por
 este contrato de isolamento e não autorizam exceções de segurança.
 
-O botão de olho é **Modo discreto**: mascara a leitura casual da tela e cobre
+**Modo discreto**, agora disponível no popover de filtros do cabeçalho, mascara a leitura casual da tela e cobre
 os gráficos. Ele não é uma fronteira de segurança; os dados continuam na
 resposta/DOM para que os gráficos possam ser renderizados no navegador. Quem
 precisa de confidencialidade contra inspeção do navegador precisa de um

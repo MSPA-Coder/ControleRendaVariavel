@@ -322,6 +322,9 @@ Corretora e prazo não alteram o resultado.
 - A grade pode ser filtrada por carteira e por corretora; o filtro vale para
   os totais e pesos exibidos. O padrão é "Todas" — linhas de todas as
   carteiras aparecem juntas, mas os totais continuam separados por balde.
+- O filtro global de moeda vale para as telas financeiras. O padrão é BRL;
+  USD restringe à moeda escolhida e `Todas` mostra ambos os grupos sem
+  conversão nem soma implícita.
 - Valores monetários e quantidades usam `Decimal`, nunca `float`.
 - O extrato de uma posição explica seu estado atual: a quantidade da posição
   é a soma dos movimentos, e o custo médio é o do último deles.

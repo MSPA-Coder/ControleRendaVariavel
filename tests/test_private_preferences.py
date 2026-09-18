@@ -65,19 +65,22 @@ def test_operator_can_save_only_own_preferences(preference_accounts):
     with app.app_context():
         own = db.session.get(UserPreference, ids[0])
         other = db.session.get(UserPreference, ids[1])
-        assert (own.theme, own.risk_free_rate_annual, own.stale_alert_seconds) == ("dark", Decimal("0.2"), 120)
+        assert (own.theme, own.risk_free_rate_annual, own.stale_alert_seconds) == ("dark", Decimal("0.2"), None)
         assert other.theme == "light"
         settings = db.session.get(AppSetting, 1)
         assert (settings.theme, settings.risk_free_rate_annual, settings.poll_interval_seconds) == global_values
-    assert 'data-theme="dark"' in client.get("/preferences").get_data(as_text=True)
+    page = client.get("/preferences").get_data(as_text=True)
+    assert 'data-theme="dark"' in page
+    assert 'class="theme-grid"' in page
+    assert "Alertar cotação desatualizada" not in page
 
 
-@pytest.mark.parametrize("rate,stale", [("NaN", "120"), ("0.2", "999999999999999999999"), ("0.2", "²")])
-def test_invalid_preferences_do_not_persist(preference_accounts, rate, stale):
+@pytest.mark.parametrize("rate", ["NaN", "999999999999999999999", "²"])
+def test_invalid_preferences_do_not_persist(preference_accounts, rate):
     app, client, csrf, ids, _ = preference_accounts
     response = client.post("/preferences", data={
         "csrf_token": csrf, "theme": "dark", "risk_free_rate_annual": rate,
-        "stale_alert_seconds": stale, "benchmark_ticker_id": "",
+        "benchmark_ticker_id": "",
     })
     assert response.status_code == 422
     with app.app_context():
@@ -107,7 +110,7 @@ def test_benchmark_requires_own_historical_entitlement(preference_accounts):
         db.session.add(UserTickerEntitlement(user_id=ids[1], ticker_id=ticker_id, first_held_on=date(2026, 1, 1)))
         db.session.commit()
     form = {"csrf_token": csrf, "theme": "light", "risk_free_rate_annual": "0.1",
-            "stale_alert_seconds": "", "benchmark_ticker_id": ticker_id}
+            "benchmark_ticker_id": ticker_id}
     try:
         assert client.post("/preferences", data=form).status_code == 422
         with app.app_context():

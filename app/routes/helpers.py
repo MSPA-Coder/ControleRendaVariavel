@@ -16,6 +16,7 @@ from app.collector.settings import (
     DEFAULT_POLL_INTERVAL_SECONDS,
 )
 from app.core.currency import TaxaDeCambio
+from app.core.currency_filter import ALL, parse_currency_filter
 from app.models import (
     AppSetting,
     Broker,
@@ -166,6 +167,14 @@ def selected_filters() -> tuple[int | None, str | None, str]:
     return portfolio_id, broker, raw_portfolio
 
 
+def selected_currency_filter() -> str:
+    """Moeda da requisição atual; nunca é persistida nem obtida do cliente fora da URL."""
+    try:
+        return parse_currency_filter(request.args)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+
+
 MAX_ID_DECIMAL_DIGITS = 10
 MAX_DATABASE_ID = 2_147_483_647
 
@@ -188,6 +197,7 @@ def positions_query(
     *,
     group_by_broker: bool = True,
     exclude_simulated: bool = False,
+    currency: str | None = None,
 ) -> list[Position]:
     order_columns = (
         (Ticker.currency, Broker.name, Ticker.symbol, Position.opened_on)
@@ -228,6 +238,9 @@ def positions_query(
         statement = statement.join(Position.portfolio_ref).where(Portfolio.simulated.is_(False))
     if broker:
         statement = statement.where(Broker.name == broker)
+    selected_currency = currency or selected_currency_filter()
+    if selected_currency != ALL:
+        statement = statement.where(Ticker.currency == selected_currency)
     return list(db.session.scalars(statement).unique())
 
 
@@ -841,9 +854,9 @@ def agent_check_interval_seconds() -> int:
 
 def quote_stale_after_seconds() -> int:
     floor = poll_interval_seconds() * 2 + 5
-    preference = user_preferences()
-    if preference.stale_alert_seconds is not None:
-        return max(preference.stale_alert_seconds, floor)
+    settings = db.session.get(AppSetting, 1)
+    if settings is not None and settings.stale_alert_seconds is not None:
+        return max(settings.stale_alert_seconds, floor)
     configured = int(current_app.config["RTD_STALE_AFTER_SECONDS"])
     return max(configured, floor)
 

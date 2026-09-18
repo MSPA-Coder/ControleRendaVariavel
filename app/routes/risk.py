@@ -7,6 +7,7 @@ from flask import render_template
 from sqlalchemy import select
 
 from app import db
+from app.core.currency_filter import ALL
 from app.models import Ticker
 from app.performance.risk import (
     MIN_OBSERVATIONS_FOR_CONFIDENCE,
@@ -22,6 +23,7 @@ from app.routes.helpers import (
     open_real_quantities_by_ticker,
     position_movement_events,
     price_series_by_ticker,
+    selected_currency_filter,
     ticker_is_entitled,
     ticker_price_series,
     user_preferences,
@@ -38,6 +40,16 @@ def risk_report() -> str:
 
     quantities_by_ticker = open_real_quantities_by_ticker()
     tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}
+    selected_currency = selected_currency_filter()
+    if (
+        benchmark_ticker_id is not None
+        and selected_currency != ALL
+        and tickers.get(benchmark_ticker_id) is not None
+        and tickers[benchmark_ticker_id].currency != selected_currency
+    ):
+        # Um benchmark de outra moeda escaparia do recorte e produziria um
+        # beta sem significado para a visualização filtrada.
+        benchmark_ticker_id = None
 
     benchmark_series: list[tuple[date, Decimal]] | None = None
     if benchmark_ticker_id is not None:
@@ -48,7 +60,7 @@ def risk_report() -> str:
     ticker_metrics: list[TickerRiskMetrics] = []
     for ticker_id in quantities_by_ticker:
         ticker = tickers.get(ticker_id)
-        if ticker is None:
+        if ticker is None or (selected_currency != ALL and ticker.currency != selected_currency):
             continue
         series = [(entry.recorded_date, entry.price) for entry in ticker_price_series(ticker_id)]
         use_benchmark = (
@@ -78,7 +90,7 @@ def risk_report() -> str:
     events_by_currency: dict[str, list[HoldingEvent]] = {}
     for event in events:
         ticker = tickers.get(event.ticker_id)
-        if ticker is None:
+        if ticker is None or (selected_currency != ALL and ticker.currency != selected_currency):
             continue
         events_by_currency.setdefault(ticker.currency, []).append(event)
 
@@ -90,7 +102,7 @@ def risk_report() -> str:
     dividends_by_currency: dict[str, list[DividendEvent]] = {}
     for dividend in dividend_events({event.ticker_id for event in events}):
         ticker = tickers.get(dividend.ticker_id)
-        if ticker is not None:
+        if ticker is not None and (selected_currency == ALL or ticker.currency == selected_currency):
             dividends_by_currency.setdefault(ticker.currency, []).append(dividend)
 
     # Uma consulta para todas as séries, e não uma por ticker: os eventos

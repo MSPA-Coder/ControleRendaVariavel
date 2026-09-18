@@ -4,6 +4,7 @@ from flask import abort, render_template, request
 from sqlalchemy import select
 
 from app import db
+from app.core.currency_filter import ALL
 from app.models import IncomeKind, Ticker
 from app.performance.monthly import (
     MonthlyPerformancePoint,
@@ -29,6 +30,7 @@ from app.routes.helpers import (
     position_movement_events,
     price_series_by_ticker,
     real_portfolio_records,
+    selected_currency_filter,
     selected_filters,
     ticker_price_series,
 )
@@ -67,6 +69,14 @@ def monthly_performance() -> str:
         events = [event for event in events if event.position_key[0] == wanted]
 
     tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}
+    selected_currency = selected_currency_filter()
+    if selected_currency != ALL:
+        events = [
+            event
+            for event in events
+            if tickers.get(event.ticker_id)
+            and tickers[event.ticker_id].currency == selected_currency
+        ]
 
     # Mesmo principio do resto do app: nunca somar moedas diferentes (ver
     # app/positions/portfolio.py e app/routes/risk.py).
@@ -96,6 +106,13 @@ def monthly_performance() -> str:
             if portfolio_id is not None or broker
             else events
         )
+        if selected_currency != ALL:
+            total_events = [
+                event
+                for event in total_events
+                if tickers.get(event.ticker_id)
+                and tickers[event.ticker_id].currency == selected_currency
+            ]
         total_timeline = QuantityTimeline(total_events)
         for currency, currency_events in events_by_currency.items():
             raw_dividends = dividend_events({event.ticker_id for event in currency_events})
@@ -119,6 +136,8 @@ def monthly_performance() -> str:
     # grandezas de natureza muito diferente (payoff não-linear de opção vs.
     # preço de um índice).
     candidates = benchmark_candidates() if portfolio == "stocks" else []
+    if selected_currency != ALL:
+        candidates = [ticker for ticker in candidates if ticker.currency == selected_currency]
     selected_benchmark: Ticker | None = None
     raw_benchmark_id = request.args.get("benchmark_ticker_id")
     if raw_benchmark_id:
