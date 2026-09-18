@@ -16,12 +16,12 @@
 
 {% if m %}
 <section class="summary position-metrics" aria-label="Métricas da posição">
-  <article class="currency-card"><span>Quantidade</span><strong data-sensitive-value="true">{{ position.quantity|quantity(position.currency) }}</strong></article>
-  <article class="currency-card"><span>Preço atual</span><strong data-sensitive-value="true">{{ m.current_price|currency(position.currency, trim=true) }}</strong></article>
-  <article class="currency-card"><span>Resultado</span><strong class="{{ m.result|sign_class }}" data-sensitive-value="true">{{ m.result|currency(position.currency, 0) }}</strong></article>
-  <article class="currency-card"><span>Retorno</span><strong class="{{ m.return_pct|sign_class }}" data-sensitive-value="true">{{ m.return_pct|percent(2) }}</strong></article>
-  <article class="currency-card"><span>Stop gain</span><strong data-sensitive-value="true">{{ m.stop_gain|currency(position.currency, trim=true) }}</strong></article>
-  <article class="currency-card"><span>Breakeven</span><strong class="{{ m.breakeven|sign_class }}" data-sensitive-value="true">{{ m.breakeven|percent(2) }}</strong></article>
+  <article class="currency-card sa-cartao"><h3>Quantidade</h3><p class="sa-metrica" data-sensitive-value="true">{{ position.quantity|quantity(position.currency) }}</p></article>
+  <article class="currency-card sa-cartao"><h3>Preço atual</h3><p class="sa-metrica" data-sensitive-value="true">{{ m.current_price|currency(position.currency, trim=true) }}</p></article>
+  <article class="currency-card sa-cartao"><h3>Resultado</h3><p class="sa-metrica {{ m.result|sign_class }}" data-sensitive-value="true">{{ m.result|currency(position.currency, 0) }}</p></article>
+  <article class="currency-card sa-cartao"><h3>Retorno</h3><p class="sa-metrica {{ m.return_pct|sign_class }}" data-sensitive-value="true">{{ m.return_pct|percent(2) }}</p></article>
+  <article class="currency-card sa-cartao"><h3>Stop gain</h3><p class="sa-metrica" data-sensitive-value="true">{{ m.stop_gain|currency(position.currency, trim=true) }}</p></article>
+  <article class="currency-card sa-cartao"><h3>Breakeven</h3><p class="sa-metrica {{ m.breakeven|sign_class }}" data-sensitive-value="true">{{ m.breakeven|percent(2) }}</p></article>
 </section>
 {% else %}
 <p class="flash flash-warning">A posição ainda não tem uma cotação utilizável para calcular as métricas.</p>
