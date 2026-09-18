@@ -83,7 +83,7 @@
         </div>
 
         <div class="mega-wrap" data-group="analise">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market'] }}" type="button" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market', 'portfolio.data_status'] }}" type="button" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
             Análise <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-analise" data-mega="analise">
@@ -112,6 +112,11 @@
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"/><path d="M15 6h5v5"/></svg></span>
                 <span class="t">Exposição por Mercado</span>
                 <span class="d">Distribuição de capital entre mercados.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.data_status' }}" href="{{ url_for('portfolio.data_status') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 7v5l3 2"/></svg></span>
+                <span class="t">Status dos dados</span>
+                <span class="d">Cotações, lacunas e conversão da carteira.</span>
               </a>
             </div>
           </div>
