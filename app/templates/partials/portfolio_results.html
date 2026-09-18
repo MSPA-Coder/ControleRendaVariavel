@@ -40,7 +40,7 @@
               title="{{ p.movements|length }} movimentos formaram esta posição"
               aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os movimentos de {{ p.ticker }}">{{ '−' if expanded else '+' }}</button>
       {% endif %}
-      <a href="{{ url_for('portfolio.edit_position', position_id=p.id) }}">{{ p.ticker }}</a>
+      <a href="{{ url_for('portfolio.position_detail', position_id=p.id) }}">{{ p.ticker }}</a>
     </td>
     <td class="number" data-sensitive-value="true">{{ p.quantity|quantity(p.currency) }}</td>
     <td class="number" data-sensitive-value="true">{{ p.average_cost|currency(p.currency, trim=true) }}</td>
