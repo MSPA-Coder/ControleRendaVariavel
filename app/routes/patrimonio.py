@@ -34,12 +34,11 @@ silenciosa é um patrimônio errado com cara de completo.
 
 O ENDEREÇO É DAQUI
 
-Cada posição leva `endereco`: o caminho, relativo à raiz deste sistema, da
-tela onde ela se explica -- a carteira filtrada pela corretora, com o extrato
-da posição aberto. Quem consome junta o caminho ao endereço público que já
-conhece; o id continua opaco. Posição já encerrada não tem tela, e vai com
-`endereco` nulo. A carteira mostra só as posições de quem está logado, então o
-link de uma posição de outro dono abre a carteira sem ela.
+Cada posição leva `endereco`: o caminho, relativo à raiz deste sistema, da sua
+própria página analítica. Quem consome junta o caminho ao endereço público que
+já conhece; o id continua opaco. Posição já encerrada não tem tela, e vai com
+`endereco` nulo. A rota individual confere a posse no servidor, então um link
+de uma posição de outro dono não revela a carteira nem o ativo.
 
 HOJE E UMA DATA PASSADA SÃO DUAS PERGUNTAS
 
@@ -302,9 +301,7 @@ class _Foto:
                 "fonte_do_preco": SISTEMA,
                 "situacao_do_preco": situacao_do_preco,
                 "endereco": (
-                    url_for("portfolio.index", broker=corretora, expanded=posicao_id)
-                    if viva
-                    else None
+                    url_for("portfolio.position_detail", position_id=posicao_id) if viva else None
                 ),
             }
         )

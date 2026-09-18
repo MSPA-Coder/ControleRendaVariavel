@@ -570,7 +570,7 @@ def test_a_resposta_nao_pode_ser_guardada_por_intermediario(sessao, cenario, pub
 
 
 @banco
-def test_a_posicao_leva_a_carteira_com_o_proprio_extrato_aberto(sessao, cenario, publicando):
+def test_a_posicao_leva_a_propria_pagina_analitica(sessao, cenario, publicando):
     """O caminho é relativo: o endereço público é de quem consome."""
     posicao = _posicao(cenario, cenario["real"])
     sessao.add(posicao)
@@ -578,14 +578,14 @@ def test_a_posicao_leva_a_carteira_com_o_proprio_extrato_aberto(sessao, cenario,
 
     (linha,) = pedir(publicando).get_json()["posicoes"]
 
-    assert linha["endereco"] == f"/?broker=Genial&expanded={posicao.id}"
+    assert linha["endereco"] == f"/positions/{posicao.id}"
 
 
 @banco
-def test_no_passado_a_posicao_viva_leva_a_mesma_tela(sessao, cenario, com_extrato, publicando):
+def test_no_passado_a_posicao_viva_leva_a_mesma_pagina(sessao, cenario, com_extrato, publicando):
     (linha,) = pedir(publicando, data="2026-02-14").get_json()["posicoes"]
 
-    assert linha["endereco"] == f"/?broker=Genial&expanded={com_extrato.id}"
+    assert linha["endereco"] == f"/positions/{com_extrato.id}"
 
 
 @banco
@@ -612,10 +612,10 @@ def test_posicao_encerrada_nao_tem_para_onde_levar(sessao, cenario, publicando):
 
 
 @banco
-def test_o_endereco_publicado_abre_o_extrato_da_posicao(
+def test_o_endereco_publicado_abre_a_pagina_da_posicao(
     sessao, cenario, com_extrato, app_com_banco, monkeypatch
 ):
-    """O caminho publicado (conferido acima) é o que a carteira de fato entende."""
+    """O caminho publicado (conferido acima) abre a rota individual protegida."""
     usuario = cenario["usuario"]
     usuario.role = ROLE_ADMIN
     usuario.is_active_user = True
@@ -626,7 +626,7 @@ def test_o_endereco_publicado_abre_o_extrato_da_posicao(
         sessao_http["_user_id"] = str(usuario.id)
         sessao_http["_fresh"] = True
 
-    resposta = navegador.get(f"/?broker=Genial&expanded={com_extrato.id}")
+    resposta = navegador.get(f"/positions/{com_extrato.id}")
 
     assert resposta.status_code == 200, resposta.headers.get("Location")
-    assert 'aria-expanded="true"' in resposta.get_data(as_text=True)
+    assert "Métricas da posição" in resposta.get_data(as_text=True)
