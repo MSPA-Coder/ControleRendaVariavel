@@ -77,6 +77,7 @@ PUBLIC_ENDPOINTS = frozenset({
     # compartilhado, conferido em tempo constante dentro da própria view, e sem
     # ele a rota não devolve dado nenhum.
     "portfolio.patrimonio_resumo",
+    "portfolio.patrimonio_resumo_v2",
     "static",
     # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
     # tela de login é a única página fora da sessão que precisa de um
@@ -359,6 +360,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         app,
         limiter,
         "portfolio.patrimonio_resumo",
+        "30 per minute; 600 per hour",
+        override_defaults=True,
+        exempt_when=token_valido_apresentado,
+    )
+    aplicar_limite(
+        app,
+        limiter,
+        "portfolio.patrimonio_resumo_v2",
         "30 per minute; 600 per hour",
         override_defaults=True,
         exempt_when=token_valido_apresentado,

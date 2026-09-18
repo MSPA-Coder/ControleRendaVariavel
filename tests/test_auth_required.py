@@ -90,6 +90,7 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         # inútil: produziria um patrimônio consolidado que esconde posições sem
         # avisar.
         "portfolio.patrimonio_resumo",
+        "portfolio.patrimonio_resumo_v2",
         "static",
         # CSS do banner de mensagem, que `login.html` usa. Sem isto o
         # `requer_login` bloquearia o próprio arquivo que estiliza "Usuário ou
