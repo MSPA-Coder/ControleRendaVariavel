@@ -16,6 +16,15 @@
   --danger-surface: #fff1f0;
   --danger-line: #f0b8b2;
   --radius: 10px;
+  /* Os componentes visuais do SharedAuth recebem a paleta local: a
+     biblioteca fornece estrutura, mas não impõe marca nem tema ao aplicativo. */
+  --sharedauth-surface: var(--surface);
+  --sharedauth-text: var(--ink);
+  --sharedauth-text-suave: var(--muted);
+  --sharedauth-border: var(--line);
+  --sharedauth-radius: var(--radius);
+  --sharedauth-accent: var(--accent);
+  --sharedauth-foco: var(--accent);
   /* Aliases legados: mantêm os componentes existentes consistentes com a nova paleta. */
   --navy: #12211c;
   --navy-dark: #0b1712;
