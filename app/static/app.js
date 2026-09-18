@@ -12,6 +12,100 @@ htmx.config.includeIndicatorStyles = false;
   const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");
 
+  // A moeda e estado da URL, não da sessão. Propagá-la nos controles locais
+  // mantém a escolha ao navegar entre telas ou ao atualizar um fragmento,
+  // sem criar uma preferência mutável que duas abas possam disputar.
+  const globalCurrency = new URL(window.location.href).searchParams.get("currency");
+  const inheritGlobalCurrency = (root = document) => {
+    if (!globalCurrency) return;
+    root.querySelectorAll("a[href]").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      const url = new URL(href, window.location.origin);
+      if (url.origin !== window.location.origin || !url.pathname.startsWith("/")) return;
+      if (!url.searchParams.has("currency")) {
+        url.searchParams.set("currency", globalCurrency);
+        link.setAttribute("href", `${url.pathname}${url.search}${url.hash}`);
+      }
+    });
+    root.querySelectorAll("form[method='get']").forEach((form) => {
+      if (form.querySelector("[name='currency']")) return;
+      const field = document.createElement("input");
+      field.type = "hidden";
+      field.name = "currency";
+      field.value = globalCurrency;
+      form.append(field);
+    });
+  };
+  inheritGlobalCurrency();
+  document.body.addEventListener("htmx:load", (event) => inheritGlobalCurrency(event.target));
+  document.body.addEventListener("htmx:configRequest", (event) => {
+    if (globalCurrency && event.detail.verb === "get" && !event.detail.parameters.currency) {
+      event.detail.parameters.currency = globalCurrency;
+    }
+  });
+
+  // Filtros globais ficam no mesmo ponto onde antes havia o modo discreto.
+  // A submissão é uma navegação GET/POST completa; o bloqueio local impede
+  // duplos cliques e respostas de duas intenções consecutivas disputando a
+  // mesma tela. A moeda é um contrato de URL (currency=BRL|USD|ALL), para
+  // que o servidor possa aplicá-la de forma consistente em todas as telas.
+  const globalFilters = document.querySelector("[data-global-filters]");
+  const globalFiltersToggle = document.querySelector("[data-global-filters-toggle]");
+  const globalFiltersMenu = document.querySelector("[data-global-filters-menu]");
+  if (globalFilters && globalFiltersToggle && globalFiltersMenu) {
+    const closeGlobalFilters = () => {
+      globalFiltersMenu.hidden = true;
+      globalFiltersToggle.setAttribute("aria-expanded", "false");
+    };
+    const openGlobalFilters = () => {
+      globalFiltersMenu.hidden = false;
+      globalFiltersToggle.setAttribute("aria-expanded", "true");
+      const select = globalFiltersMenu.querySelector("[data-global-currency]");
+      if (select) select.focus({ preventScroll: true });
+    };
+    globalFiltersToggle.addEventListener("click", () => {
+      if (globalFiltersMenu.hidden) openGlobalFilters();
+      else closeGlobalFilters();
+    });
+    document.addEventListener("click", (event) => {
+      if (!globalFilters.contains(event.target)) closeGlobalFilters();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !globalFiltersMenu.hidden) {
+        closeGlobalFilters();
+        globalFiltersToggle.focus({ preventScroll: true });
+      }
+    });
+
+    const currencyForm = globalFilters.querySelector("[data-global-currency-form]");
+    const currencySubmit = globalFilters.querySelector("[data-global-currency-submit]");
+    if (currencyForm && currencySubmit) {
+      currencyForm.addEventListener("submit", (event) => {
+        // A native navigation cancels the previous page, but this guard also
+        // covers keyboard repeat and fast clicks before unload begins.
+        if (currencyForm.dataset.submitting === "1") {
+          event.preventDefault();
+          return;
+        }
+        currencyForm.dataset.submitting = "1";
+        currencySubmit.disabled = true;
+      });
+    }
+    const privacyForm = globalFilters.querySelector("[data-privacy-form]");
+    const privacySubmit = globalFilters.querySelector("[data-privacy-submit]");
+    if (privacyForm && privacySubmit) {
+      privacyForm.addEventListener("submit", (event) => {
+        if (privacyForm.dataset.submitting === "1") {
+          event.preventDefault();
+          return;
+        }
+        privacyForm.dataset.submitting = "1";
+        privacySubmit.disabled = true;
+      });
+    }
+  }
+
   if (megaWraps.length && navScrim) {
     const closeNavigation = () => {
       megaWraps.forEach((wrap) => {

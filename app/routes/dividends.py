@@ -10,6 +10,7 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
 from app import db
+from app.core.currency_filter import ALL
 from app.core.validation import parse_finite_decimal
 from app.models import Broker, Dividend, IncomeKind, Ticker
 from app.performance.dividends import build_dividend_report
@@ -23,6 +24,7 @@ from app.routes.helpers import (
     open_real_cost_basis_by_ticker,
     owned_or_404,
     parse_positive_id,
+    selected_currency_filter,
 )
 
 
@@ -110,6 +112,9 @@ def dividends_results_context() -> dict[str, object]:
     if broker:
         statement = statement.where(Broker.name == broker)
     records = list(db.session.scalars(statement))
+    selected_currency = selected_currency_filter()
+    if selected_currency != ALL:
+        records = [record for record in records if record.currency == selected_currency]
 
     totals_by_currency: dict[str, Decimal] = {}
     kind_currency_totals: dict[tuple[str, str], Decimal] = {}

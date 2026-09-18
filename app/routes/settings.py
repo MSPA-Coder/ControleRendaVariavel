@@ -9,7 +9,7 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from flask.typing import ResponseReturnValue
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import db, esquecer_tema_da_sessao
+from app import db
 from app.accounts.authorization import requer_admin
 from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
@@ -26,13 +26,6 @@ from app.collector.settings import (
     parse_collector_settings,
 )
 from app.core.pricing_settings import parse_pricing_settings
-from app.core.themes import (
-    DEFAULT_THEME,
-    THEME_DESCRIPTIONS,
-    THEME_OPTIONS,
-    get_theme_options_dict,
-    parse_theme,
-)
 from app.models import AppSetting, Ticker
 from app.routes import bp
 from app.routes.helpers import (
@@ -56,10 +49,6 @@ _WEEKDAY_OPTIONS = (
 def _submitted_settings() -> AppSetting:
     """Re-render an invalid submission without changing persisted settings."""
     submitted = default_collector_settings()
-    raw_theme = request.form.get("theme", DEFAULT_THEME).strip().lower()
-    submitted.theme = (
-        raw_theme if raw_theme in {theme_id for theme_id, _, _ in THEME_OPTIONS} else DEFAULT_THEME
-    )
     try:
         submitted.poll_interval_seconds = int(request.form.get("poll_interval_seconds", "2"))
     except ValueError:
@@ -116,7 +105,8 @@ def _get_or_create_settings() -> AppSetting:
 def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseReturnValue:
     preference = user_preferences()
     # A página ainda usa o singleton como veículo para a configuração global
-    # do coletor. Os quatro campos pessoais são projetados nele somente para
+    # do coletor. Os dois campos pessoais ainda exibidos nesta tela são projetados
+    # nele somente para
     # manter o contrato do template, sem voltar a persistir no singleton.
     # Nunca atribua valores privados à instância gerenciada do singleton:
     # qualquer consulta posterior poderia autoflush e transformar a mera
@@ -124,10 +114,8 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
     settings_view = SimpleNamespace(
         **{column.key: getattr(settings, column.key) for column in AppSetting.__table__.columns}
     )
-    settings_view.theme = preference.theme
     settings_view.benchmark_ticker_id = preference.benchmark_ticker_id
     settings_view.risk_free_rate_annual = preference.risk_free_rate_annual
-    settings_view.stale_alert_seconds = preference.stale_alert_seconds
     return (
         render_template(
             "settings.html",
@@ -143,9 +131,6 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
                 if value.isdigit()
             },
             tickers=[ticker for ticker in ticker_records() if ticker_is_entitled(ticker.id)],
-            theme_options=get_theme_options_dict(),
-            theme_descriptions=THEME_DESCRIPTIONS,
-            current_theme=settings_view.theme,
             collector_enabled=not settings.collector_paused,
             remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
         ),
@@ -153,9 +138,9 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
     )
 
 
-# Restrito a `admin`: esta tela altera o coletor, os parâmetros de precificação
-# e o benchmark do Beta — decisões que mudam todos os números exibidos a todo
-# mundo, não apenas os lançamentos de quem edita.
+# Restrito a `admin`: esta tela altera o coletor e o prazo global de alerta.
+# Os campos pessoais de precificação e Beta continuam projetados aqui por
+# compatibilidade com a tela administrativa existente.
 @bp.route("/settings", methods=["GET", "POST"])
 @requer_admin
 def settings() -> ResponseReturnValue:
@@ -169,7 +154,6 @@ def settings() -> ResponseReturnValue:
             schedule = parse_collector_schedule(
                 request.form, request.form.getlist("collector_schedule_weekdays")
             )
-            theme = parse_theme(request.form)
             raw_benchmark_id = request.form.get("benchmark_ticker_id", "").strip()
             benchmark_ticker_id = parse_positive_id(raw_benchmark_id, allow_all=True)
             if benchmark_ticker_id is not None and (
@@ -199,11 +183,6 @@ def settings() -> ResponseReturnValue:
         try:
             current_settings = _get_or_create_settings()
             preference = user_preferences()
-            preference.theme = theme
-            # O tema fica guardado na sessão para não custar uma consulta por
-            # render (ver `_theme_context`); trocá-lo aqui exige descartar o
-            # valor guardado, senão a pessoa continuaria vendo o tema antigo.
-            esquecer_tema_da_sessao()
             current_settings.poll_interval_seconds = data.poll_interval_seconds
             current_settings.agent_check_interval_seconds = agent_check_interval_seconds
             (
@@ -213,7 +192,7 @@ def settings() -> ResponseReturnValue:
             ) = schedule
             preference.risk_free_rate_annual = pricing_data.risk_free_rate_annual
             preference.benchmark_ticker_id = benchmark_ticker_id
-            preference.stale_alert_seconds = stale_alert_seconds
+            current_settings.stale_alert_seconds = stale_alert_seconds
             db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()

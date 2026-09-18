@@ -35,8 +35,8 @@
     'portfolio.table_tickers': ('Cadastros', 'Tickers'),
     'options.table_expirations': ('Cadastros', 'Vencimentos'),
     'options.table_contracts': ('Cadastros', 'Contratos'),
-    'portfolio.settings': ('Sistema', 'Configurações'),
-    'users.index': ('Sistema', 'Usuários'),
+    'portfolio.settings': ('Configurações', 'Coletor'),
+    'users.index': ('Configurações', 'Usuários'),
   } %}
   {% set crumb = nav_meta.get(request.endpoint, ('', '')) %}
   <div class="app-shell">
@@ -172,30 +172,37 @@
           </div>
         </div>
 
-        {# Esconder o grupo e apresentacao; o controle real esta em
-           `@requer_admin` na rota. Um operador que digite /settings recebe 403
-           mesmo sem ver este menu. #}
-        {% if current_user.is_admin %}
-        <div class="mega-wrap" data-group="sistema">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.settings', 'users.index'] }}" type="button" data-nav-group="sistema" aria-controls="mega-sistema" aria-expanded="false">
-            Sistema <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        <div class="mega-wrap" data-group="configuracoes">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.preferences', 'account.change_password', 'portfolio.settings', 'users.index'] }}" type="button" data-nav-group="configuracoes" aria-controls="mega-configuracoes" aria-expanded="false">
+            Configurações <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
-          <div class="mega" id="mega-sistema" data-mega="sistema">
+          <div class="mega" id="mega-configuracoes" data-mega="configuracoes">
             <div class="mega-inner">
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.preferences' }}" href="{{ url_for('portfolio.preferences') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 13.5 1-1.7-1.7-1.7-1.7 1a1.7 1.7 0 0 0-3 0l-1-1.7-1.7 1.7 1 1.7a1.7 1.7 0 0 0 0 3l-1 1.7 1.7 1.7 1.7-1a1.7 1.7 0 0 0 3 0l1.7 1 1.7-1.7-1-1.7a1.7 1.7 0 0 0 0-3Z"/></svg></span>
+                <span class="t">Preferências</span>
+                <span class="d">Tema e escolhas pessoais da sua conta.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'account.change_password' }}" href="{{ url_for('account.change_password') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg></span>
+                <span class="t">Minha senha</span>
+                <span class="d">Altere a senha de acesso da sua conta.</span>
+              </a>
+              {% if current_user.is_admin %}
               <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.settings' }}" href="{{ url_for('portfolio.settings') }}">
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 13.5 1-1.7-1.7-1.7-1.7 1a1.7 1.7 0 0 0-3 0l-1-1.7-1.7 1.7 1 1.7a1.7 1.7 0 0 0 0 3l-1 1.7 1.7 1.7 1.7-1a1.7 1.7 0 0 0 3 0l1.7 1 1.7-1.7-1-1.7a1.7 1.7 0 0 0 0-3Z"/></svg></span>
-                <span class="t">Configurações</span>
-                <span class="d">Coletor RTD, taxa livre de risco e conta.</span>
+                <span class="t">Coletor e cálculos</span>
+                <span class="d">Coletor RTD e parâmetros globais.</span>
               </a>
               <a class="mega-card {{ 'is-current' if request.endpoint == 'users.index' }}" href="{{ url_for('users.index') }}">
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c.4-3.3 2.4-5 6-5s5.6 1.7 6 5M16 11c2.8.2 4.5 1.7 5 4M16 5.5a3 3 0 0 1 0 5"/></svg></span>
                 <span class="t">Usuários</span>
                 <span class="d">Contas, papéis e acesso administrativo.</span>
               </a>
+              {% endif %}
             </div>
           </div>
         </div>
-        {% endif %}
 
         {% if current_user.is_authenticated %}
         <div class="navbar-right">
@@ -207,25 +214,39 @@
             {{ collector.heartbeat(collector_heartbeat, polling=request.endpoint != 'portfolio.index') }}
           {% endif %}
           {% if crumb[1] %}<span class="nav-current-page">{{ crumb[1] }}</span>{% endif %}
-          <form class="privacy-toggle-form" method="post" action="{{ url_for('portfolio.toggle_values_privacy') }}">
-            <input type="hidden" name="next" value="{{ request.full_path }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="privacy-toggle" type="submit"
-                    aria-pressed="{{ 'true' if values_hidden else 'false' }}"
-                    aria-label="{{ 'Desativar modo discreto' if values_hidden else 'Ativar modo discreto' }}"
-                    title="{{ 'Desativar modo discreto' if values_hidden else 'Ativar modo discreto' }}">
-              {% if values_hidden %}
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.3A10.8 10.8 0 0 1 12 4c5.5 0 9.5 5 9.5 5a17.7 17.7 0 0 1-3.2 3.3M6.2 6.2C3.9 7.8 2.5 9 2.5 9s4 5 9.5 5c.7 0 1.4-.1 2-.2"/></svg>
-              {% else %}
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s4-5 9.5-5 9.5 5 9.5 5-4 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.5"/></svg>
-              {% endif %}
+          <div class="global-filters" data-global-filters>
+            <button class="privacy-toggle filter-toggle" type="button" data-global-filters-toggle
+                    aria-controls="global-filters-menu" aria-expanded="false"
+                    aria-label="Abrir filtros globais" title="Filtros">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4"/></svg>
             </button>
-          </form>
-          {# Trocar a propria senha nao exige papel nenhum: e a conta de quem
-             esta logado, ao contrario do grupo "Sistema", que administra
-             contas alheias e so aparece para `admin`. #}
-          <a class="nav-minha-senha {{ 'is-current' if request.endpoint == 'portfolio.preferences' }}" href="{{ url_for('portfolio.preferences') }}">Preferências</a>
-          <a class="nav-minha-senha {{ 'is-current' if request.endpoint == 'account.change_password' }}" href="{{ url_for('account.change_password') }}">Minha senha</a>
+            <div class="global-filters-menu" id="global-filters-menu" data-global-filters-menu hidden>
+              <form class="global-currency-form" method="get" action="{{ request.path }}" data-global-currency-form>
+                <label for="global-currency">Moeda</label>
+                {# Preserva filtros específicos da tela ao trocar o filtro global. #}
+                {% for key, value in request.args.items() if key != 'currency' %}
+                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                {% endfor %}
+                {% set selected_currency = global_currency|default(request.args.get('currency', 'BRL'), true) %}
+                <select id="global-currency" name="currency" data-global-currency>
+                  <option value="BRL" {{ 'selected' if selected_currency == 'BRL' }}>Real</option>
+                  <option value="USD" {{ 'selected' if selected_currency == 'USD' }}>Dólar</option>
+                  <option value="ALL" {{ 'selected' if selected_currency == 'ALL' }}>Todas</option>
+                </select>
+                <button class="button button-primary" type="submit" data-global-currency-submit>Aplicar</button>
+              </form>
+              <form class="privacy-menu-form" method="post" action="{{ url_for('portfolio.toggle_values_privacy') }}" data-privacy-form>
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="privacy-menu-toggle" type="submit"
+                        aria-pressed="{{ 'true' if values_hidden else 'false' }}"
+                        data-privacy-submit>
+                  <span aria-hidden="true">{{ '◉' if values_hidden else '◌' }}</span>
+                  {{ 'Desativar' if values_hidden else 'Ativar' }} modo discreto
+                </button>
+              </form>
+            </div>
+          </div>
           <span class="avatar" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
           <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-primary" type="submit">Sair</button></form>
         </div>

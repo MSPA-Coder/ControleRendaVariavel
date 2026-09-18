@@ -10,6 +10,7 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import joinedload
 
 from app import db
+from app.core.currency_filter import ALL
 from app.core.domain import operation_result
 from app.core.validation import parse_finite_decimal
 from app.models import (
@@ -40,6 +41,7 @@ from app.routes.helpers import (
     owned_or_404,
     parse_positive_id,
     portfolio_records,
+    selected_currency_filter,
     selected_filters,
 )
 
@@ -241,6 +243,9 @@ def transactions_results_context() -> dict[str, object]:
         except ValueError:
             status_raw = "all"
     records = list(db.session.scalars(statement))
+    selected_currency = selected_currency_filter()
+    if selected_currency != ALL:
+        records = [record for record in records if record.currency == selected_currency]
     # Transações que são o encerramento parcial de uma posição ainda aberta:
     # elas não se editam soltas, e excluí-las devolve a quantidade à posição.
     # Duas consultas só (uma por instrumento), em vez de uma por linha da

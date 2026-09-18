@@ -1162,6 +1162,7 @@ class UserPreference(Base):
         Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL
     )
     stale_alert_seconds: Mapped[int | None] = mapped_column(Integer)
+    """Campo legado; o prazo de alerta vigente é global em ``AppSetting``."""
     user_ref: Mapped[User] = relationship()
     benchmark_ticker_ref: Mapped[Ticker | None] = relationship()
 

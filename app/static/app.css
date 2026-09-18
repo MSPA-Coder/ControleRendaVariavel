@@ -787,6 +787,7 @@ details.catalog-card > h2 { display: none; }
 .grp-btn.open svg { transform: rotate(180deg); }
 
 .navbar-right { align-items: center; display: flex; gap: .6rem; margin-left: auto; }
+.global-filters { position: relative; }
 .privacy-toggle-form { display: inline-flex; margin: 0; }
 .privacy-toggle {
   align-items: center; background: transparent; border: 1px solid var(--line); border-radius: .45rem;
@@ -794,6 +795,24 @@ details.catalog-card > h2 { display: none; }
 }
 .privacy-toggle:hover, .privacy-toggle:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .privacy-toggle svg { fill: none; height: 1.15rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 1.15rem; }
+.filter-toggle { min-height: 2.2rem; min-width: 2.2rem; }
+.global-filters-menu {
+  background: var(--surface); border: 1px solid var(--line); border-radius: .55rem;
+  box-shadow: 0 16px 32px -18px rgba(18, 33, 28, .4); display: grid; gap: .7rem;
+  padding: .8rem; position: absolute; right: 0; top: calc(100% + .45rem); width: 13rem; z-index: 40;
+}
+.global-filters-menu[hidden] { display: none; }
+.global-currency-form { display: grid; gap: .35rem; margin: 0; }
+.global-currency-form label { color: var(--muted); font-size: .75rem; font-weight: 700; }
+.global-currency-form select { min-height: 2.2rem; padding: .35rem .5rem; width: 100%; }
+.global-currency-form .button { min-height: 2.2rem; width: 100%; }
+.privacy-menu-form { border-top: 1px solid var(--line); margin: 0; padding-top: .65rem; }
+.privacy-menu-toggle {
+  align-items: center; background: transparent; border: 0; color: var(--ink); cursor: pointer;
+  display: flex; font: inherit; gap: .45rem; padding: .3rem 0; text-align: left; width: 100%;
+}
+.privacy-menu-toggle:hover, .privacy-menu-toggle:focus-visible { color: var(--accent); }
+.privacy-menu-toggle[disabled], .global-filters-menu [disabled] { cursor: wait; opacity: .6; }
 html[data-values-hidden="true"] input[data-sensitive-input="true"] { -webkit-text-security: disc; }
 html[data-values-hidden="true"] [data-sensitive-value="true"]:not(input) {
   color: transparent !important; text-shadow: none !important;
@@ -936,27 +955,6 @@ tr.transaction-open { background: var(--accent-soft); }
   color: var(--muted);
   display: block;
   margin-top: 0.2rem;
-}
-
-/* Link "Minha senha" na barra superior. Vizinho do avatar e do "Sair": e a
-   propria conta, nao administracao de contas alheias -- por isso fica fora do
-   grupo "Sistema", que so aparece para admin. */
-.nav-minha-senha {
-  border: 1px solid var(--line);
-  border-radius: .45rem;
-  color: var(--muted);
-  font-size: .78rem;
-  padding: .35rem .6rem;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.nav-minha-senha:hover,
-.nav-minha-senha:focus-visible,
-.nav-minha-senha.is-current {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent);
 }
 
 /* Senha temporaria devolvida pela redefinicao.

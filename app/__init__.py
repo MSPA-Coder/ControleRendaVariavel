@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from flask import Flask, render_template, request, session
+from flask import Flask, abort, render_template, request, session
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
@@ -25,6 +25,7 @@ from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
+from app.core.currency_filter import parse_currency_filter
 from app.core.privacy import values_hidden
 
 if TYPE_CHECKING:
@@ -425,6 +426,16 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     @app.context_processor
     def _privacy_context() -> dict[str, bool]:
         return {"values_hidden": values_hidden()}
+
+    @app.context_processor
+    def _currency_context() -> dict[str, str]:
+        # Request-scoped e sem escrita: uma aba pode usar uma moeda diferente
+        # de outra, e uma resposta antiga nunca altera o estado da seguinte.
+        try:
+            selected = parse_currency_filter(request.args)
+        except ValueError as exc:
+            abort(400, description=str(exc))
+        return {"global_currency": selected}
 
     @app.after_request
     def _canonizar_url(resposta):

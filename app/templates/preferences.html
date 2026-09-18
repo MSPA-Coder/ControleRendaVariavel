@@ -6,13 +6,17 @@
   <fieldset>
     <legend>Minhas preferências</legend>
     <p class="form-help">Estas escolhas afetam a apresentação e os cálculos da sua conta.</p>
-    <label>Tema
-      <select name="theme" required>
-        {% for key, label in theme_options.items() %}
-        <option value="{{ key }}" {{ 'selected' if values.theme == key }}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </label>
+    <div class="theme-grid">
+      {% for theme_value, theme_label in theme_options.items() %}
+      <label class="theme-option {% if values.theme == theme_value %}active{% endif %}">
+        <input type="radio" name="theme" value="{{ theme_value }}" aria-label="Tema {{ theme_label }}" {% if values.theme == theme_value %}checked{% endif %}>
+        <div class="theme-preview preview-{{ theme_value }}"></div>
+        <span class="theme-name">{{ theme_label }}</span>
+        <span class="theme-desc">{{ theme_descriptions[theme_value] }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="form-help">A paleta é aplicada ao menu, formulários, tabelas, indicadores e gráficos.</p>
     <label>Taxa livre de risco anual
       <input name="risk_free_rate_annual" type="number" data-sensitive-input="true" min="0" max="1" step="0.0001" required value="{{ values.risk_free_rate_annual }}">
     </label>
@@ -25,10 +29,6 @@
         {% endfor %}
       </select>
     </label>
-    <label>Alertar cotação desatualizada após (segundos)
-      <input name="stale_alert_seconds" type="number" data-sensitive-input="true" min="1" max="86400" step="1" value="{{ values.stale_alert_seconds if values.stale_alert_seconds else '' }}" placeholder="automático">
-    </label>
-    <p class="form-help">Em branco, o prazo acompanha o ciclo de atualização das cotações.</p>
     <div class="form-actions"><button class="button button-primary" type="submit">Salvar preferências</button></div>
   </fieldset>
 </form>
