@@ -141,12 +141,7 @@ def identidade(nome: str) -> str:
 
 
 def token_valido_apresentado() -> bool:
-    """O pedido traz o token certo? Falso quando nenhum token está configurado.
-
-    Usada também pelo limitador de taxa (`app/__init__.py`), que isenta quem
-    tem o token: comparar em tempo constante custa quase nada, e é a mesma
-    comparação da rota.
-    """
+    """O pedido traz o token certo? Falso quando nenhum token está configurado."""
     configurado = str(current_app.config.get("PATRIMONIO_TOKEN") or "")
     if not configurado:
         return False
@@ -190,16 +185,28 @@ def _titular() -> str:
     return nome
 
 
-def _posicoes_reais() -> list[Position]:
-    """Todas as posições de carteiras reais, de todos os donos.
+def _owner_id() -> int:
+    """Resolve o dono financeiro explicitamente configurado para a publicação."""
+    raw = str(current_app.config.get("PATRIMONIO_OWNER_ID") or "").strip()
+    try:
+        owner_id = int(raw)
+    except (TypeError, ValueError):
+        owner_id = 0
+    if not 0 < owner_id <= 2_147_483_647:
+        abort(
+            503,
+            "Publicação de patrimônio sem owner_id: defina PATRIMONIO_OWNER_ID "
+            "para o usuário financeiro autorizado.",
+        )
+    return owner_id
 
-    Sem escopo por usuário, e isso é deliberado -- igual ao outro publicador: um
-    resumo filtrado produziria um patrimônio consolidado que esconde posições
-    sem avisar, que é pior do que não responder.
-    """
+
+def _posicoes_reais(owner_id: int) -> list[Position]:
+    """Posições das carteiras do dono financeiro publicado."""
     consulta = (
         select(Position)
         .join(Position.portfolio_ref)
+        .where(Position.owner_id == owner_id)
         .options(
             joinedload(Position.quote),
             joinedload(Position.broker_ref),
@@ -211,10 +218,14 @@ def _posicoes_reais() -> list[Position]:
     return list(db.session.scalars(consulta).unique().all())
 
 
-def _proventos(desde: date, ate: date) -> list[Dividend]:
+def _proventos(desde: date, ate: date, owner_id: int) -> list[Dividend]:
     consulta = (
         select(Dividend)
-        .where(Dividend.payment_date >= desde, Dividend.payment_date <= ate)
+        .where(
+            Dividend.owner_id == owner_id,
+            Dividend.payment_date >= desde,
+            Dividend.payment_date <= ate,
+        )
         .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
         .order_by(Dividend.payment_date, Dividend.id)
     )
@@ -323,11 +334,11 @@ def _data_pedida(hoje: date) -> date:
     return referencia
 
 
-def _fotografar_hoje(foto: _Foto) -> dict[str, int]:
+def _fotografar_hoje(foto: _Foto, owner_id: int) -> dict[str, int]:
     """A carteira aberta agora, pela cotação ao vivo do coletor."""
     simuladas = 0
     sem_cotacao = 0
-    for posicao in _posicoes_reais():
+    for posicao in _posicoes_reais(owner_id):
         if posicao.simulated:
             simuladas += 1
             continue
@@ -353,7 +364,11 @@ def _fotografar_hoje(foto: _Foto) -> dict[str, int]:
             # de mercado -- um alarme que toca sempre não avisa nada.
             situacao_do_preco=posicao.quote.source_status,
         )
-    return {"simuladas": simuladas, "opcoes": _quantas_opcoes(), "sem_cotacao": sem_cotacao}
+    return {
+        "simuladas": simuladas,
+        "opcoes": _quantas_opcoes(owner_id),
+        "sem_cotacao": sem_cotacao,
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,8 +384,10 @@ def _sinal(lado: Side) -> Decimal:
     return Decimal("1") if lado == Side.BUY else Decimal("-1")
 
 
-def _extrato_das_acoes() -> tuple[list[HoldingEvent], dict[tuple[str, int], _Origem]]:
-    """Todo o extrato de ações das carteiras reais, de todos os donos.
+def _extrato_das_acoes(
+    referencia: date, owner_id: int
+) -> tuple[list[HoldingEvent], dict[tuple[str, int], _Origem]]:
+    """Extrato de ações das carteiras reais do dono publicado.
 
     É a mesma leitura de `app.routes.helpers.position_movement_events`, que
     alimenta o TWR, com três diferenças: não tem escopo de usuário (pelo mesmo
@@ -395,7 +412,11 @@ def _extrato_das_acoes() -> tuple[list[HoldingEvent], dict[tuple[str, int], _Ori
         .select_from(Position)
         .join(Position.portfolio_ref)
         .outerjoin(PositionMovement, PositionMovement.position_id == Position.id)
-        .where(Portfolio.simulated.is_(False))
+        .where(
+            Position.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            data_do_evento <= referencia,
+        )
         .order_by(data_do_evento, PositionMovement.id)
     )
     encerradas = (
@@ -407,7 +428,12 @@ def _extrato_das_acoes() -> tuple[list[HoldingEvent], dict[tuple[str, int], _Ori
             PositionLedgerArchive.broker_id,
         )
         .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
-        .where(Portfolio.simulated.is_(False), PositionLedgerArchive.instrument == "stock")
+        .where(
+            PositionLedgerArchive.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            PositionLedgerArchive.instrument == "stock",
+            PositionLedgerArchive.occurred_on <= referencia,
+        )
         .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
     )
 
@@ -430,7 +456,7 @@ def _extrato_das_acoes() -> tuple[list[HoldingEvent], dict[tuple[str, int], _Ori
     return eventos, origens
 
 
-def _opcoes_detidas_em(referencia: date) -> int:
+def _opcoes_detidas_em(referencia: date, owner_id: int) -> int:
     """Quantas opções de carteira real estavam abertas na data.
 
     Opções continuam fora do resumo; a contagem é o que torna a omissão
@@ -448,7 +474,11 @@ def _opcoes_detidas_em(referencia: date) -> int:
             OptionPositionMovement,
             OptionPositionMovement.option_position_id == OptionPosition.id,
         )
-        .where(Portfolio.simulated.is_(False))
+        .where(
+            OptionPosition.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            data_do_evento <= referencia,
+        )
         .order_by(data_do_evento, OptionPositionMovement.id)
     )
     encerradas = (
@@ -458,7 +488,12 @@ def _opcoes_detidas_em(referencia: date) -> int:
             PositionLedgerArchive.resulting_signed_quantity,
         )
         .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
-        .where(Portfolio.simulated.is_(False), PositionLedgerArchive.instrument == "option")
+        .where(
+            PositionLedgerArchive.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            PositionLedgerArchive.instrument == "option",
+            PositionLedgerArchive.occurred_on <= referencia,
+        )
         .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
     )
     eventos = [
@@ -472,7 +507,7 @@ def _opcoes_detidas_em(referencia: date) -> int:
     return sum(1 for quantidade in quantidades.values() if quantidade != 0)
 
 
-def _simuladas_em(referencia: date) -> int:
+def _simuladas_em(referencia: date, owner_id: int) -> int:
     """Posições simuladas abertas até a data.
 
     Carteira simulada não guarda extrato, então isto conta as que existem hoje
@@ -485,7 +520,11 @@ def _simuladas_em(referencia: date) -> int:
             select(func.count())
             .select_from(Position)
             .join(Position.portfolio_ref)
-            .where(Portfolio.simulated.is_(True), Position.opened_on <= referencia)
+            .where(
+                Position.owner_id == owner_id,
+                Portfolio.simulated.is_(True),
+                Position.opened_on <= referencia,
+            )
         )
         or 0
     )
@@ -518,9 +557,9 @@ def _fechamentos(
     return series
 
 
-def _fotografar_passado(foto: _Foto, referencia: date) -> dict[str, int]:
+def _fotografar_passado(foto: _Foto, referencia: date, owner_id: int) -> dict[str, int]:
     """A carteira como estava no fim de `referencia`, a preço de fechamento."""
-    eventos, origens = _extrato_das_acoes()
+    eventos, origens = _extrato_das_acoes(referencia, owner_id)
     linha_do_tempo = QuantityTimeline(eventos)
     abertas = {
         chave: quantidade
@@ -565,8 +604,8 @@ def _fotografar_passado(foto: _Foto, referencia: date) -> dict[str, int]:
             viva=origem.viva,
         )
     return {
-        "simuladas": _simuladas_em(referencia),
-        "opcoes": _opcoes_detidas_em(referencia),
+        "simuladas": _simuladas_em(referencia, owner_id),
+        "opcoes": _opcoes_detidas_em(referencia, owner_id),
         "sem_cotacao": sem_cotacao,
     }
 
@@ -575,18 +614,27 @@ def _fotografar_passado(foto: _Foto, referencia: date) -> dict[str, int]:
 def patrimonio_resumo():
     _exigir_token()
     titular_nome = _titular()
+    owner_id = _owner_id()
     foto = _Foto(titular=identidade(titular_nome))
 
     hoje = datetime.now(MARKET_TIMEZONE).date()
+    try:
+        max_history_days = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
+    except (KeyError, TypeError, ValueError):
+        abort(503, "Janela histórica do patrimônio não configurada.")
+    if max_history_days <= 0:
+        abort(503, "Janela histórica do patrimônio inválida.")
     referencia = _data_pedida(hoje)
+    if referencia < hoje - timedelta(days=max_history_days):
+        abort(400, "Data fora da janela histórica pública configurada.")
     if referencia == hoje:
-        omitidas = _fotografar_hoje(foto)
+        omitidas = _fotografar_hoje(foto, owner_id)
     else:
-        omitidas = _fotografar_passado(foto, referencia)
+        omitidas = _fotografar_passado(foto, referencia, owner_id)
 
     desde = referencia - timedelta(days=JANELA_DE_PROVENTOS_EM_DIAS)
     proventos = []
-    for provento in _proventos(desde, referencia):
+    for provento in _proventos(desde, referencia, owner_id):
         proventos.append(
             {
                 "id": f"{SISTEMA}:provento:{provento.id}",
@@ -628,12 +676,13 @@ def patrimonio_resumo():
     return resposta
 
 
-def _quantas_opcoes() -> int:
+def _quantas_opcoes(owner_id: int) -> int:
     return int(
         db.session.scalar(
             select(db.func.count())
             .select_from(OptionPosition)
             .join(OptionPosition.portfolio_ref)
+            .where(OptionPosition.owner_id == owner_id)
         )
         or 0
     )
@@ -644,6 +693,7 @@ def patrimonio_resumo_v2():
     """Dashboard agregado de patrimônio, paralelo e compatível com a v1."""
     _exigir_token()
     titular_nome = _titular()
+    owner_id = _owner_id()
     from app.patrimonio.dashboard import build_dashboard, parse_period
 
     # Esta rota combina diversas consultas. Fixe o isolamento antes da primeira
@@ -661,6 +711,12 @@ def patrimonio_resumo_v2():
         sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
 
     hoje = datetime.now(MARKET_TIMEZONE).date()
+    try:
+        max_history_days = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
+    except (KeyError, TypeError, ValueError):
+        abort(503, "Janela histórica do patrimônio não configurada.")
+    if max_history_days <= 0:
+        abort(503, "Janela histórica do patrimônio inválida.")
     pedida = (request.args.get("data") or "").strip()
     if not pedida:
         referencia = hoje
@@ -671,6 +727,8 @@ def patrimonio_resumo_v2():
             abort(400, "Data inválida: use AAAA-MM-DD.")
         if referencia > hoje:
             abort(400, "Data futura: não há posição nem fechamento para ela.")
+        if referencia < hoje - timedelta(days=max_history_days):
+            abort(400, "Data fora da janela histórica pública configurada.")
     try:
         periodo = parse_period(request.args.get("periodo"))
     except ValueError as exc:
@@ -684,12 +742,16 @@ def patrimonio_resumo_v2():
             abort(400, "Início inválido: use AAAA-MM-DD.")
         if inicio > referencia:
             abort(400, "Início posterior à data de referência.")
+        if inicio < referencia - timedelta(days=max_history_days):
+            abort(400, "Início fora da janela histórica pública configurada.")
     payload = build_dashboard(
         titular=identidade(titular_nome),
         titular_nome=titular_nome,
+        owner_id=owner_id,
         reference=referencia,
         period=periodo,
         start_override=inicio,
+        max_history_days=max_history_days,
     )
     resposta = jsonify(payload)
     resposta.headers["Cache-Control"] = "no-store"

@@ -9,7 +9,7 @@ ConfortoTermico, registrado na docstring de `aplicar_limite`.
 
 São a única superfície do sistema alcançável sem sessão (estão em
 `PUBLIC_ENDPOINTS`), e por isso a única sem cobertura nenhuma do gate de
-login. `COLLECTOR_AGENT_TOKEN` não está configurado na suíte
+login. Os tokens do coletor não estão configurados na suíte
 (`CONFIG_DE_TESTE`), então `_require_agent_token` recusa com 503 antes de
 tocar o banco -- os testes abaixo contam requisições, não autenticam de
 verdade, e por isso não precisam de PostgreSQL.
@@ -56,19 +56,17 @@ def test_resumo_de_patrimonio_bloqueia_quem_nao_tem_o_token(app) -> None:
     assert cliente.get("/patrimonio/v1/resumo", headers=errado).status_code == 429
 
 
-def test_resumo_de_patrimonio_nao_limita_quem_tem_o_token(app) -> None:
-    """O consolidador reconstrói a história uma data por vez: anos de fotos são
-    milhares de chamadas legítimas. O teto existe para quem martela sem token,
-    e ele continua valendo para esses mesmo depois das chamadas com token."""
+def test_resumo_de_patrimonio_tambem_limita_quem_tem_o_token(app) -> None:
+    """O token autoriza a integração, mas não cria um caminho sem orçamento."""
     app.config["PATRIMONIO_TOKEN"] = TOKEN_DE_PATRIMONIO
     app.config["PATRIMONIO_TITULAR"] = ""
     cliente = app.test_client()
     certo = {"Authorization": f"Bearer {TOKEN_DE_PATRIMONIO}"}
 
-    for _ in range(40):
+    for _ in range(30):
         # 503: o token passou, e a rota parou na falta de titular.
         assert cliente.get("/patrimonio/v1/resumo", headers=certo).status_code == 503
-    assert cliente.get("/patrimonio/v1/resumo").status_code == 401
+    assert cliente.get("/patrimonio/v1/resumo", headers=certo).status_code == 429
 
 
 def test_agente_nao_compartilha_orcamento_com_outra_rota(client) -> None:

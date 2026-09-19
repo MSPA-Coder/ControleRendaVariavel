@@ -34,16 +34,19 @@ def test_producao_resolve_segredos_de_arquivo_para_o_banco_do_container(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     secret_key_path = tmp_path / "secret_key"
-    agent_token_path = tmp_path / "collector_agent_token"
+    agent_read_token_path = tmp_path / "collector_agent_read_token"
+    agent_write_token_path = tmp_path / "collector_agent_write_token"
     postgres_password_path = tmp_path / "postgres_password"
     secret_key_path.write_text("chave-de-arquivo", encoding="utf-8")
     postgres_password_path.write_text("senha/de-arquivo", encoding="utf-8")
-    agent_token_path.write_text("token-de-arquivo-com-tamanho-suficiente", encoding="utf-8")
+    agent_read_token_path.write_text("token-de-leitura-com-tamanho-suficiente", encoding="utf-8")
+    agent_write_token_path.write_text("token-de-escrita-com-tamanho-suficiente", encoding="utf-8")
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("SECRET_KEY_FILE", str(secret_key_path))
     monkeypatch.setenv("POSTGRES_PASSWORD_FILE", str(postgres_password_path))
-    monkeypatch.setenv("COLLECTOR_AGENT_TOKEN_FILE", str(agent_token_path))
+    monkeypatch.setenv("COLLECTOR_AGENT_READ_TOKEN_FILE", str(agent_read_token_path))
+    monkeypatch.setenv("COLLECTOR_AGENT_WRITE_TOKEN_FILE", str(agent_write_token_path))
     monkeypatch.setenv("POSTGRES_HOST", "db")
     monkeypatch.setenv("POSTGRES_PORT", "5432")
 
@@ -53,8 +56,9 @@ def test_producao_resolve_segredos_de_arquivo_para_o_banco_do_container(
     assert app.config["SQLALCHEMY_DATABASE_URI"] == (
         "postgresql+psycopg://investimentos:senha%2Fde-arquivo@db:5432/investimentos"
     )
-    # O token do agente segue o mesmo contrato `_FILE` dos demais segredos.
-    assert app.config["COLLECTOR_AGENT_TOKEN"] == "token-de-arquivo-com-tamanho-suficiente"
+    # Os dois tokens do agente seguem o mesmo contrato `_FILE` dos demais segredos.
+    assert app.config["COLLECTOR_AGENT_READ_TOKEN"] == "token-de-leitura-com-tamanho-suficiente"
+    assert app.config["COLLECTOR_AGENT_WRITE_TOKEN"] == "token-de-escrita-com-tamanho-suficiente"
 
 
 def test_recusa_confiar_no_proxy_sem_forcar_https() -> None:

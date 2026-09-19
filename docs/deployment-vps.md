@@ -29,8 +29,9 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 
 1. Crie `.env.vps` a partir de `.env.vps.example`.
 2. Restaure por canal seguro `.secrets/secret_key`,
-   `.secrets/postgres_password`, `.secrets/collector_agent_token`,
-   `.secrets/patrimonio_token` e o material de `.certs/` exigido pelo build.
+   `.secrets/postgres_password`, `.secrets/collector_agent_read_token`,
+   `.secrets/collector_agent_write_token`, `.secrets/patrimonio_token` e o
+   material de `.certs/` exigido pelo build.
    Nunca registre ou exiba seus conteúdos. No Docker Compose não-Swarm, use modo
    `700` no diretório `.secrets` e `644` nos arquivos, pois PostgreSQL e Flask
    usam usuários Linux diferentes.
@@ -57,9 +58,17 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
    .\scripts\rtd-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
    ```
 
-O mesmo token do agente deve estar em `.secrets/collector_agent_token` nos dois
-lados. O servidor apenas recebe chamadas HTTPS autenticadas; ele nunca tenta
-alcançar o computador Windows.
+O token de leitura deve estar em `.secrets/collector_agent_read_token` no VPS e
+no Windows; o token de escrita deve estar em
+`.secrets/collector_agent_write_token` nos dois lados. São segredos distintos:
+o primeiro só lê configuração e o segundo só publica cotações/falhas. O
+servidor apenas recebe chamadas HTTPS autenticadas; ele nunca tenta alcançar o
+computador Windows.
+
+`PATRIMONIO_OWNER_ID` também precisa apontar para o `id` do usuário financeiro
+autorizado. `PATRIMONIO_TITULAR` é somente o nome da pessoa no contrato externo;
+não substitui esse vínculo. O publicador recusa dados fora de
+`PATRIMONIO_MAX_HISTORICO_DIAS` (dez anos por padrão).
 
 `.env.vps` precisa trazer `FORCE_HTTPS=true` junto de `TRUST_PROXY_HEADERS=true`
 -- a aplicação recusa subir com a segunda ligada e a primeira desligada:

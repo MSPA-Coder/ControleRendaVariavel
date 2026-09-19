@@ -34,6 +34,7 @@ from app.collector.settings import (
     valid_agent_check_interval,
     valid_poll_interval,
 )
+from app.core.secret_files import project_secret_value
 
 CONFIG_PATH = Path(".docker-local") / "remote-collector.env"
 AGENT_LOGGER_NAME = "controle_renda_variavel.remote_collector"
@@ -57,16 +58,20 @@ def _environment(project_dir: Path) -> dict[str, str]:
     return _read_dotenv(project_dir / CONFIG_PATH)
 
 
-def _read_token(project_dir: Path, config: dict[str, str]) -> str:
-    raw_path = config.get("COLLECTOR_AGENT_TOKEN_FILE", ".secrets/collector_agent_token")
-    path = Path(raw_path)
-    if not path.is_absolute():
-        path = project_dir / path
+def _read_token(project_dir: Path, config: dict[str, str], config_key: str) -> str:
+    secret_name = config_key.removesuffix("_FILE")
+    raw_path = config.get(config_key)
+    environ = config
+    if raw_path and not Path(raw_path).is_absolute():
+        # `project_secret_value` aceita o caminho explícito como o Compose,
+        # mas o agente é executado a partir do agendador e não pode depender
+        # do diretório de trabalho atual.
+        environ = {**config, config_key: str(project_dir / raw_path)}
     try:
-        token = path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        raise RuntimeError(f"Token do agente não disponível em {path}.") from exc
-    if len(token) < 32:
+        token = project_secret_value(project_dir, secret_name, environ)
+    except (OSError, RuntimeError) as exc:
+        raise RuntimeError(f"Token do agente não disponível ({secret_name}).") from exc
+    if token is None or len(token) < 32:
         raise RuntimeError("Token do agente inválido.")
     return token
 
@@ -139,20 +144,29 @@ def _store_agent_check_interval(path: Path, interval: int) -> None:
 
 
 class CollectorApi:
-    def __init__(self, base_url: str, token: str, *, timeout_seconds: float = 15) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        read_token: str,
+        write_token: str,
+        *,
+        timeout_seconds: float = 15,
+    ) -> None:
         if not base_url.startswith("https://"):
             raise RuntimeError("COLLECTOR_REMOTE_URL deve usar HTTPS.")
         self.base_url = base_url.rstrip("/")
-        self.token = token
+        self.read_token = read_token
+        self.write_token = write_token
         self.timeout_seconds = timeout_seconds
 
     def _request(self, path: str, *, payload: dict[str, object] | None = None) -> dict[str, Any]:
         data = json.dumps(payload).encode() if payload is not None else None
+        token = self.write_token if data is not None else self.read_token
         request = Request(
             f"{self.base_url}{path}",
             data=data,
             headers={
-                "Authorization": f"Bearer {self.token}",
+                "Authorization": f"Bearer {token}",
                 "Accept": "application/json",
                 **({"Content-Type": "application/json"} if data is not None else {}),
             },
@@ -316,7 +330,11 @@ def remote_loop_arguments(project_dir: Path) -> dict[str, object]:
     primeira consulta ao VPS ainda não voltou.
     """
     config = _environment(project_dir)
-    api = CollectorApi(config.get("COLLECTOR_REMOTE_URL", ""), _read_token(project_dir, config))
+    api = CollectorApi(
+        config.get("COLLECTOR_REMOTE_URL", ""),
+        _read_token(project_dir, config, "COLLECTOR_AGENT_READ_TOKEN_FILE"),
+        _read_token(project_dir, config, "COLLECTOR_AGENT_WRITE_TOKEN_FILE"),
+    )
     state_path = _state_path(project_dir)
     saved = (_load_agent_check_interval(state_path), _load_collector_schedule(state_path))
 

@@ -102,7 +102,7 @@ def _open_transaction_for(option_position_id: int, owner_id: int) -> Transaction
             # mesmo id numérico faria esta consulta encontrar duas linhas
             # ou a linha errada.
             Transaction.option_contract_id.is_not(None),
-        )
+        ).with_for_update()
     )
 
 

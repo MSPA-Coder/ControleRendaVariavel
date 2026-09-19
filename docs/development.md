@@ -13,12 +13,18 @@ Copy-Item .env.example .env
 docker compose -f compose.yaml -f compose.dev.yaml up --build -d
 ```
 
-`provision-secrets.ps1` cria, sem exibir os valores, `.secrets/secret_key` e
-`.secrets/postgres_password` a partir de `SECRET_KEY` e `POSTGRES_PASSWORD` do
-`.env` — **troque os dois valores de exemplo antes de provisionar** — e gera
-`.secrets/collector_agent_token` aleatoriamente quando ele ainda não existe. Por
-padrão o script recusa sobrescrever arquivo existente; `-Force` rotaciona, e
-exige tratar a senha do banco e a invalidação das sessões abertas.
+`provision-secrets.ps1` gera, sem exibir os valores, `.secrets/secret_key` e
+`.secrets/postgres_password`, uma senha sintética para o banco efêmero da suíte
+e tokens separados de leitura e escrita para o coletor. Em instalações antigas,
+valores ainda presentes no `.env` servem apenas como migração para arquivos que
+não existam. Por padrão arquivos existentes são preservados; `-Force` rotaciona
+os segredos deliberadamente, exigindo tratar a senha do banco, a troca dos
+tokens e a invalidação das sessões abertas.
+
+Em uma cópia antiga que ainda guardava valores no `.env`, execute também
+`.scripts\provision-secrets.ps1 -MigrateDotEnv` depois de confirmar os arquivos
+em `.secrets`; o comando substitui os valores por referências locais e preserva
+as demais variáveis.
 
 Falta um arquivo que o script não cria, porque não é segredo gerado aqui:
 
@@ -168,5 +174,6 @@ específico do Windows.
 
 O caminho do agente remoto (`REMOTE_COLLECTOR_ENABLED=true`) pode ser exercitado
 sem Windows chamando os endpoints `/api/collector/*` com o Bearer token de
-`.secrets/collector_agent_token`: é a mesma superfície que o agente usa, e a
-única que ele tem.
+`.secrets/collector_agent_read_token` para configuração e
+`.secrets/collector_agent_write_token` para cotações/falhas. São superfícies
+separadas de propósito.

@@ -87,14 +87,19 @@ ficam registradas: `opened_on` de posição antiga costuma ser a data do
 cadastro, não a da compra, e o arquivo das encerradas não guarda o
 multiplicador da cotação (elas entram com 1).
 
-O teto de requisições dessa rota vale para quem chega **sem** o token -- é essa
-a ameaça que ele contém. Quem apresenta o token certo é isento, porque o
-consolidador reconstrói a história uma data por vez, e anos de fotos são
-milhares de chamadas legítimas.
+O teto de requisições vale também para quem apresenta o token correto: o token
+autoriza a integração, mas não transforma uma consulta histórica cara em um
+caminho ilimitado. O consolidador deve agrupar pedidos ou usar uma exportação
+controlada quando precisar de volume maior.
 
-`PATRIMONIO_TITULAR` é obrigatório para publicar. Aqui `owner_id` aponta para o
-**usuário** do aplicativo, e do outro lado titular é a pessoa dona do dinheiro:
-são conceitos diferentes com o mesmo nome, e a rota prefere recusar a adivinhar.
+`PATRIMONIO_TITULAR` e `PATRIMONIO_OWNER_ID` são obrigatórios para publicar.
+Titular é a identidade externa; `PATRIMONIO_OWNER_ID` é o usuário financeiro
+explicitamente autorizado. Toda consulta do publicador aplica esse `owner_id`,
+inclusive posições, carteiras, proventos, transações e histórico.
+
+O resumo aceita no máximo `PATRIMONIO_MAX_HISTORICO_DIAS` para data e período
+públicos, com padrão de dez anos. Isso protege o worker contra reconstruções
+sem limite; exportações mais antigas devem ser produzidas por fluxo controlado.
 
 ### Dashboard patrimonial v2
 
@@ -191,10 +196,11 @@ o limite decorado e nunca aplicado.
 
 ### Segredos
 
-`SECRET_KEY`, a senha do PostgreSQL e o token do agente vêm de arquivo, nunca do
-ambiente do contêiner: `NOME_FILE` aponta o caminho e
-`sharedauth.secrets.resolver_segredo` o lê. `NOME` direto continua aceito para
-execução manual e injeção de teste, mas não é o contrato do Compose.
+`SECRET_KEY`, a senha do PostgreSQL, o token de patrimônio e os tokens de leitura
+e escrita do agente vêm de arquivo, nunca do ambiente do contêiner: `NOME_FILE`
+aponta o caminho e `sharedauth.secrets.resolver_segredo` o lê. `NOME` direto
+continua aceito para execução manual e injeção de teste, mas não é o contrato do
+Compose.
 
 `app/core/secret_files.py` guarda o que só este projeto tem: o agente RTD roda no
 Windows, fora de contêiner, e lê os valores de `.secrets/` na raiz do projeto.
@@ -357,9 +363,10 @@ Assim o cálculo visual acompanha a entrega de cotações sem conexão persisten
 nem requisições a cada poucos segundos.
 
 O servidor nunca inicia conexão para o computador Windows e nunca recebe acesso
-ao ambiente local. Os três endpoints exigem Bearer token próprio, comparado com
-`hmac.compare_digest`, e são os únicos isentos de CSRF — não há navegador nem
-sessão do outro lado. O corpo é limitado a 512 KB.
+ao ambiente local. Os três endpoints exigem tokens Bearer separados: o token de
+leitura só consulta configuração, e o token de escrita publica cotações e
+falhas. Ambos são comparados com `hmac.compare_digest` e são os únicos isentos
+de CSRF — não há navegador nem sessão do outro lado. O corpo é limitado a 512 KB.
 
 `REMOTE_COLLECTOR_ENABLED` identifica a instância receptora no VPS. Sua tela
 pode pausar/retomar via `collector_paused`, mantendo o agente disponível.

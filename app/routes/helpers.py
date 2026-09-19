@@ -80,6 +80,28 @@ def owned_or_404(model: type[Portfolio] | type[Position] | type[OptionPosition] 
     return record
 
 
+def owned_or_404_for_update(
+    model: type[Portfolio] | type[Position] | type[OptionPosition] | type[Transaction] | type[Dividend],
+    record_id: int,
+):
+    """Carrega um registro financeiro do usuário e serializa sua alteração.
+
+    A checagem de ownership e o bloqueio precisam estar na mesma consulta. Fazer
+    ``owned_or_404`` e bloquear depois deixa uma janela em que um encerramento,
+    exclusão ou outra edição pode mudar o estado que a rota acabou de validar.
+    """
+    if not 0 < record_id <= 2_147_483_647:
+        abort(400, description="Identificador inválido.")
+    record = db.session.scalar(
+        select(model)
+        .where(model.id == record_id, model.owner_id == current_owner_id())
+        .with_for_update()
+    )
+    if record is None:
+        abort(404)
+    return record
+
+
 def grant_ticker_entitlement(*, user_id: int, ticker_id: int, held_on: date) -> None:
     """Registra a primeira posse confirmada sem revogar histórico ao encerrar."""
     statement = insert(UserTickerEntitlement).values(

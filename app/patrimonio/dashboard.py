@@ -27,6 +27,7 @@ CENT = Decimal("0.01")
 CONTRACT = "patrimonio/v2"
 SYSTEM = "controle-renda-variavel"
 PERIODS = frozenset({"week", "month", "quarter", "semester", "year", "all"})
+DEFAULT_MAX_PUBLIC_HISTORY_DAYS = 3650
 
 
 def _money(value: Decimal | None) -> str | None:
@@ -49,9 +50,14 @@ def _subtract_months(value: date, months: int) -> date:
     return date(year, month, min(value.day, monthrange(year, month)[1]))
 
 
-def period_window(reference: date, period: str) -> tuple[date, date]:
+def period_window(
+    reference: date,
+    period: str,
+    *,
+    max_history_days: int = DEFAULT_MAX_PUBLIC_HISTORY_DAYS,
+) -> tuple[date, date]:
     if period == "all":
-        return date.min, reference
+        return reference - timedelta(days=max_history_days), reference
     if period == "week":
         return reference - timedelta(days=6), reference
     months = {"month": 1, "quarter": 3, "semester": 6, "year": 12}
@@ -249,12 +255,14 @@ def _monthly_performance_points(daily_points) -> list[dict[str, object]]:
     ]
 
 
-def _performance(reference: date, start: date, dividends: list) -> list[dict[str, object]]:
+def _performance(
+    reference: date, start: date, dividends: list, owner_id: int
+) -> list[dict[str, object]]:
     # A fotografia publicada inclui ações. Manter opções fora da série evita
     # comparar um desempenho que contém instrumentos omitidos com um total que
     # não os contém.
     events = [
-        event for event in queries.performance_events()
+        event for event in queries.performance_events(reference, owner_id)
         if event.position_key[0] == "stock"
     ]
     tickers = queries.tickers(event.ticker_id for event in events)
@@ -263,7 +271,7 @@ def _performance(reference: date, start: date, dividends: list) -> list[dict[str
         ticker = tickers.get(event.ticker_id)
         if ticker is not None:
             by_currency[ticker.currency].append(event)
-    prices = queries.quote_series(tickers)
+    prices = queries.quote_series(tickers, start=start, end=reference)
     # A performance report uses proventos rateados by the same position
     # timeline as the existing HTML performance report.
     total_timeline = QuantityTimeline(events)
@@ -305,9 +313,11 @@ def build_dashboard(
     *,
     titular: str,
     titular_nome: str | None = None,
+    owner_id: int,
     reference: date,
     period: str,
     start_override: date | None = None,
+    max_history_days: int = DEFAULT_MAX_PUBLIC_HISTORY_DAYS,
 ) -> dict[str, object]:
     today = datetime.now(MARKET_TIMEZONE).date()
     from app.routes.patrimonio import _Foto, _fotografar_hoje, _fotografar_passado
@@ -315,11 +325,15 @@ def build_dashboard(
     # Keep the v1 list byte-for-byte compatible in shape. The enriched v2
     # list is separate so an unquoted position is visible to the dashboard.
     foto = _Foto(titular=titular)
-    omitted = _fotografar_hoje(foto) if reference == today else _fotografar_passado(foto, reference)
+    omitted = (
+        _fotografar_hoje(foto, owner_id)
+        if reference == today
+        else _fotografar_passado(foto, reference, owner_id)
+    )
     if reference == today:
         current_lines = [
             _current_position(position, reference, titular=titular)
-            for position in queries.real_positions()
+            for position in queries.real_positions(owner_id)
         ]
     else:
         current_lines = [
@@ -356,14 +370,14 @@ def build_dashboard(
                 "motivo_valores",
             )
             line.update({key: extra[key] for key in keys if key in extra})
-    desde, _ = period_window(reference, period)
+    desde, _ = period_window(reference, period, max_history_days=max_history_days)
     if start_override is not None:
         desde = start_override
     # A lista legada keeps v1's one-year publication window even when the v2
     # dashboard asks for ``all`` performance. New aggregates use ``desde``.
     v1_desde = reference - timedelta(days=365)
-    dividends = queries.dividends(min(v1_desde, desde), reference)
-    txs = queries.closed_transactions(desde, reference)
+    dividends = queries.dividends(min(v1_desde, desde), reference, owner_id)
+    txs = queries.closed_transactions(desde, reference, owner_id)
     v1_dividends = [
         {
             "id": f"{SYSTEM}:provento:{item.id}",
@@ -387,7 +401,7 @@ def build_dashboard(
             "ativa": bool(portfolio.is_active),
             "endereco": "/tables/portfolios",
         }
-        for portfolio in queries.portfolios()
+        for portfolio in queries.portfolios(owner_id)
         if not portfolio.simulated
     ]
     endpoints = {
@@ -433,7 +447,7 @@ def build_dashboard(
         "omitidas": omitted,
         "carteiras": portfolio_rows,
         "posicoes_atuais": current_lines,
-        "desempenho_por_moeda": _performance(reference, desde, dividends),
+        "desempenho_por_moeda": _performance(reference, desde, dividends, owner_id),
         "ganhos_realizados_por_moeda": _realized(txs),
         "renda_por_moeda": _income_by_currency(dividends, desde, reference),
         "enderecos": endpoints,

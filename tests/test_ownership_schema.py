@@ -180,7 +180,8 @@ def test_collector_legacy_configuration_is_removed_after_agent_upgrade(legacy_ap
         assert db.session.scalar(text("SELECT to_regtype('collector_destination')")) is None
         assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _COLLECTOR_CLEANUP_REVISION
 
-        legacy_app.config["COLLECTOR_AGENT_TOKEN"] = "a" * 32
+        legacy_app.config["COLLECTOR_AGENT_READ_TOKEN"] = "a" * 32
+        legacy_app.config["COLLECTOR_AGENT_WRITE_TOKEN"] = "b" * 32
         response = legacy_app.test_client().get(
             "/api/collector/configuration", headers={"Authorization": "Bearer " + "a" * 32}
         )

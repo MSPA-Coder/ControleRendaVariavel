@@ -38,13 +38,15 @@ switch ($Action) {
         if ($PSCmdlet.ShouldProcess($taskName, "instalar agente automático para o VPS")) {
             if ($ApiUrl) {
                 New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
-                # Preserva opções RTD existentes; substitui somente a URL e o caminho do token.
+                # Preserva opções RTD existentes; substitui somente a URL e os
+                # caminhos dos tokens separados por capacidade.
                 $lines = @()
                 if (Test-Path -LiteralPath $configPath) {
-                    $lines = @(Get-Content -LiteralPath $configPath | Where-Object { $_ -notmatch '^COLLECTOR_REMOTE_URL=|^COLLECTOR_AGENT_TOKEN_FILE=' })
+                    $lines = @(Get-Content -LiteralPath $configPath | Where-Object { $_ -notmatch '^COLLECTOR_REMOTE_URL=|^COLLECTOR_AGENT_(TOKEN|READ|WRITE)_TOKEN_FILE=' })
                 }
                 $lines += "COLLECTOR_REMOTE_URL=$($ApiUrl.TrimEnd('/'))"
-                $lines += "COLLECTOR_AGENT_TOKEN_FILE=.secrets/collector_agent_token"
+                $lines += "COLLECTOR_AGENT_READ_TOKEN_FILE=.secrets/collector_agent_read_token"
+                $lines += "COLLECTOR_AGENT_WRITE_TOKEN_FILE=.secrets/collector_agent_write_token"
                 [IO.File]::WriteAllLines($configPath, [string[]]$lines, [Text.UTF8Encoding]::new($false))
             }
             Stop-CollectorTask -Name $taskName -Destination remote

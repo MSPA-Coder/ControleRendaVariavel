@@ -42,6 +42,10 @@ jobs:
           rm -f /tmp/local-root-ca.key
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
+          printf '%s\n' 'ci-placeholder-quality-only' > .secrets/postgres_password_quality
+          printf '%s\n' 'ci-placeholder-read-only-token' > .secrets/collector_agent_read_token
+          printf '%s\n' 'ci-placeholder-write-only-token' > .secrets/collector_agent_write_token
+          printf '%s\n' 'ci-placeholder-patrimonio-token' > .secrets/patrimonio_token
           # O `chmod` na senha do PostgreSQL não é descuido, e o `umask 077`
           # continua valendo para os outros dois arquivos.
           #
@@ -56,6 +60,7 @@ jobs:
           # subia neste job. O valor é uma constante pública escrita acima e não
           # protege nada.
           chmod 0644 .secrets/postgres_password
+          chmod 0644 .secrets/postgres_password_quality
       - name: Validar Compose
         run: docker compose config --quiet
       - name: Construir quality sem cache
@@ -139,6 +144,10 @@ jobs:
           rm -f /tmp/local-root-ca.key
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
+          printf '%s\n' 'ci-placeholder-quality-only' > .secrets/postgres_password_quality
+          printf '%s\n' 'ci-placeholder-read-only-token' > .secrets/collector_agent_read_token
+          printf '%s\n' 'ci-placeholder-write-only-token' > .secrets/collector_agent_write_token
+          printf '%s\n' 'ci-placeholder-patrimonio-token' > .secrets/patrimonio_token
       - name: Validar contrato do PostgreSQL no Compose
         shell: bash
         run: |
@@ -147,7 +156,8 @@ jobs:
           python3 - <<'PY'
           import json
 
-          db = json.load(open("/tmp/compose.json", encoding="utf-8"))["services"]["db"]
+          services = json.load(open("/tmp/compose.json", encoding="utf-8"))["services"]
+          db = services["db"]
           assert db["user"] == "postgres"
           assert db["read_only"] is True
           assert db["cap_drop"] == ["ALL"]
@@ -155,6 +165,23 @@ jobs:
           assert db["pids_limit"] == 256
           assert "/tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m" in db["tmpfs"]
           assert "/var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m" in db["tmpfs"]
+
+          quality = services["quality"]
+          assert quality["read_only"] is True
+          assert quality["cap_drop"] == ["ALL"]
+          assert quality["security_opt"] == ["no-new-privileges:true"]
+          assert quality["pids_limit"] == 256
+          assert quality["secrets"][0]["source"] == "postgres_password_quality"
+
+          db_teste = services["db-teste"]
+          assert db_teste["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/postgres_password_quality"
+          assert db_teste["secrets"][0]["source"] == "postgres_password_quality"
+
+          web = services["web"]
+          assert web["environment"]["COLLECTOR_AGENT_READ_TOKEN_FILE"] == "/run/secrets/collector_agent_read_token"
+          assert web["environment"]["COLLECTOR_AGENT_WRITE_TOKEN_FILE"] == "/run/secrets/collector_agent_write_token"
+          assert "PATRIMONIO_OWNER_ID" in web["environment"]
+          assert web["environment"]["PATRIMONIO_MAX_HISTORICO_DIAS"] == "3650"
           PY
       - name: Construir e inspecionar runtime sem cache
         shell: bash

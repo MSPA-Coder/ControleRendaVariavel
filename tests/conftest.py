@@ -115,7 +115,7 @@ def _url_do_banco_de_teste() -> str:
     # CodeQL sinaliza como "uncontrolled data used in path expression" -- com
     # razao, ainda que aqui a origem fosse o proprio compose.yaml. Sem o
     # intermediario nao existe sink, e o codigo fica mais curto.
-    senha = Path("/run/secrets/postgres_password").read_text(encoding="utf-8").strip()
+    senha = Path("/run/secrets/postgres_password_quality").read_text(encoding="utf-8").strip()
     return (
         "postgresql+psycopg://"
         f"{quote(os.environ['TESTE_POSTGRES_USER'])}:{quote(senha)}"

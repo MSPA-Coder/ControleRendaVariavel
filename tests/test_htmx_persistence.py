@@ -63,7 +63,7 @@ def test_update_position_retorna_formulario_em_modo_edicao_apos_erro(monkeypatch
 
     capturado: dict[str, object] = {}
 
-    monkeypatch.setattr(positions.db, "get_or_404", lambda *_args: Position())
+    monkeypatch.setattr(positions, "owned_or_404_for_update", lambda *_args: Position())
     monkeypatch.setattr(
         positions,
         "_parse_form",
@@ -94,7 +94,7 @@ def test_update_option_position_retorna_formulario_em_modo_edicao_apos_erro(monk
 
     capturado: dict[str, object] = {}
 
-    monkeypatch.setattr(options.db, "get_or_404", lambda *_args: Position())
+    monkeypatch.setattr(options, "owned_or_404_for_update", lambda *_args: Position())
     monkeypatch.setattr(
         options,
         "_parse_position",
@@ -151,7 +151,7 @@ def test_update_transaction_retorna_formulario_em_modo_edicao_apos_erro(monkeypa
 
     capturado: dict[str, object] = {}
 
-    monkeypatch.setattr(transactions.db, "get_or_404", lambda *_args: Transaction())
+    monkeypatch.setattr(transactions, "owned_or_404_for_update", lambda *_args: Transaction())
     monkeypatch.setattr(
         transactions,
         "_parse_form",

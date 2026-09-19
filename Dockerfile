@@ -21,19 +21,11 @@ RUN --mount=type=secret,id=local_ca,required=false \
       && update-ca-certificates; \
     fi
 
-# Correcoes de seguranca da base e das ferramentas de empacotamento.
-#
-# `apt-get upgrade` porque a `python:3.14-slim` publicada carrega pacotes do
-# Debian com CVE ja corrigido a montante; sem isto a correcao so chega quando a
-# imagem oficial for republicada. O `setuptools` que vem na base tambem fica
-# para tras -- o 70.3.0 tinha CVE-2025-47273, travessia de caminho.
-#
-# A atualização inclui correções publicadas antes que a imagem base seja
-# republicada.
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* \
-    && python -m pip install --no-cache-dir --upgrade "pip>=26.1.2,<27" setuptools \
+# A base está fixada por digest. Não fazemos `apt-get upgrade` contra o índice
+# corrente: isso tornaria dois builds do mesmo commit diferentes. A varredura
+# Trivy da imagem e a atualização periódica do digest são o caminho de segurança
+# da base; pacotes adicionais são instalados com versão explícita abaixo.
+RUN python -m pip install --no-cache-dir "pip==26.2.1" "setuptools==80.9.0" \
     && addgroup --system app \
     && adduser --system --ingroup app app
 
@@ -61,7 +53,7 @@ RUN apt-get update \
 # token, porque o repositorio e publico.
 FROM base AS builder
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
+    && apt-get install -y --no-install-recommends "git=1:2.47.3-0+deb13u1" \
     && rm -rf /var/lib/apt/lists/*
 # Versao fixa: o instalador que garante reprodutibilidade nao pode ser ele
 # proprio uma variavel. O binario e autocontido, e o estagio `quality` o copia
@@ -110,7 +102,7 @@ FROM base AS quality
 # que reinstalar um gerenciador de pacotes.
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
+    && apt-get install -y --no-install-recommends "git=1:2.47.3-0+deb13u1" \
     && rm -rf /var/lib/apt/lists/*
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"
