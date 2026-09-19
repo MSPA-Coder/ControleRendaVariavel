@@ -79,17 +79,21 @@ htmx.config.includeIndicatorStyles = false;
     });
 
     const currencyForm = globalFilters.querySelector("[data-global-currency-form]");
-    const currencySubmit = globalFilters.querySelector("[data-global-currency-submit]");
-    if (currencyForm && currencySubmit) {
+    if (currencyForm) {
+      currencyForm.addEventListener("change", (event) => {
+        if (!event.target.matches("[data-global-currency]")) return;
+        if (currencyForm.dataset.submitting === "1") return;
+        if (typeof currencyForm.requestSubmit === "function") currencyForm.requestSubmit();
+        else currencyForm.submit();
+      });
       currencyForm.addEventListener("submit", (event) => {
         // A native navigation cancels the previous page, but this guard also
-        // covers keyboard repeat and fast clicks before unload begins.
+        // covers repeated change events before unload begins.
         if (currencyForm.dataset.submitting === "1") {
           event.preventDefault();
           return;
         }
         currencyForm.dataset.submitting = "1";
-        currencySubmit.disabled = true;
       });
     }
     const privacyForm = globalFilters.querySelector("[data-privacy-form]");

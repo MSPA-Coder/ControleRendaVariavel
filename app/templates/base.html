@@ -233,7 +233,6 @@
                   <option value="USD" {{ 'selected' if selected_currency == 'USD' }}>Dólar</option>
                   <option value="ALL" {{ 'selected' if selected_currency == 'ALL' }}>Todas</option>
                 </select>
-                <button class="button button-primary" type="submit" data-global-currency-submit>Aplicar</button>
               </form>
               <form class="privacy-menu-form" method="post" action="{{ url_for('portfolio.toggle_values_privacy') }}" data-privacy-form>
                 <input type="hidden" name="next" value="{{ request.full_path }}">
