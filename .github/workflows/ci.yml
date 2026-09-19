@@ -62,7 +62,7 @@ jobs:
           chmod 0644 .secrets/postgres_password
           chmod 0644 .secrets/postgres_password_quality
       - name: Validar Compose
-        run: docker compose config --quiet
+        run: docker compose --profile quality config --quiet
       - name: Construir quality sem cache
         run: docker compose --profile quality build --no-cache quality
       - name: Executar quality
@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose -f compose.yaml config --format json > /tmp/compose.json
+          docker compose --profile quality -f compose.yaml config --format json > /tmp/compose.json
           python3 - <<'PY'
           import json
 
