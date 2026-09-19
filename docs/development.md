@@ -13,9 +13,11 @@ Copy-Item .env.example .env
 docker compose -f compose.yaml -f compose.dev.yaml up --build -d
 ```
 
-`provision-secrets.ps1` gera, sem exibir os valores, `.secrets/secret_key` e
-`.secrets/postgres_password`, uma senha sintética para o banco efêmero da suíte
-e tokens separados de leitura e escrita para o coletor. Em instalações antigas,
+`provision-secrets.ps1` gera, sem exibir os valores, `.secrets/secret_key`, a
+senha administrativa `.secrets/postgres_password`, a senha do runtime
+`.secrets/postgres_app_password`, uma senha sintética para o banco efêmero da
+suíte e a senha correspondente do papel de runtime, além dos tokens separados
+de leitura e escrita para o coletor. Em instalações antigas,
 valores ainda presentes no `.env` servem apenas como migração para arquivos que
 não existam. Por padrão arquivos existentes são preservados; `-Force` rotaciona
 os segredos deliberadamente, exigindo tratar a senha do banco, a troca dos
@@ -46,6 +48,13 @@ O primeiro acesso precisa de uma conta:
 ```powershell
 docker compose exec web flask --app app:create_app users create-admin
 ```
+
+O banco usa dois papéis: `investimentos` fica apenas no `migrate` e no
+provisionamento; `web` e o agente RTD usam `investimentos_app`. Bancos novos
+nascem com checksums (`POSTGRES_INITDB_ARGS=--data-checksums`). A configuração
+não habilita checksums retroativamente em um volume existente: isso exige
+backup validado, parada limpa e o procedimento operacional documentado no
+relatório da implantação.
 
 ## Validação automatizada
 

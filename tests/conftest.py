@@ -20,7 +20,9 @@ impossiveis de verificar sem PostgreSQL:
   que o grafo dela e integro.
 
 O banco dessa camada e o servico `db-teste` do Compose: efemero, em tmpfs, e
-deliberadamente NAO e o `db` com dados reais.
+deliberadamente NAO e o `db` com dados reais. A fixture usa o papel
+`investimentos_app`, igual ao `web`; o papel administrativo só provisiona
+o usuário e aplica migrações.
 
 CONSEQUENCIA PRATICA: o bootstrap do schema em PostgreSQL vazio deixou de ser
 verificacao manual. Uma migracao que falha ao executar agora reprova na CI, e
@@ -86,7 +88,7 @@ def client(app):
 # ---------------------------------------------------------------------------
 
 
-def _url_do_banco_de_teste() -> str:
+def _url_do_banco_de_teste(*, administrativo: bool = False) -> str:
     """Monta a URL a partir das variaveis `TESTE_POSTGRES_*` do Compose.
 
     O prefixo `TESTE_` nao e enfeite: varios testes desta suite medem o que a
@@ -115,10 +117,15 @@ def _url_do_banco_de_teste() -> str:
     # CodeQL sinaliza como "uncontrolled data used in path expression" -- com
     # razao, ainda que aqui a origem fosse o proprio compose.yaml. Sem o
     # intermediario nao existe sink, e o codigo fica mais curto.
-    senha = Path("/run/secrets/postgres_password_quality").read_text(encoding="utf-8").strip()
+    usuario = os.environ["TESTE_POSTGRES_USER"]
+    caminho_senha = "/run/secrets/postgres_app_password_quality"
+    if administrativo:
+        usuario = os.environ.get("TESTE_POSTGRES_ADMIN_USER", "investimentos")
+        caminho_senha = "/run/secrets/postgres_password_quality"
+    senha = Path(caminho_senha).read_text(encoding="utf-8").strip()
     return (
         "postgresql+psycopg://"
-        f"{quote(os.environ['TESTE_POSTGRES_USER'])}:{quote(senha)}"
+        f"{quote(usuario)}:{quote(senha)}"
         f"@{os.environ['TESTE_POSTGRES_HOST']}:{os.environ.get('TESTE_POSTGRES_PORT', '5432')}"
         f"/{os.environ['TESTE_POSTGRES_DB']}"
     )
@@ -139,12 +146,12 @@ def app_com_banco():
     """
     from flask_migrate import upgrade
 
-    aplicacao = create_app(
-        {"SQLALCHEMY_DATABASE_URI": _url_do_banco_de_teste(), "TESTING": True}
+    aplicacao_administrativa = create_app(
+        {"SQLALCHEMY_DATABASE_URI": _url_do_banco_de_teste(administrativo=True), "TESTING": True}
     )
-    with aplicacao.app_context():
+    with aplicacao_administrativa.app_context():
         upgrade()
-    return aplicacao
+    return create_app({"SQLALCHEMY_DATABASE_URI": _url_do_banco_de_teste(), "TESTING": True})
 
 
 @pytest.fixture

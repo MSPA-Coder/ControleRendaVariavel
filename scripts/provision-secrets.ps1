@@ -173,7 +173,9 @@ else {
 }
 $secretKeyPath = Join-Path $secretsDir "secret_key"
 $postgresPasswordPath = Join-Path $secretsDir "postgres_password"
+$postgresAppPasswordPath = Join-Path $secretsDir "postgres_app_password"
 $qualityPasswordPath = Join-Path $secretsDir "postgres_password_quality"
+$qualityAppPasswordPath = Join-Path $secretsDir "postgres_app_password_quality"
 
 if ($PSCmdlet.ShouldProcess($secretsDir, "criar diretório de segredos local")) {
     New-Item -ItemType Directory -Path $secretsDir -Force | Out-Null
@@ -181,7 +183,9 @@ if ($PSCmdlet.ShouldProcess($secretsDir, "criar diretório de segredos local")) 
 
 Ensure-SecretFile -Path $secretKeyPath -Value $secretKey
 Ensure-SecretFile -Path $postgresPasswordPath -Value $postgresPassword
+Ensure-SecretFile -Path $postgresAppPasswordPath -Value (New-ControlToken)
 Ensure-SecretFile -Path $qualityPasswordPath -Value (New-ControlToken)
+Ensure-SecretFile -Path $qualityAppPasswordPath -Value (New-ControlToken)
 
 $collectorAgentReadTokenPath = Join-Path $secretsDir "collector_agent_read_token"
 Ensure-SecretFile -Path $collectorAgentReadTokenPath -Value (New-ControlToken)

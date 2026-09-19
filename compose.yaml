@@ -26,6 +26,7 @@ services:
       POSTGRES_DB: investimentos
       POSTGRES_USER: investimentos
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     secrets:
       - postgres_password
     ports:
@@ -70,7 +71,7 @@ services:
         max-file: "3"
     environment:
       SECRET_KEY_FILE: /run/secrets/secret_key
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_app_password
       COLLECTOR_AGENT_READ_TOKEN_FILE: /run/secrets/collector_agent_read_token
       COLLECTOR_AGENT_WRITE_TOKEN_FILE: /run/secrets/collector_agent_write_token
       # Publicacao do resumo de patrimonio, lida pelo consolidador. As duas
@@ -83,7 +84,7 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
-      POSTGRES_USER: investimentos
+      POSTGRES_USER: investimentos_app
       RENDA_VARIAVEL_SESSION_COOKIE_NAME: ${RENDA_VARIAVEL_SESSION_COOKIE_NAME:-controle_renda_variavel_session}
       RTD_STALE_AFTER_SECONDS: ${RTD_STALE_AFTER_SECONDS:-30}
       FORCE_HTTPS: ${FORCE_HTTPS:-false}
@@ -92,7 +93,7 @@ services:
       RATELIMIT_STORAGE_URI: ${RATELIMIT_STORAGE_URI:-memory://}
     secrets:
       - secret_key
-      - postgres_password
+      - postgres_app_password
       - collector_agent_read_token
       - collector_agent_write_token
       - patrimonio_token
@@ -101,6 +102,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-provision:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -150,7 +153,49 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-provision:
+        condition: service_completed_successfully
     command: ["flask", "--app", "app:create_app", "db", "upgrade"]
+
+  # Provisiona de forma idempotente o usuário que atende a aplicação. O
+  # superusuário só aparece neste serviço e no `migrate`; nunca é montado no
+  # `web`. O script é o mesmo no Docker Desktop e no VPS.
+  db-provision:
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    user: postgres
+    read_only: true
+    cpus: 0.5
+    mem_limit: 256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777,size=16m
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: investimentos
+      DB_ADMIN_USER: investimentos
+      DB_ADMIN_PASSWORD_FILE: /run/secrets/postgres_password
+      DB_APP_USER: investimentos_app
+      DB_APP_PASSWORD_FILE: /run/secrets/postgres_app_password
+    secrets:
+      - postgres_password
+      - postgres_app_password
+    volumes:
+      - ./scripts/provision-db-runtime.sh:/usr/local/bin/provision-db-runtime.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "/usr/local/bin/provision-db-runtime.sh"]
 
   # Banco EFÊMERO da suíte.
   #
@@ -192,6 +237,7 @@ services:
       POSTGRES_DB: investimentos
       POSTGRES_USER: investimentos
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password_quality
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     secrets:
       - postgres_password_quality
     healthcheck:
@@ -199,6 +245,44 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  db-teste-provision:
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    profiles: ["quality"]
+    user: postgres
+    read_only: true
+    cpus: 0.5
+    mem_limit: 256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777,size=16m
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    environment:
+      DB_HOST: db-teste
+      DB_PORT: "5432"
+      DB_NAME: investimentos
+      DB_ADMIN_USER: investimentos
+      DB_ADMIN_PASSWORD_FILE: /run/secrets/postgres_password_quality
+      DB_APP_USER: investimentos_app
+      DB_APP_PASSWORD_FILE: /run/secrets/postgres_app_password_quality
+    secrets:
+      - postgres_password_quality
+      - postgres_app_password_quality
+    volumes:
+      - ./scripts/provision-db-runtime.sh:/usr/local/bin/provision-db-runtime.sh:ro
+    depends_on:
+      db-teste:
+        condition: service_healthy
+    command: ["sh", "/usr/local/bin/provision-db-runtime.sh"]
 
   quality:
     build:
@@ -223,7 +307,8 @@ services:
       TESTE_POSTGRES_HOST: db-teste
       TESTE_POSTGRES_PORT: "5432"
       TESTE_POSTGRES_DB: investimentos
-      TESTE_POSTGRES_USER: investimentos
+      TESTE_POSTGRES_USER: investimentos_app
+      TESTE_POSTGRES_ADMIN_USER: investimentos
     read_only: true
     cap_drop:
       - ALL
@@ -234,9 +319,12 @@ services:
     pids_limit: 256
     secrets:
       - postgres_password_quality
+      - postgres_app_password_quality
     depends_on:
       db-teste:
         condition: service_healthy
+      db-teste-provision:
+        condition: service_completed_successfully
     profiles: ["quality"]
     logging:
       driver: json-file
@@ -256,6 +344,10 @@ secrets:
     file: .secrets/postgres_password
   postgres_password_quality:
     file: .secrets/postgres_password_quality
+  postgres_app_password:
+    file: .secrets/postgres_app_password
+  postgres_app_password_quality:
+    file: .secrets/postgres_app_password_quality
   collector_agent_read_token:
     file: .secrets/collector_agent_read_token
   collector_agent_write_token:

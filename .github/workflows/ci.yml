@@ -42,7 +42,9 @@ jobs:
           rm -f /tmp/local-root-ca.key
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
+          printf '%s\n' 'ci-placeholder-not-a-real-app-password' > .secrets/postgres_app_password
           printf '%s\n' 'ci-placeholder-quality-only' > .secrets/postgres_password_quality
+          printf '%s\n' 'ci-placeholder-quality-app-only' > .secrets/postgres_app_password_quality
           printf '%s\n' 'ci-placeholder-read-only-token' > .secrets/collector_agent_read_token
           printf '%s\n' 'ci-placeholder-write-only-token' > .secrets/collector_agent_write_token
           printf '%s\n' 'ci-placeholder-patrimonio-token' > .secrets/patrimonio_token
@@ -60,7 +62,9 @@ jobs:
           # subia neste job. O valor é uma constante pública escrita acima e não
           # protege nada.
           chmod 0644 .secrets/postgres_password
+          chmod 0644 .secrets/postgres_app_password
           chmod 0644 .secrets/postgres_password_quality
+          chmod 0644 .secrets/postgres_app_password_quality
       - name: Validar Compose
         run: docker compose --profile quality config --quiet
       - name: Construir quality sem cache
@@ -144,7 +148,9 @@ jobs:
           rm -f /tmp/local-root-ca.key
           printf '%s\n' 'ci-placeholder-not-a-real-secret' > .secrets/secret_key
           printf '%s\n' 'ci-placeholder-not-a-real-password' > .secrets/postgres_password
+          printf '%s\n' 'ci-placeholder-not-a-real-app-password' > .secrets/postgres_app_password
           printf '%s\n' 'ci-placeholder-quality-only' > .secrets/postgres_password_quality
+          printf '%s\n' 'ci-placeholder-quality-app-only' > .secrets/postgres_app_password_quality
           printf '%s\n' 'ci-placeholder-read-only-token' > .secrets/collector_agent_read_token
           printf '%s\n' 'ci-placeholder-write-only-token' > .secrets/collector_agent_write_token
           printf '%s\n' 'ci-placeholder-patrimonio-token' > .secrets/patrimonio_token
@@ -163,6 +169,7 @@ jobs:
           assert db["cap_drop"] == ["ALL"]
           assert db["security_opt"] == ["no-new-privileges:true"]
           assert db["pids_limit"] == 256
+          assert db["environment"]["POSTGRES_INITDB_ARGS"] == "--data-checksums"
           assert "/tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m" in db["tmpfs"]
           assert "/var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m" in db["tmpfs"]
 
@@ -175,9 +182,19 @@ jobs:
 
           db_teste = services["db-teste"]
           assert db_teste["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/postgres_password_quality"
+          assert db_teste["environment"]["POSTGRES_INITDB_ARGS"] == "--data-checksums"
           assert db_teste["secrets"][0]["source"] == "postgres_password_quality"
 
+          provision = services["db-provision"]
+          assert provision["environment"]["DB_APP_USER"] == "investimentos_app"
+          assert provision["secrets"][1]["source"] == "postgres_app_password"
+
+          provision_teste = services["db-teste-provision"]
+          assert provision_teste["profiles"] == ["quality"]
+
           web = services["web"]
+          assert web["environment"]["POSTGRES_USER"] == "investimentos_app"
+          assert web["environment"]["POSTGRES_PASSWORD_FILE"] == "/run/secrets/postgres_app_password"
           assert web["environment"]["COLLECTOR_AGENT_READ_TOKEN_FILE"] == "/run/secrets/collector_agent_read_token"
           assert web["environment"]["COLLECTOR_AGENT_WRITE_TOKEN_FILE"] == "/run/secrets/collector_agent_write_token"
           assert "PATRIMONIO_OWNER_ID" in web["environment"]
