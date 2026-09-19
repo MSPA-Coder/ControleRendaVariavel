@@ -19,7 +19,10 @@ def legacy_app():
     """Cadeia Alembic em schema descartável, sem tocar no schema da suíte."""
     from flask_migrate import upgrade
 
-    database_url = _url_do_banco_de_teste()
+    # Este ensaio cria schemas e aplica migrações deliberadamente; ele usa o
+    # papel administrativo. A fixture normal da suíte continua no papel
+    # `investimentos_app`, igual ao contêiner web.
+    database_url = _url_do_banco_de_teste(administrativo=True)
     schema = f"ownership_{uuid.uuid4().hex}"
     admin_engine = create_engine(database_url)
     with admin_engine.begin() as connection:

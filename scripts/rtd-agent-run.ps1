@@ -9,11 +9,11 @@ if ($Destination -eq "local") {
     $env:FLASK_SKIP_DOTENV = "1"
     Remove-Item Env:DATABASE_URL, Env:DATABASE_URL_FILE -ErrorAction SilentlyContinue
     $env:SECRET_KEY_FILE = Join-Path $ProjectDir ".secrets\secret_key"
-    $env:POSTGRES_PASSWORD_FILE = Join-Path $ProjectDir ".secrets\postgres_password"
+    $env:POSTGRES_PASSWORD_FILE = Join-Path $ProjectDir ".secrets\postgres_app_password"
     $env:POSTGRES_HOST = "127.0.0.1"
     $env:POSTGRES_PORT = "5302"
     $env:POSTGRES_DB = "investimentos"
-    $env:POSTGRES_USER = "investimentos"
+    $env:POSTGRES_USER = "investimentos_app"
     $env:REMOTE_COLLECTOR_ENABLED = "false"
     # Limites só do agente local: a queda do Docker não pode prender Stop
     # durante minutos dentro de uma conexão ou consulta PostgreSQL.

@@ -29,12 +29,14 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 
 1. Crie `.env.vps` a partir de `.env.vps.example`.
 2. Restaure por canal seguro `.secrets/secret_key`,
-   `.secrets/postgres_password`, `.secrets/collector_agent_read_token`,
+   `.secrets/postgres_password`, `.secrets/postgres_app_password`,
+   `.secrets/collector_agent_read_token`,
    `.secrets/collector_agent_write_token`, `.secrets/patrimonio_token` e o
    material de `.certs/` exigido pelo build.
    Nunca registre ou exiba seus conteúdos. No Docker Compose não-Swarm, use modo
    `700` no diretório `.secrets` e `644` nos arquivos, pois PostgreSQL e Flask
-   usam usuários Linux diferentes.
+   usam usuários Linux diferentes. `postgres_password` fica reservado ao banco
+   e às migrações; `web` e o agente RTD recebem somente `postgres_app_password`.
 
    **`patrimonio_token` precisa existir mesmo sem a integração em uso**: o
    Compose recusa subir com um segredo declarado e ausente, e o `deploy.sh`
@@ -69,6 +71,13 @@ computador Windows.
 autorizado. `PATRIMONIO_TITULAR` é somente o nome da pessoa no contrato externo;
 não substitui esse vínculo. O publicador recusa dados fora de
 `PATRIMONIO_MAX_HISTORICO_DIAS` (dez anos por padrão).
+
+O Compose é a mesma fonte de verdade no local e no VPS: `db-provision` cria ou
+atualiza `investimentos_app` de forma idempotente antes do `migrate`, concede
+apenas DML e uso de sequências e recusa DDL. O papel administrativo
+`investimentos` não é montado no contêiner `web`. Bancos novos recebem
+checksums por `POSTGRES_INITDB_ARGS=--data-checksums`; um volume existente só é
+habilitado em janela controlada, depois de backup e ensaio de restauração.
 
 `.env.vps` precisa trazer `FORCE_HTTPS=true` junto de `TRUST_PROXY_HEADERS=true`
 -- a aplicação recusa subir com a segunda ligada e a primeira desligada:
