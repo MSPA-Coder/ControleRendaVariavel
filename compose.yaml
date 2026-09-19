@@ -2,7 +2,7 @@ name: controle-renda-variavel
 
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     user: postgres
     restart: unless-stopped
     cpus: 1.0
@@ -71,12 +71,15 @@ services:
     environment:
       SECRET_KEY_FILE: /run/secrets/secret_key
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      COLLECTOR_AGENT_TOKEN_FILE: /run/secrets/collector_agent_token
+      COLLECTOR_AGENT_READ_TOKEN_FILE: /run/secrets/collector_agent_read_token
+      COLLECTOR_AGENT_WRITE_TOKEN_FILE: /run/secrets/collector_agent_write_token
       # Publicacao do resumo de patrimonio, lida pelo consolidador. As duas
       # andam juntas: sem token a rota nao autentica, sem titular ela nao sabe
       # de quem e o dinheiro que publica.
       PATRIMONIO_TOKEN_FILE: /run/secrets/patrimonio_token
       PATRIMONIO_TITULAR: ${PATRIMONIO_TITULAR:-}
+      PATRIMONIO_OWNER_ID: ${PATRIMONIO_OWNER_ID:-}
+      PATRIMONIO_MAX_HISTORICO_DIAS: ${PATRIMONIO_MAX_HISTORICO_DIAS:-3650}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
@@ -90,7 +93,8 @@ services:
     secrets:
       - secret_key
       - postgres_password
-      - collector_agent_token
+      - collector_agent_read_token
+      - collector_agent_write_token
       - patrimonio_token
     ports:
       - "127.0.0.1:5301:5003"
@@ -158,13 +162,13 @@ services:
   # e o `initdb` roda como `postgres` com `cap_drop: ALL`, sem CAP_CHOWN nem
   # CAP_FOWNER para tomar posse. 70 é o uid do postgres nesta imagem.
   #
-  # O arquivo `.secrets/postgres_password` precisa ser LEGÍVEL PELO UID 70: um
+  # O arquivo `.secrets/postgres_password_quality` precisa ser LEGÍVEL PELO UID 70: um
   # segredo de arquivo é montado preservando dono e modo do host, e `uid`/`gid`/
   # `mode` na sintaxe longa são ignorados fora do Swarm. Com 0600 de outro dono,
   # este contêiner morre no arranque e o `quality` só reporta "dependency failed
   # to start". No Docker Desktop do Windows não aparece: lá tudo chega 0777.
   db-teste:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     profiles: ["quality"]
     user: postgres
     cpus: 1.0
@@ -187,9 +191,9 @@ services:
     environment:
       POSTGRES_DB: investimentos
       POSTGRES_USER: investimentos
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password_quality
     secrets:
-      - postgres_password
+      - postgres_password_quality
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U investimentos -d investimentos"]
       interval: 3s
@@ -220,8 +224,16 @@ services:
       TESTE_POSTGRES_PORT: "5432"
       TESTE_POSTGRES_DB: investimentos
       TESTE_POSTGRES_USER: investimentos
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=256m
+    pids_limit: 256
     secrets:
-      - postgres_password
+      - postgres_password_quality
     depends_on:
       db-teste:
         condition: service_healthy
@@ -242,7 +254,11 @@ secrets:
     file: .secrets/secret_key
   postgres_password:
     file: .secrets/postgres_password
-  collector_agent_token:
-    file: .secrets/collector_agent_token
+  postgres_password_quality:
+    file: .secrets/postgres_password_quality
+  collector_agent_read_token:
+    file: .secrets/collector_agent_read_token
+  collector_agent_write_token:
+    file: .secrets/collector_agent_write_token
   patrimonio_token:
     file: .secrets/patrimonio_token

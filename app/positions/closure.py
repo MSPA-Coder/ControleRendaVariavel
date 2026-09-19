@@ -100,7 +100,7 @@ def _open_transaction_for(position_id: int, owner_id: int) -> Transaction | None
             # mesmo id numérico faria esta consulta encontrar duas linhas
             # (``MultipleResultsFound``) ou a linha errada.
             Transaction.ticker_id.is_not(None),
-        )
+        ).with_for_update()
     )
 
 

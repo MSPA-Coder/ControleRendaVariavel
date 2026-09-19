@@ -36,16 +36,19 @@ existente para o isolamento por usuário, siga o [roteiro de migração](docs/de
 
 ## Execução com Docker
 
-Copie `.env.example` para `.env`, substitua os valores de exemplo de
-`SECRET_KEY` e `POSTGRES_PASSWORD` e provisione os arquivos locais de segredo:
+Copie `.env.example` para `.env` e provisione os arquivos locais de segredo:
 
 ```powershell
 Copy-Item .env.example .env
 .\scripts\provision-secrets.ps1
 ```
 
-O script cria `.secrets/secret_key`, `.secrets/postgres_password` e
-`.secrets/collector_agent_token` sem exibir os valores. `.env`, `.secrets/`,
+O script gera `.secrets/secret_key`, `.secrets/postgres_password`, uma senha
+sintética para a suíte e tokens separados de leitura e escrita do coletor, sem
+exibir os valores. Se uma instalação antiga ainda tiver `SECRET_KEY` ou
+`POSTGRES_PASSWORD` no `.env`, eles são aceitos apenas para preencher arquivos
+que ainda não existam; depois rode `.scripts\provision-secrets.ps1 -MigrateDotEnv`
+para trocar os valores por referências aos arquivos. `.env`, `.secrets/`,
 `.certs/` e `.docker-local/` são locais e ignorados pelo Git.
 
 Suba a pilha, crie o administrador e acesse a aplicação:

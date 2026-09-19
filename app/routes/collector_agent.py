@@ -41,8 +41,10 @@ def _settings() -> AppSetting:
     return settings
 
 
-def _require_agent_token() -> None:
-    configured = str(current_app.config["COLLECTOR_AGENT_TOKEN"])
+def _require_agent_token(kind: str) -> None:
+    if kind not in {"read", "write"}:
+        raise ValueError(f"Tipo de token do coletor inválido: {kind}")
+    configured = str(current_app.config[f"COLLECTOR_AGENT_{kind.upper()}_TOKEN"])
     supplied = request.headers.get("Authorization", "")
     if not configured:
         abort(503, "Coletor remoto não configurado.")
@@ -92,7 +94,7 @@ def _json_body() -> dict[str, Any]:
 
 @bp.get("/api/collector/configuration")
 def collector_agent_configuration():
-    _require_agent_token()
+    _require_agent_token("read")
     settings = _settings()
     _record_agent_seen(settings)
     positions, option_positions = load_collector_positions()
@@ -177,7 +179,7 @@ def _bounded_position_id(value: object) -> int:
 
 @bp.post("/api/collector/quotes")
 def collector_agent_quotes():
-    _require_agent_token()
+    _require_agent_token("write")
     payload = _json_body()
     positions_payload = payload.get("positions", [])
     options_payload = payload.get("option_positions", [])
@@ -202,7 +204,7 @@ def collector_agent_quotes():
 
 @bp.post("/api/collector/failure")
 def collector_agent_failure():
-    _require_agent_token()
+    _require_agent_token("write")
     payload = _json_body()
     error = payload.get("error")
     if not isinstance(error, str) or not error.strip():

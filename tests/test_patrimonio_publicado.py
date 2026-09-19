@@ -119,6 +119,16 @@ def test_sem_titular_configurado_a_rota_nao_publica(client, app):
     assert resposta.status_code == 503
 
 
+def test_sem_owner_configurado_a_rota_nao_publica(client, app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_TITULAR"] = "Mariano"
+    app.config["PATRIMONIO_OWNER_ID"] = ""
+
+    resposta = client.get(ROTA, headers={"Authorization": f"Bearer {TOKEN}"})
+
+    assert resposta.status_code == 503
+
+
 def test_a_rota_esta_declarada_como_publica():
     """Ela é máquina a máquina e não tem sessão -- mas a declaração é explícita."""
     from app import PUBLIC_ENDPOINTS
@@ -198,9 +208,10 @@ def _posicao(cenario, carteira, **campos):
 
 
 @pytest.fixture
-def publicando(app_com_banco):
+def publicando(app_com_banco, cenario):
     app_com_banco.config["PATRIMONIO_TOKEN"] = TOKEN
     app_com_banco.config["PATRIMONIO_TITULAR"] = "Mariano"
+    app_com_banco.config["PATRIMONIO_OWNER_ID"] = str(cenario["usuario"].id)
     return app_com_banco.test_client()
 
 
@@ -234,6 +245,61 @@ def test_posicao_real_e_publicada_com_valor_a_mercado(sessao, cenario, publicand
     assert Decimal(linha["valor_a_mercado"]) == Decimal("15630.00")
     assert linha["preco_em"]
     assert linha["fonte_do_preco"]
+
+
+@banco
+def test_publicador_nao_vaza_outro_owner(sessao, cenario, publicando):
+    outro = User(username="outro-dono", password_hash="hash")
+    outra_carteira = Portfolio(
+        name="Carteira privada de outro",
+        owner_ref=outro,
+        currency="BRL",
+        simulated=False,
+    )
+    outro_papel = Ticker(
+        symbol="OUTR3",
+        trading_name="Outro ativo",
+        market=Market.B3,
+        rtd_market_code="B",
+        currency="BRL",
+    )
+    sessao.add_all([outro, outra_carteira, outro_papel])
+    sessao.flush()
+    sessao.add_all(
+        [
+            Quote(
+                ticker_id=outro_papel.id,
+                last_price=Decimal("99.00"),
+                previous_close=Decimal("98.00"),
+                source_status="online",
+                observed_at=datetime.now(UTC),
+            ),
+            _posicao(
+                cenario,
+                outra_carteira,
+                owner_id=outro.id,
+                ticker_id=outro_papel.id,
+            ),
+            Dividend(
+                owner_id=outro.id,
+                broker_id=cenario["corretora"].id,
+                ticker_id=outro_papel.id,
+                amount=Decimal("999.99"),
+                payment_date=date.today(),
+            ),
+            _posicao(cenario, cenario["real"]),
+        ]
+    )
+    sessao.flush()
+
+    v1 = pedir(publicando).get_json()
+    v2 = pedir_v2(publicando, periodo="year").get_json()
+
+    assert all(linha["instrumento"] != "OUTR3" for linha in v1["posicoes"])
+    assert all(linha["instrumento"] != "OUTR3" for linha in v1["proventos"])
+    assert all(linha["instrumento"] != "OUTR3" for linha in v2["posicoes"])
+    assert all(linha["instrumento"] != "OUTR3" for linha in v2["proventos"])
+    assert all(carteira["nome"] != "Carteira privada de outro" for carteira in v2["carteiras"])
 
 
 @banco

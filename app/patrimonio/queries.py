@@ -1,8 +1,8 @@
 """Consultas somente-leitura usadas pelo contrato de patrimônio v2.
 
-As consultas deste módulo deliberadamente não usam ``current_user``. A rota
-é uma integração máquina-a-máquina protegida pelo token de patrimônio, como a
-rota v1, e publica o conjunto patrimonial configurado para o consolidador.
+A integração não tem sessão, mas isso não elimina autorização: cada consulta
+recebe o ``owner_id`` explicitamente resolvido pela configuração do publicador.
+O token autoriza a integração; o owner limita o conjunto financeiro publicado.
 """
 
 from __future__ import annotations
@@ -33,15 +33,21 @@ from app.models import (
 from app.positions.holdings_history import HoldingEvent
 
 
-def portfolios() -> list[Portfolio]:
-    return list(db.session.scalars(select(Portfolio).order_by(Portfolio.simulated, Portfolio.name, Portfolio.id)))
+def portfolios(owner_id: int) -> list[Portfolio]:
+    return list(
+        db.session.scalars(
+            select(Portfolio)
+            .where(Portfolio.owner_id == owner_id)
+            .order_by(Portfolio.simulated, Portfolio.name, Portfolio.id)
+        )
+    )
 
 
-def real_positions() -> list[Position]:
+def real_positions(owner_id: int) -> list[Position]:
     statement = (
         select(Position)
         .join(Position.portfolio_ref)
-        .where(Portfolio.simulated.is_(False))
+        .where(Position.owner_id == owner_id, Portfolio.simulated.is_(False))
         .options(
             joinedload(Position.quote),
             joinedload(Position.broker_ref),
@@ -54,14 +60,20 @@ def real_positions() -> list[Position]:
     return list(db.session.scalars(statement).unique())
 
 
-def quote_series(ticker_ids: Iterable[int]) -> dict[int, list[tuple[date, Decimal]]]:
+def quote_series(
+    ticker_ids: Iterable[int], *, start: date, end: date
+) -> dict[int, list[tuple[date, Decimal]]]:
     ids = sorted(set(ticker_ids))
     result: dict[int, list[tuple[date, Decimal]]] = {ticker_id: [] for ticker_id in ids}
     if not ids:
         return result
     rows = db.session.execute(
         select(QuoteHistory.ticker_id, QuoteHistory.recorded_date, QuoteHistory.price)
-        .where(QuoteHistory.ticker_id.in_(ids))
+        .where(
+            QuoteHistory.ticker_id.in_(ids),
+            QuoteHistory.recorded_date >= start,
+            QuoteHistory.recorded_date <= end,
+        )
         .order_by(QuoteHistory.ticker_id, QuoteHistory.recorded_date)
     )
     for ticker_id, recorded_date, price in rows:
@@ -69,22 +81,27 @@ def quote_series(ticker_ids: Iterable[int]) -> dict[int, list[tuple[date, Decima
     return result
 
 
-def dividends(desde: date, ate: date) -> list[Dividend]:
+def dividends(desde: date, ate: date, owner_id: int) -> list[Dividend]:
     statement = (
         select(Dividend)
-        .where(Dividend.payment_date >= desde, Dividend.payment_date <= ate)
+        .where(
+            Dividend.owner_id == owner_id,
+            Dividend.payment_date >= desde,
+            Dividend.payment_date <= ate,
+        )
         .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
         .order_by(Dividend.payment_date, Dividend.id)
     )
     return list(db.session.scalars(statement))
 
 
-def closed_transactions(desde: date, ate: date) -> list[Transaction]:
+def closed_transactions(desde: date, ate: date, owner_id: int) -> list[Transaction]:
     statement = (
         select(Transaction)
         .join(Transaction.portfolio_ref)
         .where(
             Portfolio.simulated.is_(False),
+            Transaction.owner_id == owner_id,
             Transaction.status == TransactionStatus.CLOSED,
             Transaction.closed_on >= desde,
             Transaction.closed_on <= ate,
@@ -100,8 +117,8 @@ def closed_transactions(desde: date, ate: date) -> list[Transaction]:
     return list(db.session.scalars(statement).unique())
 
 
-def performance_events() -> list[HoldingEvent]:
-    """Lê o mesmo extrato que a performance da aplicação, sem autenticação."""
+def performance_events(reference: date, owner_id: int) -> list[HoldingEvent]:
+    """Lê o extrato do owner publicado até a data de referência."""
     stock = (
         select(
             func.coalesce(PositionMovement.occurred_on, Position.opened_on),
@@ -113,7 +130,11 @@ def performance_events() -> list[HoldingEvent]:
         .select_from(Position)
         .join(Position.portfolio_ref)
         .outerjoin(PositionMovement, PositionMovement.position_id == Position.id)
-        .where(Portfolio.simulated.is_(False))
+        .where(
+            Position.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            func.coalesce(PositionMovement.occurred_on, Position.opened_on) <= reference,
+        )
         .order_by(PositionMovement.occurred_on, PositionMovement.id, Position.id)
     )
     option = (
@@ -131,7 +152,12 @@ def performance_events() -> list[HoldingEvent]:
             OptionPositionMovement,
             OptionPositionMovement.option_position_id == OptionPosition.id,
         )
-        .where(Portfolio.simulated.is_(False))
+        .where(
+            OptionPosition.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            func.coalesce(OptionPositionMovement.occurred_on, OptionPosition.opened_on)
+            <= reference,
+        )
         .order_by(OptionPositionMovement.occurred_on, OptionPositionMovement.id, OptionPosition.id)
     )
     events: list[HoldingEvent] = []
@@ -151,7 +177,11 @@ def performance_events() -> list[HoldingEvent]:
             PositionLedgerArchive.resulting_signed_quantity,
         )
         .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
-        .where(Portfolio.simulated.is_(False))
+        .where(
+            PositionLedgerArchive.owner_id == owner_id,
+            Portfolio.simulated.is_(False),
+            PositionLedgerArchive.occurred_on <= reference,
+        )
         .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
     )
     for occurred_on, ticker_id, instrument, position_id, quantity in db.session.execute(archive):

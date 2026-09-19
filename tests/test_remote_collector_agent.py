@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, time
 from decimal import Decimal
 
+from app.collector import remote_agent
 from app.collector.loop import CollectorDeadlines
 from app.collector.remote_agent import (
+    CollectorApi,
     _instrument_sets,
     _load_agent_check_interval,
     _load_collector_schedule,
@@ -55,10 +57,58 @@ def test_agente_monta_instrumentos_e_payload_sem_expor_acesso_ao_banco() -> None
 
 
 def test_api_do_agente_recusa_chamada_sem_token(client) -> None:
-    client.application.config["COLLECTOR_AGENT_TOKEN"] = "a" * 32
+    client.application.config["COLLECTOR_AGENT_READ_TOKEN"] = "a" * 32
     response = client.get("/api/collector/configuration")
 
     assert response.status_code == 401
+
+
+def test_api_do_agente_separa_leitura_de_escrita(client) -> None:
+    client.application.config["COLLECTOR_AGENT_READ_TOKEN"] = "a" * 32
+    client.application.config["COLLECTOR_AGENT_WRITE_TOKEN"] = "b" * 32
+
+    leitura_no_post = client.post(
+        "/api/collector/quotes",
+        headers={"Authorization": f"Bearer {'a' * 32}"},
+        json={},
+    )
+    escrita_no_get = client.get(
+        "/api/collector/configuration",
+        headers={"Authorization": f"Bearer {'b' * 32}"},
+    )
+
+    assert leitura_no_post.status_code == 401
+    assert escrita_no_get.status_code == 401
+
+
+def test_cliente_remoto_envia_o_token_de_leitura_e_escrita_na_rota_certa(monkeypatch) -> None:
+    chamadas: list[tuple[str, str]] = []
+
+    class Resposta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(request, *, timeout):
+        del timeout
+        chamadas.append((request.full_url, request.get_header("Authorization")))
+        return Resposta()
+
+    monkeypatch.setattr(remote_agent, "urlopen", fake_urlopen)
+    api = CollectorApi("https://example.test", "r" * 32, "w" * 32)
+
+    api.configuration()
+    api.send_quotes({})
+
+    assert chamadas == [
+        ("https://example.test/api/collector/configuration", "Bearer " + "r" * 32),
+        ("https://example.test/api/collector/quotes", "Bearer " + "w" * 32),
+    ]
 
 
 def test_agente_guarda_e_reaproveita_intervalo_no_arquivo_local(tmp_path) -> None:

@@ -39,6 +39,7 @@ from app.routes.helpers import (
     investable_ticker_records,
     is_htmx_request,
     owned_or_404,
+    owned_or_404_for_update,
     parse_positive_id,
     portfolio_records,
     selected_currency_filter,
@@ -408,7 +409,7 @@ def edit_transaction(transaction_id: int) -> ResponseReturnValue:
 
 @bp.post("/transactions/<int:transaction_id>")
 def update_transaction(transaction_id: int) -> ResponseReturnValue:
-    transaction = owned_or_404(Transaction, transaction_id)
+    transaction = owned_or_404_for_update(Transaction, transaction_id)
     if transaction.status == TransactionStatus.OPEN:
         flash("Essa transação está aberta; edite-a pela posição.", "error")
         return redirect(url_for("portfolio.transactions"))
@@ -451,7 +452,7 @@ def delete_transaction(transaction_id: int) -> ResponseReturnValue:
     continuaria reduzida — Carteira e Transações passariam a mostrar uma
     quantidade que não corresponde a nenhum lançamento.
     """
-    transaction = owned_or_404(Transaction, transaction_id)
+    transaction = owned_or_404_for_update(Transaction, transaction_id)
     if transaction.status == TransactionStatus.OPEN:
         flash("Essa transação está aberta; exclua a posição.", "error")
         return redirect(url_for("portfolio.transactions"))

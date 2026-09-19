@@ -189,7 +189,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         RTD_REFRESH_SECONDS=float(os.getenv("RTD_REFRESH_SECONDS", "2")),
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),
         RTD_STALE_AFTER_SECONDS=int(os.getenv("RTD_STALE_AFTER_SECONDS", "30")),
-        COLLECTOR_AGENT_TOKEN=resolver_segredo("COLLECTOR_AGENT_TOKEN") or "",
+        COLLECTOR_AGENT_READ_TOKEN=resolver_segredo("COLLECTOR_AGENT_READ_TOKEN") or "",
+        COLLECTOR_AGENT_WRITE_TOKEN=resolver_segredo("COLLECTOR_AGENT_WRITE_TOKEN") or "",
         # Publicação do resumo de patrimônio, lida pelo consolidador. As duas
         # são exigidas juntas: sem token a rota não autentica ninguém, e sem
         # titular ela não sabe de quem é o dinheiro que publica -- aqui
@@ -197,6 +198,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # dona do dinheiro, e são conceitos diferentes com o mesmo nome.
         PATRIMONIO_TOKEN=resolver_segredo("PATRIMONIO_TOKEN") or "",
         PATRIMONIO_TITULAR=os.getenv("PATRIMONIO_TITULAR", "").strip(),
+        PATRIMONIO_OWNER_ID=os.getenv("PATRIMONIO_OWNER_ID", "").strip(),
+        PATRIMONIO_MAX_HISTORICO_DIAS=int(os.getenv("PATRIMONIO_MAX_HISTORICO_DIAS", "3650")),
         REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),
@@ -348,21 +351,16 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "60 per minute; 2000 per hour",
         override_defaults=True,
     )
-    # O resumo de patrimônio é a quarta superfície alcançável sem sessão. O
-    # teto é para quem martela a rota SEM o token: é essa a ameaça que ele
-    # contém. Quem apresenta o token certo fica isento, porque o consolidador
-    # reconstrói a história uma data por vez -- anos de fotos são milhares de
-    # chamadas legítimas, e o teto de 600 por hora transformaria a carga
-    # inicial numa tarde inteira de 429.
-    from app.routes.patrimonio import token_valido_apresentado
-
+    # O resumo de patrimônio é uma integração cara mesmo quando o token está
+    # correto: ele consulta histórico, cotas e agregados. O limite vale para
+    # todas as chamadas; integrações que precisam de mais volume devem agrupar
+    # pedidos ou usar uma fila de exportação, não ganhar um caminho ilimitado.
     aplicar_limite(
         app,
         limiter,
         "portfolio.patrimonio_resumo",
         "30 per minute; 600 per hour",
         override_defaults=True,
-        exempt_when=token_valido_apresentado,
     )
     aplicar_limite(
         app,
@@ -370,7 +368,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "portfolio.patrimonio_resumo_v2",
         "30 per minute; 600 per hour",
         override_defaults=True,
-        exempt_when=token_valido_apresentado,
     )
     for endpoint in (
         "portfolio.collector_agent_quotes",

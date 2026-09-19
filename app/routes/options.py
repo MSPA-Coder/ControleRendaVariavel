@@ -53,6 +53,7 @@ from app.routes.helpers import (
     option_contracts,
     option_expirations,
     owned_or_404,
+    owned_or_404_for_update,
     parse_positive_id,
     poll_interval_seconds,
     portfolio_records,
@@ -334,7 +335,7 @@ def edit_position(position_id: int) -> str:
 
 @bp.post("/options/positions/<int:position_id>")
 def update_position(position_id: int) -> ResponseReturnValue:
-    position = owned_or_404(OptionPosition, position_id)
+    position = owned_or_404_for_update(OptionPosition, position_id)
     previous_contract_id = position.contract_id
     try:
         data = _parse_position(permitir_contrato_vencido=True)
@@ -379,7 +380,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
 
 @bp.post("/options/positions/<int:position_id>/delete")
 def delete_position(position_id: int) -> ResponseReturnValue:
-    position = owned_or_404(OptionPosition, position_id)
+    position = owned_or_404_for_update(OptionPosition, position_id)
     delete_open_transaction_for_position(position.id, position.owner_id)
     db.session.delete(position)
     db.session.commit()

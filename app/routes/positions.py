@@ -49,6 +49,7 @@ from app.routes.helpers import (
     market_exposure_chart_data,
     missing_quote_rows,
     owned_or_404,
+    owned_or_404_for_update,
     parse_positive_id,
     poll_interval_seconds,
     portfolio_records,
@@ -414,7 +415,7 @@ def edit_position(position_id: int) -> str:
 
 @bp.post("/positions/<int:position_id>")
 def update_position(position_id: int) -> ResponseReturnValue:
-    position = owned_or_404(Position, position_id)
+    position = owned_or_404_for_update(Position, position_id)
     previous_ticker_id = position.ticker_id
     try:
         data = _parse_form()
@@ -466,7 +467,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
 
 @bp.post("/positions/<int:position_id>/delete")
 def delete_position(position_id: int) -> ResponseReturnValue:
-    position = owned_or_404(Position, position_id)
+    position = owned_or_404_for_update(Position, position_id)
     delete_open_transaction_for_position(position.id, position.owner_id)
     db.session.delete(position)
     db.session.commit()

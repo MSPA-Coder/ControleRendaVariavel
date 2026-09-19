@@ -1,29 +1,35 @@
 <#!
 .SYNOPSIS
-  Provisiona arquivos locais de segredo consumidos pelo Compose a partir de .env.
+  Provisiona os arquivos locais de segredo consumidos pelo Compose.
 
 .DESCRIPTION
-  Cria .secrets\secret_key e .secrets\postgres_password sem alterar .env,
+  Cria os segredos locais consumidos pelo Compose sem alterar .env por padrão,
   banco, contêineres ou valores existentes. Não imprime conteúdos. Por padrão,
-  recusa sobrescrever arquivos para preservar valores existentes; use -Force
-  somente ao rotacionar deliberadamente o arquivo a partir de .env.
+  preserva arquivos existentes; para uma instalação antiga, ainda aceita
+  SECRET_KEY e POSTGRES_PASSWORD do .env como migração única. Instalações novas
+  geram os dois valores diretamente em .secrets. Use -Force somente ao
+  rotacionar deliberadamente os arquivos. Use -MigrateDotEnv para substituir
+  valores legados do .env por caminhos para os arquivos provisionados.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
-param([switch]$Force)
+param(
+    [switch]$Force,
+    [switch]$MigrateDotEnv
+)
 
 $ErrorActionPreference = "Stop"
 $projectDir = Split-Path -Parent $PSScriptRoot
 $envPath = Join-Path $projectDir ".env"
 $secretsDir = Join-Path $projectDir ".secrets"
 
-function Get-DotEnvValue {
+function Get-OptionalDotEnvValue {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$Key
     )
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "Arquivo .env não encontrado. Copie .env.example e defina os segredos antes de provisionar."
+        return $null
     }
     foreach ($line in Get-Content -LiteralPath $Path) {
         $trimmed = $line.Trim()
@@ -34,12 +40,12 @@ function Get-DotEnvValue {
         if ($parts.Length -eq 2 -and $parts[0].Trim() -eq $Key) {
             $value = $parts[1].Trim().Trim('"').Trim("'")
             if ([string]::IsNullOrWhiteSpace($value)) {
-                throw "$Key não pode estar vazio."
+                return $null
             }
             return $value
         }
     }
-    throw "$Key não foi definido no .env."
+    return $null
 }
 
 function Write-SecretFile {
@@ -67,36 +73,120 @@ function Write-SecretFile {
     }
 }
 
-function New-ControlToken {
-    $bytes = [byte[]]::new(32)
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    return [System.Convert]::ToHexString($bytes).ToLowerInvariant()
+function Ensure-SecretFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    if (-not (Test-Path -LiteralPath $Path) -or $Force) {
+        Write-SecretFile -Path $Path -Value $Value
+    }
 }
 
-$secretKey = Get-DotEnvValue -Path $envPath -Key "SECRET_KEY"
-$postgresPassword = Get-DotEnvValue -Path $envPath -Key "POSTGRES_PASSWORD"
-$secretKeyPath = Join-Path $secretsDir "secret_key"
-$postgresPasswordPath = Join-Path $secretsDir "postgres_password"
+function New-ControlToken {
+    $bytes = [byte[]]::new(32)
+    $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $generator.GetBytes($bytes)
+    }
+    finally {
+        $generator.Dispose()
+    }
+    return ([System.BitConverter]::ToString($bytes) -replace "-", "").ToLowerInvariant()
+}
 
-# Valida tudo antes da primeira escrita para evitar provisionamento parcial.
-if (-not $Force) {
-    foreach ($target in @($secretKeyPath, $postgresPasswordPath)) {
-        if (Test-Path -LiteralPath $target) {
-            throw "Arquivo de segredo já existe: $target. Revise-o ou use -Force para substituir deliberadamente."
+function Migrate-DotEnvSecretPaths {
+    if (-not $MigrateDotEnv -or -not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
+        return
+    }
+
+    $pathByKey = @{
+        "SECRET_KEY" = "SECRET_KEY_FILE=.secrets/secret_key"
+        "POSTGRES_PASSWORD" = "POSTGRES_PASSWORD_FILE=.secrets/postgres_password"
+        "DATABASE_URL" = "DATABASE_URL_FILE=.secrets/database_url"
+    }
+    $seenPaths = @{}
+    $output = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in Get-Content -LiteralPath $envPath) {
+        $trimmed = $line.Trim()
+        if ($trimmed -match "^([A-Z0-9_]+)=") {
+            $key = $Matches[1]
+            if ($pathByKey.ContainsKey($key)) {
+                $pathKey = "${key}_FILE"
+                if ($key -eq "DATABASE_URL" -and -not (Test-Path -LiteralPath (Join-Path $secretsDir "database_url") -PathType Leaf)) {
+                    $value = $trimmed.Split("=", 2)[1].Trim().Trim('"').Trim("'")
+                    if ([string]::IsNullOrWhiteSpace($value)) {
+                        throw "DATABASE_URL não pode estar vazio durante a migração."
+                    }
+                    Ensure-SecretFile -Path (Join-Path $secretsDir "database_url") -Value $value
+                }
+                if ($seenPaths.ContainsKey($pathKey)) {
+                    continue
+                }
+                $output.Add($pathByKey[$key])
+                $seenPaths[$pathKey] = $true
+                continue
+            }
+            if ($key -like "*_FILE") {
+                if ($seenPaths.ContainsKey($key)) {
+                    continue
+                }
+                $seenPaths[$key] = $true
+            }
+        }
+        $output.Add($line)
+    }
+    foreach ($key in $pathByKey.Keys) {
+        $pathKey = "${key}_FILE"
+        if (-not $seenPaths.ContainsKey($pathKey)) {
+            if ($key -eq "DATABASE_URL" -and -not (Test-Path -LiteralPath (Join-Path $secretsDir "database_url") -PathType Leaf)) {
+                continue
+            }
+            $output.Add($pathByKey[$key])
+        }
+    }
+    if ($PSCmdlet.ShouldProcess($envPath, "remover valores de segredo do .env")) {
+        $temporary = Join-Path $projectDir ".env.$([guid]::NewGuid().ToString('N')).tmp"
+        try {
+            [System.IO.File]::WriteAllLines($temporary, [string[]]$output, [System.Text.UTF8Encoding]::new($false))
+            Move-Item -LiteralPath $temporary -Destination $envPath -Force
+        }
+        finally {
+            Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
         }
     }
 }
+
+if ($Force) {
+    # Rotação deliberada não pode reaproveitar a semente legada do `.env`.
+    # O operador precisa tratar a senha no PostgreSQL e invalidar as sessões
+    # depois de usar este modo.
+    $secretKey = New-ControlToken
+    $postgresPassword = New-ControlToken
+}
+else {
+    $secretKey = Get-OptionalDotEnvValue -Path $envPath -Key "SECRET_KEY"
+    $postgresPassword = Get-OptionalDotEnvValue -Path $envPath -Key "POSTGRES_PASSWORD"
+    if ([string]::IsNullOrWhiteSpace($secretKey)) { $secretKey = New-ControlToken }
+    if ([string]::IsNullOrWhiteSpace($postgresPassword)) { $postgresPassword = New-ControlToken }
+}
+$secretKeyPath = Join-Path $secretsDir "secret_key"
+$postgresPasswordPath = Join-Path $secretsDir "postgres_password"
+$qualityPasswordPath = Join-Path $secretsDir "postgres_password_quality"
 
 if ($PSCmdlet.ShouldProcess($secretsDir, "criar diretório de segredos local")) {
     New-Item -ItemType Directory -Path $secretsDir -Force | Out-Null
 }
 
-Write-SecretFile -Path $secretKeyPath -Value $secretKey
-Write-SecretFile -Path $postgresPasswordPath -Value $postgresPassword
+Ensure-SecretFile -Path $secretKeyPath -Value $secretKey
+Ensure-SecretFile -Path $postgresPasswordPath -Value $postgresPassword
+Ensure-SecretFile -Path $qualityPasswordPath -Value (New-ControlToken)
 
-$collectorAgentTokenPath = Join-Path $secretsDir "collector_agent_token"
-if (-not (Test-Path -LiteralPath $collectorAgentTokenPath)) {
-    Write-SecretFile -Path $collectorAgentTokenPath -Value (New-ControlToken)
-}
+$collectorAgentReadTokenPath = Join-Path $secretsDir "collector_agent_read_token"
+Ensure-SecretFile -Path $collectorAgentReadTokenPath -Value (New-ControlToken)
+$collectorAgentWriteTokenPath = Join-Path $secretsDir "collector_agent_write_token"
+Ensure-SecretFile -Path $collectorAgentWriteTokenPath -Value (New-ControlToken)
+Migrate-DotEnvSecretPaths
 
 Write-Output "Arquivos de segredo provisionados em .secrets. Nenhum valor foi exibido; revise permissões locais antes de iniciar a pilha."
