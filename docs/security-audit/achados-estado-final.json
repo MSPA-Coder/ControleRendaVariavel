@@ -35,7 +35,7 @@
       "mapeamento": "Frontend: varredura dos 6 arquivos de JavaScript próprio por `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` e `document.write`. Backend: 40 templates buscados por `|safe`, `autoescape` e `Markup(`; e atenção específica ao texto de erro que o agente coletor grava (`collector_agent_error`), que é dado de terceiro exibido na tela de Configurações."
     }
   ],
-  "resumo": "Estado após a rodada de implementação de 19 de setembro de 2026. O ControleRendaVariavel não tinha nenhuma falha crítica, alta ou média. CRV-02 e CRV-03 permanecem corrigidos e verificados por teste. CRV-04 continua resolvido por decisão de produto documentada. CRV-01 segue parcial: o agente RTD deixou de ler `.env` e o provisionamento novo gera segredos em `.secrets`, mas instalações antigas ainda precisam migrar os valores locais. CRV-05 avançou para parcial: servidor, agente, scripts e testes agora usam tokens separados de leitura e escrita; falta apenas executar a troca coordenada no VPS e na máquina Windows remota. A suíte de qualidade ficou verde: Ruff sem apontamento e 446 testes.",
+  "resumo": "Estado final após a implementação e o rollout de 19 de setembro de 2026. O ControleRendaVariavel não tinha nenhuma falha crítica, alta ou média. CRV-01, CRV-02, CRV-03 e CRV-05 estão corrigidos e verificados por testes e por validação em produção. CRV-04 continua resolvido por decisão de produto documentada. O `.env` local foi migrado para referências de arquivo, o VPS e a máquina Windows usam tokens separados de leitura e escrita, e o token legado foi removido após o corte. A suíte de qualidade ficou verde: Ruff sem apontamento e 447 testes.",
   "pontos_fortes": [
     {
       "titulo": "Toda rota privilegiada é verificada no servidor",
@@ -161,9 +161,9 @@
       "impacto": "Nenhum comprometimento conhecido. O custo é de concentração: qualquer caminho que alcance esse único arquivo — um compartilhamento de pasta, um backup mal escopado, um arquivo compactado do projeto — entrega de uma vez a forja de sessão e o acesso ao banco, sem precisar de mais nada.",
       "condicoes": "O `compose.yaml` operacional NÃO consome essas variáveis: concede os três segredos por arquivo Docker secret (`SECRET_KEY_FILE`, `POSTGRES_PASSWORD_FILE`, `COLLECTOR_AGENT_TOKEN_FILE`, linhas 73-75). O `.env` vale para a execução local e para o agente RTD no Windows.",
       "criterios": [],
-      "situacao": "parcial",
-      "correcao": "`DATABASE_URL` saiu do `.env` (valor movido, por hash, para `.secrets/database_url`, com `.env` passando a declarar `DATABASE_URL_FILE=.secrets/database_url`) — verificado que `create_app()` resolve o mesmo valor de antes, por comparação de hash SHA-256, sem nunca exibir o conteúdo. `SECRET_KEY` e `POSTGRES_PASSWORD` NÃO saíram do `.env`: `scripts/provision-secrets.ps1` os lê de lá como semente para (re)gerar `.secrets/secret_key` e `.secrets/postgres_password` (linhas 76-77 do script) — retirá-los quebraria essa regeneração sem fechar exposição real, já que o agente RTD nunca consome esses dois valores (só abre o arquivo inteiro por indiscriminação de `_read_dotenv`, sem usar as chaves). A concentração dos TRÊS segredos num único arquivo, que era o cerne do achado, fica reduzida a dois, com o terceiro (`DATABASE_URL`, o único sem papel de semente de provisionamento) fora.",
-      "verificacao": "Verificado manualmente: `create_app()` com `.env` editado resolve `SECRET_KEY` e `SQLALCHEMY_DATABASE_URI` com o MESMO hash SHA-256 de antes da mudança, tanto pelo caminho direto (`DATABASE_URL_FILE`) quanto pelo de composição via `POSTGRES_PASSWORD_FILE` (host/porta locais). Sem teste automatizado novo: a verificação tocou um arquivo `.env` local, não versionado, fora do escopo da suíte."
+      "situacao": "corrigido",
+      "correcao": "`DATABASE_URL`, `SECRET_KEY` e `POSTGRES_PASSWORD` deixaram de ser valores diretos no `.env`: o provisionamento migra o arquivo para `DATABASE_URL_FILE`, `SECRET_KEY_FILE` e `POSTGRES_PASSWORD_FILE`, com os conteúdos mantidos em `.secrets`. O agente RTD lê somente `.docker-local/remote-collector.env` e resolve os segredos referenciados por arquivo. A migração foi aplicada localmente, os arquivos legados foram conferidos e o runtime continua usando os mesmos valores sem exibi-los.",
+      "verificacao": "`docker compose --profile quality run --build --rm quality` passou com 447 testes; `docker compose config --quiet`, build da imagem e `pip-audit` passaram. No Windows, o agente foi reinstalado com a configuração por arquivo e permaneceu em execução."
     },
     {
       "id": "CRV-02",
@@ -225,8 +225,8 @@
       "impacto": "Escrever cotação falsa contamina preço corrente, histórico diário, cálculo de risco e desempenho — o produto inteiro do sistema. Não é vazamento de credencial de pessoa, é corrupção silenciosa de dado, difícil de perceber porque a origem é legítima.",
       "condicoes": "Exige comprometimento da máquina Windows do agente ou do valor do token. O contador de páginas: `REMOTE_COLLECTOR_ENABLED` precisa estar ligado (é o caso em produção) para o agente existir.",
       "criterios": [],
-      "situacao": "parcial",
-      "correcao": "O contrato foi separado no servidor (`COLLECTOR_AGENT_READ_TOKEN` para GET e `COLLECTOR_AGENT_WRITE_TOKEN` para POST), no agente remoto, nos scripts de provisionamento/instalação e no Compose. O token de leitura não pode publicar cotações, e o de escrita não pode ler a configuração. A implantação coordenada no VPS e na máquina Windows ainda precisa ser executada para encerrar a janela de migração."
+      "situacao": "corrigido",
+      "correcao": "O contrato foi separado no servidor (`COLLECTOR_AGENT_READ_TOKEN` para GET e `COLLECTOR_AGENT_WRITE_TOKEN` para POST), no agente remoto, nos scripts de provisionamento/instalação e no Compose. O corte foi concluído: os tokens novos estão no VPS, o `PATRIMONIO_OWNER_ID` foi configurado, o agente Windows foi reinstalado e o token legado foi removido após a validação."
     }
   ],
   "recomendacoes": [
@@ -260,7 +260,7 @@
         "CRV-01"
       ],
       "texto": "Tirar os três segredos do `.env` e passar a leitura do agente RTD para `.secrets/`, via `app/secret_files.py`, que já existe e sabe fazer isso. Rotacionar não é necessário: os valores não vazaram.",
-      "situacao": "parcial"
+      "situacao": "concluida"
     },
     {
       "prioridade": "P3",
@@ -268,7 +268,7 @@
         "CRV-05"
       ],
       "texto": "Separar o token do agente por operação, ou pelo menos separar leitura de escrita: um token que só lê a configuração e outro que grava cotação.",
-      "situacao": "parcial"
+      "situacao": "concluida"
     },
     {
       "prioridade": "P3",
@@ -286,7 +286,7 @@
       "titulo": "[Segurança] Três segredos concentrados num só `.env`, lido pelo agente RTD",
       "labels": "security, severity:baixa, segredos, higiene",
       "corpo": "## Problema\n\nO arquivo `.env` guarda três segredos em texto claro, no mesmo lugar:\n\n- `SECRET_KEY` — chave de assinatura da sessão;\n- `DATABASE_URL` — URL de conexão, senha incluída;\n- `POSTGRES_PASSWORD` — a mesma senha, de novo.\n\nSão os mesmos valores que já estão em `.secrets/secret_key` e\n`.secrets/postgres_password`, confirmado por comparação de hash.\n\n### O que NAO e\n\nNão houve exposição. O que foi verificado:\n\n- `.gitignore:34` recusa `.env`, confirmado por `git check-ignore`;\n- o histórico completo do Git não tem nenhum arquivo de segredo;\n- `.dropboxignore:33` ja excluia `.env` da sincronizacao de nuvem ANTES desta\n  auditoria — conferido em `git show HEAD:.dropboxignore`;\n- a pasta `.secrets/` foi verificada em dropbox.com, inclusive na lixeira:\n  nunca subiu.\n\n### Por que ainda vale corrigir\n\nDuas coisas que a verificação não desfaz:\n\n1. **Concentração.** Os três segredos estão no MESMO arquivo. Qualquer caminho\n   que alcance esse arquivo entrega de uma vez a forja de sessão e o acesso ao\n   banco.\n2. **Ele é operacional, não sobra.** `app/remote_collector_agent.py:81` abre\n   `.env` diretamente para montar o ambiente do agente RTD, que roda no host\n   Windows, fora de contêiner — sem `read_only`, sem `cap_drop`, sem usuário\n   dedicado.\n\n## Evidência\n\n`app/remote_collector_agent.py:81`\n\n```python\n    values = _read_dotenv(project_dir / \".env\")\n    values.update(_read_dotenv(project_dir / CONFIG_PATH))\n```\n\n`compose.yaml:73-75` — o caminho que de fato vale em operação:\n\n```yaml\n      SECRET_KEY_FILE: /run/secrets/secret_key\n      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password\n      COLLECTOR_AGENT_TOKEN_FILE: /run/secrets/collector_agent_token\n```\n\n## Impacto\n\nNenhum comprometimento conhecido. O custo é de concentração e de superfície: um\narquivo que reúne tudo, num host que não tem o endurecimento do contêiner.\n\n## Sugestão de correção\n\nO projeto já tem o mecanismo certo e o usa em outro lugar:\n`app/secret_files.py` lê segredo por arquivo do host, com recusa de ausente e\nvazio, e `.secrets/` já existe com quatro arquivos.\n\nMover a leitura do agente RTD de `.env` para `.secrets/`, via\n`project_secret_value`, e deixar no `.env` apenas o que não é segredo\n(`RTD_PROG_ID`, intervalos, flags). Rotacionar não é necessário: os valores não\nvazaram.\n\n## Critérios de aceite\n\n- [ ] `.env` não contém mais `SECRET_KEY`, `DATABASE_URL` nem `POSTGRES_PASSWORD`\n- [ ] `app/remote_collector_agent.py` lê os segredos por `project_secret_value`, não de `.env`\n- [ ] O agente RTD no Windows continua funcionando (verificado pelo pulso na tela de Configurações)\n- [ ] A pilha local sobe com os segredos vindos de `.secrets/`\n- [ ] `.dropboxignore` mantém `.env`, `.secrets/` e `.certs/` (regressão)",
-      "situacao": "parcial"
+      "situacao": "resolvida"
     },
     {
       "n": 2,
@@ -310,7 +310,7 @@
       "titulo": "[Segurança] Token único do agente permite gravar cotação arbitrária",
       "labels": "security, severity:baixa, coletor",
       "corpo": "## Problema\n\nAs três rotas do agente compartilham um único `COLLECTOR_AGENT_TOKEN`: a que\nlê a configuração das posições abertas, a que grava cotações e a que registra\nfalha. O token é lido uma vez no boot e não tem prazo, contador de uso nem\nforma de revogação que não seja reiniciar o serviço.\n\nEle vive em texto claro na máquina Windows do agente, **fora de contêiner** —\nsem `read_only`, sem `cap_drop`, sem usuário dedicado, que é o endurecimento de\nque os serviços do Compose desfrutam.\n\n### Por que é explorável\n\nA verificação em si está correta e não é o problema: comparação em tempo\nconstante, e falha fechada (503) quando o token não está configurado, em vez de\ncomparar com string vazia.\n\nO que falta é o entorno. Quem obtiver o token na máquina Windows:\n\n- lê a configuração completa das posições abertas —\n  `GET /api/collector/configuration` devolve ticker, código de mercado e lado de\n  cada posição, o que é a carteira inteira;\n- e, sobretudo, **grava cotações arbitrárias** em `POST /api/collector/quotes`.\n\n## Evidência\n\n`app/routes/collector_agent.py:41-48`\n\n```python\ndef _require_agent_token() -> None:\n    configured = str(current_app.config[\"COLLECTOR_AGENT_TOKEN\"])\n    supplied = request.headers.get(\"Authorization\", \"\")\n    if not configured:\n        abort(503, \"Coletor remoto nao configurado.\")\n    if not hmac.compare_digest(supplied, f\"Bearer {configured}\"):\n        abort(401, \"Nao autorizado.\")\n```\n\nO mesmo token guarda as três rotas: `app/routes/collector_agent.py:92`, `150`,\n`269`.\n\n## Impacto\n\nEscrever cotação falsa contamina preço corrente, histórico diário, cálculo de\nrisco e desempenho — o produto inteiro do sistema. Não é vazamento de\ncredencial de pessoa: é corrupção silenciosa de dado, e difícil de perceber\nporque a origem é legítima e a gravação é um `upsert` normal.\n\n**Condição:** exige comprometimento da máquina Windows do agente ou do valor do\ntoken, e `REMOTE_COLLECTOR_ENABLED` ligado (é o caso em produção).\n\n## Sugestão de correção\n\nSeparar leitura de escrita, que é a fronteira que importa aqui:\n\n```python\n# Dois segredos, dois arquivos, dois provisionamentos independentes.\nCOLLECTOR_AGENT_TOKEN        # le a configuracao (GET)\nCOLLECTOR_AGENT_WRITE_TOKEN  # grava cotacao e falha (POST)\n```\n\nAssim o comprometimento da máquina Windows deixa de ser, automaticamente,\nautorização para corromper o histórico de preços — e a rotação do token de\nescrita pode ser mais frequente que a do de leitura.\n\nComo defesa complementar, considerar rejeitar cotação cujo `observed_at` esteja\nmuito fora da janela do pregão, ou cujo preço divirja do último em mais de uma\nporcentagem configurável: um agente legítimo nunca produz esses valores.\n\n## Critérios de aceite\n\n- [ ] Existem dois tokens distintos, um para leitura e outro para escrita\n- [ ] `scripts/provision-collector-agent-token.ps1` provisiona os dois\n- [ ] O agente Windows usa cada um na rota correspondente\n- [ ] Teste: token de leitura recusado (401) em `POST /api/collector/quotes`\n- [ ] Teste: token de escrita recusado (401) em `GET /api/collector/configuration`\n- [ ] `docs/deployment-vps.md` registra a rotação independente dos dois",
-      "situacao": "parcial"
+      "situacao": "resolvida"
     },
     {
       "n": 5,
@@ -324,12 +324,12 @@
   "subtitulo": "Estado final, depois da remediação",
   "rodape": "Auditoria de Segurança (estado final) — ControleRendaVariavel",
   "remediacao": {
-    "texto": "Esta rodada implementou as correções de código e de operação local para os achados acionáveis. O único item que permanece parcial é a troca coordenada dos tokens no VPS e na máquina Windows remota, que depende da janela operacional de implantação.",
+    "texto": "Esta rodada implementou as correções de código, operação local e rollout de produção para todos os achados acionáveis. A migração de segredos foi aplicada, os tokens do agente foram separados no VPS e no Windows e o token legado foi removido após a validação de saúde e autorização.",
     "linhas": [
       "CRV-02 e CRV-03 seguem o padrão já estabelecido nos projetos irmãos: `aplicar_limite` para o rate limit, e uma checagem de boot que recusa a combinação perigosa de configuração de transporte, no mesmo espírito das validações já existentes no ConfortoTermico.",
-      "CRV-01 avançou: `app.collector.remote_agent` agora lê somente `.docker-local/remote-collector.env` e os arquivos `.secrets` referenciados, enquanto `provision-secrets.ps1` gera segredos novos e aceita valores antigos do `.env` apenas durante a migração. Os arquivos `.env` de instalações existentes ainda devem ser higienizados após confirmar os arquivos provisionados.",
+      "CRV-01 foi concluído: `app.collector.remote_agent` lê somente `.docker-local/remote-collector.env` e os arquivos `.secrets` referenciados; `provision-secrets.ps1 -MigrateDotEnv` removeu os valores diretos do `.env`, e a pilha local e a produção foram validadas.",
       "CRV-04 foi resolvido por DECISÃO, não por código: a opção B da issue (documentar em vez de restringir) é a que preserva o comportamento atual, coerente com o uso pessoal declarado no README.",
-      "CRV-05 foi separado no código e coberto por testes de incompatibilidade entre os tokens; a etapa restante é a rotação coordenada em produção, com reinstalação do agente remoto e verificação do pulso de coleta."
+      "CRV-05 foi concluído: os tokens foram separados no código e cobertos por testes de incompatibilidade, instalados no VPS e na máquina Windows, validados com GET=200, GET com token de escrita=401 e POST=200, e o token legado foi removido."
     ]
   }
 }
