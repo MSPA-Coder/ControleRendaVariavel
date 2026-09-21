@@ -91,6 +91,9 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         # avisar.
         "portfolio.patrimonio_resumo",
         "portfolio.patrimonio_resumo_v2",
+        "portfolio.patrimonio_activities_v3",
+        "portfolio.patrimonio_categories_v3",
+        "portfolio.patrimonio_metadata_v3",
         "static",
         # CSS do banner de mensagem, que `login.html` usa. Sem isto o
         # `requer_login` bloquearia o próprio arquivo que estiliza "Usuário ou
