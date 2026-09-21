@@ -81,6 +81,9 @@ PUBLIC_ENDPOINTS = frozenset({
     "portfolio.patrimonio_activities_v3",
     "portfolio.patrimonio_categories_v3",
     "portfolio.patrimonio_metadata_v3",
+    "portfolio.patrimonio_income_v3",
+    "portfolio.patrimonio_performance_v3",
+    "portfolio.patrimonio_events_v3",
     "static",
     # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
     # tela de login é a única página fora da sessão que precisa de um
@@ -376,6 +379,9 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "portfolio.patrimonio_activities_v3",
         "portfolio.patrimonio_categories_v3",
         "portfolio.patrimonio_metadata_v3",
+        "portfolio.patrimonio_income_v3",
+        "portfolio.patrimonio_performance_v3",
+        "portfolio.patrimonio_events_v3",
     ):
         aplicar_limite(app, limiter, endpoint, "60 per minute; 1200 per hour", override_defaults=True)
     for endpoint in (
