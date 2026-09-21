@@ -120,6 +120,28 @@ As consultas que formam uma resposta v2 compartilham uma transação
 `REPEATABLE READ`, evitando misturar posições, fluxos e desempenho de estados
 concorrentes do banco.
 
+### Recursos analíticos v3 para o shell
+
+O contrato `patrimonio/v3` acrescenta três recursos somente-leitura, sempre
+autenticados pelo mesmo Bearer e filtrados por `PATRIMONIO_OWNER_ID`:
+
+| Recurso | Rota | Conteúdo |
+| --- | --- | --- |
+| `income` | `GET /patrimonio/v3/income` | proventos persistidos, paginados, com moeda, tipo, categoria e deep link |
+| `performance` | `GET /patrimonio/v3/performance` | séries mensais TWR por moeda, com valor, fluxo, renda e retorno acumulado |
+| `events` | `GET /patrimonio/v3/events` | eventos de quantidade da linha do tempo de posições, paginados |
+
+`income` aceita `inicio`, `fim`, `moeda`, `tipo`, `page` e `page_size`. Os
+outros dois aceitam `inicio` e `fim`; `events` também aceita a paginação. A
+janela analítica respeita `PATRIMONIO_MAX_HISTORICO_DIAS` e recusa datas
+futuras. IDs dos três recursos são opacos, prefixados pelo sistema e não
+expõem chaves primárias. Quantidades e dinheiro continuam como texto no JSON;
+um evento não recebe preço inventado quando a série de cotações não o possui.
+
+`GET /patrimonio/v3/metadata` declara `income`, `performance` e `events` como
+capacidades, além das atividades/categorias já existentes. Nenhum desses
+recursos aceita escrita, importação, categorização ou mutação de carteira.
+
 ### O endereço que chega à barra
 
 Um formulário HTML serializa todos os seus campos ao ser enviado, inclusive os

@@ -112,6 +112,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
+from app.patrimonio import queries
 from app.positions.holdings_history import (
     CLOSING_PRICE_VALIDITY_DAYS,
     HoldingEvent,
@@ -138,6 +139,17 @@ def _id_v3(recurso: str, valor: int) -> str:
     """ID estável que não expõe a chave primária operacional."""
     material = f"{SISTEMA}:{recurso}:{valor}".encode()
     digest = hashlib.sha256(material).hexdigest()[:24]
+    return f"{SISTEMA}:{recurso}:{digest}"
+
+
+def _id_v3_material(recurso: str, material: str) -> str:
+    """ID opaco para recursos que não têm uma única chave operacional.
+
+    Séries e eventos podem ser compostos por várias linhas do domínio. O
+    material é montado pelo publicador, nunca aceito do chamador, e o digest
+    evita expor a combinação de IDs internos no contrato HTTP.
+    """
+    digest = hashlib.sha256(f"{SISTEMA}:{recurso}:{material}".encode()).hexdigest()[:24]
     return f"{SISTEMA}:{recurso}:{digest}"
 
 
@@ -169,6 +181,27 @@ def _intervalo_v3() -> tuple[date | None, date | None]:
         abort(400, "inicio e fim devem usar AAAA-MM-DD")
     if inicio and fim and inicio > fim:
         abort(400, "inicio não pode ser posterior a fim")
+    return inicio, fim
+
+
+def _janela_analitica_v3() -> tuple[date, date]:
+    """Resolve a janela de uma série analítica sem aceitar datas futuras."""
+    hoje = datetime.now(MARKET_TIMEZONE).date()
+    try:
+        limite = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
+    except (KeyError, TypeError, ValueError):
+        abort(503, "Janela histórica do patrimônio não configurada.")
+    if limite <= 0:
+        abort(503, "Janela histórica do patrimônio inválida.")
+    inicio, fim = _intervalo_v3()
+    fim = fim or hoje
+    inicio = inicio or (fim - timedelta(days=limite))
+    if fim > hoje:
+        abort(400, "fim não pode ser uma data futura")
+    if inicio > fim:
+        abort(400, "inicio não pode ser posterior a fim")
+    if inicio < fim - timedelta(days=limite):
+        abort(400, "inicio fora da janela histórica pública configurada")
     return inicio, fim
 
 
@@ -962,10 +995,228 @@ def patrimonio_metadata_v3():
             "capacidades": {
                 "atividades": True,
                 "categorias": True,
+                "income": True,
+                "performance": True,
+                "events": True,
+                "renda": True,
+                "desempenho": True,
+                "eventos": True,
                 "escrita": False,
                 "paginacao_atividades": True,
+                "paginacao_income": True,
+                "paginacao_events": True,
             },
             "paginacao": {"padrao": V3_PAGE_SIZE, "maximo": V3_MAX_PAGE_SIZE},
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+def _pagina_v3(pagina: int, tamanho: int, total: int) -> dict[str, object]:
+    """Envelope de paginação compartilhado pelos recursos analíticos."""
+    paginas = (total + tamanho - 1) // tamanho if total else 0
+    return {
+        "pagina": pagina,
+        "tamanho": tamanho,
+        "total": total,
+        "paginas": paginas,
+        "tem_anterior": pagina > 1 and bool(total),
+        "tem_proxima": pagina < paginas,
+        "anterior": _link_pagina_v3(pagina - 1) if pagina > 1 and bool(total) else None,
+        "proxima": _link_pagina_v3(pagina + 1) if pagina < paginas else None,
+    }
+
+
+@bp.get("/patrimonio/v3/income")
+def patrimonio_income_v3():
+    """Renda recebida detalhada, somente leitura e paginada.
+
+    O recurso expõe somente ``Dividend`` já persistido. Não transforma renda
+    em caixa nem tenta calcular uma renda implícita a partir da cotação.
+    """
+    _exigir_token()
+    titular = identidade(_titular())
+    owner_id = _owner_id()
+    inicio, fim = _intervalo_v3()
+    pagina, tamanho = _paginacao_v3()
+    consulta = (
+        select(Dividend)
+        .where(Dividend.owner_id == owner_id)
+        .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
+    )
+    if inicio:
+        consulta = consulta.where(Dividend.payment_date >= inicio)
+    if fim:
+        consulta = consulta.where(Dividend.payment_date <= fim)
+    moeda = (request.args.get("moeda") or "").strip().upper()
+    if moeda:
+        consulta = consulta.join(Dividend.ticker_ref).where(Ticker.currency == moeda)
+    tipo = (request.args.get("tipo") or "").strip().lower()
+    if tipo:
+        consulta = consulta.where(Dividend.kind == tipo)
+    itens = list(
+        db.session.scalars(consulta.order_by(Dividend.payment_date, Dividend.id)).unique().all()
+    )
+    total = len(itens)
+    inicio_fatia = (pagina - 1) * tamanho
+    fatia = itens[inicio_fatia : inicio_fatia + tamanho]
+    payload = []
+    for item in fatia:
+        payload.append(
+            {
+                "id": _id_v3("renda", item.id),
+                "origem": "provento",
+                "data": item.payment_date.isoformat(),
+                "descricao": f"{item.kind.value.capitalize()} de {item.ticker}",
+                "tipo": item.kind.value,
+                "status": "realizado",
+                "moeda": item.currency,
+                "valor": _dinheiro(item.amount),
+                "instrumento": item.ticker,
+                "instituicao": identidade(item.broker),
+                "titular": titular,
+                "categoria": {
+                    "id": _id_v3_material("categoria", item.kind.value),
+                    "nome": item.kind.value,
+                    "natureza": "renda",
+                },
+                "deep_link": url_for("portfolio.edit_dividend", dividend_id=item.id),
+            }
+        )
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V3,
+            "recurso": "income",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "filtros": {
+                "inicio": inicio.isoformat() if inicio else None,
+                "fim": fim.isoformat() if fim else None,
+                "moeda": moeda or None,
+                "tipo": tipo or None,
+            },
+            "paginacao": _pagina_v3(pagina, tamanho, total),
+            "itens": payload,
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v3/performance")
+def patrimonio_performance_v3():
+    """Séries mensais TWR já calculadas pelo domínio do CRV."""
+    _exigir_token()
+    titular = identidade(_titular())
+    owner_id = _owner_id()
+    inicio, fim = _janela_analitica_v3()
+    from app.patrimonio.dashboard import _performance
+
+    dividends = queries.dividends(inicio, fim, owner_id)
+    series = _performance(fim, inicio, dividends, owner_id)
+    itens = [
+        {
+            "id": _id_v3_material("performance", f"{item['moeda']}:{inicio}:{fim}"),
+            "titular": titular,
+            "moeda": item["moeda"],
+            "metodo": item["metodo"],
+            "inicio": item["inicio"],
+            "fim": item["fim"],
+            "pontos": item["pontos"],
+            "deep_link": item["endereco"],
+        }
+        for item in series
+    ]
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V3,
+            "recurso": "performance",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "filtros": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
+            "itens": itens,
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v3/events")
+def patrimonio_events_v3():
+    """Eventos de quantidade usados para a série de performance.
+
+    O contrato publica a quantidade resultante, não preço ou patrimônio. A
+    ausência de preço é deliberada: o preço pertence à série de cotações e
+    não deve ser inferido pelo consumidor.
+    """
+    _exigir_token()
+    titular = identidade(_titular())
+    owner_id = _owner_id()
+    inicio, fim = _janela_analitica_v3()
+    pagina, tamanho = _paginacao_v3()
+    eventos = [
+        event
+        for event in queries.performance_events(fim, owner_id)
+        if inicio <= event.occurred_on <= fim
+    ]
+    tickers = queries.tickers(event.ticker_id for event in eventos)
+    # A ordem inclui todos os campos do evento para permanecer determinística
+    # mesmo quando duas linhas têm a mesma data e quantidade.
+    eventos.sort(
+        key=lambda event: (
+            event.occurred_on,
+            event.position_key[0],
+            event.position_key[1],
+            event.ticker_id,
+            event.resulting_signed_quantity,
+        ),
+        reverse=True,
+    )
+    ocorrencias: dict[str, int] = {}
+    itens = []
+    for event in eventos:
+        ticker = tickers.get(event.ticker_id)
+        if ticker is None:
+            continue
+        classe, posicao_id = event.position_key
+        material = (
+            f"{event.occurred_on.isoformat()}:{classe}:{posicao_id}:"
+            f"{event.ticker_id}:{event.resulting_signed_quantity}"
+        )
+        ocorrencias[material] = ocorrencias.get(material, 0) + 1
+        material = f"{material}:{ocorrencias[material]}"
+        deep_link = (
+            url_for("portfolio.position_detail", position_id=posicao_id)
+            if classe == "stock"
+            else url_for("options.edit_position", position_id=posicao_id)
+        )
+        itens.append(
+            {
+                "id": _id_v3_material("evento", material),
+                "titular": titular,
+                "data": event.occurred_on.isoformat(),
+                "tipo": "movimentacao",
+                "status": "realizado",
+                "classe": classe,
+                "instrumento": ticker.symbol,
+                "moeda": ticker.currency,
+                "mercado": ticker.market.value,
+                "quantidade_resultante": _numero(event.resulting_signed_quantity),
+                "deep_link": deep_link,
+            }
+        )
+    total = len(itens)
+    inicio_fatia = (pagina - 1) * tamanho
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V3,
+            "recurso": "events",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "filtros": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
+            "paginacao": _pagina_v3(pagina, tamanho, total),
+            "itens": itens[inicio_fatia : inicio_fatia + tamanho],
         }
     )
     resposta.headers["Cache-Control"] = "no-store"
