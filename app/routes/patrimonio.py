@@ -82,6 +82,7 @@ seria pior do que publicar o dia.
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import re
 import unicodedata
@@ -98,6 +99,7 @@ from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     Broker,
     Dividend,
+    OptionContract,
     OptionPosition,
     OptionPositionMovement,
     Portfolio,
@@ -107,6 +109,8 @@ from app.models import (
     QuoteHistory,
     Side,
     Ticker,
+    Transaction,
+    TransactionStatus,
 )
 from app.positions.holdings_history import (
     CLOSING_PRICE_VALIDITY_DAYS,
@@ -118,13 +122,93 @@ from app.positions.portfolio import effective_position_quote
 from app.routes import bp
 
 CONTRATO = "patrimonio/v1"
+CONTRATO_V3 = "patrimonio/v3"
 SISTEMA = "controle-renda-variavel"
+V3_PAGE_SIZE = 50
+V3_MAX_PAGE_SIZE = 100
 
 #: Janela dos proventos publicados. Eles não entram no patrimônio de hoje (já
 #: foram recebidos e viraram caixa, que é do outro sistema); vão no envelope
 #: porque o consolidador mostra renda do período. Sem janela, a lista cresceria
 #: para sempre.
 JANELA_DE_PROVENTOS_EM_DIAS = 365
+
+
+def _id_v3(recurso: str, valor: int) -> str:
+    """ID estável que não expõe a chave primária operacional."""
+    material = f"{SISTEMA}:{recurso}:{valor}".encode()
+    digest = hashlib.sha256(material).hexdigest()[:24]
+    return f"{SISTEMA}:{recurso}:{digest}"
+
+
+def _paginacao_v3() -> tuple[int, int]:
+    try:
+        pagina = int(request.args.get("page", request.args.get("pagina", "1")))
+        tamanho = int(request.args.get("page_size", request.args.get("tamanho", str(V3_PAGE_SIZE))))
+    except (TypeError, ValueError):
+        abort(400, "page e page_size devem ser inteiros positivos")
+    if pagina < 1 or tamanho < 1 or tamanho > V3_MAX_PAGE_SIZE:
+        abort(400, f"page deve ser positivo e page_size deve estar entre 1 e {V3_MAX_PAGE_SIZE}")
+    return pagina, tamanho
+
+
+def _link_pagina_v3(numero: int) -> str:
+    params = request.args.to_dict(flat=False)
+    params["page"] = [str(numero)]
+    params.pop("pagina", None)
+    from urllib.parse import urlencode
+
+    return f"{request.path}?{urlencode(params, doseq=True)}"
+
+
+def _intervalo_v3() -> tuple[date | None, date | None]:
+    try:
+        inicio = date.fromisoformat(request.args["inicio"]) if request.args.get("inicio") else None
+        fim = date.fromisoformat(request.args["fim"]) if request.args.get("fim") else None
+    except ValueError:
+        abort(400, "inicio e fim devem usar AAAA-MM-DD")
+    if inicio and fim and inicio > fim:
+        abort(400, "inicio não pode ser posterior a fim")
+    return inicio, fim
+
+
+def _atividade_v3_transacao(item: Transaction, titular: str) -> dict:
+    instrumento = item.ticker
+    return {
+        "id": _id_v3("atividade-transacao", item.id),
+        "origem": "transacao",
+        "data": item.closed_on.isoformat(),
+        "data_realizacao": item.closed_on.isoformat(),
+        "descricao": f"Encerramento de {instrumento}",
+        "tipo": "venda" if item.side == Side.BUY else "recompra",
+        "status": "realizado",
+        "moeda": item.currency,
+        "valor": _dinheiro(item.result),
+        "valor_realizado": _dinheiro(item.result),
+        "instrumento": instrumento,
+        "instituicao": identidade(item.broker),
+        "titular": titular,
+        "deep_link": url_for("portfolio.edit_transaction", transaction_id=item.id),
+    }
+
+
+def _atividade_v3_provento(item: Dividend, titular: str) -> dict:
+    return {
+        "id": _id_v3("atividade-provento", item.id),
+        "origem": "provento",
+        "data": item.payment_date.isoformat(),
+        "data_realizacao": item.payment_date.isoformat(),
+        "descricao": f"{item.kind.value.capitalize()} de {item.ticker}",
+        "tipo": item.kind.value,
+        "status": "realizado",
+        "moeda": item.currency,
+        "valor": _dinheiro(item.amount),
+        "valor_realizado": _dinheiro(item.amount),
+        "instrumento": item.ticker,
+        "instituicao": identidade(item.broker),
+        "titular": titular,
+        "deep_link": url_for("portfolio.edit_dividend", dividend_id=item.id),
+    }
 
 
 def identidade(nome: str) -> str:
@@ -754,5 +838,135 @@ def patrimonio_resumo_v2():
         max_history_days=max_history_days,
     )
     resposta = jsonify(payload)
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v3/activities")
+def patrimonio_activities_v3():
+    """Atividades financeiras encerradas, somente leitura.
+
+    A lista é deliberadamente materializada após consultas separadas: os dois
+    modelos têm datas diferentes e o contrato precisa ordenar o conjunto
+    combinado de forma determinística. Nenhuma linha aberta ou simulada entra.
+    """
+    _exigir_token()
+    titular_nome = _titular()
+    owner_id = _owner_id()
+    titular = identidade(titular_nome)
+    inicio, fim = _intervalo_v3()
+    pagina, tamanho = _paginacao_v3()
+
+    transacoes = (
+        select(Transaction)
+        .join(Transaction.portfolio_ref)
+        .where(
+            Transaction.owner_id == owner_id,
+            Transaction.status == TransactionStatus.CLOSED,
+            Portfolio.simulated.is_(False),
+        )
+        .options(
+            joinedload(Transaction.broker_ref),
+            joinedload(Transaction.ticker_ref),
+            joinedload(Transaction.option_contract_ref).joinedload(OptionContract.ticker_ref),
+        )
+    )
+    proventos = (
+        select(Dividend)
+        .where(Dividend.owner_id == owner_id)
+        .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
+    )
+    if inicio:
+        transacoes = transacoes.where(Transaction.closed_on >= inicio)
+        proventos = proventos.where(Dividend.payment_date >= inicio)
+    if fim:
+        transacoes = transacoes.where(Transaction.closed_on <= fim)
+        proventos = proventos.where(Dividend.payment_date <= fim)
+
+    itens = [
+        (item.closed_on, 0, item.id, _atividade_v3_transacao(item, titular))
+        for item in db.session.scalars(transacoes).unique().all()
+    ] + [
+        (item.payment_date, 1, item.id, _atividade_v3_provento(item, titular))
+        for item in db.session.scalars(proventos).unique().all()
+    ]
+    itens.sort(key=lambda row: (row[0], row[1], row[2]), reverse=True)
+    total = len(itens)
+    inicio_fatia = (pagina - 1) * tamanho
+    fatia = itens[inicio_fatia : inicio_fatia + tamanho]
+    paginas = (total + tamanho - 1) // tamanho if total else 0
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V3,
+            "recurso": "atividades",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "filtros": {
+                "inicio": inicio.isoformat() if inicio else None,
+                "fim": fim.isoformat() if fim else None,
+            },
+            "paginacao": {
+                "pagina": pagina,
+                "tamanho": tamanho,
+                "total": total,
+                "paginas": paginas,
+                "tem_anterior": pagina > 1 and bool(total),
+                "tem_proxima": pagina < paginas,
+                "anterior": _link_pagina_v3(pagina - 1) if pagina > 1 and bool(total) else None,
+                "proxima": _link_pagina_v3(pagina + 1) if pagina < paginas else None,
+            },
+            "itens": [row[3] for row in fatia],
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v3/categories")
+def patrimonio_categories_v3():
+    """Categorias derivadas dos tipos de provento já publicados."""
+    _exigir_token()
+    owner_id = _owner_id()
+    tipos = db.session.scalars(
+        select(Dividend.kind)
+        .where(Dividend.owner_id == owner_id)
+        .distinct()
+        .order_by(Dividend.kind)
+    ).all()
+    itens = [
+        {
+            "id": _id_v3("categoria", index),
+            "nome": tipo.value,
+            "natureza": "renda",
+            "deep_link": url_for("portfolio.dividends"),
+        }
+        for index, tipo in enumerate(tipos, start=1)
+    ]
+    resposta = jsonify(
+        {"contrato": CONTRATO_V3, "recurso": "categorias", "sistema": SISTEMA, "gerado_em": datetime.now(UTC).isoformat(), "itens": itens}
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v3/metadata")
+def patrimonio_metadata_v3():
+    """Capacidades e limites do exportador, sem inventar catálogo."""
+    _exigir_token()
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V3,
+            "recurso": "metadata",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "capacidades": {
+                "atividades": True,
+                "categorias": True,
+                "escrita": False,
+                "paginacao_atividades": True,
+            },
+            "paginacao": {"padrao": V3_PAGE_SIZE, "maximo": V3_MAX_PAGE_SIZE},
+        }
+    )
     resposta.headers["Cache-Control"] = "no-store"
     return resposta

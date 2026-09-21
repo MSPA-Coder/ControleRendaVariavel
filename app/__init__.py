@@ -78,6 +78,9 @@ PUBLIC_ENDPOINTS = frozenset({
     # ele a rota não devolve dado nenhum.
     "portfolio.patrimonio_resumo",
     "portfolio.patrimonio_resumo_v2",
+    "portfolio.patrimonio_activities_v3",
+    "portfolio.patrimonio_categories_v3",
+    "portfolio.patrimonio_metadata_v3",
     "static",
     # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
     # tela de login é a única página fora da sessão que precisa de um
@@ -369,6 +372,12 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "30 per minute; 600 per hour",
         override_defaults=True,
     )
+    for endpoint in (
+        "portfolio.patrimonio_activities_v3",
+        "portfolio.patrimonio_categories_v3",
+        "portfolio.patrimonio_metadata_v3",
+    ):
+        aplicar_limite(app, limiter, endpoint, "60 per minute; 1200 per hour", override_defaults=True)
     for endpoint in (
         "portfolio.collector_agent_quotes",
         "portfolio.collector_agent_failure",
