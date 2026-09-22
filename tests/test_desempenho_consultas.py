@@ -3,16 +3,18 @@
 `/risk` buscava a série de cotações de cada ativo aberto com duas consultas
 (permissão e série), e o número de idas ao banco crescia com a carteira. O
 teste abaixo mede a página com duas e com seis posições abertas e exige a
-mesma contagem: o N+1 não pode voltar sem reprovar aqui.
+mesma contagem: o N+1 não pode voltar sem reprovar aqui. `/performance`
+pagava duas consultas a mais pelo benchmark e uma por moeda nos proventos;
+os testes dela exigem que nenhum dos dois acrescente consulta.
 
 `upsert_quote_history` gravava uma instrução por linha; a importação "desde a
 posição" traz anos de pregões por ticker. Os testes de lote medem que a
 gravação agora vai em blocos e que o resultado é o mesmo da gravação linha a
 linha — o instante mais novo vence, inclusive dentro do mesmo lote.
 
-`/risk` precisa de dados confirmados (a requisição abre a própria sessão), então
-aquele teste grava de verdade no `db-teste` e apaga o que criou ao sair, como
-`test_financial_isolation_http.py`. Os de lote cabem na fixture `sessao`.
+As páginas precisam de dados confirmados (a requisição abre a própria
+sessão), então esses testes gravam de verdade no `db-teste` e apagam o que
+criaram ao sair, como `test_financial_isolation_http.py`. Os de lote cabem na fixture `sessao`.
 """
 from __future__ import annotations
 
@@ -63,7 +65,7 @@ def contar_consultas(engine):
 
 
 @pytest.fixture
-def carteira_de_risco(app_com_banco):
+def carteira_medida(app_com_banco):
     """Usuário com carteira real, sem posições; `abrir` acrescenta ativos."""
     app = app_com_banco
     sufixo = uuid4().hex[:8]
@@ -84,26 +86,42 @@ def carteira_de_risco(app_com_banco):
 
     inicio = date.today() - timedelta(days=PREGOES + 1)
 
-    def abrir(quantidade: int) -> list[str]:
+    def _ticker(moeda: str, *, referencia: bool = False) -> Ticker:
+        mercado, codigo = (Market.B3, "B") if moeda == "BRL" else (Market.NYSE, "N")
+        ticker = Ticker(symbol=f"Q{uuid4().hex[:10]}", trading_name="Ativo de medição",
+                        market=mercado, currency=moeda, rtd_market_code=codigo,
+                        is_benchmark=referencia)
+        db.session.add(ticker)
+        db.session.flush()
+        criados["tickers"].append(ticker.id)
+        db.session.add(UserTickerEntitlement(user_id=criados["usuario"], ticker_id=ticker.id,
+                                             first_held_on=inicio))
+        db.session.add_all(
+            QuoteHistory(ticker_id=ticker.id, price=Decimal(20 + dia),
+                         recorded_date=inicio + timedelta(days=dia),
+                         recorded_at=datetime.now(UTC))
+            for dia in range(PREGOES)
+        )
+        return ticker
+
+    def referencia() -> int:
+        with app.app_context():
+            ticker_id = _ticker("BRL", referencia=True).id
+            db.session.commit()
+        return ticker_id
+
+    def abrir(quantidade: int, moeda: str = "BRL") -> list[str]:
         simbolos = []
         with app.app_context():
             for _ in range(quantidade):
-                ticker = Ticker(symbol=f"Q{uuid4().hex[:10]}", trading_name="Ativo de medição",
-                                market=Market.B3, currency="BRL", rtd_market_code="B")
-                db.session.add(ticker)
-                db.session.flush()
-                criados["tickers"].append(ticker.id)
+                ticker = _ticker(moeda)
                 simbolos.append(ticker.symbol)
                 posicao = Position(owner_id=criados["usuario"], broker_id=criados["corretora"],
                                    ticker_id=ticker.id, portfolio_id=criados["carteira"],
                                    quantity=Decimal("10"), average_cost=Decimal("20"),
                                    quote_multiplier=1, target_multiplier=1, side=Side.BUY,
                                    opened_on=inicio, result_mode="L")
-                db.session.add_all([
-                    posicao,
-                    UserTickerEntitlement(user_id=criados["usuario"], ticker_id=ticker.id,
-                                          first_held_on=inicio),
-                ])
+                db.session.add(posicao)
                 db.session.flush()
                 db.session.add(PositionMovement(
                     owner_id=criados["usuario"], position_id=posicao.id,
@@ -111,17 +129,11 @@ def carteira_de_risco(app_com_banco):
                     price=Decimal("20"), occurred_on=inicio, resulting_quantity=Decimal("10"),
                     resulting_average_cost=Decimal("20"),
                 ))
-                db.session.add_all(
-                    QuoteHistory(ticker_id=ticker.id, price=Decimal(20 + dia),
-                                 recorded_date=inicio + timedelta(days=dia),
-                                 recorded_at=datetime.now(UTC))
-                    for dia in range(PREGOES)
-                )
             db.session.commit()
         return simbolos
 
     try:
-        yield app, criados, abrir
+        yield app, criados, abrir, referencia
     finally:
         with app.app_context():
             db.session.rollback()
@@ -151,11 +163,11 @@ def _cliente(app, sessao_id: str):
     return cliente
 
 
-def _medir_risco(app, cliente, simbolos: list[str]) -> int:
+def _medir(app, cliente, url: str, simbolos: list[str] = ()) -> int:
     with app.app_context():
         engine = db.engine
     with contar_consultas(engine) as instrucoes:
-        resposta = cliente.get("/risk")
+        resposta = cliente.get(url)
     assert resposta.status_code == 200
     pagina = resposta.get_data(as_text=True)
     for simbolo in simbolos:
@@ -163,19 +175,48 @@ def _medir_risco(app, cliente, simbolos: list[str]) -> int:
     return len(instrucoes)
 
 
-def test_risco_nao_consulta_o_banco_uma_vez_por_ativo(carteira_de_risco):
-    app, criados, abrir = carteira_de_risco
+def test_risco_nao_consulta_o_banco_uma_vez_por_ativo(carteira_medida):
+    app, criados, abrir, _ = carteira_medida
     cliente = _cliente(app, criados["sessao"])
     simbolos = abrir(2)
     # A primeira visita cria a preferência do usuário sob demanda; medir a
     # partir da segunda deixa só o custo de regime.
-    _medir_risco(app, cliente, simbolos)
-    com_dois = _medir_risco(app, cliente, simbolos)
+    _medir(app, cliente, "/risk", simbolos)
+    com_dois = _medir(app, cliente, "/risk", simbolos)
 
     simbolos += abrir(4)
-    com_seis = _medir_risco(app, cliente, simbolos)
+    com_seis = _medir(app, cliente, "/risk", simbolos)
 
     assert com_seis == com_dois
+
+
+def test_performance_nao_paga_consulta_extra_pelo_benchmark(carteira_medida):
+    app, criados, abrir, referencia = carteira_medida
+    cliente = _cliente(app, criados["sessao"])
+    abrir(2)
+    benchmark = referencia()
+    _medir(app, cliente, "/performance")
+    sem_benchmark = _medir(app, cliente, "/performance")
+
+    com_benchmark = _medir(app, cliente, f"/performance?benchmark_ticker_id={benchmark}")
+
+    assert com_benchmark == sem_benchmark
+
+
+def test_performance_nao_consulta_proventos_uma_vez_por_moeda(carteira_medida):
+    app, criados, abrir, _ = carteira_medida
+    cliente = _cliente(app, criados["sessao"])
+    # Sem o filtro explícito a página mostra uma moeda só, e a segunda nem
+    # chegaria ao relatório.
+    todas = "/performance?currency=ALL"
+    abrir(1, "BRL")
+    _medir(app, cliente, todas)
+    uma_moeda = _medir(app, cliente, todas)
+
+    abrir(1, "USD")
+    duas_moedas = _medir(app, cliente, todas)
+
+    assert duas_moedas == uma_moeda
 
 
 def _linhas(sessao, ticker_id: int) -> list[tuple[date, Decimal, datetime]]:
