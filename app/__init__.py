@@ -26,6 +26,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
 from app.core.currency_filter import parse_currency_filter
+from app.core.estaticos import instalar_versao_de_estaticos
 from app.core.privacy import values_hidden
 
 if TYPE_CHECKING:
@@ -485,6 +486,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         if destino is not None:
             resposta.headers.setdefault("HX-Replace-Url", destino)
         return resposta
+
+    instalar_versao_de_estaticos(app)
 
     requer_login(
         app,
