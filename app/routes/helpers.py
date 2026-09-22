@@ -480,6 +480,12 @@ def quote_update_target_tickers() -> list[TickerImportTarget]:
     return [target for target, _ in quote_update_targets()]
 
 
+#: Linhas por instrução em ``upsert_quote_history``. Quatro parâmetros por
+#: linha deixam cada lote bem abaixo do teto de 65535 parâmetros do protocolo
+#: do PostgreSQL.
+QUOTE_HISTORY_UPSERT_BATCH_SIZE = 1000
+
+
 def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]]) -> None:
     """Grava um snapshot de cotação por (ticker, dia).
 
@@ -489,15 +495,38 @@ def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]])
     duplicata. É o mesmo caminho usado pelo lançamento manual, pela
     importação diária, pela importação "desde a posição" e pelo coletor RTD.
 
+    Grava em lotes de ``QUOTE_HISTORY_UPSERT_BATCH_SIZE`` linhas por
+    instrução, e não uma instrução por linha: a importação "desde a posição"
+    traz anos de pregões de cada ticker, e cada linha era uma ida e volta ao
+    banco. Um lote não pode tocar a mesma linha duas vezes (o PostgreSQL
+    recusa o ``ON CONFLICT DO UPDATE`` inteiro), por isso a entrada é
+    reduzida antes a uma linha por (ticker, dia) — a de instante mais novo,
+    e a última em caso de empate, exatamente a que sobraria gravando uma a
+    uma com o filtro ``excluded.recorded_at >= recorded_at``. A ordem por
+    chave faz duas gravações concorrentes (coletor e importação) travarem as
+    linhas na mesma sequência, sem deadlock.
+
     Não faz ``commit``: quem inicia a operação de escrita é dono do limite
     transacional.
     """
+    latest: dict[tuple[int, date], tuple[Decimal, datetime]] = {}
     for ticker_id, price, recorded_date, recorded_at in entries:
+        key = (ticker_id, recorded_date)
+        current = latest.get(key)
+        if current is None or recorded_at >= current[1]:
+            latest[key] = (price, recorded_at)
+    rows = [
+        {
+            "ticker_id": ticker_id,
+            "price": price,
+            "recorded_date": recorded_date,
+            "recorded_at": recorded_at,
+        }
+        for (ticker_id, recorded_date), (price, recorded_at) in sorted(latest.items())
+    ]
+    for start in range(0, len(rows), QUOTE_HISTORY_UPSERT_BATCH_SIZE):
         statement = insert(QuoteHistory).values(
-            ticker_id=ticker_id,
-            price=price,
-            recorded_date=recorded_date,
-            recorded_at=recorded_at,
+            rows[start : start + QUOTE_HISTORY_UPSERT_BATCH_SIZE]
         )
         db.session.execute(
             statement.on_conflict_do_update(

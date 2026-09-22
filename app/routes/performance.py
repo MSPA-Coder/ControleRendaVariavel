@@ -32,7 +32,6 @@ from app.routes.helpers import (
     real_portfolio_records,
     selected_currency_filter,
     selected_filters,
-    ticker_price_series,
 )
 
 
@@ -87,8 +86,6 @@ def monthly_performance() -> str:
             continue
         events_by_currency.setdefault(ticker.currency, []).append(event)
 
-    series_by_ticker = price_series_by_ticker({event.ticker_id for event in events})
-
     # Proventos entram no numerador do retorno (o app nao tem conta caixa:
     # sem esse credito o dinheiro recebido sumiria na data ex). So fazem
     # sentido com acoes no recorte — opcao nao paga provento.
@@ -114,22 +111,22 @@ def monthly_performance() -> str:
                 and tickers[event.ticker_id].currency == selected_currency
             ]
         total_timeline = QuantityTimeline(total_events)
+        # Uma consulta para todas as moedas, separada depois pela moeda do
+        # ticker -- a mesma separacao de `events_by_currency`.
+        raw_dividends_by_currency: dict[str, list[DividendEvent]] = {}
+        for dividend in dividend_events(
+            {event.ticker_id for currency_events in events_by_currency.values()
+             for event in currency_events}
+        ):
+            raw_dividends_by_currency.setdefault(
+                tickers[dividend.ticker_id].currency, []
+            ).append(dividend)
         for currency, currency_events in events_by_currency.items():
-            raw_dividends = dividend_events({event.ticker_id for event in currency_events})
             dividends_by_currency[currency] = prorate_dividends(
-                raw_dividends, QuantityTimeline(currency_events), total_timeline
+                raw_dividends_by_currency.get(currency, []),
+                QuantityTimeline(currency_events),
+                total_timeline,
             )
-
-    reports: list[MonthlyPerformanceReport] = [
-        build_monthly_performance(
-            currency,
-            currency_events,
-            series_by_ticker,
-            dividends_by_currency.get(currency, []),
-            period,
-        )
-        for currency, currency_events in sorted(events_by_currency.items())
-    ]
 
     # Comparação com benchmark restrita a portfolio == "stocks": com opções
     # na mesma carteira ("all"/"options"), o valor de mercado somaria
@@ -148,6 +145,24 @@ def monthly_performance() -> str:
         if selected_benchmark is None:
             abort(404)
 
+    # Uma consulta para todas as series da pagina -- carteira e benchmark --,
+    # e nao uma a mais (permissao + serie) quando ha comparacao.
+    series_ticker_ids = {event.ticker_id for event in events}
+    if selected_benchmark is not None:
+        series_ticker_ids.add(selected_benchmark.id)
+    series_by_ticker = price_series_by_ticker(series_ticker_ids)
+
+    reports: list[MonthlyPerformanceReport] = [
+        build_monthly_performance(
+            currency,
+            currency_events,
+            series_by_ticker,
+            dividends_by_currency.get(currency, []),
+            period,
+        )
+        for currency, currency_events in sorted(events_by_currency.items())
+    ]
+
     # No modo de comparação, o gráfico (só o gráfico — a tabela "Dados"
     # abaixo continua mostrando o histórico completo) fica restrito a
     # "desde que a posição mais antiga da moeda foi aberta": comparar contra
@@ -159,10 +174,7 @@ def monthly_performance() -> str:
     }
     benchmark_values_by_currency: dict[str, list[str | None]] = {}
     if selected_benchmark is not None:
-        benchmark_series = [
-            (entry.recorded_date, entry.price)
-            for entry in ticker_price_series(selected_benchmark.id)
-        ]
+        benchmark_series = series_by_ticker[selected_benchmark.id]
         for report in reports:
             currency_events = events_by_currency.get(report.currency, [])
             # Os mesmos fluxos que o TWR neutraliza, ja avaliados a preco de
