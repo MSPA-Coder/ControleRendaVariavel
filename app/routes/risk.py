@@ -25,7 +25,6 @@ from app.routes.helpers import (
     price_series_by_ticker,
     selected_currency_filter,
     ticker_is_entitled,
-    ticker_price_series,
     user_preferences,
 )
 
@@ -51,18 +50,38 @@ def risk_report() -> str:
         # beta sem significado para a visualização filtrada.
         benchmark_ticker_id = None
 
+    # A quantidade vem do extrato (`position_movement_events`), não do saldo
+    # de hoje: medir o passado com a posição atual mostraria um patrimônio
+    # que nunca existiu sempre que houve aumento. Sem argumentos porque esta
+    # página não tem filtro de carteira nem de corretora — é a carteira real
+    # inteira, e a exclusão da carteira simulada já vem de dentro.
+    events = position_movement_events()
+
+    # Uma consulta para todas as séries da página — métricas por ativo,
+    # benchmark e drawdown —, e não duas por ativo aberto (permissão + série),
+    # que crescia com o tamanho da carteira. Os eventos trazem tickers que
+    # `quantities_by_ticker` não cobre (contratos de opção, por exemplo); os
+    # ativos abertos entram só se passam no filtro de moeda, como antes, para
+    # a checagem de permissão alcançar exatamente os mesmos tickers.
+    metric_ticker_ids = [
+        ticker_id
+        for ticker_id in quantities_by_ticker
+        if (ticker := tickers.get(ticker_id)) is not None
+        and (selected_currency == ALL or ticker.currency == selected_currency)
+    ]
+    series_ticker_ids = {event.ticker_id for event in events} | set(metric_ticker_ids)
+    if benchmark_ticker_id is not None:
+        series_ticker_ids.add(benchmark_ticker_id)
+    series_by_ticker = price_series_by_ticker(series_ticker_ids)
+
     benchmark_series: list[tuple[date, Decimal]] | None = None
     if benchmark_ticker_id is not None:
-        benchmark_series = [
-            (entry.recorded_date, entry.price) for entry in ticker_price_series(benchmark_ticker_id)
-        ]
+        benchmark_series = series_by_ticker[benchmark_ticker_id]
 
     ticker_metrics: list[TickerRiskMetrics] = []
-    for ticker_id in quantities_by_ticker:
-        ticker = tickers.get(ticker_id)
-        if ticker is None or (selected_currency != ALL and ticker.currency != selected_currency):
-            continue
-        series = [(entry.recorded_date, entry.price) for entry in ticker_price_series(ticker_id)]
+    for ticker_id in metric_ticker_ids:
+        ticker = tickers[ticker_id]
+        series = series_by_ticker[ticker_id]
         use_benchmark = (
             benchmark_series if benchmark_ticker_id and benchmark_ticker_id != ticker_id else None
         )
@@ -80,13 +99,6 @@ def risk_report() -> str:
     # Drawdown por carteira, sempre agrupado por moeda — nunca somando
     # moedas diferentes, mesmo princípio do resto do app (ver
     # app/positions/portfolio.py).
-    #
-    # A quantidade vem do extrato (`position_movement_events`), não do saldo
-    # de hoje: medir o passado com a posição atual mostraria um patrimônio
-    # que nunca existiu sempre que houve aumento. Sem argumentos porque esta
-    # página não tem filtro de carteira nem de corretora — é a carteira real
-    # inteira, e a exclusão da carteira simulada já vem de dentro.
-    events = position_movement_events()
     events_by_currency: dict[str, list[HoldingEvent]] = {}
     for event in events:
         ticker = tickers.get(event.ticker_id)
@@ -105,16 +117,11 @@ def risk_report() -> str:
         if ticker is not None and (selected_currency == ALL or ticker.currency == selected_currency):
             dividends_by_currency.setdefault(ticker.currency, []).append(dividend)
 
-    # Uma consulta para todas as séries, e não uma por ticker: os eventos
-    # trazem tickers que `quantities_by_ticker` não cobre (contratos de
-    # opção, por exemplo).
-    drawdown_series = price_series_by_ticker({event.ticker_id for event in events})
-
     portfolio_drawdowns: list[PortfolioDrawdown] = [
         build_portfolio_drawdown(
             currency,
             currency_events,
-            drawdown_series,
+            series_by_ticker,
             dividends_by_currency.get(currency, []),
         )
         for currency, currency_events in sorted(events_by_currency.items())
