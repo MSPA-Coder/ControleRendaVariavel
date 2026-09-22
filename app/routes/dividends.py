@@ -8,6 +8,7 @@ from typing import Any
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
+from sqlalchemy.orm import contains_eager
 
 from app import db
 from app.core.currency_filter import ALL
@@ -107,6 +108,9 @@ def dividends_results_context() -> dict[str, object]:
         .where(Dividend.owner_id == current_owner_id())
         .join(Dividend.broker_ref)
         .join(Dividend.ticker_ref)
+        # Os joins já trazem corretora e ticker: sem isto, cada linha
+        # buscava os dois de novo, uma consulta por valor distinto.
+        .options(contains_eager(Dividend.broker_ref), contains_eager(Dividend.ticker_ref))
         .order_by(Dividend.payment_date.desc(), Dividend.id.desc())
     )
     if broker:

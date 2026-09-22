@@ -7,7 +7,7 @@ from decimal import Decimal
 from flask import flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import case, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import contains_eager, joinedload
 
 from app import db
 from app.core.currency_filter import ALL
@@ -217,6 +217,11 @@ def transactions_results_context() -> dict[str, object]:
         .where(Transaction.owner_id == current_owner_id())
         .join(Transaction.broker_ref)
         .options(
+            # O join acima já traz a corretora; sem `contains_eager` o
+            # template a buscava de novo, uma consulta por corretora distinta
+            # (a página inteira escapava disso só porque `broker_records()`
+            # enchia o mapa de identidade antes; o fragmento HTMX pagava).
+            contains_eager(Transaction.broker_ref),
             joinedload(Transaction.ticker_ref),
             joinedload(Transaction.option_contract_ref).joinedload(OptionContract.ticker_ref),
             joinedload(Transaction.option_contract_ref).joinedload(OptionContract.expiration),
