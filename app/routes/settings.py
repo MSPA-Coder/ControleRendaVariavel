@@ -29,9 +29,9 @@ from app.core.pricing_settings import parse_pricing_settings
 from app.models import AppSetting, Ticker
 from app.routes import bp
 from app.routes.helpers import (
+    entitled_tickers,
     parse_positive_id,
     ticker_is_entitled,
-    ticker_records,
     user_preferences,
 )
 
@@ -130,7 +130,9 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
                 for value in settings.collector_schedule_weekdays.split(",")
                 if value.isdigit()
             },
-            tickers=[ticker for ticker in ticker_records() if ticker_is_entitled(ticker.id)],
+            # Uma consulta só: filtrar `ticker_records()` com `ticker_is_entitled`
+            # custava uma ida ao banco por ticker cadastrado.
+            tickers=entitled_tickers(),
             collector_enabled=not settings.collector_paused,
             remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
         ),
