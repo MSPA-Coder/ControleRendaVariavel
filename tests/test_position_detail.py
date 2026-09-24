@@ -25,11 +25,23 @@ def test_grafico_de_fechamentos_usa_coordenadas_svg_com_ponto() -> None:
     assert grafico["maximo"] == "15"
 
 
-def test_template_da_posicao_respeita_csp_e_reaproveita_o_extrato() -> None:
-    template = (
-        Path(__file__).resolve().parents[1] / "app" / "templates" / "position_detail.html"
-    ).read_text(encoding="utf-8")
+def test_nenhum_template_tem_script_ou_estilo_inline() -> None:
+    """A CSP recusa `<script>` sem `src` e o atributo `style`: o navegador
+    descarta em silêncio, e a tela quebra sem erro no servidor."""
+    import re
 
-    assert "<script" not in template
-    assert "style=" not in template
-    assert 'include "partials/position_movements.html"' in template
+    raiz = Path(__file__).resolve().parents[1] / "app" / "templates"
+    templates = list(raiz.rglob("*.html"))
+    sobras = []
+    for caminho in templates:
+        fonte = caminho.read_text(encoding="utf-8")
+        # HTML não diferencia caixa: `<SCRIPT>` e `STYLE=` valem o mesmo.
+        if re.search(r"<script\b(?![^>]*\bsrc=)[^>]*>", fonte, re.IGNORECASE) or re.search(
+            r"\sstyle=", fonte, re.IGNORECASE
+        ):
+            sobras.append(caminho.relative_to(raiz).as_posix())
+
+    # Sem este piso, um caminho errado não acharia template nenhum e a
+    # varredura passaria vazia.
+    assert len(templates) >= 10
+    assert sobras == []

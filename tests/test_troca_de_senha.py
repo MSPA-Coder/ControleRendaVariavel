@@ -187,8 +187,8 @@ def test_redefinir_nao_repete_a_senha_entre_chamadas(monkeypatch, sem_banco):
 
 
 def test_a_senha_temporaria_nao_entra_na_trilha(monkeypatch, sem_banco):
-    # Complemento do que `test_auditoria.py` mede lendo o codigo-fonte: aqui a
-    # funcao roda de verdade e o registro e inspecionado.
+    # Nao ha pergunta que ela responda e ha muitas que ela abre. A funcao roda
+    # de verdade e o registro e inspecionado.
     alvo = _usuario(id=2, username="fulano")
     alvo.set_password("senha-antiga")
     monkeypatch.setattr(um, "_locked_user", lambda _id: alvo)
@@ -196,6 +196,19 @@ def test_a_senha_temporaria_nao_entra_na_trilha(monkeypatch, sem_banco):
     _, senha = um.reset_password(2)
 
     assert senha not in repr(sem_banco)
+
+
+def test_a_troca_pelo_dono_nao_leva_senha_para_a_trilha(monkeypatch, sem_banco):
+    dono = _usuario(id=3)
+    dono.set_password("Senha-Antiga-Longa-1")
+    hash_antigo = dono.password_hash
+
+    um.change_own_password(dono, "Senha-Antiga-Longa-1", "Senha-Nova-Longa-2", "Senha-Nova-Longa-2")
+
+    registro = repr(sem_banco)
+    assert sem_banco, "a troca deixou de registrar na trilha"
+    for segredo in ("Senha-Antiga-Longa-1", "Senha-Nova-Longa-2", hash_antigo, dono.password_hash):
+        assert segredo not in registro
 
 
 def test_a_senha_temporaria_nunca_e_guardada_em_texto_claro(monkeypatch, sem_banco):

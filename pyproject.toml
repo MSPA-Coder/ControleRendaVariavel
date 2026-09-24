@@ -116,4 +116,14 @@ markers = [
   # marca isola a que exige PostgreSQL, para o laco rapido no venv poder
   # exclui-la com `-m "not banco"`.
   "banco: exige um PostgreSQL de verdade (servico `db-teste` do Compose)",
+  # Le JS ou CSS porque nenhum teste executa o navegador; confere so o que
+  # define um mecanismo de dinheiro ou privacidade (docs/TESTES.md, T6).
+  "sentinela_front: guarda textual de um mecanismo de front-end critico",
+]
+filterwarnings = [
+  # `flask_login` 0.6.3, a ultima publicada, chama `datetime.utcnow()` ao
+  # gravar o cookie de "lembrar de mim". O aviso e da biblioteca, nao deste
+  # codigo; o filtro e preso ao modulo dela para nao esconder o mesmo aviso
+  # vindo daqui. Rever quando sair versao nova do flask-login.
+  "ignore:datetime.datetime.utcnow:DeprecationWarning:flask_login.*",
 ]

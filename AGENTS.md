@@ -96,6 +96,13 @@ e restauração são responsabilidade exclusiva do BackupRestore; não replique
 seus procedimentos ou detalhes internos neste repositório. Alteração destrutiva
 de dados exige backup validado e autorização explícita.
 
+O que merece teste, em que camada e em que forma está em `docs/TESTES.md`,
+comum aos repositórios; leia antes de escrever ou remover um teste. Diante de
+vermelho, decida de quem é o defeito antes de mexer: teste que mede texto
+literal reprova mudança legítima, e nesse caso quem se corrige é a asserção.
+Nunca escreva código para o teste passar. Os testes marcados com
+`sentinela_front` leem JS ou CSS porque nenhum teste executa o navegador.
+
 PostgreSQL é o único backend dos testes com persistência; SQLite não o
 substitui. A suíte tem duas camadas (ver o docstring de `tests/conftest.py`): a
 maior parte recusa a conexão de propósito, e os testes marcados com
@@ -105,8 +112,9 @@ tmpfs, e deliberadamente separado do `db` com dados reais.
 O que a camada com banco cobre hoje é o piso, não a cobertura toda: as
 `CheckConstraint` de quantidade e custo médio, o guarda contra `NaN`, o tipo
 `numeric` das colunas de valor, e a aplicação da cadeia de migrações em banco
-vazio. Atomicidade e concorrência ainda não têm teste; ao escrever um, é nessa
-camada que ele vai.
+vazio. Concorrência também mora nela: índice único e lock consultivo das
+posições (`test_posicao_unica_por_chave.py`). Teste de atomicidade ou de
+concorrência novo vai nessa camada.
 
 **O bootstrap em PostgreSQL vazio deixou de ser passo manual:** toda execução
 do `quality` aplica todas as revisões Alembic a um banco vazio, porque é assim

@@ -124,18 +124,6 @@ def test_login_aceita_apenas_destino_local_sem_barra_invertida():
     assert url_proximo_seguro("https://externo.test") is None
 
 
-def test_as_duas_rotas_que_recebem_next_usam_a_checagem_compartilhada():
-    # `auth.login` e `portfolio.toggle_values_privacy` recebem um `next` que
-    # volta pelo navegador. Uma delas passar a validar por conta propria e
-    # exatamente como a divergencia comeca.
-    import inspect
-
-    from app.routes import auth, privacy
-
-    for modulo in (auth, privacy):
-        assert "url_proximo_seguro(" in inspect.getsource(modulo), modulo.__name__
-
-
 def test_login_recusa_destino_com_separador_aninhado_alem_de_tres_camadas():
     destino = "/%5cexterno.test"
     for _ in range(6):

@@ -76,16 +76,3 @@ def test_aporte_sem_cotacao_fica_indisponivel_mas_realizado_continua_visivel():
     results = position_movement_results(position(Side.BUY, "B", opening, decrease), None)
 
     assert results == {1: None, 2: Decimal("2")}
-
-
-def test_extrato_de_acoes_recebe_mapa_e_partial_compartilhado_tem_fallback():
-    actions_template = (
-        ROOT / "app" / "templates" / "partials" / "portfolio_results.html"
-    ).read_text(encoding="utf-8")
-    movements_template = (
-        ROOT / "app" / "templates" / "partials" / "position_movements.html"
-    ).read_text(encoding="utf-8")
-
-    assert "movement_results_by_position" in actions_template
-    assert "movement_results is defined" in movements_template
-    assert "movement.result" in movements_template

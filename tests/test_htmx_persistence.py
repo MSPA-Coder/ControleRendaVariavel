@@ -219,59 +219,35 @@ def test_resposta_de_carteiras_preserva_painel_aberto(monkeypatch, app):
     assert capturado["management_open"] is True
 
 
+@pytest.mark.sentinela_front
 def test_confirmacao_de_carteira_simulada_falha_fechada():
+    """Sem o componente de confirmação, o envio é barrado, não segue calado."""
     script = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
 
     assert "showConfirmationUnavailable(form)" in script
-    assert "event.preventDefault();" in script
-    assert "A operação não foi enviada" in script
 
 
 def test_acoes_se_atualiza_no_proximo_ciclo_sem_polling_continuo():
+    """A carteira pede cotação quando o ciclo do coletor vence, não a cada N s."""
+    import re
+
     template = (ROOT / "app" / "templates" / "partials" / "portfolio_results.html").read_text(
         encoding="utf-8"
     )
-    script = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
 
-    assert "data-quote-refresh-schedule" in template
-    assert 'hx-trigger="quote-refresh-due"' in template
-    assert "every {{ poll_interval_seconds }}s" not in template
-    assert "schedulePortfolioRefresh" in script
-    assert "QUOTE_REFRESH_GRACE_MS" in script
+    gatilhos = re.findall(r'hx-trigger="([^"]*)"', template)
+    assert "quote-refresh-due" in gatilhos
+    assert not [g for g in gatilhos if "every " in g], gatilhos
 
 
+@pytest.mark.sentinela_front
 def test_resposta_htmx_antiga_nao_sobrescreve_intencao_mais_recente_em_acoes():
+    """Cada pedido leva uma geração; a troca só aplica a resposta da mais nova.
+
+    Sem isso, a atualização agendada chega depois de a pessoa abrir uma linha
+    e fecha o que ela acabou de abrir, com valores de um instante anterior.
+    """
     script = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
 
-    assert "portfolioRequestGenerations = new WeakMap()" in script
-    assert "portfolioExpansionRequests = new Set()" in script
-    assert "latestPortfolioRequestGeneration += 1" in script
-    assert 'requester.matches(".row-toggle")' in script
-    assert "isScheduledRefresh && portfolioExpansionRequests.size > 0" in script
-    assert 'event.preventDefault();\n      return;' in script
-    assert 'document.addEventListener("htmx:afterRequest"' in script
     assert 'document.addEventListener("htmx:beforeSwap"' in script
     assert "generation === latestPortfolioRequestGeneration" in script
-    assert "event.preventDefault();" in script
-
-
-def test_grafico_de_vencimentos_reinicializa_apos_swap_htmx():
-    script = (ROOT / "app" / "static" / "expiration-chart.js").read_text(encoding="utf-8")
-
-    assert 'document.addEventListener("htmx:afterSwap", renderExpirationChart)' in script
-    assert 'container.dataset.chartInitialized === "true"' in script
-
-
-def test_scripts_de_graficos_sao_carregados_antes_do_primeiro_resultado():
-    templates = {
-        "quotes.html": ("quote-history-chart.js", "selected_ticker and history"),
-        "performance.html": ("monthly-performance-chart.js", "reports"),
-        "exposure_asset.html": ("chart_scripts()", "allocation_charts"),
-        "exposure_broker.html": ("chart_scripts()", "allocation_charts"),
-        "exposure_market.html": ("chart_scripts()", "allocation_charts"),
-    }
-
-    for name, (script_name, removed_guard) in templates.items():
-        source = (ROOT / "app" / "templates" / name).read_text(encoding="utf-8")
-        assert script_name in source
-        assert removed_guard not in source
