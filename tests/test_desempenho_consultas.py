@@ -53,8 +53,8 @@ from app.models import (
     UserPreference,
     UserTickerEntitlement,
 )
-from app.routes import helpers
-from app.routes.helpers import upsert_quote_history
+from app.quotes import history
+from app.quotes.history import upsert_quote_history
 
 pytestmark = pytest.mark.banco
 
@@ -312,7 +312,7 @@ def _instante(hora: int) -> datetime:
 
 
 def test_lote_grava_em_blocos(sessao, ticker_de_lote, monkeypatch):
-    monkeypatch.setattr(helpers, "QUOTE_HISTORY_UPSERT_BATCH_SIZE", 2)
+    monkeypatch.setattr(history, "QUOTE_HISTORY_UPSERT_BATCH_SIZE", 2)
     entradas = [
         (ticker_de_lote, Decimal(10 + dia), date(2026, 9, 1) + timedelta(days=dia), _instante(18))
         for dia in range(5)

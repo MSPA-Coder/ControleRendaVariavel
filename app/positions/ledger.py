@@ -53,7 +53,7 @@ def archive_closed_position(
     continuaria "aberta" no relatório para todo o futuro.
 
     Não faz ``commit``: quem inicia a operação de escrita é dono do limite
-    transacional — mesma regra de ``app.routes.helpers.upsert_quote_history``.
+    transacional — mesma regra de ``app.quotes.history.upsert_quote_history``.
     """
     direction = signed_quantity_direction(side)
     for occurred_on, resulting_quantity in entries:

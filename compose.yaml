@@ -70,6 +70,11 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
+      # O dia de negocio e o de Sao Paulo. Sem isto o conteiner roda em UTC e
+      # todo `date.today()` do app vira o dia seguinte entre 21h e 24h: um
+      # ajuste de posicao feito na noite do ultimo dia do mes cairia no mes
+      # seguinte. Os outros apps do VPS declaram o mesmo.
+      TZ: America/Sao_Paulo
       SECRET_KEY_FILE: /run/secrets/secret_key
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_app_password
       COLLECTOR_AGENT_READ_TOKEN_FILE: /run/secrets/collector_agent_read_token
@@ -141,6 +146,7 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
+      TZ: America/Sao_Paulo
       SECRET_KEY_FILE: /run/secrets/secret_key
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_HOST: db

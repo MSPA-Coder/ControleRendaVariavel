@@ -289,6 +289,8 @@ Em volta dele:
 | `app/performance/risk.py`, `app/options/greeks.py` | KPIs de risco e sensibilidades de opção |
 | `app/positions/portfolio.py`, `app/options/portfolio.py` | agregação para exibição, por corretora e por mercado |
 | `app/performance/dividends.py` | proventos por período e por ticker |
+| `app/quotes/history.py` | o que importar de cotação e a gravação única por (ticker, dia), usada pela tela, pela CLI e pelo coletor |
+| `app/patrimonio/fotografia.py` | a fotografia do patrimônio publicada ao NetWorth, hoje ou numa data passada |
 | `app/core/validation.py`, `app/core/presentation.py` | entrada e saída: parse de decimal, filtros Jinja |
 
 Os dois módulos de encerramento mantêm **três registros em dia, sempre juntos e

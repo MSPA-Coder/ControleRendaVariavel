@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from app.core.domain import MARKET_TIMEZONE, operation_result, safe_div
 from app.models import Side, Transaction
 from app.patrimonio import queries
+from app.patrimonio.fotografia import _Foto, _fotografar_hoje, _fotografar_passado, identidade
 from app.positions.holdings_history import (
     DividendEvent,
     QuantityTimeline,
@@ -303,8 +304,6 @@ def _performance(
 
 
 def _identity(name: str) -> str:
-    from app.routes.patrimonio import identidade
-
     return identidade(name)
 
 
@@ -319,8 +318,6 @@ def build_dashboard(
     max_history_days: int = DEFAULT_MAX_PUBLIC_HISTORY_DAYS,
 ) -> dict[str, object]:
     today = datetime.now(MARKET_TIMEZONE).date()
-    from app.routes.patrimonio import _Foto, _fotografar_hoje, _fotografar_passado
-
     # Keep the v1 list byte-for-byte compatible in shape. The enriched v2
     # list is separate so an unquoted position is visible to the dashboard.
     foto = _Foto(titular=titular)

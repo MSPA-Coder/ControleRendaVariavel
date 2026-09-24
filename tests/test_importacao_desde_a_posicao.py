@@ -28,7 +28,7 @@ from sqlalchemy import delete, select
 from app import db
 from app.models import Broker, Market, Portfolio, Position, QuoteHistory, Side, Ticker, User
 from app.quotes import history_import
-from app.routes.helpers import upsert_quote_history
+from app.quotes.history import upsert_quote_history
 
 pytestmark = pytest.mark.banco
 

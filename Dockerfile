@@ -110,6 +110,9 @@ COPY --chown=app:app pyproject.toml uv.lock README.md ./
 COPY --chown=app:app app ./app
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app tests ./tests
+# A suite confere propriedades da implantacao (fuso, por exemplo) no proprio
+# arquivo que o VPS usa.
+COPY --chown=app:app compose.yaml ./
 # `--extra dev` acrescenta as ferramentas de teste ao MESMO conjunto que o
 # runtime instala: a suite tem de medir o que a imagem servida usa, e o lock
 # garante que sejam as mesmas versoes.
