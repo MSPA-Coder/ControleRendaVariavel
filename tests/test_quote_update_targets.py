@@ -19,7 +19,7 @@ from app.models import (
     TransactionStatus,
     User,
 )
-from app.routes import helpers
+from app.quotes import history
 
 HOJE = date.today()
 
@@ -36,7 +36,7 @@ def _ticker(ticker_id, symbol, *, is_benchmark=False):
 def _executar(monkeypatch, *, abertas=(), opcoes=(), operacoes=(), arquivo=(), tickers=()):
     """As quatro fontes de `_held_periods`, na ordem, e depois os tickers."""
     respostas = iter([list(abertas), list(opcoes), list(operacoes), list(arquivo), _Rows(tickers)])
-    monkeypatch.setattr(helpers.db.session, "execute", lambda _statement: next(respostas))
+    monkeypatch.setattr(history.db.session, "execute", lambda _statement: next(respostas))
 
 
 def _periodos(targets):
@@ -52,7 +52,7 @@ def test_operacao_encerrada_antes_da_posicao_atual_puxa_o_inicio(monkeypatch):
         tickers=[_ticker(1, "CGC")],
     )
 
-    assert _periodos(helpers.quote_update_targets()) == {"CGC": (date(2026, 2, 11), HOJE)}
+    assert _periodos(history.quote_update_targets()) == {"CGC": (date(2026, 2, 11), HOJE)}
 
 
 def test_ativo_encerrado_vai_ate_o_ultimo_encerramento(monkeypatch):
@@ -64,14 +64,14 @@ def test_ativo_encerrado_vai_ate_o_ultimo_encerramento(monkeypatch):
         tickers=[_ticker(2, "HODL11")],
     )
 
-    assert _periodos(helpers.quote_update_targets()) == {"HODL11": (date(2026, 3, 23), date(2026, 8, 28))}
+    assert _periodos(history.quote_update_targets()) == {"HODL11": (date(2026, 3, 23), date(2026, 8, 28))}
 
 
 def test_operacao_ainda_aberta_vai_ate_hoje(monkeypatch):
     # `closed_on` nulo chega do banco já trocado por hoje (`coalesce`).
     _executar(monkeypatch, operacoes=[(3, date(2026, 1, 5), HOJE)], tickers=[_ticker(3, "PETR4")])
 
-    assert _periodos(helpers.quote_update_targets()) == {"PETR4": (date(2026, 1, 5), HOJE)}
+    assert _periodos(history.quote_update_targets()) == {"PETR4": (date(2026, 1, 5), HOJE)}
 
 
 def test_benchmark_cobre_a_carteira_inteira_ate_hoje(monkeypatch):
@@ -83,7 +83,7 @@ def test_benchmark_cobre_a_carteira_inteira_ate_hoje(monkeypatch):
         tickers=[_ticker(1, "CGC"), _ticker(2, "HODL11"), _ticker(4, "RAIZH150"), _ticker(9, "BOVA11", is_benchmark=True)],
     )
 
-    periodos = _periodos(helpers.quote_update_targets())
+    periodos = _periodos(history.quote_update_targets())
 
     assert periodos["BOVA11"] == (date(2024, 1, 10), HOJE)
     assert periodos["RAIZH150"] == (date(2025, 11, 7), HOJE)
@@ -93,10 +93,10 @@ def test_benchmark_cobre_a_carteira_inteira_ate_hoje(monkeypatch):
 def test_sem_nenhuma_posicao_benchmark_usa_o_lookback(monkeypatch):
     _executar(monkeypatch, tickers=[_ticker(9, "BOVA11", is_benchmark=True)])
 
-    ((target, start, end),) = helpers.quote_update_targets()
+    ((target, start, end),) = history.quote_update_targets()
 
     assert target.symbol == "BOVA11"
-    assert start == HOJE - timedelta(days=helpers.DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS)
+    assert start == HOJE - timedelta(days=history.DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS)
     assert end == HOJE
 
 
@@ -108,7 +108,7 @@ def test_atualizacao_diaria_deixa_de_fora_o_ativo_ja_encerrado(monkeypatch):
         tickers=[_ticker(1, "CGC"), _ticker(2, "HODL11"), _ticker(9, "BOVA11", is_benchmark=True)],
     )
 
-    assert [target.symbol for target in helpers.quote_update_target_tickers()] == ["BOVA11", "CGC"]
+    assert [target.symbol for target in history.quote_update_target_tickers()] == ["BOVA11", "CGC"]
 
 
 @pytest.mark.banco
@@ -142,7 +142,7 @@ def test_periodos_lidos_do_banco(sessao):
     )
     sessao.flush()
 
-    periodos = _periodos(helpers.quote_update_targets())
+    periodos = _periodos(history.quote_update_targets())
 
     assert periodos["CGC"] == (date(2026, 2, 11), HOJE)
     assert periodos["HODL11"] == (date(2026, 3, 23), date(2026, 8, 28))

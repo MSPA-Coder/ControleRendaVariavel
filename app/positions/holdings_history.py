@@ -28,7 +28,7 @@ O modelo, em quatro peças:
   corretora, só ticker: a renda é rateada pela fração da posição que o
   recorte (carteira ou corretora filtrada) detinha na data do pagamento.
 
-O resumo de patrimônio numa data passada (``app.routes.patrimonio``) usa a
+O resumo de patrimônio numa data passada (``app.patrimonio.fotografia``) usa a
 mesma linha do tempo, posição a posição (``QuantityTimeline.quantities_at``),
 com o fechamento vigente naquela data (``closing_price_on``).
 

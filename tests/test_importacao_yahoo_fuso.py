@@ -30,12 +30,12 @@ from sqlalchemy import select
 
 from app.models import Market, QuoteHistory, Ticker
 from app.quotes import history_import
+from app.quotes.history import upsert_quote_history
 from app.quotes.history_import import (
     QuoteHistoryImportError,
     TickerImportTarget,
     fetch_yahoo_daily_quotes,
 )
-from app.routes.helpers import upsert_quote_history
 
 CAMBIO = TickerImportTarget(1, "USDBRL=X", Market.NYSE, is_benchmark=True)
 ACAO_B3 = TickerImportTarget(2, "PETR4", Market.B3)

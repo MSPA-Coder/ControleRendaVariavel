@@ -40,7 +40,7 @@ from app.models import (
     Ticker,
     User,
 )
-from app.routes.patrimonio import identidade
+from app.patrimonio.fotografia import identidade
 
 ROTA = "/patrimonio/v1/resumo"
 ROTA_V2 = "/patrimonio/v2/resumo"

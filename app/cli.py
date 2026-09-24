@@ -25,12 +25,12 @@ from app.models import (
     VALID_ROLES,
     User,
 )
+from app.quotes.history import quote_update_targets, upsert_quote_history
 from app.quotes.history_import import (
     DailyQuote,
     QuoteHistoryImportError,
     fetch_yahoo_daily_quotes,
 )
-from app.routes.helpers import quote_update_targets, upsert_quote_history
 
 
 def register_commands(app: Flask) -> None:

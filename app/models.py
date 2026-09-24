@@ -277,7 +277,7 @@ class Ticker(Base):
     Tickers de referência: aparecem nos comparadores de evolução das
     cotações e da performance (``app.routes.helpers.benchmark_candidates``)
     e têm sua cotação diária atualizada junto com os demais ativos
-    (``app.routes.helpers.quote_update_targets``), mas ficam de fora dos
+    (``app.quotes.history.quote_update_targets``), mas ficam de fora dos
     formulários de Posições, Transações, Proventos e Contratos de Opção
     (``app.routes.helpers.investable_ticker_records``) — não representam
     algo que se possa comprar/vender na carteira. Ver validação cruzada em

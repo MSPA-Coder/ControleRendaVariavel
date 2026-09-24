@@ -20,6 +20,11 @@ from app.models import (
     QuoteHistory,
     Ticker,
 )
+from app.quotes.history import (
+    quote_update_target_tickers,
+    quote_update_targets,
+    upsert_quote_history,
+)
 from app.quotes.history_import import (
     DailyQuote,
     QuoteHistoryImportError,
@@ -32,11 +37,8 @@ from app.routes.helpers import (
     is_htmx_request,
     parse_positive_id,
     quote_ticker_records,
-    quote_update_target_tickers,
-    quote_update_targets,
     selected_currency_filter,
     ticker_price_series,
-    upsert_quote_history,
 )
 
 

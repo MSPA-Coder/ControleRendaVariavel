@@ -41,7 +41,7 @@ from app.models import (
     Quote,
     Side,
 )
-from app.routes.helpers import upsert_quote_history
+from app.quotes.history import upsert_quote_history
 
 
 def collector_settings_row() -> AppSetting:

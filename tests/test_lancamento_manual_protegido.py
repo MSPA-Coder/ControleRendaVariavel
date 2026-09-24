@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Market, QuoteHistory, Ticker
-from app.routes.helpers import upsert_quote_history
+from app.quotes.history import upsert_quote_history
 
 
 def _lancamento_manual(ticker_id: int, preco: str, dia: date) -> tuple[int, Decimal, date, datetime]:
