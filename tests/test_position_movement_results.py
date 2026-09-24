@@ -45,12 +45,12 @@ def test_aporte_exibe_resultado_hipotetico_por_lote(side, mode, expected):
     assert results == {1: expected}
 
 
-def test_aumento_usa_quantidade_do_lote_e_cotacao_com_multiplicador_ja_aplicado():
+def test_aumento_usa_so_a_quantidade_e_o_preco_do_proprio_lote():
     opening = movement(1, PositionMovementKind.OPEN, "25", "10")
     increase = movement(2, PositionMovementKind.INCREASE, "45", "8")
 
     # 25 * (12 - 10) + 45 * (12 - 8) seria o total; cada linha recebe só
-    # sua própria contribuição. O multiplicador não é aplicado novamente.
+    # sua própria contribuição.
     results = position_movement_results(
         position(Side.BUY, "B", opening, increase), Decimal("12")
     )

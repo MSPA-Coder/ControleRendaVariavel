@@ -1,10 +1,12 @@
 """Schema recém-migrado: bootstrap seguro e integridade entre proprietários."""
 
 from datetime import date
+from pathlib import Path
 
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from flask_migrate import upgrade
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +20,9 @@ pytestmark = pytest.mark.banco
 
 _PRE_HYGIENE_REVISION = "20260912_0016"
 _HYGIENE_REVISION = "20260913_0017"
-_COLLECTOR_CLEANUP_REVISION = "20260913_0018"
+# "Chegou ao fim da cadeia" se compara com a head lida das migrações: um
+# literal aqui reprovaria toda revisão nova, sem nada de errado com ela.
+_HEAD_REVISION = ScriptDirectory(str(Path(__file__).resolve().parents[1] / "migrations")).get_current_head()
 _LEGACY_POSITION_COLUMNS = ("broker", "ticker", "market", "rtd_market_code", "currency")
 _LEGACY_COLLECTOR_COLUMNS = ("collector_mode", "collector_destination")
 _TIMESTAMP_COLUMNS = (
@@ -69,7 +73,7 @@ def test_empty_bootstrap_does_not_invent_owner(legacy_app, remove_defaults):
         upgrade()
         assert db.session.scalar(text('SELECT count(*) FROM users')) == 0
         assert db.session.scalar(text('SELECT count(*) FROM portfolios')) == 0
-        assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == _COLLECTOR_CLEANUP_REVISION
+        assert db.session.scalar(text('SELECT version_num FROM alembic_version')) == _HEAD_REVISION
 
 
 @pytest.mark.parametrize('customization', ["description='preservar configuração'", 'is_active=false'])
@@ -90,7 +94,7 @@ def test_schema_hygiene_migrates_drifted_legacy_schema_without_differences(legac
 
     with legacy_app.app_context():
         upgrade()
-        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _COLLECTOR_CLEANUP_REVISION
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _HEAD_REVISION
         remaining_columns = db.session.scalars(
             text(
                 """
@@ -178,7 +182,7 @@ def test_collector_legacy_configuration_is_removed_after_agent_upgrade(legacy_ap
         assert not set(_LEGACY_COLLECTOR_COLUMNS).intersection(columns_after)
         assert db.session.scalar(text("SELECT to_regtype('collector_mode')")) is None
         assert db.session.scalar(text("SELECT to_regtype('collector_destination')")) is None
-        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _COLLECTOR_CLEANUP_REVISION
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _HEAD_REVISION
 
         legacy_app.config["COLLECTOR_AGENT_READ_TOKEN"] = "a" * 32
         legacy_app.config["COLLECTOR_AGENT_WRITE_TOKEN"] = "b" * 32
@@ -204,7 +208,7 @@ def test_database_rejects_financial_links_between_owners(legacy_app):
             db.session.add(Position(owner_id=users[0].id, portfolio_id=portfolios[1].id,
                                     broker_id=broker.id, ticker_id=ticker.id, quantity=1,
                                     average_cost=10, side=Side.BUY, opened_on=date.today(),
-                                    quote_multiplier=1, target_multiplier=1.5, result_mode='L'))
+                                    target_multiplier=1.5, result_mode='L'))
             db.session.flush()
         assert 'fk_positions_portfolio_owner' in str(error.value)
         db.session.rollback()

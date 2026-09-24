@@ -32,9 +32,12 @@ ambígua.
 | custo médio | `average_cost` |
 | tipo C/V | `side` |
 | início | `opened_on` |
-| delta da cotação | `quote_multiplier` |
 | modo B (bruto) ou L (líquido) | `result_mode` |
 | dias do ano | constante 365 |
+
+O **delta da cotação** da planilha não tem correspondente: foi removido do
+sistema em 23/09/2026 (revisão `20260923_0019`). Era um ajuste da planilha,
+e aqui a cotação já é o preço do ativo; todas as posições usavam 1.
 
 Corretoras e tickers têm cadastros próprios. Mercado, código RTD e moeda
 pertencem ao ticker; posições apenas referenciam esses cadastros.
@@ -69,8 +72,7 @@ resultado = sinal × quantidade do lote × (cotação atual − preço do aporte
 ```
 
 O sinal é `+1` para compra (`C`) e `-1` para venda (`V`). O modo `L` aplica o
-fator líquido `0,9996`; o modo `B` mostra o valor bruto. A cotação atual já
-considera o multiplicador da posição. Portanto, o resultado de cada linha usa
+fator líquido `0,9996`; o modo `B` mostra o valor bruto. O resultado de cada linha usa
 somente sua própria quantidade e seu preço de aporte, e não o saldo ou o custo
 médio acumulado.
 
@@ -96,7 +98,7 @@ Regras de um **aumento**:
   arredondada em oito casas (escala das colunas `Numeric(24, 8)`);
 - a data inicial recua para a mais antiga entre a posição e o aporte, porque
   a exposição é mantida desde o primeiro lançamento;
-- delta da cotação, multiplicador do target e modo de resultado são os da
+- multiplicador do target e modo de resultado são os da
   posição existente: um aporte não redefine o alvo de uma posição em
   andamento;
 - nenhum resultado é realizado.

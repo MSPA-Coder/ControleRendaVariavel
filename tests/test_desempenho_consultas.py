@@ -181,7 +181,7 @@ def carteira_medida(app_com_banco):
                 posicao = Position(owner_id=criados["usuario"], broker_id=corretora_id,
                                    ticker_id=ticker.id, portfolio_id=criados["carteira"],
                                    quantity=Decimal("10"), average_cost=Decimal("20"),
-                                   quote_multiplier=1, target_multiplier=1, side=Side.BUY,
+                                   target_multiplier=1, side=Side.BUY,
                                    opened_on=inicio, result_mode="L")
                 db.session.add(posicao)
                 db.session.flush()

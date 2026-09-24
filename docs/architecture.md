@@ -82,10 +82,9 @@ o último antes dele. A data do preço viaja em `preco_em` -- sábado vale o
 fechamento de sexta, e quem lê precisa poder ver isso. Fechamento com mais de
 sete dias não serve, e a posição conta como sem cotação: aplicar o preço de um
 mês antes produziria um valor que nunca existiu. "Hoje" é o dia em **Brasília**,
-e o preço de hoje é a cotação ao vivo do coletor. Duas heranças do extrato
-ficam registradas: `opened_on` de posição antiga costuma ser a data do
-cadastro, não a da compra, e o arquivo das encerradas não guarda o
-multiplicador da cotação (elas entram com 1).
+e o preço de hoje é a cotação ao vivo do coletor. Uma herança do extrato
+fica registrada: `opened_on` de posição antiga costuma ser a data do
+cadastro, não a da compra.
 
 O teto de requisições vale também para quem apresenta o token correto: o token
 autoriza a integração, mas não transforma uma consulta histórica cara em um

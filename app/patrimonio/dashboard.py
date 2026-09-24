@@ -114,7 +114,6 @@ def _current_position(
     result = cost = gross = ret = None
     if quote is not None:
         price, _ = effective_position_quote(position)
-        price *= position.quote_multiplier
         cost = position.quantity * position.average_cost
         gross = position.quantity * price
         result = operation_result(

@@ -113,15 +113,14 @@ def calculate_position(
     average_cost: Decimal,
     raw_price: Decimal,
     previous_close: Decimal,
-    quote_multiplier: Decimal,
     target_multiplier: Decimal,
     opened_on: date,
     result_mode: str,
     return_period_days: int = 365,
     today: date | None = None,
 ) -> PositionMetrics:
-    current = raw_price * quote_multiplier
-    previous = previous_close * quote_multiplier
+    current = raw_price
+    previous = previous_close
     direction = ONE if side == "C" else -ONE
     result = operation_result(side, quantity, average_cost, current, result_mode)
     invested = quantity * average_cost

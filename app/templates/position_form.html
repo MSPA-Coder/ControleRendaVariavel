@@ -23,8 +23,8 @@
   <p class="form-help">
     Se já houver uma posição do mesmo ticker na mesma corretora, com o mesmo tipo e a mesma
     natureza, este lançamento é somado a ela: a quantidade se acumula e o custo médio passa a ser
-    a média ponderada. A data inicial recua para a mais antiga das duas, e o delta da cotação, o
-    multiplicador do target e o modo de resultado da posição existente são preservados.
+    a média ponderada. A data inicial recua para a mais antiga das duas, e o multiplicador do target e o
+    modo de resultado da posição existente são preservados.
   </p>
   {% endif %}
   {% set value = position %}
@@ -46,7 +46,6 @@
     {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
   </select></label>
   <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
-  <label>Delta da cotação<input required type="number" min="0.00000001" step="any" name="quote_multiplier" value="{{ value.quote_multiplier if value else '1' }}" data-sensitive-input="true"></label>
   <label>Multiplicador do target<input required type="number" min="0.00000001" step="any" name="target_multiplier" value="{{ value.target_multiplier if value else '1.5' }}" data-sensitive-input="true"></label>
   <label>Resultado<select name="result_mode">
     {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}

@@ -106,7 +106,6 @@ class PositionInput:
     average_cost: Decimal
     side: Side
     opened_on: date
-    quote_multiplier: Decimal
     target_multiplier: Decimal
     result_mode: str
     portfolio_id: int
@@ -119,9 +118,6 @@ def _parse_form() -> PositionInput:
         ticker_id = parse_positive_id(raw["ticker_id"])
         quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
         average_cost = parse_finite_decimal(raw["average_cost"], field_name="um custo médio")
-        quote_multiplier = parse_finite_decimal(
-            raw["quote_multiplier"], field_name="um multiplicador de cotação"
-        )
         target_multiplier = parse_finite_decimal(
             raw["target_multiplier"], field_name="um multiplicador de target"
         )
@@ -137,9 +133,9 @@ def _parse_form() -> PositionInput:
             "Esse ticker está marcado como referência de comparação e não pode "
             "ter posição própria."
         )
-    if quantity <= 0 or average_cost < 0 or quote_multiplier <= 0 or target_multiplier <= 0:
+    if quantity <= 0 or average_cost < 0 or target_multiplier <= 0:
         raise ValueError(
-            "Quantidade e multiplicadores devem ser positivos; custo não pode ser negativo."
+            "Quantidade e multiplicador do target devem ser positivos; custo não pode ser negativo."
         )
     result_mode = raw.get("result_mode", "").upper()
     try:
@@ -157,7 +153,6 @@ def _parse_form() -> PositionInput:
         average_cost,
         side,
         opened_on,
-        quote_multiplier,
         target_multiplier,
         result_mode,
         portfolio_id,
@@ -390,8 +385,8 @@ def create_position() -> ResponseReturnValue:
         flash(
             f"Aporte unificado à posição já existente em {position.ticker} · "
             f"{position.broker}: quantidade somada e custo médio recalculado. "
-            "Os parâmetros da posição anterior (delta da cotação, multiplicador "
-            "do target e modo de resultado) foram preservados.",
+            "Os parâmetros da posição anterior (multiplicador do target e modo "
+            "de resultado) foram preservados.",
             "success",
         )
     else:

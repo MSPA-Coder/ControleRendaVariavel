@@ -99,9 +99,11 @@ def test_legado_mspa_preserva_contagens_e_ultimo_snapshot(legacy_app) -> None:
             "dividends", "position_movements", "option_position_movements",
             "position_ledger_archive",
         )
+        # O delta da cotação sai numa revisão posterior (20260923_0019) e,
+        # com 1 em todas as linhas, a remoção não muda nenhum valor.
         before = {
             table: db.session.scalar(
-                text(f"SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM {table} row")
+                text(f"SELECT jsonb_agg((to_jsonb(row) - 'quote_multiplier') ORDER BY id) FROM {table} row")
             )
             for table in roots
         }

@@ -206,9 +206,7 @@ def position_movement_results(
 
     O mapa contém todos os movimentos para que o partial possa distinguir um
     resultado não aplicável (ajuste ou aporte sem cotação) de um resultado
-    realizado. A cotação já deve incluir ``quote_multiplier`` (como
-    ``PositionMetrics.current_price``); aplicá-lo aqui novamente distorceria o
-    resultado.
+    realizado. A cotação é a mesma de ``PositionMetrics.current_price``.
     """
     results: dict[int, Decimal | None] = {}
     for movement in position.movements:
@@ -271,7 +269,6 @@ def build_portfolio(
             average_cost=position.average_cost,
             raw_price=effective_price,
             previous_close=quote.previous_close,
-            quote_multiplier=position.quote_multiplier,
             target_multiplier=position.target_multiplier,
             opened_on=position.opened_on,
             result_mode=position.result_mode,
