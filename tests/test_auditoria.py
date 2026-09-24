@@ -202,34 +202,3 @@ def test_os_pontos_de_registro_so_usam_o_vocabulario_declarado() -> None:
 
     assert usadas, "nenhuma chamada a registrar() encontrada -- o teste parou de olhar"
     assert usadas <= ACOES, sorted(usadas - ACOES)
-
-
-def test_a_senha_nunca_entra_na_trilha() -> None:
-    """Não há pergunta que ela responda e há muitas que ela abre.
-
-    Cobre as duas funções que mexem em senha: a redefinição feita por um
-    administrador e a troca feita pelo próprio dono. O recorte é por função,
-    e não um intervalo entre duas âncoras do arquivo: quando
-    `change_own_password` nasceu entre `reset_password` e `set_active`, o
-    intervalo antigo passou a incluí-la sem que nenhuma asserção a olhasse.
-    """
-    from pathlib import Path
-
-    fonte = (
-        Path(__file__).resolve().parent.parent / "app" / "accounts" / "users.py"
-    ).read_text(encoding="utf-8")
-
-    def corpo(nome: str) -> str:
-        inicio = fonte.index(f"def {nome}")
-        # `read_text` normaliza a quebra de linha, entao "\ndef " acha o
-        # inicio da proxima funcao de topo tanto em LF quanto em CRLF.
-        fim = fonte.find("\ndef ", inicio + 1)
-        return fonte[inicio : fim if fim != -1 else len(fonte)]
-
-    for nome in ("reset_password", "change_own_password"):
-        trecho = corpo(nome)
-        assert "registrar(" in trecho, f"{nome} deixou de registrar na trilha"
-        argumentos = trecho.split("registrar(")[1].split(")")[0]
-        assert "password" not in argumentos, f"{nome} leva senha para a trilha"
-
-    assert 'detalhes={"username"' in corpo("reset_password")

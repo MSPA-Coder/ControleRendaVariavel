@@ -116,4 +116,7 @@ markers = [
   # marca isola a que exige PostgreSQL, para o laco rapido no venv poder
   # exclui-la com `-m "not banco"`.
   "banco: exige um PostgreSQL de verdade (servico `db-teste` do Compose)",
+  # Le JS ou CSS porque nenhum teste executa o navegador; confere so o que
+  # define um mecanismo de dinheiro ou privacidade (docs/TESTES.md, T6).
+  "sentinela_front: guarda textual de um mecanismo de front-end critico",
 ]

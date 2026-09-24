@@ -25,11 +25,16 @@ def test_grafico_de_fechamentos_usa_coordenadas_svg_com_ponto() -> None:
     assert grafico["maximo"] == "15"
 
 
-def test_template_da_posicao_respeita_csp_e_reaproveita_o_extrato() -> None:
-    template = (
-        Path(__file__).resolve().parents[1] / "app" / "templates" / "position_detail.html"
-    ).read_text(encoding="utf-8")
+def test_nenhum_template_tem_script_ou_estilo_inline() -> None:
+    """A CSP recusa `<script>` sem `src` e o atributo `style`: o navegador
+    descarta em silêncio, e a tela quebra sem erro no servidor."""
+    import re
 
-    assert "<script" not in template
-    assert "style=" not in template
-    assert 'include "partials/position_movements.html"' in template
+    raiz = Path(__file__).resolve().parents[1] / "app" / "templates"
+    sobras = []
+    for caminho in raiz.rglob("*.html"):
+        fonte = caminho.read_text(encoding="utf-8")
+        if re.search(r"<script\b(?![^>]*\bsrc=)[^>]*>", fonte) or re.search(r"\sstyle=", fonte):
+            sobras.append(caminho.relative_to(raiz).as_posix())
+
+    assert sobras == []

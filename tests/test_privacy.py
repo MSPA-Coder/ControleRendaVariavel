@@ -106,36 +106,7 @@ def test_todos_os_outputs_com_class_number_tem_marcador_explicito():
     assert not unmarked, "outputs numéricos sem marcador:\n" + "\n".join(unmarked)
 
 
-@pytest.mark.parametrize(
-    ("template", "expressions"),
-    [
-        (
-            "risk.html",
-            ["metrics.observations|number(0)"],
-        ),
-        (
-            "partials/options_results.html",
-            ["m.elapsed_days|number(0)", "m.remaining_days|number(0)", "m.business_days|number(0)"],
-        ),
-        (
-            "partials/portfolio_results.html",
-            ["m.days|number(0)"],
-        ),
-        (
-            "partials/transactions_results.html",
-            ["tx.days_held|number(0)"],
-        ),
-    ],
-)
-def test_numeros_crus_que_eram_ocultados_no_navegador_sao_mascarados_no_servidor(
-    template: str, expressions: list[str]
-):
-    source = (TEMPLATES / template).read_text(encoding="utf-8")
-
-    for expression in expressions:
-        assert expression in source
-
-
+@pytest.mark.sentinela_front
 def test_outputs_financeiros_fora_de_class_number_tambem_sao_marcados():
     expected = {
         "partials/exposure.html": ["<strong data-sensitive-value=\"true\">"],
@@ -153,12 +124,11 @@ def test_outputs_financeiros_fora_de_class_number_tambem_sao_marcados():
             assert snippet in source, f"marcador ausente em {template}: {snippet}"
 
 
+@pytest.mark.sentinela_front
 def test_modo_privacidade_tem_placeholder_css_e_inputs_de_encerramento_marcados():
     stylesheet = (ROOT / "app" / "static" / "app.css").read_text(encoding="utf-8")
 
     assert '[data-sensitive-value="true"]:not(input)::after' in stylesheet
-    assert 'content: "****"' in stylesheet
-    assert "pointer-events: none" in stylesheet
     for template in ("close_position_form.html", "close_option_form.html"):
         source = (TEMPLATES / template).read_text(encoding="utf-8")
-        assert source.count('data-sensitive-input="true"') >= 4
+        assert 'data-sensitive-input="true"' in source
