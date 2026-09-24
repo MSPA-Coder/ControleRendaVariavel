@@ -387,6 +387,10 @@ class Position(Base):
         ),
         CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
         UniqueConstraint("id", "owner_id", name="uq_positions_id_owner"),
+        # Uma posição por exposição: aporte na mesma chave reforça a existente
+        # (ver `positions.closure.create_or_merge_position`).
+        UniqueConstraint("owner_id", "portfolio_id", "broker_id", "ticker_id", "side",
+                         name="uq_positions_chave"),
         ForeignKeyConstraint(["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
                              name="fk_positions_portfolio_owner", ondelete="RESTRICT"),
     )
@@ -714,6 +718,8 @@ class OptionPosition(Base):
         ),
         CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
         UniqueConstraint("id", "owner_id", name="uq_option_positions_id_owner"),
+        UniqueConstraint("owner_id", "portfolio_id", "broker_id", "contract_id", "side",
+                         name="uq_option_positions_chave"),
         ForeignKeyConstraint(["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
                              name="fk_option_positions_portfolio_owner", ondelete="RESTRICT"),
     )

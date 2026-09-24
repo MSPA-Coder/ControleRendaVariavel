@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.options.closure import (
     close_open_position,
+    conflicting_position,
     create_or_merge_position,
     delete_open_transaction_for_position,
     discard_simulation_history,
@@ -357,6 +358,21 @@ def update_position(position_id: int) -> ResponseReturnValue:
     was_simulated = position.simulated
     for key, value in asdict(data).items():
         setattr(position, key, value)
+    # Mesma regra de `routes.positions.update_position`, para opções.
+    if conflicting_position(position) is not None:
+        db.session.rollback()
+        flash("Já existe uma posição nesta carteira, corretora, ativo e tipo. Para somar, registre um aporte; para juntar as duas, ajuste uma e exclua a outra.", "error")
+        return render_template(
+            "option_form.html",
+            position=request.form,
+            edit_mode=True,
+            position_id=position_id,
+            movement_count=len(position.movements),
+            brokers=_brokers(),
+            contracts=_contracts(),
+            sides=Side,
+            portfolios=portfolio_records(),
+        ), 422
     if position.contract_id != previous_contract_id:
         contract = db.get_or_404(OptionContract, position.contract_id)
         grant_ticker_entitlement(

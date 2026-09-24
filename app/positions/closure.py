@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, text
 
 from app import db
 from app.core.domain import (
@@ -285,14 +285,43 @@ def _mergeable_statement(candidate: Position) -> Select[tuple[Position]]:
     )
 
 
+def _chave(candidate: Position) -> str:
+    return (
+        f"posicao:{candidate.owner_id}:{candidate.portfolio_id}:"
+        f"{candidate.broker_id}:{candidate.ticker_id}:{candidate.side}"
+    )
+
+
 def _mergeable_position(candidate: Position) -> Position | None:
     """A posição que o aporte vai reforçar, já travada para escrita.
 
     O ``FOR UPDATE`` existe porque dois aportes simultâneos no mesmo ativo
-    leriam a mesma quantidade e o segundo sobrescreveria o primeiro.
+    leriam a mesma quantidade e o segundo sobrescreveria o primeiro. Ele não
+    basta quando a posição AINDA NÃO EXISTE: não há linha para travar, e dois
+    cliques no primeiro aporte criavam duas posições. O lock consultivo pela
+    chave serializa esse caso -- o segundo espera o primeiro e o reforça. O
+    índice único ``uq_positions_chave`` é a garantia do banco.
     """
 
+    db.session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:chave, 0))"),
+        {"chave": _chave(candidate)},
+    )
     return db.session.scalar(_mergeable_statement(candidate).with_for_update())
+
+
+def conflicting_position(position: Position) -> Position | None:
+    """Outra posição com a mesma chave -- o que uma edição não pode produzir.
+
+    Chamada depois de a edição já ter alterado o objeto: sem o
+    ``no_autoflush``, a própria consulta gravaria a mudança antes de ela ser
+    conferida, e quem responderia seria o índice único, com erro 500.
+    """
+
+    with db.session.no_autoflush:
+        return db.session.scalar(
+            _mergeable_statement(position).where(Position.id != position.id)
+        )
 
 
 def duplicate_entry(candidate: Position) -> PositionMovement | None:
