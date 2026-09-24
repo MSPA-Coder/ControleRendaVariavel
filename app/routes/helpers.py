@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from flask import abort, current_app, request
 from flask_login import current_user  # type: ignore[import-untyped]
-from sqlalchemy import func, select
+from sqlalchemy import Date, func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -379,105 +379,94 @@ def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
     ]
 
 
-def quote_update_targets() -> list[tuple[TickerImportTarget, date]]:
-    """Ativos e data inicial para a atualização de histórico "desde a
-    posição" (comando ``flask import-position-history`` e rota
+def _held_periods(today: date) -> dict[int, tuple[date, date]]:
+    """Primeiro e último dia em que cada ticker esteve na carteira.
+
+    Quatro fontes, porque nenhuma sozinha conta a história inteira:
+
+    - posições de ação e de opção abertas (real ou hipotética): da abertura
+      até hoje;
+    - operações (``Transaction``): da abertura até o encerramento, ou até
+      hoje se ainda aberta. É a única fonte que guarda posições já
+      encerradas com a data de encerramento;
+    - o arquivo do extrato (``PositionLedgerArchive``): cada evento de uma
+      posição já apagada da carteira.
+
+    O último dia é hoje se alguma fonte diz que o ticker continua detido;
+    senão, o último encerramento. O intervalo entre um encerramento e uma
+    reabertura entra junto: não é necessário, mas também não atrapalha.
+    """
+    rows = (
+        select(Position.ticker_id, Position.opened_on, literal(None, Date)),
+        select(OptionContract.ticker_id, OptionPosition.opened_on, literal(None, Date)).join(
+            OptionContract, OptionPosition.contract_id == OptionContract.id
+        ),
+        select(
+            func.coalesce(Transaction.ticker_id, OptionContract.ticker_id),
+            Transaction.opened_on,
+            func.coalesce(Transaction.closed_on, today),
+        ).outerjoin(OptionContract, Transaction.option_contract_id == OptionContract.id),
+        select(
+            PositionLedgerArchive.ticker_id,
+            PositionLedgerArchive.occurred_on,
+            PositionLedgerArchive.occurred_on,
+        ),
+    )
+    periods: dict[int, tuple[date, date]] = {}
+    for statement in rows:
+        for ticker_id, start, end in db.session.execute(statement):
+            end = today if end is None else end
+            previous = periods.get(ticker_id)
+            if previous is not None:
+                start, end = min(start, previous[0]), max(end, previous[1])
+            periods[ticker_id] = (start, end)
+    return periods
+
+
+def quote_update_targets() -> list[tuple[TickerImportTarget, date, date]]:
+    """Ativos e período para a atualização de histórico "desde a posição"
+    (comando ``flask import-position-history`` e rota
     ``/quotes/import-position-history``).
 
-    Reúne dois grupos, sem duplicar um ticker que esteja nos dois:
-
-    - Tickers com ao menos uma posição de ação ou de opção (real ou
-      hipotética): a partir da data de abertura mais antiga desse ticker
-      especificamente.
-    - Tickers de referência (``Ticker.is_benchmark``): a partir da data de
-      abertura mais antiga entre TODAS as posições existentes, para que o
-      histórico do benchmark cubra qualquer comparação possível — mesmo
-      sem ter, ele próprio, uma posição. É isso que evita a necessidade de
-      abrir uma posição "fantasma" só para manter a cotação atualizada.
-      Sem nenhuma posição cadastrada ainda, usa
-      ``DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS`` para já deixar histórico
-      disponível antes da primeira compra.
+    - Ticker que esteve na carteira: do primeiro ao último dia em que foi
+      detido (``_held_periods``). Até 23/09/2026 só as posições ABERTAS
+      contavam: um ativo encerrado (HODL11) deixava de ser importado, e um
+      com operação encerrada antes da posição atual (CGC) começava tarde.
+    - Ticker de referência (``Ticker.is_benchmark``): da abertura mais
+      antiga da carteira até hoje, para cobrir qualquer comparação possível
+      sem uma posição "fantasma". Sem nenhuma posição, usa
+      ``DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS``.
     """
-    position_rows = db.session.execute(
-        select(
-            Position.ticker_id,
-            Ticker.symbol,
-            Ticker.market,
-            Ticker.is_benchmark,
-            func.min(Position.opened_on).label("start_date"),
-        )
-        .join(Ticker, Ticker.id == Position.ticker_id)
-        .group_by(Position.ticker_id, Ticker.symbol, Ticker.market, Ticker.is_benchmark)
-    ).all()
-    option_position_rows = db.session.execute(
-        select(
-            OptionContract.ticker_id,
-            Ticker.symbol,
-            Ticker.market,
-            Ticker.is_benchmark,
-            func.min(OptionPosition.opened_on).label("start_date"),
-        )
-        .join(OptionContract, OptionPosition.contract_id == OptionContract.id)
-        .join(Ticker, OptionContract.ticker_id == Ticker.id)
-        .group_by(
-            OptionContract.ticker_id,
-            Ticker.symbol,
-            Ticker.market,
-            Ticker.is_benchmark,
-        )
-    ).all()
-
-    targets: dict[int, tuple[TickerImportTarget, date]] = {
-        row.ticker_id: (
-            TickerImportTarget(row.ticker_id, row.symbol, row.market, row.is_benchmark),
-            row.start_date,
-        )
-        for row in position_rows
-    }
-
-    # Um ticker pode ser simultaneamente objeto de uma posição de ação e de
-    # um contrato de opção. Preserva-se um único alvo e a menor data, para
-    # não perder o começo de nenhuma das duas exposições.
-    for row in option_position_rows:
-        candidate = (
-            TickerImportTarget(row.ticker_id, row.symbol, row.market, row.is_benchmark),
-            row.start_date,
-        )
-        previous = targets.get(row.ticker_id)
-        if previous is None or row.start_date < previous[1]:
-            targets[row.ticker_id] = candidate
-
-    all_position_rows = [*position_rows, *option_position_rows]
-    earliest_position_start = min(
-        (row.start_date for row in all_position_rows),
-        default=None,
+    today = date.today()
+    periods = _held_periods(today)
+    benchmark_start = min(
+        (start for start, _ in periods.values()),
+        default=today - timedelta(days=DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS),
     )
-    benchmark_start = earliest_position_start or (
-        date.today() - timedelta(days=DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS)
-    )
-    benchmark_rows = db.session.execute(
-        select(Ticker.id, Ticker.symbol, Ticker.market).where(Ticker.is_benchmark.is_(True))
-    ).all()
-    for row in benchmark_rows:
-        if row.id in targets:
-            # Já coberto por uma posição própria, com data mais específica.
-            continue
-        targets[row.id] = (
-            TickerImportTarget(row.id, row.symbol, row.market, is_benchmark=True),
-            benchmark_start,
+    tickers = db.session.execute(
+        select(Ticker.id, Ticker.symbol, Ticker.market, Ticker.is_benchmark).where(
+            Ticker.id.in_(list(periods)) | Ticker.is_benchmark.is_(True)
         )
-
-    return sorted(targets.values(), key=lambda pair: pair[0].symbol)
+    ).all()
+    targets = []
+    for row in tickers:
+        target = TickerImportTarget(row.id, row.symbol, row.market, row.is_benchmark)
+        if row.is_benchmark:
+            # Referência cobre a carteira inteira, mesmo que tenha sido detida.
+            start = min(benchmark_start, periods.get(row.id, (benchmark_start,))[0])
+            targets.append((target, start, today))
+        else:
+            targets.append((target, *periods[row.id]))
+    return sorted(targets, key=lambda item: item[0].symbol)
 
 
 def quote_update_target_tickers() -> list[TickerImportTarget]:
-    """Tickers elegíveis para atualização de cotação: com posição (real ou
-    hipotética) ou marcados como referência de comparação (Ticker.is_benchmark).
-    Mesmo critério de ``quote_update_targets``, mas sem a data de início por
-    ticker — usado pela atualização "diária" que sempre usa um período
-    explícito (start_date/end_date) informado no formulário.
+    """Tickers da atualização "diária", que usa o período do formulário:
+    os ainda detidos e os de referência. Um ticker já encerrado não recebe
+    cotação posterior ao encerramento -- a carteira não precisa dela.
     """
-    return [target for target, _ in quote_update_targets()]
+    today = date.today()
+    return [target for target, _start, end in quote_update_targets() if end == today]
 
 
 #: Linhas por instrução em ``upsert_quote_history``. Quatro parâmetros por

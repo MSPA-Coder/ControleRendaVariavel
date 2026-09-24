@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -186,17 +186,17 @@ def _poll_rtd(watch: bool) -> None:
 
 @click.command("import-position-history")
 def import_position_history() -> None:
-    """Import daily action and option history from each open position's
-    first date, plus every ticker registered as a comparison benchmark."""
+    """Import daily history for every ticker the portfolio ever held, over
+    the period it was held, plus every comparison benchmark."""
 
     targets = quote_update_targets()
     db.session.rollback()
 
     imported: list[tuple[int, DailyQuote]] = []
     failures: list[str] = []
-    for target, start_date in targets:
+    for target, start_date, end_date in targets:
         try:
-            quotes = fetch_yahoo_daily_quotes(target, start_date, date.today())
+            quotes = fetch_yahoo_daily_quotes(target, start_date, end_date)
         except QuoteHistoryImportError:
             failures.append(target.symbol)
             continue
