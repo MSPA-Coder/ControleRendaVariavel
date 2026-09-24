@@ -347,17 +347,17 @@ def import_quote_history() -> ResponseReturnValue:
 @bp.post("/quotes/import-position-history")
 @requer_admin
 def import_position_quote_history() -> ResponseReturnValue:
-    """Refresh action and option history from each ticker's earliest
-    open-position date, plus every comparison benchmark."""
+    """Refresh history for every ticker the portfolio ever held, over the
+    period it was held, plus every comparison benchmark."""
 
     targets = quote_update_targets()
     db.session.rollback()
 
     imported: list[tuple[int, DailyQuote]] = []
     failures: list[str] = []
-    for target, start_date in targets:
+    for target, start_date, end_date in targets:
         try:
-            quotes = fetch_yahoo_daily_quotes(target, start_date, date.today())
+            quotes = fetch_yahoo_daily_quotes(target, start_date, end_date)
         except QuoteHistoryImportError:
             failures.append(target.symbol)
             continue
