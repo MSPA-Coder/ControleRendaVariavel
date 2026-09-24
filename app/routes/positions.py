@@ -16,6 +16,7 @@ from app.core.validation import parse_finite_decimal
 from app.models import Broker, Portfolio, Position, QuoteHistory, Side, Ticker
 from app.positions.closure import (
     close_open_position,
+    conflicting_position,
     create_or_merge_position,
     delete_open_transaction_for_position,
     discard_simulation_history,
@@ -432,6 +433,22 @@ def update_position(position_id: int) -> ResponseReturnValue:
     was_simulated = position.simulated
     for key, value in asdict(data).items():
         setattr(position, key, value)
+    # Duas posições com a mesma chave são a mesma exposição contada duas
+    # vezes; o índice único `uq_positions_chave` recusaria com erro 500.
+    if conflicting_position(position) is not None:
+        db.session.rollback()
+        flash("Já existe uma posição nesta carteira, corretora, ativo e tipo. Para somar, registre um aporte; para juntar as duas, ajuste uma e exclua a outra.", "error")
+        return render_template(
+            "position_form.html",
+            position=request.form,
+            edit_mode=True,
+            position_id=position_id,
+            movement_count=len(position.movements),
+            brokers=broker_records(),
+            tickers=investable_ticker_records(),
+            sides=Side,
+            portfolios=portfolio_records(),
+        ), 422
     if position.ticker_id != previous_ticker_id:
         grant_ticker_entitlement(
             user_id=position.owner_id,

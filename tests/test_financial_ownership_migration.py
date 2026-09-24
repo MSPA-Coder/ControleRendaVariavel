@@ -110,7 +110,10 @@ def test_legado_mspa_preserva_contagens_e_ultimo_snapshot(legacy_app) -> None:
         # `upgrade()` abre outra conexão Alembic; encerra a leitura antes de
         # pedir locks DDL sobre as mesmas tabelas.
         db.session.commit()
-        upgrade()
+        # Até a 0019, e não até a head: este legado tem duas posições na mesma
+        # chave (é o que prova a fusão das cotações por ativo), e a 0020 recusa
+        # esse estado de propósito -- ver o fim deste teste.
+        upgrade(revision="20260923_0019")
         owner_id = db.session.scalar(text("SELECT id FROM users WHERE username='mspa'"))
         after = {
             table: db.session.scalar(
@@ -127,6 +130,14 @@ def test_legado_mspa_preserva_contagens_e_ultimo_snapshot(legacy_app) -> None:
         assert db.session.execute(text("SELECT contract_id,last_price,underlying_price FROM option_quotes")).one() == (1, 4, 14)
         assert db.session.scalar(text("SELECT count(*) FROM user_ticker_entitlements WHERE user_id=:owner AND ticker_id=1"), {"owner": owner_id}) == 1
         assert db.session.scalar(text("SELECT benchmark_ticker_id FROM user_preferences WHERE user_id=:owner"), {"owner": owner_id}) is None
+
+        # A 0020 (uma posição por chave) não funde por conta própria: aborta,
+        # e o banco fica exatamente onde estava.
+        db.session.commit()
+        with pytest.raises(SystemExit):
+            upgrade()
+        assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == "20260923_0019"
+        assert db.session.scalar(text("SELECT count(*) FROM positions")) == len(before["positions"])
 
 
 def test_legado_sem_mspa_interrompe_antes_de_atribuir(legacy_app) -> None:

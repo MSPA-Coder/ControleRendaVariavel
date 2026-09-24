@@ -93,6 +93,12 @@ def test_schema_hygiene_migrates_drifted_legacy_schema_without_differences(legac
     _create_schema_drift(legacy_app, populate_legacy_column=False)
 
     with legacy_app.app_context():
+        # O legado tem duas posições na mesma chave, e a 20260924_0020 só
+        # segue depois que o usuário as resolve. Aqui a resolução é excluir a
+        # mais nova, como na tela; o assunto do teste é o esquema final.
+        upgrade(revision="20260923_0019")
+        db.session.execute(text("DELETE FROM positions WHERE id = 2"))
+        db.session.commit()
         upgrade()
         assert db.session.scalar(text("SELECT version_num FROM alembic_version")) == _HEAD_REVISION
         remaining_columns = db.session.scalars(

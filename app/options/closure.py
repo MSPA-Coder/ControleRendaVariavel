@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, text
 
 from app import db
 from app.core.domain import (
@@ -288,9 +288,36 @@ def _mergeable_statement(candidate: OptionPosition) -> Select[tuple[OptionPositi
 
 
 def _mergeable_position(candidate: OptionPosition) -> OptionPosition | None:
-    """A posição que o aporte vai reforçar, já travada para escrita."""
+    """A posição que o aporte vai reforçar, já travada para escrita.
 
+    O lock consultivo pela chave cobre o primeiro aporte, quando ainda não há
+    linha para o ``FOR UPDATE`` travar (ver ``position_closure``).
+    """
+
+    db.session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:chave, 0))"),
+        {
+            "chave": (
+                f"opcao:{candidate.owner_id}:{candidate.portfolio_id}:"
+                f"{candidate.broker_id}:{candidate.contract_id}:{candidate.side}"
+            )
+        },
+    )
     return db.session.scalar(_mergeable_statement(candidate).with_for_update())
+
+
+def conflicting_position(position: OptionPosition) -> OptionPosition | None:
+    """Outra posição de opção com a mesma chave -- o que uma edição não pode produzir.
+
+    Chamada depois de a edição já ter alterado o objeto: sem o
+    ``no_autoflush``, a própria consulta gravaria a mudança antes de ela ser
+    conferida, e quem responderia seria o índice único, com erro 500.
+    """
+
+    with db.session.no_autoflush:
+        return db.session.scalar(
+            _mergeable_statement(position).where(OptionPosition.id != position.id)
+        )
 
 
 def duplicate_entry(candidate: OptionPosition) -> OptionPositionMovement | None:
