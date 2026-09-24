@@ -298,8 +298,9 @@ def portfolio_flow_series(
     nos dados reais elas divergem por três motivos que não têm nada a ver
     com desempenho — ``opened_on`` de uma posição antiga costuma ser a data
     em que ela foi CADASTRADA e não em que foi comprada; ``quote_history``
-    guarda o fechamento AJUSTADO (proventos e splits) importado do Yahoo,
-    enquanto o custo médio é nominal; e um ``ADJUSTMENT`` grava o custo
+    guarda o fechamento do Yahoo ajustado por DESDOBRAMENTO (de ativo detido,
+    não por provento -- ver ``app.quotes.history_import``), enquanto o custo
+    médio é o do negócio, anterior ao desdobramento; e um ``ADJUSTMENT`` grava o custo
     médio no lugar de um preço de negócio. Qualquer uma dessas divergências
     vazaria para o retorno do dia do aporte como ganho ou perda que nunca
     aconteceu.
