@@ -31,10 +31,17 @@ def test_nenhum_template_tem_script_ou_estilo_inline() -> None:
     import re
 
     raiz = Path(__file__).resolve().parents[1] / "app" / "templates"
+    templates = list(raiz.rglob("*.html"))
     sobras = []
-    for caminho in raiz.rglob("*.html"):
+    for caminho in templates:
         fonte = caminho.read_text(encoding="utf-8")
-        if re.search(r"<script\b(?![^>]*\bsrc=)[^>]*>", fonte) or re.search(r"\sstyle=", fonte):
+        # HTML não diferencia caixa: `<SCRIPT>` e `STYLE=` valem o mesmo.
+        if re.search(r"<script\b(?![^>]*\bsrc=)[^>]*>", fonte, re.IGNORECASE) or re.search(
+            r"\sstyle=", fonte, re.IGNORECASE
+        ):
             sobras.append(caminho.relative_to(raiz).as_posix())
 
+    # Sem este piso, um caminho errado não acharia template nenhum e a
+    # varredura passaria vazia.
+    assert len(templates) >= 10
     assert sobras == []
