@@ -61,13 +61,9 @@ recusava a pergunta.
 "Hoje" é o dia em Brasília. Em UTC, das 21h à meia-noite a rota já estaria no
 dia seguinte, e pedir a data do dia seria recusado como data futura.
 
-Dois limites herdados do extrato, os mesmos do relatório de performance:
-
-- `opened_on` de uma posição antiga costuma ser a data em que ela foi
-  **cadastrada**, e não a da compra. Antes dela, a posição não aparece;
-- o arquivo das posições encerradas não guarda o multiplicador da cotação.
-  Elas entram com multiplicador 1, que é o valor de todas as posições desta
-  base.
+Um limite herdado do extrato, o mesmo do relatório de performance:
+`opened_on` de uma posição antiga costuma ser a data em que ela foi
+**cadastrada**, e não a da compra. Antes dela, a posição não aparece.
 
 E um limite herdado da série de cotações: a linha de `quote_history` de um dia é
 a última observação daquele dia, e se a coleta parou no meio do pregão ela é um
@@ -471,7 +467,7 @@ def _fotografar_hoje(foto: _Foto, owner_id: int) -> dict[str, int]:
             mercado=posicao.ticker_ref.market.value,
             moeda=posicao.currency,
             quantidade=posicao.quantity * direcao,
-            preco=preco * posicao.quote_multiplier,
+            preco=preco,
             preco_em=observado_em.isoformat(),
             # O estado que o próprio coletor gravou. A idade do preço quem
             # diz é `preco_em`, e é ela que o consumidor deve usar para
@@ -493,7 +489,6 @@ class _Origem:
     """O que o extrato não carrega e a linha publicada precisa."""
 
     corretora_id: int
-    multiplicador: Decimal
     viva: bool
 
 
@@ -508,8 +503,7 @@ def _extrato_das_acoes(
 
     É a mesma leitura de `app.routes.helpers.position_movement_events`, que
     alimenta o TWR, com três diferenças: não tem escopo de usuário (pelo mesmo
-    motivo de `_posicoes_reais`), carrega a corretora e o multiplicador de cada
-    posição, e dá a uma posição viva SEM extrato uma abertura sintética em
+    motivo de `_posicoes_reais`), carrega a corretora de cada posição, e dá a uma posição viva SEM extrato uma abertura sintética em
     `opened_on` com a quantidade atual. Sem ela, essa posição sumiria de toda
     data passada: um patrimônio menor, calado. Com ela, a posição conta desde a
     data em que foi cadastrada, que é tudo o que o banco sabe dela.
@@ -524,7 +518,6 @@ def _extrato_das_acoes(
             Position.side,
             quantidade_do_evento,
             Position.broker_id,
-            Position.quote_multiplier,
         )
         .select_from(Position)
         .join(Position.portfolio_ref)
@@ -556,20 +549,19 @@ def _extrato_das_acoes(
 
     eventos: list[HoldingEvent] = []
     origens: dict[tuple[str, int], _Origem] = {}
-    for dia, posicao_id, ticker_id, lado, quantidade, corretora_id, multiplicador in (
+    for dia, posicao_id, ticker_id, lado, quantidade, corretora_id in (
         db.session.execute(vivas)
     ):
         chave = ("stock", posicao_id)
         eventos.append(HoldingEvent(dia, ticker_id, _sinal(lado) * quantidade, chave))
-        origens[chave] = _Origem(corretora_id, multiplicador, viva=True)
+        origens[chave] = _Origem(corretora_id, viva=True)
     for dia, posicao_id, ticker_id, quantidade, corretora_id in db.session.execute(encerradas):
         chave = ("stock", posicao_id)
-        # O sinal já foi aplicado quando o arquivo foi gravado. O multiplicador
-        # não foi guardado: veja o docstring do módulo.
+        # O sinal já foi aplicado quando o arquivo foi gravado.
         eventos.append(HoldingEvent(dia, ticker_id, quantidade, chave))
         # Viva é quem ainda está na carteira; o arquivo não tira isso dela.
         viva = chave in origens and origens[chave].viva
-        origens[chave] = _Origem(corretora_id, Decimal("1"), viva=viva)
+        origens[chave] = _Origem(corretora_id, viva=viva)
     return eventos, origens
 
 
@@ -713,7 +705,7 @@ def _fotografar_passado(foto: _Foto, referencia: date, owner_id: int) -> dict[st
             mercado=ticker.market.value,
             moeda=ticker.currency,
             quantidade=abertas[chave],
-            preco=preco * origem.multiplicador,
+            preco=preco,
             # A data do PREÇO, não a pedida: sábado vale o fechamento de sexta,
             # e quem lê precisa poder ver isso.
             preco_em=dia_do_preco.isoformat(),

@@ -101,12 +101,6 @@ def test_banco_aceita_custo_medio_zero(sessao, cenario):
     sessao.flush()  # não levanta
 
 
-def test_banco_recusa_multiplicador_zero(sessao, cenario):
-    sessao.add(_posicao(cenario, quote_multiplier=Decimal("0")))
-    with pytest.raises(IntegrityError, match="quote_multiplier_positive"):
-        sessao.flush()
-
-
 def test_banco_recusa_quantidade_nan(sessao, cenario):
     """É para o `NaN` que a constraint `quantity_finite` existe.
 
@@ -227,7 +221,6 @@ def test_constraints_de_dominio_existem_no_banco(sessao):
     esperadas = {
         "ck_positions_quantity_positive",
         "ck_positions_average_cost_non_negative",
-        "ck_positions_quote_multiplier_positive",
         "ck_positions_quantity_finite",
         "ck_positions_average_cost_finite",
     }

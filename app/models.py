@@ -372,7 +372,6 @@ class Position(Base):
     __table_args__ = (
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("average_cost >= 0", name="average_cost_non_negative"),
-        CheckConstraint("quote_multiplier > 0", name="quote_multiplier_positive"),
         CheckConstraint("target_multiplier > 0", name="target_multiplier_positive"),
         CheckConstraint(
             "quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
@@ -381,10 +380,6 @@ class Position(Base):
         CheckConstraint(
             "average_cost NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="average_cost_finite",
-        ),
-        CheckConstraint(
-            "quote_multiplier NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
-            name="quote_multiplier_finite",
         ),
         CheckConstraint(
             "target_multiplier NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
@@ -408,7 +403,6 @@ class Position(Base):
     average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     side: Mapped[Side] = mapped_column(Enum(Side, name="position_side"), default=Side.BUY)
     opened_on: Mapped[date] = mapped_column(Date)
-    quote_multiplier: Mapped[Decimal] = mapped_column(Numeric(18, 8), default=Decimal("1"))
     target_multiplier: Mapped[Decimal] = mapped_column(Numeric(18, 8), default=Decimal("1.5"))
     result_mode: Mapped[str] = mapped_column(String(1), default="L")
     portfolio_id: Mapped[int] = mapped_column(

@@ -67,7 +67,7 @@ def review_case(app_com_banco):
         owner = users[2]
         position = Position(owner_id=owner.id, broker_id=broker.id, ticker_id=tickers[0].id,
                             portfolio_id=portfolios[2].id, quantity=Decimal('17'), average_cost=Decimal('23'),
-                            quote_multiplier=1, target_multiplier=1, side=Side.BUY, opened_on=date.today(), result_mode='L')
+                            target_multiplier=1, side=Side.BUY, opened_on=date.today(), result_mode='L')
         option = OptionPosition(owner_id=owner.id, broker_id=broker.id, contract_id=contract.id,
                                 portfolio_id=portfolios[2].id, quantity=Decimal('19'), average_cost=Decimal('2'),
                                 side=Side.BUY, opened_on=date.today(), result_mode='L')
@@ -202,7 +202,7 @@ def test_create_edit_delete_preserves_quote_entitlement_without_adopting_posted_
     form = {'csrf_token': token, 'owner_id': data['user_ids'][2], 'broker_id': data['broker'],
                 'ticker_id': data['ticker_ids'][0], 'portfolio_id': data['portfolio_ids'][0],
                 'quantity': '4', 'average_cost': '10', 'side': 'C', 'opened_on': date.today().isoformat(),
-                'quote_multiplier': '1', 'target_multiplier': '1.5', 'result_mode': 'L'}
+                'target_multiplier': '1.5', 'result_mode': 'L'}
     response = client.post('/positions', data=form)
     assert response.status_code == 302, response.get_data(as_text=True)[:500]
     with app.app_context():
@@ -232,7 +232,7 @@ def test_foreign_portfolio_cannot_be_linked_and_invalid_form_ids_are_rejected(re
     client, token = client_for(app, data['ids'][0])
     form = {'csrf_token': token, 'broker_id': data['broker'], 'ticker_id': data['ticker'],
             'portfolio_id': data['portfolio'], 'quantity': '4', 'average_cost': '10',
-            'side': 'C', 'opened_on': date.today().isoformat(), 'quote_multiplier': '1',
+            'side': 'C', 'opened_on': date.today().isoformat(),
             'target_multiplier': '1.5', 'result_mode': 'L'}
     assert client.post('/positions', data=form).status_code == 422
     form['portfolio_id'] = data['portfolio_ids'][0]

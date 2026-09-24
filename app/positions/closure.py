@@ -333,7 +333,7 @@ def create_or_merge_position(candidate: Position) -> tuple[Position, bool]:
     ser a média ponderada dos dois (ver ``domain.weighted_average_cost``). A
     data inicial recua para a mais antiga das duas, porque a posição de fato é
     mantida desde o primeiro aporte; e os parâmetros da posição existente
-    (delta da cotação, multiplicador do target e modo de resultado) são
+    (multiplicador do target e modo de resultado) são
     preservados, já que um aporte não é motivo para redefinir o alvo de uma
     posição em andamento.
 

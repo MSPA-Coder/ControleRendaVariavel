@@ -45,7 +45,6 @@ def _posicao(*, lado="C", custo="10", atual="7", fechamento="7", dias=100, quant
         average_cost=Decimal(custo),
         raw_price=Decimal(atual),
         previous_close=Decimal(fechamento),
-        quote_multiplier=Decimal("1"),
         target_multiplier=Decimal("1.5"),
         opened_on=HOJE - timedelta(days=dias),
         result_mode="B",
