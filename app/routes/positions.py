@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -14,6 +15,12 @@ from app import db
 from app.core.currency import converter_totais
 from app.core.validation import parse_finite_decimal
 from app.models import Broker, Portfolio, Position, QuoteHistory, Side, Ticker
+from app.positions.average_cost_line import (
+    Aporte,
+    Degrau,
+    aportes_da_posicao,
+    degraus_da_posicao,
+)
 from app.positions.closure import (
     close_open_position,
     conflicting_position,
@@ -71,31 +78,126 @@ RETURN_PERIODS = (
 RETURN_PERIOD_DAYS = tuple(days for days, _ in RETURN_PERIODS)
 
 
-def _grafico_de_fechamentos(fechamentos: list[QuoteHistory]) -> dict[str, str] | None:
+# Janelas do gráfico de fechamentos, as mesmas do zoom da aba Cotações.
+PERIODOS_DO_GRAFICO = (
+    ("1m", "1 mês"),
+    ("3m", "3 meses"),
+    ("6m", "6 meses"),
+    ("1y", "1 ano"),
+    ("ytd", "YTD"),
+    ("all", "Todo o período"),
+)
+PERIODO_PADRAO_DO_GRAFICO = "6m"
+_MESES_DO_PERIODO = {"1m": 1, "3m": 3, "6m": 6, "1y": 12}
+
+
+def _inicio_da_janela(periodo: str, ultimo: date) -> date | None:
+    """Primeiro dia da janela, contada para trás a partir do último
+    fechamento, como no zoom de Cotações. ``None`` é o período inteiro.
+
+    Recuar meses a partir do dia 31 cai no último dia do mês de destino.
+    """
+    if periodo == "ytd":
+        return date(ultimo.year, 1, 1)
+    meses = _MESES_DO_PERIODO.get(periodo)
+    if meses is None:
+        return None
+    ano, indice = divmod(ultimo.year * 12 + ultimo.month - 1 - meses, 12)
+    return date(ano, indice + 1, min(ultimo.day, calendar.monthrange(ano, indice + 1)[1]))
+
+
+def _grafico_de_fechamentos(
+    fechamentos: list[QuoteHistory], degraus: list[Degrau], aportes: list[Aporte]
+) -> dict[str, Any] | None:
     """Geometria simples do histórico da posição, sem JavaScript.
 
     O gráfico é só uma leitura dos fechamentos que já existem no banco. Ele
     não chama o coletor, não preenche dias ausentes e não tenta transformar o
     preço bruto em valor a mercado: essa transformação continua em
     ``build_portfolio`` e depende dos parâmetros da posição.
+
+    Sobre os fechamentos vão duas referências da posição (ver
+    ``app.positions.average_cost_line``):
+
+    - o custo médio em degraus: em cada fechamento vale o degrau mais recente
+      até aquela data, e a troca de nível é um trecho vertical no primeiro
+      fechamento em que o novo custo vigora;
+    - uma linha horizontal por aporte (abertura ou aumento), no preço dele, do
+      primeiro fechamento a partir da data do aporte até o último.
+
+    A escala inclui as duas, para nenhuma linha sair do quadro. Os eixos são
+    marcas: cinco preços no Y e até seis datas espaçadas no X.
     """
     if len(fechamentos) < 2:
         return None
-    largura, altura, margem = 640, 180, 12
+    largura, altura = 640, 220
+    esquerda, direita, topo, base = 70, 24, 12, 28
     valores = [fechamento.price for fechamento in fechamentos]
-    menor, maior = min(valores), max(valores)
+    datas = [fechamento.recorded_date for fechamento in fechamentos]
+    custos: list[Decimal | None] = []
+    for dia in datas:
+        vigentes = [d.custo_medio for d in degraus if d.desde <= dia]
+        custos.append(vigentes[-1] if vigentes else None)
+    # Aporte posterior ao último fechamento ainda não tem onde começar.
+    inicios = [
+        (aporte, next(i for i, dia in enumerate(datas) if dia >= aporte.data))
+        for aporte in aportes
+        if aporte.data <= datas[-1]
+    ]
+    escala = (
+        valores
+        + [custo for custo in custos if custo is not None]
+        + [aporte.preco for aporte, _ in inicios]
+    )
+    menor, maior = min(escala), max(escala)
     amplitude = maior - menor or Decimal("1")
-    pontos = []
-    for indice, valor in enumerate(valores):
-        x = margem + (largura - 2 * margem) * indice / (len(valores) - 1)
-        y = altura - margem - (altura - 2 * margem) * float((valor - menor) / amplitude)
-        pontos.append(f"{x:.1f},{y:.1f}")
+    ultimo = len(valores) - 1
+
+    def x(indice: int) -> float:
+        return esquerda + (largura - esquerda - direita) * indice / ultimo
+
+    def y(valor: Decimal) -> float:
+        return topo + (altura - topo - base) * float((maior - valor) / amplitude)
+
+    pontos = [f"{x(indice):.1f},{y(valor):.1f}" for indice, valor in enumerate(valores)]
+    pontos_custo: list[str] = []
+    anterior: Decimal | None = None
+    for indice, custo in enumerate(custos):
+        if custo is None:
+            continue
+        if anterior is not None and custo != anterior:
+            pontos_custo.append(f"{x(indice):.1f},{y(anterior):.1f}")
+        pontos_custo.append(f"{x(indice):.1f},{y(custo):.1f}")
+        anterior = custo
+    marcas_x = min(6, len(valores))
+    indices_x = sorted({round(k * ultimo / (marcas_x - 1)) for k in range(marcas_x)})
     return {
         "pontos": " ".join(pontos),
+        "pontos_custo": " ".join(pontos_custo),
+        "aportes": [
+            {
+                "pontos": f"{x(inicio):.1f},{y(aporte.preco):.1f} {x(ultimo):.1f},{y(aporte.preco):.1f}",
+                "rotulo": aporte.rotulo,
+                "preco": aporte.preco,
+                "cor": indice % 4,
+            }
+            for indice, (aporte, inicio) in enumerate(inicios)
+        ],
+        "eixo_y": [
+            {"y": f"{y(valor):.1f}", "valor": valor}
+            for valor in (menor + amplitude * k / 4 for k in range(5))
+        ],
+        "eixo_x": [
+            {"x": f"{x(indice):.1f}", "rotulo": datas[indice].strftime("%d/%m/%y")}
+            for indice in indices_x
+        ],
+        "esquerda": str(esquerda),
+        "direita": str(largura - direita),
+        "base": str(altura - base),
         "largura": str(largura),
         "altura": str(altura),
-        "minimo": str(menor),
-        "maximo": str(maior),
+        "minimo": str(min(valores)),
+        "maximo": str(max(valores)),
     }
 
 
@@ -303,24 +405,40 @@ def position_detail(position_id: int) -> str:
         stale_after_seconds=quote_stale_after_seconds(),
     )
     (item,) = portfolio.positions
+    degraus = degraus_da_posicao(position)
+    periodo = request.args.get("periodo", PERIODO_PADRAO_DO_GRAFICO)
+    if periodo not in dict(PERIODOS_DO_GRAFICO):
+        periodo = PERIODO_PADRAO_DO_GRAFICO
+    # "Todo o período" é a vida inteira da posição, desde o primeiro dia em
+    # que ela existe. Encerrada por inteiro, a posição deixa de existir e esta
+    # tela responde 404.
     fechamentos = list(
         db.session.scalars(
             select(QuoteHistory)
-            .where(QuoteHistory.ticker_id == position.ticker_id)
-            .order_by(QuoteHistory.recorded_date.desc())
-            .limit(60)
+            .where(
+                QuoteHistory.ticker_id == position.ticker_id,
+                QuoteHistory.recorded_date >= min(position.opened_on, degraus[0].desde),
+            )
+            .order_by(QuoteHistory.recorded_date)
         )
     )
-    fechamentos.reverse()
+    if fechamentos:
+        inicio = _inicio_da_janela(periodo, fechamentos[-1].recorded_date)
+        if inicio is not None:
+            fechamentos = [f for f in fechamentos if f.recorded_date >= inicio]
     return render_template(
         "position_detail.html",
+        periodo=periodo,
+        periodos=PERIODOS_DO_GRAFICO,
         item=item,
         position=position,
         movement_results=position_movement_results(
             position, item.metrics.current_price if item.metrics is not None else None
         ),
         fechamentos=fechamentos,
-        grafico=_grafico_de_fechamentos(fechamentos),
+        grafico=_grafico_de_fechamentos(
+            fechamentos, degraus, aportes_da_posicao(position)
+        ),
     )
 
 

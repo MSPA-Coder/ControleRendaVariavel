@@ -29,28 +29,59 @@
     });
     return latest;
   }
-  function openPositionLines(container) {
-    return parseData(container, "openPositionLines").filter(function (line) {
-      return line && typeof line.openedOn === "string" && Number.isFinite(Number(line.entryPrice));
+  // Uma linha por posição, em degraus: cada degrau é o custo médio vigente
+  // a partir de uma data. Posição encerrada traz `until` e um só degrau.
+  function averageCostLines(container) {
+    return parseData(container, "averageCostLines").filter(function (line) {
+      return line && Array.isArray(line.steps) && line.steps.length > 0 && line.steps.every(function (step) {
+        return step && typeof step.from === "string" && Number.isFinite(Number(step.averageCost));
+      });
     });
   }
+  var CLOSED_LINE_COLOR = "#8a99a6";
   function lineColor(index) {
     return ["#7c3aed", "#c2410c", "#047857", "#be123c"][index % 4];
   }
-  function chartLabels(rows, lines) {
-    var latest = rows.length ? rows[rows.length - 1].label : null;
-    return Array.from(new Set(rows.map(function (row) { return row.label; }).concat(
-      lines.filter(function (line) { return latest && line.openedOn <= latest; }).map(function (line) { return line.openedOn; })
-    ))).sort();
+  function lineStyle(line, openIndex) {
+    return line.closed
+      ? { color: CLOSED_LINE_COLOR, dash: [3, 3], width: 1.5 }
+      : { color: lineColor(openIndex), dash: [7, 4], width: 2 };
   }
-  function positionEntryDatasets(labels, lines) {
-    var latest = labels.length ? labels[labels.length - 1] : null;
-    return lines.filter(function (line) { return latest && line.openedOn <= latest; }).map(function (line, index) {
-      var color = lineColor(index), entryPrice = Number(line.entryPrice);
+  // Custo médio vigente no rótulo `key` (uma data, ou o período já agregado);
+  // null fora da vida da posição.
+  function costAt(line, key, period) {
+    if (key < periodKey(line.steps[0].from, period)) return null;
+    if (line.until && key > periodKey(line.until, period)) return null;
+    var value = null;
+    line.steps.forEach(function (step) { if (periodKey(step.from, period) <= key) value = Number(step.averageCost); });
+    return value;
+  }
+  // Valores de cada linha nos rótulos dados; linhas sem nenhum ponto na
+  // janela visível somem, para não ocupar legenda nem escala.
+  function visibleCostLines(lines, labels, period) {
+    var openIndex = 0;
+    return lines.map(function (line) {
+      var values = labels.map(function (label) { return costAt(line, label, period); });
+      if (!values.some(function (value) { return value !== null; })) return null;
+      return { line: line, values: values, style: lineStyle(line, line.closed ? 0 : openIndex++) };
+    }).filter(Boolean);
+  }
+  // As datas de mudança de custo entram no eixo, para o degrau cair no dia
+  // certo mesmo sem cotação naquele dia; só dentro da janela já visível.
+  function chartLabels(rows, lines) {
+    var first = rows[0].label, latest = rows[rows.length - 1].label, extra = [];
+    lines.forEach(function (line) {
+      line.steps.map(function (step) { return step.from; }).concat(line.until ? [line.until] : []).forEach(function (date) {
+        if (date >= first && date <= latest) extra.push(date);
+      });
+    });
+    return Array.from(new Set(rows.map(function (row) { return row.label; }).concat(extra))).sort();
+  }
+  function averageCostDatasets(labels, lines) {
+    return visibleCostLines(lines, labels, "daily").map(function (item) {
       return {
-        type: "line", label: line.label || "Aporte em posição aberta",
-        data: labels.map(function (label) { return label >= line.openedOn ? entryPrice : null; }),
-        borderColor: color, backgroundColor: color, borderDash: [7, 4], borderWidth: 2,
+        type: "line", label: item.line.label || "Custo médio", data: item.values, stepped: true,
+        borderColor: item.style.color, backgroundColor: item.style.color, borderDash: item.style.dash, borderWidth: item.style.width,
         pointRadius: 0, pointHoverRadius: 3, spanGaps: false,
       };
     });
@@ -58,12 +89,17 @@
   function zoomedSeries(dates, prices, zoom, sharedLatest) {
     if (zoom === "all") return { dates: dates, prices: prices };
     var months = { "1m": 1, "3m": 3, "6m": 6, "1y": 12 }[zoom];
-    if (!months || !dates.length) return { dates: dates, prices: prices };
+    if ((!months && zoom !== "ytd") || !dates.length) return { dates: dates, prices: prices };
     var latest = sharedLatest || latestQuoteDate(dates, prices);
     if (!latest) return { dates: [], prices: [] };
-    var cutoff = new Date(latest + "T00:00:00Z");
-    cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
-    var cutoffDate = cutoff.toISOString().slice(0, 10);
+    var cutoffDate;
+    if (zoom === "ytd") {
+      cutoffDate = latest.slice(0, 4) + "-01-01";
+    } else {
+      var cutoff = new Date(latest + "T00:00:00Z");
+      cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
+      cutoffDate = cutoff.toISOString().slice(0, 10);
+    }
     var selectedDates = [], selectedPrices = [];
     dates.forEach(function (value, index) {
       if (value >= cutoffDate && (!sharedLatest || value <= sharedLatest)) {
@@ -98,10 +134,9 @@
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Candles de cotacoes");
     container.appendChild(canvas);
     var ctx = canvas.getContext("2d"); ctx.scale(ratio, ratio);
-    var latest = rows.length ? rows[rows.length - 1].label : null;
-    var visibleLines = lines.filter(function (line) { return latest && periodKey(line.openedOn, period) <= latest; });
+    var visibleLines = visibleCostLines(lines, rows.map(function (row) { return row.label; }), period);
     var values = rows.flatMap(function (row) { return [row.low, row.high]; }).concat(
-      visibleLines.map(function (line) { return Number(line.entryPrice); })
+      visibleLines.flatMap(function (item) { return item.values.filter(function (value) { return value !== null; }); })
     );
     var min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
     var left = 54, right = 16, top = 16, bottom = 38, plotWidth = width - left - right, plotHeight = height - top - bottom;
@@ -117,13 +152,19 @@
       ctx.fillRect(x - body / 2, bodyTop, body, bodyHeight);
       if (rows.length <= 18 || index % Math.ceil(rows.length / 8) === 0) { ctx.fillStyle = "#5c7180"; ctx.fillText(row.label, x - body, height - 14); }
     });
-    visibleLines.forEach(function (line, index) {
-      var start = periodKey(line.openedOn, period);
-      var startIndex = rows.findIndex(function (row) { return row.label >= start; });
-      if (startIndex < 0) return;
-      ctx.save(); ctx.strokeStyle = lineColor(index); ctx.lineWidth = 2; ctx.setLineDash([7, 4]);
-      ctx.beginPath(); ctx.moveTo(left + step * (startIndex + .5), y(Number(line.entryPrice)));
-      ctx.lineTo(left + step * (rows.length - .5), y(Number(line.entryPrice))); ctx.stroke(); ctx.restore();
+    // Cada período ativo é um trecho horizontal na largura do candle; a
+    // troca de nível vira um trecho vertical na divisa entre dois candles.
+    visibleLines.forEach(function (item) {
+      ctx.save(); ctx.strokeStyle = item.style.color; ctx.lineWidth = item.style.width; ctx.setLineDash(item.style.dash);
+      ctx.beginPath();
+      var drawing = false;
+      item.values.forEach(function (value, index) {
+        if (value === null) { drawing = false; return; }
+        var x0 = left + step * index, yy = y(value);
+        if (drawing) ctx.lineTo(x0, yy); else ctx.moveTo(x0, yy);
+        ctx.lineTo(x0 + step, yy); drawing = true;
+      });
+      ctx.stroke(); ctx.restore();
     });
   }
   // Modo comparação: duas linhas (ticker selecionado x índice de
@@ -174,7 +215,7 @@
     var container = document.getElementById("quote-history-chart"); if (!container) return;
     var primaryDates = parseData(container, "dates"), primaryPrices = parseData(container, "prices").map(Number);
     var currency = container.dataset.currency || "BRL";
-    var positionLines = openPositionLines(container);
+    var positionLines = averageCostLines(container);
     var benchmarkLabel = container.dataset.benchmarkLabel;
     if (benchmarkLabel) {
       var benchmarkDates = parseData(container, "benchmarkDates"), benchmarkPrices = parseData(container, "benchmarkPrices").map(Number);
@@ -201,9 +242,11 @@
     if (period !== "daily") { drawCandles(container, rows, currency, positionLines, period); return; }
     if (typeof Chart === "undefined") return;
     var labels = chartLabels(rows, positionLines);
-    var positionEntryLines = positionEntryDatasets(labels, positionLines);
+    var costLines = averageCostDatasets(labels, positionLines);
     container.replaceChildren(); var canvas = document.createElement("canvas"); container.appendChild(canvas);
-    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: false }, ...positionEntryLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: positionEntryLines.length > 0 }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
+    // spanGaps na cotação: os únicos rótulos sem preço são as datas de troca
+    // de custo médio injetadas acima, e elas não devem cortar a série.
+    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: true }, ...costLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: costLines.length > 0 }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
   }
   function init() {
     var type = document.querySelector("[data-quote-chart-type]"), period = document.querySelector("[data-quote-chart-period]"), zoom = document.querySelector("[data-quote-chart-zoom]");

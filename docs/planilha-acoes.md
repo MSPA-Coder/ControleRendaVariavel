@@ -132,13 +132,31 @@ excluível sem efeito colateral.
 
 ## Comparação de cotações
 
-No gráfico normal da aba **Cotações**, cada abertura ou aumento que ainda compõe
-uma posição aberta do usuário no ticker selecionado gera uma linha horizontal
-tracejada. A linha usa a data e o preço unitário daquele aporte e termina na
-última cotação disponível; portanto, uma posição consolidada com vários
-aportes mostra uma referência para cada um deles. Não há linha quando a última
-cotação for anterior ao aporte. A comparação com benchmark permanece em
-evolução percentual e, portanto, não mostra referências de preço absoluto.
+No gráfico normal da aba **Cotações**, cada posição real de ações do usuário
+no ticker selecionado aparece como **uma linha tracejada em degraus no custo
+médio**. Ela começa na abertura, no custo médio inicial, e muda de nível na
+data de cada movimento que alterou o custo (aumento ou ajuste manual), usando
+o custo médio resultante gravado no extrato. Encerramento parcial não muda o
+custo e não cria degrau. Posições abertas vão até a última cotação.
+
+Posições encerradas também aparecem, em cinza: como o encerramento total apaga
+o extrato, cada transação fechada vira um segmento reto no custo médio final,
+da abertura ao encerramento. Um encerramento parcial é uma transação fechada
+própria e gera o seu segmento. Opções não entram (o custo delas é prêmio, em
+outra escala) nem a carteira Simulada. Ao aproximar o período, uma linha que
+começou antes da janela aparece desde o início dela. A comparação com
+benchmark permanece em evolução percentual e, portanto, não mostra
+referências de preço absoluto.
+
+Os dois gráficos têm o mesmo seletor de período: 1 mês, 3 meses, 6 meses
+(padrão), 1 ano, YTD e todo o período. A janela conta para trás a partir do
+último fechamento; YTD começa em 1º de janeiro do ano desse fechamento.
+
+No detalhe de uma posição aberta, "todo o período" são todos os fechamentos
+desde a abertura. O gráfico tem eixos de preço e de data, e duas referências feitas só
+com o extrato daquela posição: a mesma linha de custo médio em degraus e, mais
+fina e pontilhada, uma linha por aporte (abertura ou aumento) no preço dele,
+do primeiro fechamento a partir da data do aporte até o último.
 
 Na aba **Cotações**, ao comparar dois ativos, o gráfico começa na primeira
 data de calendário em que há cotação registrada para **ambos**. A data é a

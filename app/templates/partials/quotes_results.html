@@ -39,11 +39,12 @@
         </select>
         <label for="quote-zoom">Zoom</label>
         <select id="quote-zoom" data-quote-chart-zoom>
-          <option value="all">Todo o histórico</option>
           <option value="1m">1 mês</option>
           <option value="3m">3 meses</option>
-          <option value="6m">6 meses</option>
+          <option value="6m" selected>6 meses</option>
           <option value="1y">1 ano</option>
+          <option value="ytd">YTD</option>
+          <option value="all">Todo o período</option>
         </select>
         {% if benchmark_candidates %}
         <label for="quote-benchmark">Comparar com</label>
@@ -75,7 +76,7 @@
     <div id="quote-history-chart" class="chart-box"
          data-dates='{{ chart_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
          data-prices='{{ chart_history|map(attribute='price')|map('string')|list|tojson }}'
-         data-open-position-lines='{{ open_position_lines|tojson }}'
+         data-average-cost-lines='{{ average_cost_lines|tojson }}'
          data-currency="{{ selected_ticker.currency }}"
          data-label="{{ selected_ticker.symbol }}"
          {% if selected_benchmark %}
