@@ -67,7 +67,6 @@
     <td class="ticker-status">
       {% if item.instrument_status %}<span class="instrument-code instrument-{{ item.instrument_status_class }}"
               title="{{ item.instrument_status|instrument_status_description }}">{{ item.instrument_status|instrument_status_label }}</span>{% endif %}
-      <span class="status status-{{ item.quote_status }}">{{ item.quote_status }}</span>
     </td>
   </tr>
   {% if expanded and has_history %}

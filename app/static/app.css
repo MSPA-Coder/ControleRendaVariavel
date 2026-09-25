@@ -702,8 +702,6 @@ details.catalog-card > h2 { display: none; }
 .topbar .filters select, .topbar .button, .rtd-toggle, .group-toggle { min-height: 2.2rem; }
 .topbar .filters select { padding: .45rem .6rem; }
 .rtd-toggle { gap: .35rem; padding: .35rem .55rem; }
-.rtd-toggle .collector-heartbeat { background: transparent; color: var(--ink); font-size: .75rem; padding: 0; }
-.rtd-toggle .collector-heartbeat time { white-space: nowrap; }
 .quote-card-zones, .quote-manual-form { display: grid; gap: .85rem; }
 .quote-card-zone { padding: .85rem 0; }
 .quote-card-zone + .quote-card-zone { border-top: 1px solid var(--line); }

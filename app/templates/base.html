@@ -206,12 +206,15 @@
 
         {% if current_user.is_authenticated %}
         <div class="navbar-right">
-          {# O pulso do coletor mora na barra do menu, antes do nome da pagina:
-             ele acompanha a leitura de cotacoes, entao so faz sentido onde
-             cotacao e o assunto — Acoes e Cotacoes. Nas demais paginas seria
-             so uma requisicao a cada 10s sem ninguem para ler. #}
-          {% if request.endpoint in ['portfolio.index', 'portfolio.quote_history'] %}
+          {# O pulso do coletor fica fixo na barra do menu, em toda pagina: e o
+             unico lugar que o mostra. Em Acoes quem o atualiza e a propria
+             carteira (troca fora de banda), entao ali ele nao faz polling.
+             Fora das telas de cotacao ele chega logo depois do carregamento,
+             para o render da pagina nao pagar a consulta. #}
+          {% if collector_heartbeat is defined %}
             {{ collector.heartbeat(collector_heartbeat, polling=request.endpoint != 'portfolio.index') }}
+          {% else %}
+            {{ collector.heartbeat_pending() }}
           {% endif %}
           {% if crumb[1] %}<span class="nav-current-page">{{ crumb[1] }}</span>{% endif %}
           <div class="global-filters" data-global-filters>
