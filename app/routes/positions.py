@@ -210,7 +210,6 @@ class PositionInput:
     side: Side
     opened_on: date
     target_multiplier: Decimal
-    result_mode: str
     portfolio_id: int
 
 
@@ -240,15 +239,12 @@ def _parse_form() -> PositionInput:
         raise ValueError(
             "Quantidade e multiplicador do target devem ser positivos; custo não pode ser negativo."
         )
-    result_mode = raw.get("result_mode", "").upper()
     try:
         portfolio_id = parse_positive_id(raw["portfolio_id"])
     except (KeyError, ValueError) as exc:
         raise ValueError("Selecione uma carteira.") from exc
     if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
-    if result_mode not in {"L", "B"}:
-        raise ValueError("Modo de resultado inválido.")
     return PositionInput(
         broker_id,
         ticker_id,
@@ -257,7 +253,6 @@ def _parse_form() -> PositionInput:
         side,
         opened_on,
         target_multiplier,
-        result_mode,
         portfolio_id,
     )
 

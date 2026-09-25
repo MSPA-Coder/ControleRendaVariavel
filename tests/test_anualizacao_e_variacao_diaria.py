@@ -47,7 +47,6 @@ def _posicao(*, lado="C", custo="10", atual="7", fechamento="7", dias=100, quant
         previous_close=Decimal(fechamento),
         target_multiplier=Decimal("1.5"),
         opened_on=HOJE - timedelta(days=dias),
-        result_mode="B",
         today=HOJE,
     )
 
@@ -159,7 +158,6 @@ def test_variacao_diaria_de_opcao_segue_a_mesma_convencao(lado, fechamento, atua
         underlying_price=Decimal("31"),
         opened_on=HOJE - timedelta(days=5),
         expiration_date=HOJE + timedelta(days=20),
-        result_mode="B",
         today=HOJE,
     )
 

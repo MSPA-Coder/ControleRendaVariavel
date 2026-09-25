@@ -385,7 +385,6 @@ class Position(Base):
             "target_multiplier NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="target_multiplier_finite",
         ),
-        CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
         UniqueConstraint("id", "owner_id", name="uq_positions_id_owner"),
         # Uma posição por exposição: aporte na mesma chave reforça a existente
         # (ver `positions.closure.create_or_merge_position`).
@@ -408,7 +407,6 @@ class Position(Base):
     side: Mapped[Side] = mapped_column(Enum(Side, name="position_side"), default=Side.BUY)
     opened_on: Mapped[date] = mapped_column(Date)
     target_multiplier: Mapped[Decimal] = mapped_column(Numeric(18, 8), default=Decimal("1.5"))
-    result_mode: Mapped[str] = mapped_column(String(1), default="L")
     portfolio_id: Mapped[int] = mapped_column(
         ForeignKey("portfolios.id", ondelete="RESTRICT"), index=True
     )
@@ -716,7 +714,6 @@ class OptionPosition(Base):
             "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="target_finite",
         ),
-        CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
         UniqueConstraint("id", "owner_id", name="uq_option_positions_id_owner"),
         UniqueConstraint("owner_id", "portfolio_id", "broker_id", "contract_id", "side",
                          name="uq_option_positions_chave"),
@@ -737,7 +734,6 @@ class OptionPosition(Base):
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
     side: Mapped[Side] = mapped_column(Enum(Side, name="position_side"))
     opened_on: Mapped[date] = mapped_column(Date)
-    result_mode: Mapped[str] = mapped_column(String(1), default="L")
     portfolio_id: Mapped[int] = mapped_column(
         ForeignKey("portfolios.id", ondelete="RESTRICT"), index=True
     )
@@ -955,7 +951,6 @@ class Transaction(Base):
             "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="result_finite",
         ),
-        CheckConstraint("result_mode IN ('L', 'B')", name="result_mode_valid"),
         CheckConstraint(
             "(status = 'OPEN' AND closed_on IS NULL AND exit_price IS NULL "
             "AND result IS NULL) OR "
@@ -1011,7 +1006,6 @@ class Transaction(Base):
     side: Mapped[Side] = mapped_column(Enum(Side, name="position_side"), default=Side.BUY)
     opened_on: Mapped[date] = mapped_column(Date)
     closed_on: Mapped[date | None] = mapped_column(Date, index=True)
-    result_mode: Mapped[str] = mapped_column(String(1), default="L")
     result: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
     """Resultado realizado, calculado no momento do fechamento (mesma
     fórmula de ``domain.operation_result``) e persistido — não recalculado

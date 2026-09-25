@@ -26,9 +26,6 @@
   </select></label>
   <label>Data de abertura<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
   <label>Data de encerramento<input required type="date" name="closed_on" value="{{ value.closed_on.isoformat() if editing and value.closed_on is defined and value.closed_on is not string else value.closed_on|default('', true) if value else '' }}"></label>
-  <label>Resultado<select name="result_mode">
-    {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}
-  </select></label>
   <label>Carteira<select required name="portfolio_id">
     <option value="">Selecione</option>
     {% for portfolio in portfolios %}

@@ -32,7 +32,6 @@ ambígua.
 | custo médio | `average_cost` |
 | tipo C/V | `side` |
 | início | `opened_on` |
-| modo B (bruto) ou L (líquido) | `result_mode` |
 | dias do ano | constante 365 |
 
 O **delta da cotação** da planilha não tem correspondente: foi removido do
@@ -71,8 +70,8 @@ não realizado daquele lote contra a cotação atual:
 resultado = sinal × quantidade do lote × (cotação atual − preço do aporte)
 ```
 
-O sinal é `+1` para compra (`C`) e `-1` para venda (`V`). O modo `L` aplica o
-fator líquido `0,9996`; o modo `B` mostra o valor bruto. O resultado de cada linha usa
+O sinal é `+1` para compra (`C`) e `-1` para venda (`V`). O valor é bruto (ver
+"Resultado bruto" em **Fórmulas**). O resultado de cada linha usa
 somente sua própria quantidade e seu preço de aporte, e não o saldo ou o custo
 médio acumulado.
 
@@ -286,12 +285,11 @@ Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
 | Atual | `delta * preço RTD` |
 | Var. dia | `s * (p / f - 1)` |
 | Bruto | `s * q * (p - c)` |
-| Líquido | `Bruto * 0,9996` |
 | Retorno | `Resultado / (q * c)` |
 | Retorno no período | `(1 + r) ** (período / d) - 1` |
-| Stop gain | `c * 1,5` |
+| Stop gain | compra: `c * m`; venda: `max(0, c * (2 - m))`, com `m` o multiplicador do target |
 | Distância do target | `Stop gain / p - 1` |
-| Breakeven | `p/c - 1` quando `c < p`; caso contrário `-(c/p - 1)` |
+| Breakeven | compra: `p/c - 1` quando `c < p`, senão `-(c/p - 1)`; venda: `1 - p/c` quando `p < c`, senão `c/p - 1` |
 | Desmontar | `s * q * p` |
 | Montar | `-s * q * c` |
 | Peso atual | `abs(Desmontar) / soma(abs(Desmontar))` |
@@ -313,6 +311,20 @@ possível numa venda) também: não há projeção composta com sentido.
   ano, perda maior que o investido numa compra. Pela composta, -72,8%. O
   retorno anualizado da aba **Risco** usava a mesma forma e passou junto.
 
+**Resultado bruto** (decisão de 25/09/2026). O resultado é sempre
+`s * q * (p - c)`, sem custos nem IR. A planilha tinha um modo `L`
+("líquido"), e o sistema o reproduzia como `Bruto * 0,9996`. Esse fator vinha
+de uma versão com bugs da `ResultadoOperacao`: o custo incidia sobre o
+resultado, e não sobre o volume negociado; a corretagem nunca era cobrada; e,
+numa perda, o "custo" deixava o número melhor. O modo saiu (revisão
+`20260925_0021`). Custos reais e IR são apurados fora do sistema. Resultados
+realizados gravados antes continuam com o valor calculado no encerramento.
+
+**Stop gain e breakeven respeitam o lado** (mesma data). A planilha e o
+sistema usavam a fórmula da compra também na venda: o alvo de uma venda com
+`m = 1,5` ficava 50% acima do custo, onde ela perde. Na venda o alvo é
+espelhado abaixo do custo e o breakeven é positivo quando o preço cai.
+
 O período é selecionável como semanal (`7` dias), mensal (`30`), trimestral
 (`90`), semestral (`182`) ou anual (`365`, padrão).
 
@@ -321,12 +333,11 @@ O período é selecionável como semanal (`7` dias), mensal (`30`), trimestral
 Estes casos fixam o resultado esperado da função de resultado e servem de
 oráculo para os testes unitários de domínio:
 
-| Entrada | Resultado |
+| Entrada (lado, quantidade, custo, preço) | Resultado |
 |---|---:|
-| `Ge, 100 dias, C, 100, 10, 12, L` | `199,92` |
-| `Ge, 100 dias, V, 100, 10, 12, L` | `-199,92` |
-| `Ge, 100 dias, C, 100, 10, 12, B` | `200,00` |
-| `Ge, 1550 dias, C, 1300, 14,20, 11,21, L` | `-3.885,4452` |
+| `C, 100, 10, 12` | `200,00` |
+| `V, 100, 10, 12` | `-200,00` |
+| `C, 1300, 14,20, 11,21` | `-3.887,00` |
 
 Corretora e prazo não alteram o resultado.
 

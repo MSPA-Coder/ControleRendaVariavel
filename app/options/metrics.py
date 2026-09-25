@@ -61,7 +61,6 @@ def calculate_option(
     underlying_price: Decimal,
     opened_on: date,
     expiration_date: date,
-    result_mode: str,
     today: date,
 ) -> OptionMetrics:
     direction = Decimal("1") if side == "C" else Decimal("-1")
@@ -69,7 +68,7 @@ def calculate_option(
     remaining_days = max((expiration_date - today).days, 0)
     total_days = max((expiration_date - opened_on).days, 0)
     result = operation_result(
-        side, quantity, average_cost, current_price, result_mode
+        side, quantity, average_cost, current_price
     )
     # Mesma convenção das ações (`app.core.domain.calculate_position`): variação
     # do dia contra o fechamento. A planilha media contra o preço atual.

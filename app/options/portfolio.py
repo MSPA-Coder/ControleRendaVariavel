@@ -103,7 +103,6 @@ def build_option_portfolio(
             underlying_price=quote.underlying_price,
             opened_on=position.opened_on,
             expiration_date=position.contract.expiration.exercise_date,
-            result_mode=position.result_mode,
             today=current_date,
         )
         position_greeks = calculate_greeks(

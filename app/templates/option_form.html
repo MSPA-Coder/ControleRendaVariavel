@@ -43,9 +43,6 @@
   <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}" data-sensitive-input="true"></label>
   <label>Target<input type="number" min="0" step="any" name="target_price" value="{{ value.target_price if value and value.target_price is not none else '' }}" data-sensitive-input="true"></label>
   <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
-  <label>Resultado<select name="result_mode">
-    {% for mode in ['L', 'B'] %}<option {{ 'selected' if value and value.result_mode == mode }}>{{ mode }}</option>{% endfor %}
-  </select></label>
   <label>Carteira<select required name="portfolio_id">
     <option value="">Selecione</option>
     {% for portfolio in portfolios %}<option value="{{ portfolio.id }}" data-simulated="{{ 'true' if portfolio.simulated else 'false' }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>{% endfor %}
