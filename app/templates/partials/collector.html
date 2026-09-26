@@ -1,10 +1,13 @@
 {# Fragmentos do estado do coletor RTD, atualizados por HTMX.
 
+   O pulso fica fixo na barra do menu (`base.html`), e só ali: o `id` é
+   único na página, e é por ele que a Carteira o atualiza fora de banda.
+
    `polling=true` faz o próprio fragmento se reagendar depois de cada troca:
    os atributos `hx-*` voltam no HTML devolvido pelo servidor, então o ciclo
-   continua sem JavaScript próprio. Quando o indicador é embutido em outro
-   fragmento que já faz polling (o controle do RTD), `polling=false` evita
-   duas requisições concorrentes para a mesma informação. #}
+   continua sem JavaScript próprio. Na Carteira, que já atualiza o pulso a
+   cada refresh, `polling=false` evita duas requisições para a mesma
+   informação. #}
 
 {% macro heartbeat(collector_heartbeat, polling=true, oob=false) %}
 <span
@@ -26,7 +29,27 @@
 </span>
 {% endmacro %}
 
-{% macro rtd_toggle(collector_enabled, collector_heartbeat) %}
+{% macro heartbeat_pending() %}
+{# Mesmo `id` e mesma forma do pulso, no estado "aguardando": o HTMX o troca
+   pelo pulso de verdade assim que a página carrega, e daí em diante o
+   fragmento devolvido segue o ciclo de 10s. #}
+<span
+  id="collector-heartbeat"
+  class="collector-heartbeat is-waiting"
+  hx-get="{{ url_for('portfolio.collector_heartbeat_partial') }}"
+  hx-trigger="load, every 10s"
+  hx-swap="outerHTML"
+  title="Consultando o coletor"
+  role="status"
+  aria-live="polite"
+>
+  <span class="heartbeat-dot" aria-hidden="true"></span>
+  <span class="visually-hidden">Consultando o coletor</span>
+  <time>--:--</time>
+</span>
+{% endmacro %}
+
+{% macro rtd_toggle(collector_enabled) %}
 {# O controle pausa e retoma a coleta; ele nao inicia nem encerra processo.
    Quem e dono do ciclo de vida do coletor e a tarefa do Windows. O que este
    botao grava e um fato na tabela, que o coletor le no proximo intervalo de
@@ -51,6 +74,5 @@
   >
   <span class="rtd-toggle-track" aria-hidden="true"></span>
   <span>{{ 'Coleta ativa' if collector_enabled else 'Coleta pausada' }}</span>
-  {{ heartbeat(collector_heartbeat, polling=false) }}
 </label>
 {% endmacro %}

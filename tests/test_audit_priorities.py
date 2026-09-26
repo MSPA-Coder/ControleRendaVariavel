@@ -30,7 +30,6 @@ def test_closed_transaction_rejects_future_dates(app, monkeypatch):
         "opened_on": future,
         "closed_on": future,
         "side": "C",
-        "result_mode": "L",
         "portfolio_id": "3",
     }
     with (
@@ -77,7 +76,6 @@ def test_new_option_position_rejects_expired_contract(app, monkeypatch):
         "target_price": "",
         "side": "C",
         "opened_on": date.today().isoformat(),
-        "result_mode": "L",
         "portfolio_id": "3",
     }
     with app.test_request_context("/options/positions", method="POST", data=form):

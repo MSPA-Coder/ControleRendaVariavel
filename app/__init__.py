@@ -113,14 +113,15 @@ def esquecer_tema_da_sessao() -> None:
     session.pop(CHAVE_USUARIO_TEMA_NA_SESSAO, None)
 
 
-# Telas que exibem o pulso do coletor: a barra do menu em Ações e Cotações, o
-# controle em Configurações e os dois fragmentos que o HTMX rebusca.
+# Telas que já trazem o pulso do coletor preenchido na barra do menu: as que
+# tratam de cotação e o fragmento que o HTMX rebusca. As demais mostram o
+# pulso "aguardando" e o buscam logo depois de carregar (ver `base.html`),
+# sem pagar a consulta durante o render.
 HEARTBEAT_ENDPOINTS = {
     "portfolio.index",
     "portfolio.quote_history",
     "portfolio.settings",
     "portfolio.collector_heartbeat_partial",
-    "portfolio.rtd_service_partial",
 }
 
 
@@ -393,19 +394,22 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     @app.context_processor
     def _collector_heartbeat_context() -> dict[str, object]:
-        """Pulso do coletor, só onde alguma tela o mostra.
+        """Pulso do coletor já preenchido, nas telas de `HEARTBEAT_ENDPOINTS`.
 
-        Ele custa uma consulta por render. O indicador aparece na barra do
-        menu em Ações e Cotações, e o controle do coletor vive em
-        Configurações; nas demais páginas a consulta não teria leitor.
+        Ele custa uma consulta por render; nas demais telas o pulso chega
+        depois, pelo próprio fragmento.
         """
         if request.endpoint not in HEARTBEAT_ENDPOINTS:
             return {}
         from app.collector.heartbeat import collector_heartbeat
+        from app.routes.helpers import quote_stale_after_seconds
 
+        # O mesmo limite de "desatualizado" que o resto do sistema (o que o
+        # admin define em Configurações): a página inteira e o polling de
+        # 10s não podem pintar o pulso com cores diferentes.
         return {
             "collector_heartbeat": collector_heartbeat(
-                stale_after_seconds=app.config["RTD_STALE_AFTER_SECONDS"]
+                stale_after_seconds=quote_stale_after_seconds()
             )
         }
 

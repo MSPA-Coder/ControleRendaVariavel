@@ -11,12 +11,11 @@
     {% if remote_collector_enabled %}
       <p class="form-help">O agente Windows envia cotações para este VPS independentemente do ambiente local.</p>
       <div class="rtd-toggle-row">
-        {{ collector.rtd_toggle(collector_enabled, collector_heartbeat) }}
+        {{ collector.rtd_toggle(collector_enabled) }}
       </div>
     {% else %}
       <p class="form-help">A coleta local é independente do VPS e só funciona quando iniciada no Windows. Ao parar, o processo é encerrado.</p>
       <p class="form-help">Use os atalhos de coleta local ou <code>scripts/rtd-local.ps1 -Action Start</code> e <code>-Action Stop</code> no Windows. Salvar esta tela não inicia o coletor.</p>
-      {{ collector.heartbeat(collector_heartbeat, polling=false) }}
     {% endif %}
     <div class="form-actions">
       <button class="button button-primary" type="submit"

@@ -122,7 +122,6 @@ def _current_position(
             position.quantity,
             position.average_cost,
             price,
-            position.result_mode,
         )
         ret = safe_div(result, cost)
     link = f"/positions/{position.id}"

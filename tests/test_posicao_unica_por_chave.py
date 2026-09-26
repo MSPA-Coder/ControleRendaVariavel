@@ -80,7 +80,7 @@ def test_tela_recusa_edicao_que_colide_com_422(review_case):
     form = {
         "csrf_token": token, "broker_id": data["broker"], "ticker_id": data["ticker_ids"][0],
         "portfolio_id": data["portfolio_ids"][0], "quantity": "4", "average_cost": "10", "side": "C",
-        "opened_on": date.today().isoformat(), "target_multiplier": "1.5", "result_mode": "L",
+        "opened_on": date.today().isoformat(), "target_multiplier": "1.5",
     }
     assert client.post("/positions", data=form).status_code == 302
     assert client.post("/positions", data={**form, "ticker_id": data["ticker_ids"][2]}).status_code == 302

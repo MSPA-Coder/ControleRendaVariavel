@@ -217,7 +217,6 @@ def position_movement_results(
                     movement.quantity,
                     movement.price,
                     current_price,
-                    position.result_mode,
                 )
                 if current_price is not None
                 else None
@@ -271,7 +270,6 @@ def build_portfolio(
             previous_close=quote.previous_close,
             target_multiplier=position.target_multiplier,
             opened_on=position.opened_on,
-            result_mode=position.result_mode,
             return_period_days=return_period_days,
             today=today,
         )

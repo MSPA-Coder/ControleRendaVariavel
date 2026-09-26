@@ -78,7 +78,6 @@ def create_open_transaction_for_position(position: Position) -> Transaction:
         side=position.side,
         opened_on=position.opened_on,
         closed_on=None,
-        result_mode=position.result_mode,
         result=None,
         status=TransactionStatus.OPEN,
         portfolio_id=position.portfolio_id,
@@ -124,7 +123,6 @@ def sync_open_transaction_for_position(position: Position) -> None:
     transaction.average_cost = position.average_cost
     transaction.side = position.side
     transaction.opened_on = position.opened_on
-    transaction.result_mode = position.result_mode
     transaction.portfolio_id = position.portfolio_id
     transaction.owner_id = position.owner_id
 
@@ -526,7 +524,6 @@ def close_open_position(
             held_quantity=position.quantity,
             average_cost=position.average_cost,
             side=position.side.value,
-            result_mode=position.result_mode,
             opened_on=position.opened_on,
             closed_on=closed_on,
             exit_price=exit_price,
@@ -561,7 +558,6 @@ def _close_entirely(
     transaction.side = position.side
     transaction.opened_on = position.opened_on
     transaction.closed_on = closed_on
-    transaction.result_mode = position.result_mode
     transaction.result = result
     transaction.status = TransactionStatus.CLOSED
     transaction.portfolio_id = position.portfolio_id
@@ -605,7 +601,6 @@ def _close_partially(
         side=position.side,
         opened_on=position.opened_on,
         closed_on=closed_on,
-        result_mode=position.result_mode,
         result=result,
         status=TransactionStatus.CLOSED,
         portfolio_id=position.portfolio_id,

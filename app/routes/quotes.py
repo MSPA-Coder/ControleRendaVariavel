@@ -5,21 +5,13 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from app import db
 from app.accounts.authorization import requer_admin
 from app.core.validation import parse_finite_decimal
-from app.models import (
-    OptionContract,
-    OptionPosition,
-    OptionPositionMovement,
-    Position,
-    PositionMovement,
-    PositionMovementKind,
-    QuoteHistory,
-    Ticker,
-)
+from app.models import QuoteHistory, Ticker
+from app.positions.average_cost_line import linhas_de_custo_medio_do_ticker
 from app.quotes.history import (
     quote_update_target_tickers,
     quote_update_targets,
@@ -40,73 +32,6 @@ from app.routes.helpers import (
     selected_currency_filter,
     ticker_price_series,
 )
-
-
-def open_position_entry_lines(ticker_id: int) -> list[dict[str, str]]:
-    """Referências tracejadas de cada aporte em posições abertas no ticker.
-
-    A posição consolidada registra a abertura e cada aumento no seu extrato.
-    Portanto, cada um desses aportes usa a própria data e preço original, em
-    vez do custo médio atual da posição. Embora o histórico seja global, esses
-    lançamentos financeiros são privados.
-    """
-    stock_rows = db.session.execute(
-        select(
-            PositionMovement.occurred_on,
-            PositionMovement.price,
-            PositionMovement.kind,
-        )
-        .join(Position, PositionMovement.position_id == Position.id)
-        .where(
-            Position.ticker_id == ticker_id,
-            Position.owner_id == current_owner_id(),
-            PositionMovement.owner_id == current_owner_id(),
-            PositionMovement.kind.in_(
-                (PositionMovementKind.OPEN, PositionMovementKind.INCREASE)
-            ),
-        )
-        .order_by(PositionMovement.occurred_on, PositionMovement.id)
-    ).all()
-    option_rows = db.session.execute(
-        select(
-            OptionPositionMovement.occurred_on,
-            OptionPositionMovement.price,
-            OptionPositionMovement.kind,
-        )
-        .join(
-            OptionPosition,
-            OptionPositionMovement.option_position_id == OptionPosition.id,
-        )
-        .join(OptionContract, OptionPosition.contract_id == OptionContract.id)
-        .where(
-            OptionContract.ticker_id == ticker_id,
-            OptionPosition.owner_id == current_owner_id(),
-            OptionPositionMovement.owner_id == current_owner_id(),
-            OptionPositionMovement.kind.in_(
-                (PositionMovementKind.OPEN, PositionMovementKind.INCREASE)
-            ),
-        )
-        .order_by(OptionPositionMovement.occurred_on, OptionPositionMovement.id)
-    ).all()
-
-    def as_line(
-        occurred_on: date,
-        price: object,
-        movement_kind: PositionMovementKind,
-        instrument: str,
-    ) -> dict[str, str]:
-        label = "Abertura" if movement_kind is PositionMovementKind.OPEN else "Aumento"
-        return {
-            "openedOn": occurred_on.isoformat(),
-            "entryPrice": str(price),
-            "label": f"{label} · {instrument} em {occurred_on.strftime('%d/%m/%Y')}",
-        }
-
-    lines = [
-        *(as_line(row.occurred_on, row.price, row.kind, "ação") for row in stock_rows),
-        *(as_line(row.occurred_on, row.price, row.kind, "opção") for row in option_rows),
-    ]
-    return sorted(lines, key=lambda line: line["openedOn"])
 
 
 def common_quote_start_date(
@@ -165,8 +90,10 @@ def _quote_history_context(
     if selected_ticker is None and tickers:
         selected_ticker = tickers[0]
     history = ticker_price_series(selected_ticker.id) if selected_ticker else []
-    open_position_lines = (
-        open_position_entry_lines(selected_ticker.id) if selected_ticker else []
+    average_cost_lines = (
+        linhas_de_custo_medio_do_ticker(selected_ticker.id, current_owner_id())
+        if selected_ticker
+        else []
     )
 
     candidates = benchmark_candidates(
@@ -204,7 +131,7 @@ def _quote_history_context(
         "tickers": tickers,
         "selected_ticker": selected_ticker,
         "history": history,
-        "open_position_lines": open_position_lines,
+        "average_cost_lines": average_cost_lines,
         "benchmark_candidates": candidates,
         "selected_benchmark": selected_benchmark,
         "chart_history": chart_history,

@@ -400,9 +400,8 @@ def test_v2_publica_snapshot_enriquecido_sem_simulada(sessao, cenario, publicand
     (linha,) = corpo["posicoes_atuais"]
     assert linha["instituicao"] == "genial"
     assert linha["custo_total"] == "12000.00"
-    # A posicao usa o modo liquido por padrao, portanto o contrato publica o
-    # mesmo resultado ajustado que as telas do sistema, nao o ganho bruto.
-    assert linha["resultado_nao_realizado"] == "3628.55"
+    # O contrato publica o mesmo resultado bruto que as telas do sistema.
+    assert linha["resultado_nao_realizado"] == "3630.00"
     assert corpo["omitidas"]["simuladas"] == 1
     assert all(not carteira["simulada"] for carteira in corpo["carteiras"])
 

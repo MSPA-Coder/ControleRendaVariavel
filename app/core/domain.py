@@ -12,7 +12,6 @@ e a formatação de horários de leitura exibidos na interface."""
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
-LIQUID_FACTOR = Decimal("0.9996")
 MONEY_QUANT = Decimal("0.01")
 COST_QUANT = Decimal("0.00000001")
 """Escala das colunas de custo e quantidade (``Numeric(24, 8)``). O custo
@@ -53,14 +52,51 @@ def operation_result(
     quantity: Decimal,
     average_cost: Decimal,
     current_price: Decimal,
-    result_mode: str,
 ) -> Decimal:
-    """Equivalent to ResultadoOperacao for the arguments used by sheet Ações."""
-    if result_mode not in {"L", "B"}:
-        raise ValueError("Modo de resultado inválido.")
+    """Resultado bruto: ``sinal * quantidade * (preço - custo)``.
+
+    Sem custos e sem IR, de propósito (decisão de 25/09/2026). O antigo modo
+    "L" multiplicava o resultado por 0,9996, herança de uma versão com bugs
+    da planilha: o custo incidia sobre o resultado, e não sobre o volume, e
+    numa perda deixava o número melhor. A apuração com custos reais e IR é
+    feita fora do sistema; aqui o número serve para gerir a carteira.
+    """
     direction = ONE if side == "C" else -ONE
-    gross = direction * quantity * (current_price - average_cost)
-    return gross * LIQUID_FACTOR if result_mode == "L" else gross
+    return direction * quantity * (current_price - average_cost)
+
+
+def stop_gain_price(side: str, average_cost: Decimal, target_multiplier: Decimal) -> Decimal:
+    """Preço-alvo de saída com ganho: o multiplicador é o ganho desejado
+    sobre o custo (1,5 = +50%).
+
+    Na compra o alvo fica acima do custo (``c * m``); na venda, espelhado
+    abaixo dele (``c * (2 - m)``): +50% numa venda é o preço cair à metade.
+    Uma venda não ganha mais que 100%, então um multiplicador de 2 ou mais
+    leva o alvo a zero, nunca a um preço negativo.
+    """
+    if side == "C":
+        return average_cost * target_multiplier
+    return max(ZERO, average_cost * (2 - target_multiplier))
+
+
+def breakeven_distance(side: str, average_cost: Decimal, current: Decimal) -> Decimal | None:
+    """Com ganho, quanto o preço se afastou do custo a favor da posição
+    (positivo); com perda, quanto ele precisa andar a favor para voltar ao
+    custo (negativo).
+
+    Compra: ``p/c - 1`` quando ``p > c``; senão ``-(c/p - 1)``.
+    Venda, espelhada: ``1 - p/c`` quando ``p < c``; senão ``-(1 - c/p)``.
+    Custo ou preço zero é "não aplicável".
+    """
+    if average_cost == ZERO or current == ZERO:
+        return None
+    if side == "C":
+        if average_cost < current:
+            return current / average_cost - ONE
+        return -(average_cost / current - ONE)
+    if current < average_cost:
+        return ONE - current / average_cost
+    return average_cost / current - ONE
 
 
 def signed_period_return(
@@ -115,28 +151,21 @@ def calculate_position(
     previous_close: Decimal,
     target_multiplier: Decimal,
     opened_on: date,
-    result_mode: str,
     return_period_days: int = 365,
     today: date | None = None,
 ) -> PositionMetrics:
     current = raw_price
     previous = previous_close
     direction = ONE if side == "C" else -ONE
-    result = operation_result(side, quantity, average_cost, current, result_mode)
+    result = operation_result(side, quantity, average_cost, current)
     invested = quantity * average_cost
     return_pct = safe_div(result, invested)
     days = ((today or date.today()) - opened_on).days
-    stop_gain = average_cost * target_multiplier
+    stop_gain = stop_gain_price(side, average_cost, target_multiplier)
     distance_to_target = safe_div(stop_gain, current)
     if distance_to_target is not None:
         distance_to_target -= ONE
-    breakeven = (
-        safe_div(current, average_cost)
-        if average_cost < current
-        else safe_div(average_cost, current)
-    )
-    if breakeven is not None:
-        breakeven = breakeven - ONE if average_cost < current else -(breakeven - ONE)
+    breakeven = breakeven_distance(side, average_cost, current)
     # Variação do dia contra o FECHAMENTO, como em qualquer cotação: fechamento
     # 100 e preço 110 é +10%. A planilha media contra o preço atual
     # (`1 - f / p`, que dava +9,09%) -- divergência decidida em 15/09/2026.
@@ -243,7 +272,6 @@ def plan_position_closure(
     held_quantity: Decimal,
     average_cost: Decimal,
     side: str,
-    result_mode: str,
     opened_on: date,
     closed_on: date,
     exit_price: Decimal,
@@ -266,7 +294,7 @@ def plan_position_closure(
             "A quantidade encerrada deve ser positiva e não pode superar a "
             "quantidade em carteira."
         )
-    result = operation_result(side, closing_quantity, average_cost, exit_price, result_mode)
+    result = operation_result(side, closing_quantity, average_cost, exit_price)
     remaining_quantity = held_quantity - closing_quantity
     return ClosureSplit(
         closing_quantity=closing_quantity,

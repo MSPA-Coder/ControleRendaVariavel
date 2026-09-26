@@ -72,7 +72,6 @@ class TransactionInput:
     side: Side
     opened_on: date
     closed_on: date
-    result_mode: str
     portfolio_id: int
     notes: str | None
 
@@ -166,9 +165,6 @@ def _parse_form() -> TransactionInput:
         raise ValueError(
             "As datas de uma transação realizada não podem estar no futuro."
         )
-    result_mode = raw.get("result_mode", "").upper()
-    if result_mode not in {"L", "B"}:
-        raise ValueError("Modo de resultado inválido.")
     try:
         portfolio_id = parse_positive_id(raw["portfolio_id"])
     except (KeyError, ValueError) as exc:
@@ -185,7 +181,6 @@ def _parse_form() -> TransactionInput:
         side,
         opened_on,
         closed_on,
-        result_mode,
         portfolio_id,
         notes,
     )
@@ -193,7 +188,7 @@ def _parse_form() -> TransactionInput:
 
 def _build_transaction(data: TransactionInput) -> Transaction:
     result = operation_result(
-        data.side.value, data.quantity, data.average_cost, data.exit_price, data.result_mode
+        data.side.value, data.quantity, data.average_cost, data.exit_price
     )
     fields = asdict(data)
     fields["result"] = result

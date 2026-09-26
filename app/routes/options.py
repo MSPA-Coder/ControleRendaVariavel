@@ -75,7 +75,6 @@ class OptionPositionInput:
     target_price: Decimal | None
     side: Side
     opened_on: date
-    result_mode: str
     portfolio_id: int
 
 
@@ -197,9 +196,6 @@ def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositio
         target_price is not None and target_price < 0
     ):
         raise ValueError("Quantidade deve ser positiva e preços não podem ser negativos.")
-    result_mode = raw.get("result_mode", "").upper()
-    if result_mode not in {"L", "B"}:
-        raise ValueError("Modo de resultado inválido.")
     return OptionPositionInput(
         broker_id,
         contract_id,
@@ -208,7 +204,6 @@ def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositio
         target_price,
         side,
         opened_on,
-        result_mode,
         portfolio_id,
     )
 

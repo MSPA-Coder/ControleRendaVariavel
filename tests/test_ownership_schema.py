@@ -214,7 +214,7 @@ def test_database_rejects_financial_links_between_owners(legacy_app):
             db.session.add(Position(owner_id=users[0].id, portfolio_id=portfolios[1].id,
                                     broker_id=broker.id, ticker_id=ticker.id, quantity=1,
                                     average_cost=10, side=Side.BUY, opened_on=date.today(),
-                                    target_multiplier=1.5, result_mode='L'))
+                                    target_multiplier=1.5))
             db.session.flush()
         assert 'fk_positions_portfolio_owner' in str(error.value)
         db.session.rollback()

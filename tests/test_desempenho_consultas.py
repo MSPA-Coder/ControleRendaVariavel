@@ -156,7 +156,7 @@ def carteira_medida(app_com_banco):
                         ticker_id=ticker.id, portfolio_id=criados["carteira"],
                         quantity=Decimal("5"), average_cost=Decimal("20"),
                         exit_price=Decimal("22"), side=Side.BUY, opened_on=inicio,
-                        closed_on=inicio + timedelta(days=1), result_mode="L",
+                        closed_on=inicio + timedelta(days=1),
                         result=Decimal("10"), status=TransactionStatus.CLOSED,
                     ))
                     db.session.add(Dividend(
@@ -176,13 +176,13 @@ def carteira_medida(app_com_banco):
                         owner_id=criados["usuario"], broker_id=corretora_id,
                         contract_id=contrato.id, portfolio_id=criados["carteira"],
                         quantity=Decimal("100"), average_cost=Decimal("1"), side=Side.BUY,
-                        opened_on=inicio, result_mode="L",
+                        opened_on=inicio,
                     ))
                 posicao = Position(owner_id=criados["usuario"], broker_id=corretora_id,
                                    ticker_id=ticker.id, portfolio_id=criados["carteira"],
                                    quantity=Decimal("10"), average_cost=Decimal("20"),
                                    target_multiplier=1, side=Side.BUY,
-                                   opened_on=inicio, result_mode="L")
+                                   opened_on=inicio)
                 db.session.add(posicao)
                 db.session.flush()
                 db.session.add(PositionMovement(

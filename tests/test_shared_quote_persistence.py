@@ -30,8 +30,8 @@ def test_shared_ticker_keeps_latest_market_and_each_side_quote(app_com_banco):
         portfolios = [Portfolio(owner_id=user.id, name=f"P-{suffix}-{i}", currency="BRL", simulated=False) for i, user in enumerate(users)]
         db.session.add_all(portfolios)
         db.session.flush()
-        buy = Position(owner_id=users[0].id, broker_id=broker.id, ticker_id=ticker.id, portfolio_id=portfolios[0].id, quantity=1, average_cost=10, target_multiplier=1, side=Side.BUY, opened_on=date.today(), result_mode="L")
-        sell = Position(owner_id=users[1].id, broker_id=broker.id, ticker_id=ticker.id, portfolio_id=portfolios[1].id, quantity=1, average_cost=10, target_multiplier=1, side=Side.SELL, opened_on=date.today(), result_mode="L")
+        buy = Position(owner_id=users[0].id, broker_id=broker.id, ticker_id=ticker.id, portfolio_id=portfolios[0].id, quantity=1, average_cost=10, target_multiplier=1, side=Side.BUY, opened_on=date.today())
+        sell = Position(owner_id=users[1].id, broker_id=broker.id, ticker_id=ticker.id, portfolio_id=portfolios[1].id, quantity=1, average_cost=10, target_multiplier=1, side=Side.SELL, opened_on=date.today())
         db.session.add_all([buy, sell])
         db.session.flush()
         persist_readings([

@@ -17,16 +17,13 @@ from flask.typing import ResponseReturnValue
 from app import db
 from app.accounts.authorization import requer_admin
 from app.collector.database import collector_settings_row
-from app.collector.heartbeat import collector_heartbeat
 from app.routes import bp
-from app.routes.helpers import collector_is_enabled, quote_stale_after_seconds
+from app.routes.helpers import collector_is_enabled
 
 
 def _render_heartbeat() -> str:
-    return render_template(
-        "partials/collector_heartbeat.html",
-        collector_heartbeat=collector_heartbeat(stale_after_seconds=quote_stale_after_seconds()),
-    )
+    # O pulso vem do processador de contexto (`app._collector_heartbeat_context`).
+    return render_template("partials/collector_heartbeat.html")
 
 
 def _render_rtd_toggle() -> str:
@@ -34,7 +31,6 @@ def _render_rtd_toggle() -> str:
         "partials/rtd_toggle.html",
         collector_enabled=collector_is_enabled(),
         remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
-        collector_heartbeat=collector_heartbeat(stale_after_seconds=quote_stale_after_seconds()),
     )
 
 
