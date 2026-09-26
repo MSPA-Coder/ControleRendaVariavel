@@ -1095,6 +1095,23 @@ class Dividend(Base):
             "amount NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
             name="amount_finite",
         ),
+        CheckConstraint("yield_on_cost IS NULL OR yield_on_cost >= 0", name="yield_on_cost_non_negative"),
+        CheckConstraint("dividend_yield IS NULL OR dividend_yield >= 0", name="dividend_yield_non_negative"),
+        CheckConstraint("quotas IS NULL OR quotas >= 0", name="quotas_non_negative"),
+        CheckConstraint("invested_total IS NULL OR invested_total >= 0", name="invested_total_non_negative"),
+        CheckConstraint("market_total IS NULL OR market_total >= 0", name="market_total_non_negative"),
+        CheckConstraint("average_price IS NULL OR average_price >= 0", name="average_price_non_negative"),
+        CheckConstraint("quoted_price IS NULL OR quoted_price >= 0", name="quoted_price_non_negative"),
+        CheckConstraint("amount_per_share IS NULL OR amount_per_share >= 0", name="amount_per_share_non_negative"),
+        UniqueConstraint(
+            "owner_id",
+            "ticker_id",
+            "broker_id",
+            "kind",
+            "payment_date",
+            "amount",
+            name="import_key",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1110,6 +1127,15 @@ class Dividend(Base):
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     payment_date: Mapped[date] = mapped_column(Date, index=True)
+    com_date: Mapped[date | None] = mapped_column(Date)
+    yield_on_cost: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    dividend_yield: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    quotas: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    invested_total: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    market_total: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    average_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    quoted_price: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    amount_per_share: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
     notes: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

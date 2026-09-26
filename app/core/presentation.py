@@ -107,6 +107,13 @@ def register_filters(app: Flask) -> None:
             return "-"
         return mask_value(f"{_number(value * 100, decimals)}%")
 
+    @app.template_filter("percent_points")
+    def percent_points(value: Decimal | None, decimals: int = 1) -> str:
+        """Formata pontos percentuais exportados pela planilha (0,42 = 0,42%)."""
+        if value is None:
+            return "-"
+        return mask_value(f"{_number(value, decimals)}%")
+
     @app.template_filter("instrument_status_label")
     def instrument_status_label(status: str | None) -> str:
         """Nome curto do estado de negociação, o que a coluna ST exibe.

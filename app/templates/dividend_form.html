@@ -27,7 +27,10 @@
   </select></label>
   <label>Valor recebido<input required type="number" min="0" step="any" name="amount" value="{{ value.amount if value else '' }}" data-sensitive-input="true"></label>
   <label>Data de pagamento<input required type="date" name="payment_date" value="{{ value.payment_date.isoformat() if editing and value.payment_date is defined and value.payment_date is not string else value.payment_date|default('', true) if value else '' }}"></label>
-  <label>Notas (opcional)<input type="text" maxlength="500" name="notes" value="{{ value.notes if value and value.notes else '' }}"></label>
+  <label>Data com<input type="date" name="com_date" value="{{ value.com_date.isoformat() if editing and value.com_date is defined and value.com_date else '' }}"></label>
+  <label>YOC (%)<input type="number" min="0" step="any" name="yield_on_cost" value="{{ value.yield_on_cost if value and value.yield_on_cost is not none else '' }}" data-sensitive-input="true"></label>
+  <label>DY (%)<input type="number" min="0" step="any" name="dividend_yield" value="{{ value.dividend_yield if value and value.dividend_yield is not none else '' }}" data-sensitive-input="true"></label>
+  <label>Cotas<input type="number" min="0" step="any" name="quotas" value="{{ value.quotas if value and value.quotas is not none else '' }}" data-sensitive-input="true"></label>
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.dividends') }}">Cancelar</a>
     <button class="button button-primary" type="submit"
