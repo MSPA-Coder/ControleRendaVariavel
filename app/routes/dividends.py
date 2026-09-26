@@ -13,7 +13,13 @@ from sqlalchemy.orm import contains_eager
 from app import db
 from app.core.currency_filter import ALL
 from app.core.validation import parse_finite_decimal
-from app.models import Broker, Dividend, IncomeKind, Ticker
+from app.dividends.importer import (
+    MAX_WORKBOOK_BYTES,
+    DividendImportRow,
+    DividendWorkbookError,
+    read_dividend_workbook,
+)
+from app.models import Broker, Dividend, IncomeKind, Quote, Ticker
 from app.performance.dividends import build_dividend_report
 from app.routes import bp
 from app.routes.helpers import (
@@ -36,7 +42,10 @@ class DividendInput:
     amount: Decimal
     payment_date: date
     kind: IncomeKind
-    notes: str | None
+    com_date: date | None
+    yield_on_cost: Decimal | None
+    dividend_yield: Decimal | None
+    quotas: Decimal | None
 
 
 def _parse_form() -> DividendInput:
@@ -58,8 +67,38 @@ def _parse_form() -> DividendInput:
         raise ValueError("O valor do provento deve ser positivo.")
     if payment_date > date.today():
         raise ValueError("A data de pagamento de um provento recebido não pode estar no futuro.")
-    notes = raw.get("notes") or None
-    return DividendInput(broker_id, ticker_id, amount, payment_date, kind, notes)
+    try:
+        com_date = date.fromisoformat(raw["com_date"]) if raw.get("com_date") else None
+        yield_on_cost = (
+            parse_finite_decimal(raw["yield_on_cost"], field_name="o YOC")
+            if raw.get("yield_on_cost")
+            else None
+        )
+        dividend_yield = (
+            parse_finite_decimal(raw["dividend_yield"], field_name="o DY")
+            if raw.get("dividend_yield")
+            else None
+        )
+        quotas = (
+            parse_finite_decimal(raw["quotas"], field_name="as cotas")
+            if raw.get("quotas")
+            else None
+        )
+    except (ValueError, ArithmeticError) as exc:
+        raise ValueError("Há um valor ausente ou inválido no formulário.") from exc
+    if any(value is not None and value < 0 for value in (yield_on_cost, dividend_yield, quotas)):
+        raise ValueError("YOC, DY e cotas não podem ser negativos.")
+    return DividendInput(
+        broker_id,
+        ticker_id,
+        amount,
+        payment_date,
+        kind,
+        com_date,
+        yield_on_cost,
+        dividend_yield,
+        quotas,
+    )
 
 
 def _parse_int_set(raw: str) -> set[int]:
@@ -140,7 +179,16 @@ def dividends_results_context() -> dict[str, object]:
         )
     ]
 
-    report = build_dividend_report(records, open_real_cost_basis_by_ticker())
+    quotes_by_ticker = {
+        ticker_id: quote
+        for ticker_id, quote in db.session.execute(select(Quote.ticker_id, Quote.last_price))
+        if quote > 0
+    }
+    report = build_dividend_report(
+        records,
+        cost_basis_by_ticker=open_real_cost_basis_by_ticker(),
+        quotes_by_ticker=quotes_by_ticker,
+    )
     return {
         "selected_broker": broker or "",
         "totals_by_currency": sorted(totals_by_currency.items()),
@@ -212,6 +260,107 @@ def create_dividend() -> ResponseReturnValue:
     )
     db.session.commit()
     flash("Renda registrada.", "success")
+    return redirect(url_for("portfolio.dividends"))
+
+
+def _import_key(row: DividendImportRow, *, ticker_id: int, broker_id: int) -> tuple[object, ...]:
+    return (ticker_id, broker_id, row.kind, row.payment_date, row.amount)
+
+
+def _same_imported_values(dividend: Dividend, row: DividendImportRow) -> bool:
+    return (
+        dividend.com_date == row.com_date
+        and dividend.yield_on_cost == row.yield_on_cost
+        and dividend.dividend_yield == row.dividend_yield
+        and dividend.quotas == row.quotas
+        and dividend.invested_total == row.invested_total
+        and dividend.market_total == row.market_total
+        and dividend.average_price == row.average_price
+        and dividend.quoted_price == row.quoted_price
+        and dividend.amount_per_share == row.amount_per_share
+    )
+
+
+@bp.route("/dividends/import", methods=["GET", "POST"])
+def import_dividends() -> ResponseReturnValue:
+    if request.method == "GET":
+        return render_template("dividend_import.html")
+    uploaded = request.files.get("workbook")
+    if uploaded is None or not uploaded.filename or not uploaded.filename.lower().endswith(".xlsx"):
+        flash("Selecione uma planilha no formato XLSX.", "error")
+        return render_template("dividend_import.html"), 422
+    content = uploaded.stream.read(MAX_WORKBOOK_BYTES + 1)
+    try:
+        workbook = read_dividend_workbook(content)
+    except DividendWorkbookError as exc:
+        flash(str(exc), "error")
+        return render_template("dividend_import.html"), 422
+
+    owner_id = current_owner_id()
+    tickers = {ticker.symbol.upper(): ticker for ticker in db.session.scalars(select(Ticker))}
+    brokers = {broker.name.casefold(): broker for broker in db.session.scalars(select(Broker))}
+    existing: dict[tuple[object, ...], Dividend] = {
+        (record.ticker_id, record.broker_id, record.kind, record.payment_date, record.amount): record
+        for record in db.session.scalars(select(Dividend).where(Dividend.owner_id == owner_id))
+    }
+    created = updated = ignored = 0
+    failures = list(workbook.rejected_rows)
+    missing_tickers: set[str] = set()
+    for row in workbook.rows:
+        ticker = tickers.get(row.ticker)
+        if ticker is None:
+            missing_tickers.add(row.ticker)
+            continue
+        broker = brokers.get(row.broker.casefold())
+        if broker is None:
+            failures.append(f"Linha {row.source_row}: corretora '{row.broker}' não está cadastrada.")
+            continue
+        if ticker.is_benchmark:
+            failures.append(f"Linha {row.source_row}: {row.ticker} é um ticker de referência.")
+            continue
+        key = _import_key(row, ticker_id=ticker.id, broker_id=broker.id)
+        dividend = existing.get(key)
+        if dividend is None:
+            dividend = Dividend(
+                owner_id=owner_id,
+                ticker_id=ticker.id,
+                broker_id=broker.id,
+                amount=row.amount,
+                kind=row.kind,
+                payment_date=row.payment_date,
+                com_date=row.com_date,
+                yield_on_cost=row.yield_on_cost,
+                dividend_yield=row.dividend_yield,
+                quotas=row.quotas,
+                invested_total=row.invested_total,
+                market_total=row.market_total,
+                average_price=row.average_price,
+                quoted_price=row.quoted_price,
+                amount_per_share=row.amount_per_share,
+            )
+            db.session.add(dividend)
+            existing[key] = dividend
+            grant_ticker_entitlement(user_id=owner_id, ticker_id=ticker.id, held_on=row.payment_date)
+            created += 1
+        elif _same_imported_values(dividend, row):
+            ignored += 1
+        else:
+            dividend.com_date = row.com_date
+            dividend.yield_on_cost = row.yield_on_cost
+            dividend.dividend_yield = row.dividend_yield
+            dividend.quotas = row.quotas
+            dividend.invested_total = row.invested_total
+            dividend.market_total = row.market_total
+            dividend.average_price = row.average_price
+            dividend.quoted_price = row.quoted_price
+            dividend.amount_per_share = row.amount_per_share
+            updated += 1
+    db.session.commit()
+    flash(f"Importação concluída: {created} criado(s), {updated} atualizado(s), {ignored} duplicado(s) ignorado(s).", "success")
+    if failures:
+        flash(f"{len(failures)} linha(s) rejeitada(s): " + " ".join(failures[:5]), "error")
+    if missing_tickers:
+        flash("Tickers não cadastrados: " + ", ".join(sorted(missing_tickers)) + ".", "error")
     return redirect(url_for("portfolio.dividends"))
 
 

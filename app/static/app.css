@@ -621,6 +621,7 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   padding: .45rem .65rem;
 }
 .header-controls { align-items: end; display: flex; flex-wrap: wrap; gap: .6rem; }
+.dividend-actions { display: flex; gap: .6rem; }
 .topbar .filters {
   background: transparent;
   border: 0;
@@ -662,6 +663,7 @@ details.catalog-card > h2 { display: none; }
 
 @media (max-width: 700px) {
   .header-controls, .topbar .filters { align-items: stretch; width: 100%; }
+  .dividend-actions { width: 100%; }
   .topbar .filters label { flex: 1 1 120px; }
   .topbar .filters select { min-width: 0; width: 100%; }
   .broker-fields { grid-template-columns: 1fr; }

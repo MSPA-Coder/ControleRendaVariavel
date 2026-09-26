@@ -222,8 +222,8 @@ por carteira (`app/performance/risk.py`,
 
 ### Limitações aceitas
 
-- **Data de pagamento, não data ex.** `Dividend` só guarda `payment_date`; a
-  queda de preço acontece na data ex, então preço e crédito do provento
+- **Crédito no pagamento.** `Dividend` guarda também `com_date`, mas a série
+  de retorno credita a renda em `payment_date`; preço e crédito do provento
   podem cair em meses diferentes na série mensal.
 - **A renda depende do cadastro.** A série de preços é nominal (não embute
   provento); uma renda não lançada é retorno que simplesmente não aparece.
@@ -241,6 +241,26 @@ por carteira (`app/performance/risk.py`,
 - **Custo médio e `opened_on` podem ser imprecisos quando cadastrados em
   lote.** O relatório de performance não depende deles, mas Carteira,
   Transações e o resultado realizado dependem.
+
+## Proventos importados e indicadores
+
+A importação de proventos exige os cabeçalhos `Ativo`, `Corretora`,
+`Recebido`, `Tipo`, `Data Pgto.`, `Data Com`, `YOC`, `DY`, `Cotas`,
+`Total investido`, `Total atual`, `Preço Médio`, `Cotação` e `Valor por Cota`.
+Pode haver colunas adicionais e a ordem não importa. Os totais e preços da
+linha são snapshots do arquivo; o CRV recalcula o YOC e o DY históricos da
+linha por eles, em pontos percentuais.
+
+No resumo por ticker, os indicadores não somam esses percentuais históricos:
+
+```
+DY 12m    = soma dos proventos por cota pagos nos últimos 365 dias / cotação atual
+YOC atual = todos os proventos recebidos / custo das posições reais abertas
+```
+
+O DY depende da última cotação disponível no CRV. O YOC não é exibido para
+um ticker sem posição real aberta. Ambos são indicadores informativos e não
+incluem valorização, impostos ou custos de negociação.
 
 ## Cotações RTD
 

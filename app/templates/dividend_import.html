@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Importar proventos{% endblock %}
+{% block content %}
+<form class="position-form" method="post" enctype="multipart/form-data" action="{{ url_for('portfolio.import_dividends') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>Importar proventos</h1>
+  <p class="form-help">Selecione uma planilha XLSX com as colunas: Ativo, Corretora, Recebido, Tipo, Data Pgto., Data Com, YOC, DY e Cotas.</p>
+  <label>Planilha XLSX<input required type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+  <div class="form-actions">
+    <a class="button" href="{{ url_for('portfolio.dividends') }}">Cancelar</a>
+    <button class="button button-primary" type="submit">Importar</button>
+  </div>
+</form>
+{% endblock %}

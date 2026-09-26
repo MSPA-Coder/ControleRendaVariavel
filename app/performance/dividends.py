@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from app.core.domain import safe_div
@@ -20,21 +20,15 @@ class TickerDividendTotal:
     Só os tipos com valor aparecem; o template itera ``IncomeKind`` para
     exibir as três colunas sempre, com "-" onde não houver renda daquele
     tipo — mesmo padrão de ``MonthlyPerformancePoint.income_by_kind``."""
-    cost_basis: Decimal | None
-    """Custo de aquisição atual do ativo (soma de quantidade × custo médio
-    das posições REAIS ainda abertas nesse ticker, ver
-    ``app.routes.helpers.open_real_cost_basis_by_ticker``). ``None`` quando o ativo não tem
-    posição aberta hoje — o custo de aquisição de uma posição já encerrada
-    não fica registrado isoladamente por ativo em nenhum lugar do modelo,
-    então ``yield_on_cost`` também fica ``None`` nesse caso."""
-    yield_on_cost: Decimal | None
-    """Proventos recebidos ÷ custo de aquisição (Relatório de
-    Proventos). Ver ``cost_basis`` para quando fica indisponível."""
     entries: list[Dividend]
     """Os lançamentos individuais deste ativo, na mesma ordem de
     ``dividends`` (mais recente primeiro, garantida pela consulta em
     ``routes.dividends``) — o drill-down do card "Por ativo" na tela de
     Proventos, aberto pelo `+` como o extrato de uma posição em Carteira."""
+    dividend_yield_12m: Decimal | None
+    """Proventos por cota nos últimos 365 dias ÷ cotação atual."""
+    yield_on_cost_current: Decimal | None
+    """Todos os proventos recebidos ÷ custo das posições reais abertas."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,24 +58,24 @@ class DividendReport:
 
 def build_dividend_report(
     dividends: list[Dividend],
+    *,
     cost_basis_by_ticker: Mapping[int, Decimal],
+    quotes_by_ticker: Mapping[int, Decimal],
+    reference_date: date | None = None,
 ) -> DividendReport:
     """Agrega proventos por ativo e por ano, cada um com seu drill-down.
-
-    ``cost_basis_by_ticker`` é fornecido pelo chamador (ver
-    ``routes.dividends._cost_basis_by_ticker``) em vez de calculado aqui,
-    para manter esta função pura e testável com dados simples — sem
-    depender de sessão de banco.
 
     Espera ``dividends`` já ordenado do mais recente ao mais antigo (mesma
     consulta da lista bruta em ``routes.dividends``): é essa ordem que
     ``TickerDividendTotal.entries`` preserva, sem reordenar.
     """
+    reference_date = reference_date or date.today()
+    trailing_start = reference_date - timedelta(days=365)
     ticker_totals: dict[tuple[str, str], Decimal] = {}
     ticker_ids: dict[tuple[str, str], int] = {}
     ticker_kind_totals: dict[tuple[str, str], dict[str, Decimal]] = {}
-    ticker_cost_basis: dict[tuple[str, str], Decimal | None] = {}
     ticker_entries: dict[tuple[str, str], list[Dividend]] = {}
+    trailing_per_share: dict[tuple[str, str], Decimal] = {}
     month_totals: dict[tuple[date, str], Decimal] = {}
     for dividend in dividends:
         ticker_key = (dividend.ticker, dividend.currency)
@@ -89,15 +83,20 @@ def build_dividend_report(
         ticker_ids[ticker_key] = dividend.ticker_id
         by_kind = ticker_kind_totals.setdefault(ticker_key, {})
         by_kind[dividend.kind] = by_kind.get(dividend.kind, Decimal("0")) + dividend.amount
-        ticker_cost_basis[ticker_key] = cost_basis_by_ticker.get(dividend.ticker_id)
         ticker_entries.setdefault(ticker_key, []).append(dividend)
+        if dividend.payment_date >= trailing_start:
+            amount_per_share = dividend.amount_per_share
+            if amount_per_share is None and dividend.quotas:
+                amount_per_share = dividend.amount / dividend.quotas
+            if amount_per_share is not None:
+                trailing_per_share[ticker_key] = (
+                    trailing_per_share.get(ticker_key, Decimal("0")) + amount_per_share
+                )
         month_key = (dividend.payment_date.replace(day=1), dividend.currency)
         month_totals[month_key] = month_totals.get(month_key, Decimal("0")) + dividend.amount
 
     by_ticker = []
     for (ticker, currency), total in sorted(ticker_totals.items()):
-        cost_basis = ticker_cost_basis[(ticker, currency)]
-        yield_on_cost = safe_div(total, cost_basis) if cost_basis is not None else None
         by_ticker.append(
             TickerDividendTotal(
                 ticker=ticker,
@@ -105,9 +104,15 @@ def build_dividend_report(
                 currency=currency,
                 total_amount=total,
                 amount_by_kind=ticker_kind_totals[(ticker, currency)],
-                cost_basis=cost_basis,
-                yield_on_cost=yield_on_cost,
                 entries=ticker_entries[(ticker, currency)],
+                dividend_yield_12m=safe_div(
+                    trailing_per_share.get((ticker, currency), Decimal("0")),
+                    quotes_by_ticker.get(ticker_ids[(ticker, currency)], Decimal("0")),
+                ),
+                yield_on_cost_current=safe_div(
+                    total,
+                    cost_basis_by_ticker.get(ticker_ids[(ticker, currency)], Decimal("0")),
+                ),
             )
         )
 
