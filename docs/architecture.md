@@ -162,7 +162,13 @@ já deteve. A janela de preços históricos é limitada por
 para todo o período. Preço ou valor de mercado ausente permanece nulo, sem
 estimativa; a cobertura informa as contagens de posições sem preço e excluídas.
 Cada resposta leva `snapshot_id`, e os recursos levam `source_id` estável e
-opaco. Posições declaram `price_kind` e `valuation_method`: o preço avaliado
+opaco. Cada item de `holdings` publica `instrument_type: "equity"`, identificando
+de forma explícita e estável o tipo das posições abertas de ações que compõem o
+escopo atual. `coverage.holdings.complete` declara `true` porque a lista contém
+todas as posições abertas de ações em carteiras reais do owner, inclusive as sem
+cotação; carteiras simuladas e opções ficam fora desse escopo. O consumidor só
+deve reconciliar holdings ausentes dentro desse escopo quando essa cobertura for
+completa. Posições declaram `price_kind` e `valuation_method`: o preço avaliado
 usa cotação específica do lado quando disponível e recorre ao preço geral do
 coletor somente quando necessário. A série de preços do coletor é marcada como
 informativa e não como o preço usado na avaliação da posição.
