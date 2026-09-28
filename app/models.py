@@ -788,17 +788,13 @@ class PatrimonioV4Outbox(Base):
     )
 
     cursor: Mapped[int] = mapped_column(primary_key=True)
-    owner_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), index=True, nullable=True
-    )
+    owner_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     resource: Mapped[str] = mapped_column(String(32))
     source_record_id: Mapped[int] = mapped_column(Integer)
     operation: Mapped[str] = mapped_column(String(8))
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
-    owner_ref: Mapped[User | None] = relationship()
 
 
 class OptionExpiration(Base):

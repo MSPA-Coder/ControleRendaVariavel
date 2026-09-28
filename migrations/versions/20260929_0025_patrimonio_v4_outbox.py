@@ -18,15 +18,15 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "patrimonio_v4_change_counter",
-        sa.Column("id", sa.SmallInteger(), primary_key=True),
-        sa.Column("value", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("value", sa.Integer(), nullable=False, server_default="0"),
         sa.CheckConstraint("id = 1", name="ck_patrimonio_v4_change_counter_singleton"),
         sa.CheckConstraint("value >= 0", name="ck_patrimonio_v4_change_counter_value_non_negative"),
     )
     op.execute("INSERT INTO patrimonio_v4_change_counter (id, value) VALUES (1, 0)")
     op.create_table(
         "patrimonio_v4_outbox",
-        sa.Column("cursor", sa.BigInteger(), primary_key=True),
+        sa.Column("cursor", sa.Integer(), primary_key=True),
         sa.Column("owner_id", sa.Integer(), nullable=True),
         sa.Column("resource", sa.String(length=32), nullable=False),
         sa.Column("source_record_id", sa.Integer(), nullable=False),
