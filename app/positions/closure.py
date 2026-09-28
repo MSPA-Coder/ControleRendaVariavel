@@ -33,7 +33,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
-from app.positions.ledger import archive_closed_position
+from app.positions.ledger import archive_closed_position, archive_closed_stock_movements
 
 
 def _is_simulated(portfolio_id: int) -> bool:
@@ -563,9 +563,25 @@ def _close_entirely(
     transaction.portfolio_id = position.portfolio_id
     transaction.owner_id = position.owner_id
     transaction.notes = f"Encerrada a partir da posição #{position.id}."
+    # Posições antigas podem não ter a transação aberta espelhada. Quando a
+    # transação é criada aqui, materialize seu id antes de registrá-lo no
+    # evento ``close`` do arquivo durável.
+    db.session.flush()
     # Antes de apagar: a exclusão leva o extrato em cascata, e sem ele a
     # posição encerrada sumiria do relatório de performance, que reconstrói a
     # série a partir dele. Ver `app.positions.ledger`.
+    # O arquivo abaixo conserva o extrato completo para integrações futuras;
+    # `PositionLedgerArchive` continua sendo a projeção mínima usada pela série.
+    archive_closed_stock_movements(
+        position_id=position.id,
+        ticker_id=position.ticker_id,
+        portfolio_id=position.portfolio_id,
+        broker_id=position.broker_id,
+        owner_id=position.owner_id,
+        side=position.side,
+        movements=position.movements,
+        closing_transaction=transaction,
+    )
     archive_closed_position(
         instrument="stock",
         position_id=position.id,

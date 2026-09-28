@@ -507,8 +507,9 @@ class PositionMovement(Base):
     ``Transaction.result``, e não é recalculado depois.
 
     O extrato acompanha a posição: encerrar totalmente (ou excluir) a posição
-    apaga seus movimentos em cascata, porque o resultado realizado já fica
-    registrado em ``transactions``, que sobrevive à posição.
+    apaga seus movimentos em cascata. No encerramento total, uma cópia integral
+    dos movimentos é gravada em ``PositionMovementArchive`` antes da cascata;
+    excluir sem encerrar continua sendo uma operação de desfazer.
     """
 
     __tablename__ = "position_movements"
@@ -652,6 +653,148 @@ class PositionLedgerArchive(Base):
     resulting_signed_quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     owner_ref: Mapped[User] = relationship()
+
+
+class PositionMovementArchive(Base):
+    """Cópia integral do extrato de uma posição de ações encerrada.
+
+    ``PositionMovement`` continua ligado à posição viva e é apagado em
+    cascata no encerramento. Este arquivo preserva cada campo financeiro do
+    movimento e o contexto da posição sem FK para a posição ou transação, que
+    podem deixar de existir depois. Só recebe movimentos em encerramentos
+    totais ocorridos após a criação desta tabela; não há backfill confiável
+    para o histórico antigo.
+    """
+
+    __tablename__ = "position_movement_archive"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id", "source_position_id", "source_movement_id",
+            name="uq_position_movement_archive_source",
+        ),
+        ForeignKeyConstraint(
+            ["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
+            name="fk_position_movement_archive_portfolio_owner", ondelete="RESTRICT",
+        ),
+        CheckConstraint("kind IN ('open', 'increase', 'decrease', 'adjustment', 'close')", name="kind_valid"),
+        CheckConstraint("side IN ('C', 'V')", name="side_valid"),
+        CheckConstraint("price >= 0", name="price_non_negative"),
+        CheckConstraint("resulting_quantity >= 0", name="resulting_quantity_non_negative"),
+        CheckConstraint("resulting_average_cost >= 0", name="resulting_average_cost_non_negative"),
+        CheckConstraint(
+            "quantity_delta NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="quantity_delta_finite",
+        ),
+        CheckConstraint(
+            "price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="price_finite",
+        ),
+        CheckConstraint(
+            "resulting_quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="resulting_quantity_finite",
+        ),
+        CheckConstraint(
+            "resulting_average_cost NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="resulting_average_cost_finite",
+        ),
+        CheckConstraint(
+            "result IS NULL OR result NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="result_finite",
+        ),
+        CheckConstraint(
+            "(kind IN ('decrease', 'close')) = (result IS NOT NULL)",
+            name="result_only_on_reduction_or_close",
+        ),
+        CheckConstraint(
+            "(kind IN ('open', 'increase') AND quantity_delta > 0) OR "
+            "(kind IN ('decrease', 'close') AND quantity_delta < 0) OR "
+            "(kind = 'adjustment')",
+            name="quantity_delta_sign_matches_kind",
+        ),
+        CheckConstraint(
+            "source_transaction_id IS NULL OR kind IN ('decrease', 'close')",
+            name="transaction_only_on_reduction_or_close",
+        ),
+        CheckConstraint(
+            "kind != 'close' OR "
+            "(source_transaction_id IS NOT NULL AND source_movement_id IS NULL "
+            "AND resulting_quantity = 0)",
+            name="close_event_matches_final_transaction",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="RESTRICT"), index=True)
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id", ondelete="RESTRICT"), index=True)
+    broker_id: Mapped[int] = mapped_column(ForeignKey("brokers.id", ondelete="RESTRICT"), index=True)
+    side: Mapped[str] = mapped_column(String(4))
+    source_position_id: Mapped[int] = mapped_column(Integer)
+    source_movement_id: Mapped[int | None] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))
+    quantity_delta: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    occurred_on: Mapped[date] = mapped_column(Date, index=True)
+    result: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    # Referência informativa: não é FK para que a trilha permaneça completa
+    # mesmo se a transação de origem for posteriormente removida.
+    source_transaction_id: Mapped[int | None] = mapped_column(Integer)
+    resulting_quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    resulting_average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    source_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    owner_ref: Mapped[User] = relationship()
+
+
+class PatrimonioV4ChangeCounter(Base):
+    """Relógio transacional único do feed público de patrimônio.
+
+    A linha é deliberadamente atualizada, e não uma sequência PostgreSQL:
+    seu lock permanece até o commit. Assim um cursor nunca fica visível antes
+    de uma alteração anterior que ainda esteja em transação.
+    """
+
+    __tablename__ = "patrimonio_v4_change_counter"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton"),
+        CheckConstraint("value >= 0", name="value_non_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    value: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+
+
+class PatrimonioV4Outbox(Base):
+    """Notificação transacional de uma mutação publicada pelo contrato v4.
+
+    O feed é de invalidação: o consumidor busca o snapshot consistente depois
+    de observar eventos. O registro preserva a identidade suficiente para
+    diagnosticar exclusões sem expor a chave primária pela API.
+    """
+
+    __tablename__ = "patrimonio_v4_outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "resource IN ('holding', 'income', 'price_current', 'price_history', 'position_ledger')",
+            name="resource_valid",
+        ),
+        CheckConstraint("operation IN ('upsert', 'delete')", name="operation_valid"),
+        Index("ix_patrimonio_v4_outbox_owner_cursor", "owner_id", "cursor"),
+    )
+
+    cursor: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    resource: Mapped[str] = mapped_column(String(32))
+    source_record_id: Mapped[int] = mapped_column(Integer)
+    operation: Mapped[str] = mapped_column(String(8))
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class OptionExpiration(Base):

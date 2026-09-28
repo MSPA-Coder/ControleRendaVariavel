@@ -227,6 +227,14 @@ def pedir_v2(publicando, **parametros):
     )
 
 
+def pedir_historico_posicao(publicando, **parametros):
+    return publicando.get(
+        "/patrimonio/v3/holding-history",
+        query_string=parametros,
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+
+
 @banco
 def test_posicao_real_e_publicada_com_valor_a_mercado(sessao, cenario, publicando):
     sessao.add(_posicao(cenario, cenario["real"]))
@@ -464,6 +472,132 @@ def _fechamento(cenario, dia, preco, ticker=None):
         recorded_date=dia,
         recorded_at=datetime.combine(dia, datetime.min.time(), tzinfo=UTC),
     )
+
+
+@banco
+def test_historico_por_ticker_publica_preco_quantidade_e_valor_owner_scoped(
+    sessao, cenario, publicando
+):
+    posicao = _posicao(
+        cenario,
+        cenario["real"],
+        quantity=Decimal("300"),
+        opened_on=date(2026, 1, 5),
+    )
+    sessao.add(posicao)
+    sessao.flush()
+    sessao.add_all(
+        [
+            _movimento(
+                cenario, posicao, date(2026, 1, 5), PositionMovementKind.OPEN, "100", "100"
+            ),
+            _movimento(
+                cenario, posicao, date(2026, 1, 7), PositionMovementKind.INCREASE, "200", "300"
+            ),
+            _fechamento(cenario, date(2026, 1, 5), "10"),
+            _fechamento(cenario, date(2026, 1, 6), "11"),
+            _fechamento(cenario, date(2026, 1, 7), "12"),
+        ]
+    )
+    # A carteira simulada não altera a quantidade publicada.
+    sessao.add(_posicao(cenario, cenario["simulada"], quantity=Decimal("900")))
+    sessao.flush()
+
+    resposta = pedir_historico_posicao(
+        publicando,
+        ticker="WEGE3",
+        mercado="B3",
+        inicio="2026-01-05",
+        fim="2026-01-07",
+    )
+
+    assert resposta.status_code == 200
+    corpo = resposta.get_json()
+    assert corpo["contrato"] == "patrimonio/v3"
+    assert corpo["recurso"] == "holding-history"
+    assert corpo["estado"] == "ok"
+    assert corpo["titular"] == "mariano"
+    assert corpo["ticker"] == "WEGE3"
+    assert corpo["mercado"] == "B3"
+    assert corpo["paginacao"]["total"] == 3
+    assert corpo["itens"] == [
+        {
+            "data": "2026-01-05",
+            "preco": "10",
+            "preco_em": "2026-01-05",
+            "quantidade": "100",
+            "valor": "1000.00",
+            "moeda": "BRL",
+        },
+        {
+            "data": "2026-01-06",
+            "preco": "11",
+            "preco_em": "2026-01-06",
+            "quantidade": "100",
+            "valor": "1100.00",
+            "moeda": "BRL",
+        },
+        {
+            "data": "2026-01-07",
+            "preco": "12",
+            "preco_em": "2026-01-07",
+            "quantidade": "300",
+            "valor": "3600.00",
+            "moeda": "BRL",
+        },
+    ]
+    assert resposta.headers["Cache-Control"] == "no-store"
+
+
+@banco
+def test_historico_nao_inventa_preco_e_retorna_estado_vazio(sessao, cenario, publicando):
+    sessao.add(_posicao(cenario, cenario["real"]))
+    sessao.flush()
+
+    resposta = pedir_historico_posicao(
+        publicando, ticker="WEGE3", inicio="2026-01-01", fim="2026-01-20"
+    )
+
+    assert resposta.status_code == 200
+    corpo = resposta.get_json()
+    assert corpo["estado"] == "empty"
+    assert corpo["itens"] == []
+    assert corpo["paginacao"]["total"] == 0
+
+
+@banco
+def test_historico_recusa_ticker_que_nao_pertence_ao_owner(sessao, cenario, publicando):
+    outro = Ticker(
+        symbol="PRIV3",
+        trading_name="Ativo de outro titular",
+        market=Market.B3,
+        rtd_market_code="B",
+        currency="BRL",
+    )
+    outro_dono = User(username="outro-historico", password_hash="hash")
+    outra_carteira = Portfolio(name="Outra", owner_ref=outro_dono, currency="BRL")
+    sessao.add_all([outro, outro_dono, outra_carteira])
+    sessao.flush()
+    sessao.add(_posicao(cenario, outra_carteira, owner_id=outro_dono.id, ticker_id=outro.id))
+    sessao.flush()
+
+    resposta = pedir_historico_posicao(
+        publicando, ticker="PRIV3", inicio="2026-01-01", fim="2026-01-20"
+    )
+
+    assert resposta.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("parametros", "status"),
+    [
+        ({"ticker": "WEGE3", "mercado": "MERCADO"}, 400),
+        ({"ticker": "WEGE3", "page_size": 101}, 400),
+        ({"ticker": "WEGE3", "inicio": "2010-01-01", "fim": "2026-01-01"}, 400),
+    ],
+)
+def test_historico_valida_mercado_paginacao_e_janela(publicando, parametros, status):
+    assert pedir_historico_posicao(publicando, **parametros).status_code == status
 
 
 @pytest.fixture

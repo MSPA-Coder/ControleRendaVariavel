@@ -129,6 +129,7 @@ autenticados pelo mesmo Bearer e filtrados por `PATRIMONIO_OWNER_ID`:
 | `income` | `GET /patrimonio/v3/income` | proventos persistidos, paginados, com moeda, tipo, categoria e deep link |
 | `performance` | `GET /patrimonio/v3/performance` | séries mensais TWR por moeda, com valor, fluxo, renda e retorno acumulado |
 | `events` | `GET /patrimonio/v3/events` | eventos de quantidade da linha do tempo de posições, paginados |
+| `holding-history` | `GET /patrimonio/v3/holding-history` | série de preço e valor histórico de um ticker detido, paginada |
 
 `income` aceita `inicio`, `fim`, `moeda`, `tipo`, `page` e `page_size`. Os
 outros dois aceitam `inicio` e `fim`; `events` também aceita a paginação. A
@@ -137,9 +138,63 @@ futuras. IDs dos três recursos são opacos, prefixados pelo sistema e não
 expõem chaves primárias. Quantidades e dinheiro continuam como texto no JSON;
 um evento não recebe preço inventado quando a série de cotações não o possui.
 
-`GET /patrimonio/v3/metadata` declara `income`, `performance` e `events` como
-capacidades, além das atividades/categorias já existentes. Nenhum desses
-recursos aceita escrita, importação, categorização ou mutação de carteira.
+`GET /patrimonio/v3/metadata` declara `income`, `performance`, `events` e
+`holding_history` como capacidades, além das atividades/categorias já existentes.
+`holding_history`
+publica preço, preço em vigor (`preco_em`), quantidade reconstruída e valor
+para `ticker` e, opcionalmente, `mercado`; a janela usa `inicio`/`fim` e a
+paginação usa `page`/`page_size` (máximo 100 por página). Cada ponto só existe
+quando há fechamento conhecido há no máximo sete dias e quantidade real não
+zero. A rota exige que o owner publicado tenha detido o ticker em carteira real;
+carteiras simuladas, opções e ativos de outros owners não entram. Valores viajam
+como texto e a resposta é `no-store`. Nenhum desses recursos aceita escrita,
+importação, categorização ou mutação de carteira.
+
+### Snapshot inicial v4 para integração com carteira externa
+
+`GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot` e
+`GET /patrimonio/v4/changes` publicam um
+snapshot atual somente-leitura, com o mesmo Bearer e escopo explícito de
+`PATRIMONIO_OWNER_ID`. O snapshot contém posições abertas de ações em carteiras
+reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
+já deteve. A janela de preços históricos é limitada por
+`PATRIMONIO_MAX_HISTORICO_DIAS`, que é um limite e não uma garantia de cobertura
+para todo o período. Preço ou valor de mercado ausente permanece nulo, sem
+estimativa; a cobertura informa as contagens de posições sem preço e excluídas.
+Cada resposta leva `snapshot_id`, e os recursos levam `source_id` estável e
+opaco. Posições declaram `price_kind` e `valuation_method`: o preço avaliado
+usa cotação específica do lado quando disponível e recorre ao preço geral do
+coletor somente quando necessário. A série de preços do coletor é marcada como
+informativa e não como o preço usado na avaliação da posição.
+
+Metadados e snapshot declaram opções e trades completos indisponíveis. O CRV
+não conserva execuções suficientes para reconstruir um ledger completo de
+compras e vendas para o histórico já existente; eventos de quantidade e
+encerramentos agregados não são substitutos. A partir da revisão
+`20260928_0024`, o encerramento total de uma posição de ações também copia cada
+`PositionMovement` para `position_movement_archive`, com seus campos
+financeiros e contexto da carteira. A tabela começa vazia: não existe backfill
+porque os movimentos antigos já foram apagados e não podem ser reconstruídos
+com fidelidade. Essa retenção não altera a capacidade `complete_trades`, que
+permanece indisponível até haver um contrato de exportação e cobertura histórica
+suficientes. Em paralelo, `GET /patrimonio/v4/ledger` publica por páginas o
+arquivo prospectivo de movimentos de posições de ações encerradas. Cada
+movimento preserva variação, preço, quantidade resultante, custo médio,
+resultado realizado e referência à transação de origem; o evento `close` é
+derivado da transação final e zera a quantidade. `metadata` e o envelope do
+recurso declaram `completeness=prospective`, a revisão inicial e
+`backfill=false`. A rota não publica caixa: compras, vendas e resultados não
+devem ser relançados como movimento operacional do Controle Bancário.
+Proventos são fatos analíticos e podem também estar registrados no
+Controle Bancário; o consumidor não deve lançá-los novamente como movimento de
+caixa. O feed de mudanças é uma outbox de invalidação transacional: o contador
+singleton é atualizado dentro da mesma transação que muda a origem, e seu lock
+preserva a ordem de commit dos cursores. Cada invalidação exige a leitura de um
+novo snapshot coerente; ela não tenta reconstruir fatos operacionais. Após
+aplicar o snapshot, o consumidor persiste o high watermark retornado. Proventos representam o valor recebido, sem
+discriminação de imposto. Carteiras simuladas e opções não entram no snapshot.
+As rotas mantêm `Cache-Control: no-store` e usam `REPEATABLE READ` para compor
+uma resposta coerente.
 
 ### O endereço que chega à barra
 
@@ -432,6 +487,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `quotes`, `option_quotes` | última leitura global por ticker ou contrato; leituras atrasadas não substituem as mais recentes |
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
+| `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
 
 A transação é delimitada no caso de uso que inicia a escrita — nunca em camada
 inferior, nunca aberta durante uma chamada externa. Invariantes concorrentes são
