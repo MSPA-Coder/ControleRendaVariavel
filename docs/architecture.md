@@ -152,7 +152,8 @@ importação, categorização ou mutação de carteira.
 
 ### Snapshot inicial v4 para integração com carteira externa
 
-`GET /patrimonio/v4/metadata` e `GET /patrimonio/v4/snapshot` publicam um
+`GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot` e
+`GET /patrimonio/v4/changes` publicam um
 snapshot atual somente-leitura, com o mesmo Bearer e escopo explícito de
 `PATRIMONIO_OWNER_ID`. O snapshot contém posições abertas de ações em carteiras
 reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
@@ -186,9 +187,11 @@ recurso declaram `completeness=prospective`, a revisão inicial e
 devem ser relançados como movimento operacional do Controle Bancário.
 Proventos são fatos analíticos e podem também estar registrados no
 Controle Bancário; o consumidor não deve lançá-los novamente como movimento de
-caixa. Também não há change feed: `changes=false` e
-`high_watermark=null`, então o consumidor precisa buscar um snapshot completo
-para atualizar seu estado. Proventos representam o valor recebido, sem
+caixa. O feed de mudanças é uma outbox de invalidação transacional: o contador
+singleton é atualizado dentro da mesma transação que muda a origem, e seu lock
+preserva a ordem de commit dos cursores. Cada invalidação exige a leitura de um
+novo snapshot coerente; ela não tenta reconstruir fatos operacionais. Após
+aplicar o snapshot, o consumidor persiste o high watermark retornado. Proventos representam o valor recebido, sem
 discriminação de imposto. Carteiras simuladas e opções não entram no snapshot.
 As rotas mantêm `Cache-Control: no-store` e usam `REPEATABLE READ` para compor
 uma resposta coerente.

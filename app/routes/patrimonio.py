@@ -80,11 +80,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 from flask import abort, current_app, jsonify, request, url_for
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -97,6 +98,8 @@ from app.models import (
     Portfolio,
     Position,
     PositionMovementArchive,
+    PatrimonioV4ChangeCounter,
+    PatrimonioV4Outbox,
     Quote,
     QuoteHistory,
     Side,
@@ -124,6 +127,7 @@ CONTRATO_V3 = "patrimonio/v3"
 CONTRATO_V4 = "patrimonio/v4"
 V3_PAGE_SIZE = 50
 V3_MAX_PAGE_SIZE = 100
+V4_MAX_CHANGE_LIMIT = 500
 
 #: Janela dos proventos publicados. Eles não entram no patrimônio de hoje (já
 #: foram recebidos e viraram caixa, que é do outro sistema); vão no envelope
@@ -300,6 +304,55 @@ def _owner_id() -> int:
             "para o usuário financeiro autorizado.",
         )
     return owner_id
+
+
+def _watermark_v4() -> int:
+    return int(db.session.scalar(select(PatrimonioV4ChangeCounter.value).where(
+        PatrimonioV4ChangeCounter.id == 1
+    )) or 0)
+
+
+def _cursor_v4(cursor: int, owner_id: int) -> str:
+    material = f"v1:{SISTEMA}:{owner_id}:{cursor}".encode()
+    secret = str(current_app.config["PATRIMONIO_TOKEN"]).encode()
+    signature = hmac.new(secret, b"patrimonio-v4-cursor:" + material, hashlib.sha256).digest()
+    return urlsafe_b64encode(material + b"." + signature).decode().rstrip("=")
+
+
+def _cursor_v4_ler(raw: str | None, owner_id: int) -> int:
+    if not raw or len(raw) > 256:
+        return 0 if not raw else abort(400, "Cursor inválido.")
+    try:
+        decoded = urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+        material, signature = decoded.rsplit(b".", 1)
+        expected = hmac.new(
+            str(current_app.config["PATRIMONIO_TOKEN"]).encode(),
+            b"patrimonio-v4-cursor:" + material,
+            hashlib.sha256,
+        ).digest()
+        version, source, bound_owner, position = material.decode().split(":")
+        cursor = int(position)
+    except (UnicodeDecodeError, ValueError, TypeError):
+        abort(400, "Cursor inválido.")
+    if not hmac.compare_digest(signature, expected) or (
+        version, source, bound_owner
+    ) != ("v1", SISTEMA, str(owner_id)) or cursor < 0:
+        abort(400, "Cursor inválido.")
+    return cursor
+
+
+def _change_limit_v4() -> int:
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except (TypeError, ValueError):
+        abort(400, "limit deve ser inteiro entre 1 e 500.")
+    if not 1 <= limit <= V4_MAX_CHANGE_LIMIT:
+        abort(400, "limit deve ser inteiro entre 1 e 500.")
+    return limit
+
+
+def _change_source_id_v4(item: PatrimonioV4Outbox) -> str:
+    return _id_v3_material("change-target", f"{item.resource}:{item.source_record_id}")
 
 
 def _data_pedida(hoje: date) -> date:
@@ -1006,6 +1059,7 @@ def patrimonio_metadata_v4():
             "sistema": SISTEMA,
             "source_id": _id_v3_material("source", SISTEMA),
             "gerado_em": datetime.now(UTC).isoformat(),
+            "high_watermark": _cursor_v4(_watermark_v4(), _owner_id()),
             "capacidades": {
                 "snapshot": True,
                 "holdings": True,
@@ -1014,7 +1068,7 @@ def patrimonio_metadata_v4():
                 "prices": True,
                 "options": False,
                 "complete_trades": False,
-                "changes": False,
+                "changes": True,
             },
             "coverage": {
                 "holdings": {
@@ -1050,8 +1104,71 @@ def patrimonio_metadata_v4():
                     "close_event": "derivado da transação final do encerramento total",
                     "cash_accounting_role": "not_a_cash_entry",
                 },
-                "changes": {"available": False, "high_watermark": None},
+                "changes": {
+                    "available": True,
+                    "endpoint": "/patrimonio/v4/changes",
+                    "mode": "snapshot_invalidation",
+                    "high_watermark": _cursor_v4(_watermark_v4(), _owner_id()),
+                },
             },
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v4/changes")
+def patrimonio_changes_v4():
+    """Invalidações ordenadas; o consumidor reconcilia pelo snapshot v4."""
+    _exigir_token()
+    owner_id = _owner_id()
+    after = _cursor_v4_ler(request.args.get("after"), owner_id)
+    limit = _change_limit_v4()
+    sessao = db.session()
+    if sessao.in_transaction():
+        isolamento = sessao.execute(text("SHOW transaction_isolation")).scalar_one()
+        if isolamento.replace("_", " ").lower() != "repeatable read":
+            raise RuntimeError("patrimonio/v4 exige transacao REPEATABLE READ")
+    else:
+        sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+    watermark = _watermark_v4()
+    rows = db.session.scalars(
+        select(PatrimonioV4Outbox)
+        .where(
+            PatrimonioV4Outbox.cursor > after,
+            PatrimonioV4Outbox.cursor <= watermark,
+            or_(
+                PatrimonioV4Outbox.owner_id == owner_id,
+                PatrimonioV4Outbox.owner_id.is_(None),
+            ),
+        )
+        .order_by(PatrimonioV4Outbox.cursor)
+        .limit(limit + 1)
+    ).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    next_position = rows[-1].cursor if rows else watermark
+    items = [
+        {
+            "cursor": _cursor_v4(item.cursor, owner_id),
+            "resource": item.resource,
+            "source_id": _change_source_id_v4(item),
+            "operation": item.operation,
+            "changed_at": item.changed_at.isoformat(),
+            "payload": {"mode": "snapshot_required"} if item.operation == "upsert" else None,
+        }
+        for item in rows
+    ]
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V4,
+            "recurso": "changes",
+            "sistema": SISTEMA,
+            "mode": "snapshot_invalidation",
+            "high_watermark": _cursor_v4(watermark, owner_id),
+            "next_cursor": _cursor_v4(next_position, owner_id),
+            "has_more": has_more,
+            "items": items,
         }
     )
     resposta.headers["Cache-Control"] = "no-store"
@@ -1073,6 +1190,7 @@ def patrimonio_snapshot_v4():
         sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
 
     gerado_em = datetime.now(UTC)
+    watermark = _cursor_v4(_watermark_v4(), owner_id)
     snapshot_id = _id_v3_material("snapshot", gerado_em.isoformat() + ":" + uuid4().hex)
     hoje = datetime.now(MARKET_TIMEZONE).date()
     try:
@@ -1264,7 +1382,7 @@ def patrimonio_snapshot_v4():
             "snapshot_id": snapshot_id,
             "gerado_em": gerado_em.isoformat(),
             "data_de_referencia": hoje.isoformat(),
-            "high_watermark": None,
+            "high_watermark": watermark,
             "capacidades": {
                 "holdings": True,
                 "position_ledger": True,
@@ -1272,7 +1390,7 @@ def patrimonio_snapshot_v4():
                 "prices": True,
                 "options": False,
                 "complete_trades": False,
-                "changes": False,
+                "changes": True,
             },
             "coverage": {
                 "holdings": {
@@ -1315,7 +1433,12 @@ def patrimonio_snapshot_v4():
                     "since_revision": "20260928_0024",
                     "backfill": False,
                 },
-                "changes": {"available": False, "high_watermark": None},
+                "changes": {
+                    "available": True,
+                    "endpoint": "/patrimonio/v4/changes",
+                    "mode": "snapshot_invalidation",
+                    "high_watermark": watermark,
+                },
             },
             "accounts": [
                 {

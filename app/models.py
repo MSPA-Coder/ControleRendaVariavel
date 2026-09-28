@@ -751,6 +751,56 @@ class PositionMovementArchive(Base):
     owner_ref: Mapped[User] = relationship()
 
 
+class PatrimonioV4ChangeCounter(Base):
+    """Relógio transacional único do feed público de patrimônio.
+
+    A linha é deliberadamente atualizada, e não uma sequência PostgreSQL:
+    seu lock permanece até o commit. Assim um cursor nunca fica visível antes
+    de uma alteração anterior que ainda esteja em transação.
+    """
+
+    __tablename__ = "patrimonio_v4_change_counter"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton"),
+        CheckConstraint("value >= 0", name="value_non_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    value: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+
+
+class PatrimonioV4Outbox(Base):
+    """Notificação transacional de uma mutação publicada pelo contrato v4.
+
+    O feed é de invalidação: o consumidor busca o snapshot consistente depois
+    de observar eventos. O registro preserva a identidade suficiente para
+    diagnosticar exclusões sem expor a chave primária pela API.
+    """
+
+    __tablename__ = "patrimonio_v4_outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "resource IN ('holding', 'income', 'price_current', 'price_history', 'position_ledger')",
+            name="resource_valid",
+        ),
+        CheckConstraint("operation IN ('upsert', 'delete')", name="operation_valid"),
+        Index("ix_patrimonio_v4_outbox_owner_cursor", "owner_id", "cursor"),
+    )
+
+    cursor: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True, nullable=True
+    )
+    resource: Mapped[str] = mapped_column(String(32))
+    source_record_id: Mapped[int] = mapped_column(Integer)
+    operation: Mapped[str] = mapped_column(String(8))
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    owner_ref: Mapped[User | None] = relationship()
+
+
 class OptionExpiration(Base):
     __tablename__ = "option_expirations"
 
