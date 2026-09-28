@@ -1398,6 +1398,7 @@ def patrimonio_snapshot_v4():
                 "holdings": {
                     "included": len(holdings),
                     "unpriced": unpriced_holdings,
+                    "complete": True,
                     "scope": "posições abertas de ações em carteiras reais; opções e simuladas excluídas",
                 },
                 "income": {

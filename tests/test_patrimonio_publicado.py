@@ -227,6 +227,12 @@ def pedir_v2(publicando, **parametros):
     )
 
 
+def pedir_snapshot_v4(publicando):
+    return publicando.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+
+
 def pedir_historico_posicao(publicando, **parametros):
     return publicando.get(
         "/patrimonio/v3/holding-history",
@@ -412,6 +418,40 @@ def test_v2_publica_snapshot_enriquecido_sem_simulada(sessao, cenario, publicand
     assert linha["resultado_nao_realizado"] == "3630.00"
     assert corpo["omitidas"]["simuladas"] == 1
     assert all(not carteira["simulada"] for carteira in corpo["carteiras"])
+
+
+@banco
+def test_snapshot_v4_identifica_explicitamente_cada_holding_como_equity(
+    sessao, cenario, publicando
+):
+    """O consumidor precisa reconhecer o tipo sem inferi-lo pelo ticker ou rota."""
+    sessao.add(_posicao(cenario, cenario["real"]))
+    sessao.add(_posicao(cenario, cenario["simulada"], quantity=Decimal("1000")))
+    sessao.flush()
+
+    resposta = pedir_snapshot_v4(publicando)
+
+    assert resposta.status_code == 200
+    assert resposta.headers["Cache-Control"] == "no-store"
+    corpo = resposta.get_json()
+    assert corpo["contrato"] == "patrimonio/v4"
+    assert corpo["coverage"]["holdings"]["complete"] is True
+    (holding,) = corpo["holdings"]
+    assert holding["instrument"] == "WEGE3"
+    assert holding["instrument_type"] == "equity"
+
+
+@banco
+def test_snapshot_v4_declara_cobertura_completa_mesmo_sem_posicoes(
+    sessao, cenario, publicando
+):
+    resposta = pedir_snapshot_v4(publicando)
+
+    assert resposta.status_code == 200
+    corpo = resposta.get_json()
+    assert corpo["holdings"] == []
+    assert corpo["coverage"]["holdings"]["included"] == 0
+    assert corpo["coverage"]["holdings"]["complete"] is True
 
 
 @banco
