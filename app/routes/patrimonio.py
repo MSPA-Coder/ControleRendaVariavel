@@ -90,6 +90,7 @@ from app import db
 from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     Dividend,
+    Market,
     OptionContract,
     Portfolio,
     Side,
@@ -108,6 +109,7 @@ from app.patrimonio.fotografia import (
     _proventos,
     identidade,
 )
+from app.positions.holdings_history import QuantityTimeline, closing_price_on
 from app.routes import bp
 
 CONTRATO = "patrimonio/v1"
@@ -564,6 +566,7 @@ def patrimonio_metadata_v3():
                 "income": True,
                 "performance": True,
                 "events": True,
+                "holding_history": True,
                 "renda": True,
                 "desempenho": True,
                 "eventos": True,
@@ -571,6 +574,7 @@ def patrimonio_metadata_v3():
                 "paginacao_atividades": True,
                 "paginacao_income": True,
                 "paginacao_events": True,
+                "paginacao_holding_history": True,
             },
             "paginacao": {"padrao": V3_PAGE_SIZE, "maximo": V3_MAX_PAGE_SIZE},
         }
@@ -783,6 +787,95 @@ def patrimonio_events_v3():
             "filtros": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
             "paginacao": _pagina_v3(pagina, tamanho, total),
             "itens": itens[inicio_fatia : inicio_fatia + tamanho],
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v3/holding-history")
+def patrimonio_holding_history_v3():
+    """Série histórica de preço e valor de mercado de um ticker detido.
+
+    A quantidade é reconstruída a partir do extrato real do owner. A resposta
+    publica somente datas com fechamento válido e quantidade diferente de
+    zero; nunca estima preço nem inclui posições simuladas ou opções.
+    """
+    _exigir_token()
+    titular = identidade(_titular())
+    owner_id = _owner_id()
+    inicio, fim = _janela_analitica_v3()
+    pagina, tamanho = _paginacao_v3()
+
+    symbol = (request.args.get("ticker") or "").strip().upper()
+    if not symbol:
+        abort(400, "ticker é obrigatório")
+    raw_market = (request.args.get("mercado") or "").strip().upper()
+    if raw_market and raw_market not in {market.value for market in Market}:
+        abort(400, "mercado deve ser B3, NYSE ou NASDAQ")
+    ticker = queries.ticker_by_symbol(symbol, raw_market or None)
+    if ticker is None:
+        abort(404, "Ticker não encontrado")
+
+    # `performance_events` já restringe posições reais ao owner informado;
+    # descartar option evita misturar contratos com ações do mesmo ticker.
+    eventos = [
+        event
+        for event in queries.performance_events(fim, owner_id)
+        if event.ticker_id == ticker.id and event.position_key[0] == "stock"
+    ]
+    if not eventos:
+        # Também impede que o endpoint vire uma forma de consultar todo o
+        # catálogo global de preços por meio de um token de integração.
+        abort(404, "Ticker não pertence à carteira publicada")
+
+    timeline = QuantityTimeline(eventos)
+    serie = queries.quote_series(
+        [ticker.id], start=inicio - timedelta(days=7), end=fim
+    )[ticker.id]
+    datas = {inicio, fim}
+    datas.update(data for data, _preco in serie if inicio <= data <= fim)
+    datas.update(event.occurred_on for event in eventos if inicio <= event.occurred_on <= fim)
+
+    pontos = []
+    for dia in sorted(datas):
+        fechamento = closing_price_on(serie, dia)
+        quantidade = timeline.quantity_at(ticker.id, dia)
+        if fechamento is None or quantidade == 0:
+            continue
+        preco_em, preco = fechamento
+        pontos.append(
+            {
+                "data": dia.isoformat(),
+                "preco": _numero(preco),
+                "preco_em": preco_em.isoformat(),
+                "quantidade": _numero(quantidade),
+                "valor": _dinheiro(preco * quantidade),
+                "moeda": ticker.currency,
+            }
+        )
+
+    total = len(pontos)
+    inicio_fatia = (pagina - 1) * tamanho
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V3,
+            "recurso": "holding-history",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "estado": "ok" if total else "empty",
+            "titular": titular,
+            "ticker": ticker.symbol,
+            "mercado": ticker.market.value,
+            "moeda": ticker.currency,
+            "filtros": {
+                "ticker": ticker.symbol,
+                "mercado": ticker.market.value,
+                "inicio": inicio.isoformat(),
+                "fim": fim.isoformat(),
+            },
+            "paginacao": _pagina_v3(pagina, tamanho, total),
+            "itens": pontos[inicio_fatia : inicio_fatia + tamanho],
         }
     )
     resposta.headers["Cache-Control"] = "no-store"

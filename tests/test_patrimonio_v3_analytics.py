@@ -13,6 +13,7 @@ ROTAS = (
     "/patrimonio/v3/income",
     "/patrimonio/v3/performance",
     "/patrimonio/v3/events",
+    "/patrimonio/v3/holding-history?ticker=RAIZ4",
 )
 
 
@@ -42,6 +43,7 @@ def test_metadata_declara_as_series_v3_sem_expor_dados(client, app):
     assert corpo["capacidades"]["income"] is True
     assert corpo["capacidades"]["performance"] is True
     assert corpo["capacidades"]["events"] is True
+    assert corpo["capacidades"]["holding_history"] is True
     assert "itens" not in corpo
 
 

@@ -81,6 +81,14 @@ def quote_series(
     return result
 
 
+def ticker_by_symbol(symbol: str, market: str | None = None) -> Ticker | None:
+    """Resolve um ticker público pelo símbolo e, opcionalmente, mercado."""
+    statement = select(Ticker).where(Ticker.symbol == symbol)
+    if market:
+        statement = statement.where(Ticker.market == market)
+    return db.session.scalar(statement)
+
+
 def dividends(desde: date, ate: date, owner_id: int) -> list[Dividend]:
     statement = (
         select(Dividend)

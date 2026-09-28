@@ -129,6 +129,7 @@ autenticados pelo mesmo Bearer e filtrados por `PATRIMONIO_OWNER_ID`:
 | `income` | `GET /patrimonio/v3/income` | proventos persistidos, paginados, com moeda, tipo, categoria e deep link |
 | `performance` | `GET /patrimonio/v3/performance` | séries mensais TWR por moeda, com valor, fluxo, renda e retorno acumulado |
 | `events` | `GET /patrimonio/v3/events` | eventos de quantidade da linha do tempo de posições, paginados |
+| `holding-history` | `GET /patrimonio/v3/holding-history` | série de preço e valor histórico de um ticker detido, paginada |
 
 `income` aceita `inicio`, `fim`, `moeda`, `tipo`, `page` e `page_size`. Os
 outros dois aceitam `inicio` e `fim`; `events` também aceita a paginação. A
@@ -137,9 +138,17 @@ futuras. IDs dos três recursos são opacos, prefixados pelo sistema e não
 expõem chaves primárias. Quantidades e dinheiro continuam como texto no JSON;
 um evento não recebe preço inventado quando a série de cotações não o possui.
 
-`GET /patrimonio/v3/metadata` declara `income`, `performance` e `events` como
-capacidades, além das atividades/categorias já existentes. Nenhum desses
-recursos aceita escrita, importação, categorização ou mutação de carteira.
+`GET /patrimonio/v3/metadata` declara `income`, `performance`, `events` e
+`holding_history` como capacidades, além das atividades/categorias já existentes.
+`holding_history`
+publica preço, preço em vigor (`preco_em`), quantidade reconstruída e valor
+para `ticker` e, opcionalmente, `mercado`; a janela usa `inicio`/`fim` e a
+paginação usa `page`/`page_size` (máximo 100 por página). Cada ponto só existe
+quando há fechamento conhecido há no máximo sete dias e quantidade real não
+zero. A rota exige que o owner publicado tenha detido o ticker em carteira real;
+carteiras simuladas, opções e ativos de outros owners não entram. Valores viajam
+como texto e a resposta é `no-store`. Nenhum desses recursos aceita escrita,
+importação, categorização ou mutação de carteira.
 
 ### O endereço que chega à barra
 
