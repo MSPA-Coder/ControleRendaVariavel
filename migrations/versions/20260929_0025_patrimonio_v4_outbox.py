@@ -32,7 +32,6 @@ def upgrade() -> None:
         sa.Column("source_record_id", sa.Integer(), nullable=False),
         sa.Column("operation", sa.String(length=8), nullable=False),
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(["owner_id"], ["users.id"], ondelete="RESTRICT"),
         sa.CheckConstraint(
             "resource IN ('holding', 'income', 'price_current', 'price_history', 'position_ledger')",
             name="ck_patrimonio_v4_outbox_resource_valid",
@@ -42,6 +41,7 @@ def upgrade() -> None:
             name="ck_patrimonio_v4_outbox_operation_valid",
         ),
     )
+    op.create_index("ix_patrimonio_v4_outbox_owner_id", "patrimonio_v4_outbox", ["owner_id"])
     op.create_index(
         "ix_patrimonio_v4_outbox_owner_cursor",
         "patrimonio_v4_outbox",
