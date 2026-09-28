@@ -96,6 +96,7 @@ from app.models import (
     OptionPosition,
     Portfolio,
     Position,
+    PositionMovementArchive,
     Quote,
     QuoteHistory,
     Side,
@@ -376,6 +377,105 @@ def patrimonio_resumo():
         }
     )
     # A foto carrega a carteira inteira: nenhum intermediário deve guardá-la.
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v4/ledger")
+def patrimonio_ledger_v4():
+    """Ledger de posições de ações encerradas, com cobertura prospectiva.
+
+    Cada linha é um movimento arquivado; ``close`` é derivado da transação
+    final e zera a quantidade. O recurso não publica lançamentos de caixa: o
+    Controle Bancário continua sendo a fonte para esse lado da operação.
+    """
+    _exigir_token()
+    owner_id = _owner_id()
+    pagina, tamanho = _paginacao_v3()
+    filtros = PositionMovementArchive.owner_id == owner_id
+    total = db.session.scalar(
+        select(func.count(PositionMovementArchive.id)).where(filtros)
+    ) or 0
+    linhas = db.session.execute(
+        select(PositionMovementArchive, Ticker, Broker, Portfolio)
+        .join(Ticker, Ticker.id == PositionMovementArchive.ticker_id)
+        .join(Broker, Broker.id == PositionMovementArchive.broker_id)
+        .join(Portfolio, Portfolio.id == PositionMovementArchive.portfolio_id)
+        .where(filtros)
+        .order_by(
+            PositionMovementArchive.occurred_on,
+            PositionMovementArchive.source_position_id,
+            PositionMovementArchive.id,
+        )
+        .offset((pagina - 1) * tamanho)
+        .limit(tamanho)
+    ).all()
+    itens = []
+    for linha, ticker, corretora, carteira in linhas:
+        chave_movimento = (
+            str(linha.source_movement_id)
+            if linha.source_movement_id is not None
+            else f"close:{linha.source_transaction_id}"
+        )
+        source_id = _id_v3_material(
+            "ledger-event", f"{linha.source_position_id}:{chave_movimento}"
+        )
+        lado_posicao = "long" if linha.side == Side.BUY.value else "short"
+        reduz = linha.kind in {"decrease", "close"}
+        lado_execucao = None
+        if linha.kind != "adjustment":
+            lado_execucao = (
+                ("buy" if lado_posicao == "long" else "sell")
+                if not reduz
+                else ("sell" if lado_posicao == "long" else "buy")
+            )
+        direcao = Decimal("1") if lado_posicao == "long" else Decimal("-1")
+        item = {
+            "id": source_id,
+            "source_id": source_id,
+            "titular": identidade(_titular()),
+            "date": linha.occurred_on.isoformat(),
+            "kind": linha.kind,
+            "instrument": ticker.symbol,
+            "instrument_type": "equity",
+            "market": ticker.market.value,
+            "currency": ticker.currency,
+            "account": identidade(corretora.name),
+            "account_name": corretora.name,
+            "portfolio": carteira.name,
+            "position_side": lado_posicao,
+            "quantity_delta": _numero(direcao * linha.quantity_delta),
+            "resulting_quantity": _numero(direcao * linha.resulting_quantity),
+            "price": _numero(linha.price),
+            "average_cost_after": _numero(linha.resulting_average_cost),
+            "realized_result": _dinheiro(linha.result) if linha.result is not None else None,
+            "execution_side": lado_execucao,
+            "source_transaction_id": (
+                _id_v3("ledger-transaction", linha.source_transaction_id)
+                if linha.source_transaction_id is not None
+                else None
+            ),
+            "cash_accounting_role": "not_a_cash_entry",
+        }
+        itens.append(item)
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V4,
+            "recurso": "ledger",
+            "sistema": SISTEMA,
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "estado": "ok" if total else "empty",
+            "paginacao": _pagina_v3(pagina, tamanho, total),
+            "coverage": {
+                "completeness": "prospective",
+                "since_revision": "20260928_0024",
+                "backfill": False,
+                "scope": "posições de ações encerradas totalmente após a revisão 20260928_0024",
+                "close_event": "derivado da transação final e saldo resultante zero",
+            },
+            "itens": itens,
+        }
+    )
     resposta.headers["Cache-Control"] = "no-store"
     return resposta
 
@@ -909,6 +1009,7 @@ def patrimonio_metadata_v4():
             "capacidades": {
                 "snapshot": True,
                 "holdings": True,
+                "position_ledger": True,
                 "income": True,
                 "prices": True,
                 "options": False,
@@ -937,7 +1038,17 @@ def patrimonio_metadata_v4():
                 "options": {"available": False, "reason": "não publicadas neste contrato"},
                 "complete_trades": {
                     "available": False,
-                    "reason": "o CRV não conserva um ledger completo de execuções para todas as posições",
+                    "reason": "o ledger detalhado é prospectivo; posições encerradas antes da revisão 20260928_0024 não têm backfill",
+                },
+                "position_ledger": {
+                    "available": True,
+                    "endpoint": "/patrimonio/v4/ledger",
+                    "scope": "movimentos de posições de ações encerradas após a revisão 20260928_0024",
+                    "completeness": "prospective",
+                    "since_revision": "20260928_0024",
+                    "backfill": False,
+                    "close_event": "derivado da transação final do encerramento total",
+                    "cash_accounting_role": "not_a_cash_entry",
                 },
                 "changes": {"available": False, "high_watermark": None},
             },
@@ -1156,6 +1267,7 @@ def patrimonio_snapshot_v4():
             "high_watermark": None,
             "capacidades": {
                 "holdings": True,
+                "position_ledger": True,
                 "income": True,
                 "prices": True,
                 "options": False,
@@ -1196,6 +1308,13 @@ def patrimonio_snapshot_v4():
                     "excluded_options": real_options,
                 },
                 "complete_trades": {"available": False},
+                "position_ledger": {
+                    "available": True,
+                    "endpoint": "/patrimonio/v4/ledger",
+                    "completeness": "prospective",
+                    "since_revision": "20260928_0024",
+                    "backfill": False,
+                },
                 "changes": {"available": False, "high_watermark": None},
             },
             "accounts": [

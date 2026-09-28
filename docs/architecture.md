@@ -168,8 +168,23 @@ informativa e não como o preço usado na avaliação da posição.
 
 Metadados e snapshot declaram opções e trades completos indisponíveis. O CRV
 não conserva execuções suficientes para reconstruir um ledger completo de
-compras e vendas; eventos de quantidade e encerramentos agregados não são
-substitutos. Proventos são fatos analíticos e podem também estar registrados no
+compras e vendas para o histórico já existente; eventos de quantidade e
+encerramentos agregados não são substitutos. A partir da revisão
+`20260928_0024`, o encerramento total de uma posição de ações também copia cada
+`PositionMovement` para `position_movement_archive`, com seus campos
+financeiros e contexto da carteira. A tabela começa vazia: não existe backfill
+porque os movimentos antigos já foram apagados e não podem ser reconstruídos
+com fidelidade. Essa retenção não altera a capacidade `complete_trades`, que
+permanece indisponível até haver um contrato de exportação e cobertura histórica
+suficientes. Em paralelo, `GET /patrimonio/v4/ledger` publica por páginas o
+arquivo prospectivo de movimentos de posições de ações encerradas. Cada
+movimento preserva variação, preço, quantidade resultante, custo médio,
+resultado realizado e referência à transação de origem; o evento `close` é
+derivado da transação final e zera a quantidade. `metadata` e o envelope do
+recurso declaram `completeness=prospective`, a revisão inicial e
+`backfill=false`. A rota não publica caixa: compras, vendas e resultados não
+devem ser relançados como movimento operacional do Controle Bancário.
+Proventos são fatos analíticos e podem também estar registrados no
 Controle Bancário; o consumidor não deve lançá-los novamente como movimento de
 caixa. Também não há change feed: `changes=false` e
 `high_watermark=null`, então o consumidor precisa buscar um snapshot completo
@@ -469,6 +484,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `quotes`, `option_quotes` | última leitura global por ticker ou contrato; leituras atrasadas não substituem as mais recentes |
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
+| `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
 
 A transação é delimitada no caso de uso que inicia a escrita — nunca em camada
 inferior, nunca aberta durante uma chamada externa. Invariantes concorrentes são
