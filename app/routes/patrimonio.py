@@ -81,9 +81,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 from datetime import UTC, date, datetime, timedelta
+from uuid import uuid4
 
 from flask import abort, current_app, jsonify, request, url_for
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -92,7 +93,11 @@ from app.models import (
     Dividend,
     Market,
     OptionContract,
+    OptionPosition,
     Portfolio,
+    Position,
+    Quote,
+    QuoteHistory,
     Side,
     Ticker,
     Transaction,
@@ -110,10 +115,12 @@ from app.patrimonio.fotografia import (
     identidade,
 )
 from app.positions.holdings_history import QuantityTimeline, closing_price_on
+from app.positions.portfolio import effective_position_quote
 from app.routes import bp
 
 CONTRATO = "patrimonio/v1"
 CONTRATO_V3 = "patrimonio/v3"
+CONTRATO_V4 = "patrimonio/v4"
 V3_PAGE_SIZE = 50
 V3_MAX_PAGE_SIZE = 100
 
@@ -876,6 +883,334 @@ def patrimonio_holding_history_v3():
             },
             "paginacao": _pagina_v3(pagina, tamanho, total),
             "itens": pontos[inicio_fatia : inicio_fatia + tamanho],
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v4/metadata")
+def patrimonio_metadata_v4():
+    """Descreve o retrato inicial e declara limites do que este publicador sabe."""
+    _exigir_token()
+    try:
+        historico_dias = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
+    except (KeyError, TypeError, ValueError):
+        abort(503, "Janela histórica do patrimônio não configurada.")
+    if historico_dias <= 0:
+        abort(503, "Janela histórica do patrimônio inválida.")
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V4,
+            "recurso": "metadata",
+            "sistema": SISTEMA,
+            "source_id": _id_v3_material("source", SISTEMA),
+            "gerado_em": datetime.now(UTC).isoformat(),
+            "capacidades": {
+                "snapshot": True,
+                "holdings": True,
+                "income": True,
+                "prices": True,
+                "options": False,
+                "complete_trades": False,
+                "changes": False,
+            },
+            "coverage": {
+                "holdings": {
+                    "available": True,
+                    "scope": "posições abertas de ações em carteiras reais do owner configurado",
+                    "includes_unpriced": True,
+                },
+                "income": {
+                    "available": True,
+                    "scope": "proventos persistidos do owner configurado",
+                    "amount_semantics": "valor efetivamente recebido; impostos não discriminados",
+                    "role": "fato analítico; pode também existir no Controle Bancário",
+                    "do_not_rebook_as_cash": True,
+                },
+                "prices": {
+                    "available": True,
+                    "scope": "cotações apenas de instrumentos já detidos pelo owner",
+                    "history_days_limit": historico_dias,
+                    "history_window_guaranteed": False,
+                },
+                "options": {"available": False, "reason": "não publicadas neste contrato"},
+                "complete_trades": {
+                    "available": False,
+                    "reason": "o CRV não conserva um ledger completo de execuções para todas as posições",
+                },
+                "changes": {"available": False, "high_watermark": None},
+            },
+        }
+    )
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
+@bp.get("/patrimonio/v4/snapshot")
+def patrimonio_snapshot_v4():
+    """Publica um retrato completo atual, sem simular eventos de negociação."""
+    _exigir_token()
+    titular = identidade(_titular())
+    owner_id = _owner_id()
+    sessao = db.session()
+    if sessao.in_transaction():
+        isolamento = sessao.execute(text("SHOW transaction_isolation")).scalar_one()
+        if isolamento.replace("_", " ").lower() != "repeatable read":
+            raise RuntimeError("patrimonio/v4 exige transacao REPEATABLE READ")
+    else:
+        sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+
+    gerado_em = datetime.now(UTC)
+    snapshot_id = _id_v3_material("snapshot", gerado_em.isoformat() + ":" + uuid4().hex)
+    hoje = datetime.now(MARKET_TIMEZONE).date()
+    try:
+        historico_dias = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
+    except (KeyError, TypeError, ValueError):
+        abort(503, "Janela histórica do patrimônio não configurada.")
+    if historico_dias <= 0:
+        abort(503, "Janela histórica do patrimônio inválida.")
+    inicio_historico = hoje - timedelta(days=historico_dias)
+
+    # A linha do tempo também inclui posições encerradas arquivadas. Isso
+    # restringe a publicação de preços a instrumentos que o owner já deteve,
+    # sem expor o catálogo global de cotações.
+    ticker_ids = {
+        evento.ticker_id
+        for evento in queries.performance_events(hoje, owner_id)
+        if evento.position_key[0] == "stock"
+    }
+    posicoes = queries.real_positions(owner_id)
+    corretoras = {}
+    holdings = []
+    unpriced_holdings = 0
+    for posicao in posicoes:
+        ticker_ids.add(posicao.ticker_id)
+        corretora_id = identidade(posicao.broker)
+        corretoras.setdefault(corretora_id, posicao.broker)
+        sinal = Decimal("1") if posicao.side == Side.BUY else Decimal("-1")
+        preco = None
+        preco_em = None
+        situacao_do_preco = None
+        if posicao.quote is not None:
+            preco, observado_em = effective_position_quote(posicao)
+            preco_em = observado_em.isoformat()
+            situacao_do_preco = posicao.quote.source_status
+        if preco is None:
+            unpriced_holdings += 1
+            price_kind = "unavailable"
+        elif posicao.side == Side.BUY and posicao.quote.buy_price is not None:
+            price_kind = "side_specific_buy_quote"
+        elif posicao.side == Side.SELL and posicao.quote.sell_price is not None:
+            price_kind = "side_specific_sell_quote"
+        else:
+            price_kind = "last_price_fallback"
+        holding_id = _id_v3("holding", posicao.id)
+        holdings.append(
+            {
+                "id": holding_id,
+                "source_id": holding_id,
+                "snapshot_id": snapshot_id,
+                "titular": titular,
+                "account": corretora_id,
+                "account_name": posicao.broker,
+                "portfolio": posicao.portfolio_ref.name,
+                "instrument": posicao.ticker,
+                "instrument_type": "equity",
+                "market": posicao.ticker_ref.market.value,
+                "currency": posicao.currency,
+                "side": "long" if sinal > 0 else "short",
+                "quantity": _numero(sinal * posicao.quantity),
+                "average_cost": _numero(posicao.average_cost),
+                "current_price": _numero(preco) if preco is not None else None,
+                "market_value": _dinheiro(sinal * posicao.quantity * preco) if preco is not None else None,
+                "price_kind": price_kind,
+                "valuation_method": (
+                    "unavailable_no_price"
+                    if preco is None
+                    else "signed_quantity_times_side_specific_price_or_fallback"
+                ),
+                "price_observed_at": preco_em,
+                "price_status": situacao_do_preco,
+                "deep_link": url_for("portfolio.position_detail", position_id=posicao.id),
+            }
+        )
+
+    quotes = []
+    history = []
+    if ticker_ids:
+        for ticker, quote in db.session.execute(
+            select(Ticker, Quote)
+            .join(Quote, Quote.ticker_id == Ticker.id)
+            .where(Ticker.id.in_(ticker_ids))
+            .order_by(Ticker.symbol)
+        ):
+            price_id = _id_v3_material("price-current", str(ticker.id))
+            quotes.append(
+                {
+                    "id": price_id,
+                    "source_id": price_id,
+                    "snapshot_id": snapshot_id,
+                    "instrument": ticker.symbol,
+                    "market": ticker.market.value,
+                    "currency": ticker.currency,
+                    "price": _numero(quote.last_price),
+                    "observed_at": quote.observed_at.isoformat(),
+                    "status": quote.source_status,
+                    "price_kind": "collector_last_price",
+                    "valuation_method": "not_used_for_position_valuation",
+                }
+            )
+        for ticker, point in db.session.execute(
+            select(Ticker, QuoteHistory)
+            .join(QuoteHistory, QuoteHistory.ticker_id == Ticker.id)
+            .where(
+                Ticker.id.in_(ticker_ids),
+                QuoteHistory.recorded_date >= inicio_historico,
+                QuoteHistory.recorded_date <= hoje,
+            )
+            .order_by(Ticker.symbol, QuoteHistory.recorded_date)
+        ):
+            price_id = _id_v3_material(
+                "price-history", f"{ticker.id}:{point.recorded_date.isoformat()}"
+            )
+            history.append(
+                {
+                    "id": price_id,
+                    "source_id": price_id,
+                    "snapshot_id": snapshot_id,
+                    "instrument": ticker.symbol,
+                    "market": ticker.market.value,
+                    "currency": ticker.currency,
+                    "price": _numero(point.price),
+                    "date": point.recorded_date.isoformat(),
+                    "observed_at": point.recorded_at.isoformat(),
+                    "price_kind": "daily_last_observation",
+                    "valuation_method": "not_used_for_position_valuation",
+                }
+            )
+
+    proventos = db.session.scalars(
+        select(Dividend)
+        .where(Dividend.owner_id == owner_id)
+        .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
+        .order_by(Dividend.payment_date, Dividend.id)
+    ).unique().all()
+    for item in proventos:
+        corretoras.setdefault(identidade(item.broker), item.broker)
+    income = []
+    for item in proventos:
+        income_id = _id_v3("income", item.id)
+        income.append(
+            {
+                "id": income_id,
+                "source_id": income_id,
+                "snapshot_id": snapshot_id,
+                "date": item.payment_date.isoformat(),
+                "instrument": item.ticker,
+                "kind": item.kind.value,
+                "currency": item.currency,
+                "amount": _dinheiro(item.amount),
+                "role": "analytic_only",
+                "cash_accounting_role": "not_a_cash_entry",
+                "duplicate_risk": "may_also_be_recorded_in_controle_bancario",
+                "account": identidade(item.broker),
+                "account_name": item.broker,
+                "titular": titular,
+                "deep_link": url_for("portfolio.edit_dividend", dividend_id=item.id),
+            }
+        )
+    simulated_equities = int(
+        db.session.scalar(
+            select(func.count(Position.id))
+            .join(Position.portfolio_ref)
+            .where(Position.owner_id == owner_id, Portfolio.simulated.is_(True))
+        )
+        or 0
+    )
+    simulated_options = int(
+        db.session.scalar(
+            select(func.count(OptionPosition.id))
+            .join(OptionPosition.portfolio_ref)
+            .where(OptionPosition.owner_id == owner_id, Portfolio.simulated.is_(True))
+        )
+        or 0
+    )
+    real_options = int(
+        db.session.scalar(
+            select(func.count(OptionPosition.id))
+            .join(OptionPosition.portfolio_ref)
+            .where(OptionPosition.owner_id == owner_id, Portfolio.simulated.is_(False))
+        )
+        or 0
+    )
+    resposta = jsonify(
+        {
+            "contrato": CONTRATO_V4,
+            "recurso": "snapshot",
+            "sistema": SISTEMA,
+            "source_id": _id_v3_material("source", SISTEMA),
+            "snapshot_id": snapshot_id,
+            "gerado_em": gerado_em.isoformat(),
+            "data_de_referencia": hoje.isoformat(),
+            "high_watermark": None,
+            "capacidades": {
+                "holdings": True,
+                "income": True,
+                "prices": True,
+                "options": False,
+                "complete_trades": False,
+                "changes": False,
+            },
+            "coverage": {
+                "holdings": {
+                    "included": len(holdings),
+                    "unpriced": unpriced_holdings,
+                    "scope": "posições abertas de ações em carteiras reais; opções e simuladas excluídas",
+                },
+                "income": {
+                    "included": len(income),
+                    "scope": "todos os proventos persistidos do owner",
+                    "role": "fato analítico; pode também existir no Controle Bancário",
+                    "do_not_rebook_as_cash": True,
+                },
+                "prices": {
+                    "current_included": len(quotes),
+                    "history_included": len(history),
+                    "history_start": inicio_historico.isoformat(),
+                    "history_end": hoje.isoformat(),
+                    "history_days_limit": historico_dias,
+                    "history_window_guaranteed": False,
+                    "scope": "somente tickers já detidos em posição real",
+                },
+                "options": {
+                    "available": False,
+                    "excluded_options": real_options,
+                    "excluded_simulated": simulated_options,
+                },
+                "exclusions": {
+                    "unpriced_holdings": unpriced_holdings,
+                    "excluded_simulated": simulated_equities + simulated_options,
+                    "excluded_simulated_equities": simulated_equities,
+                    "excluded_simulated_options": simulated_options,
+                    "excluded_options": real_options,
+                },
+                "complete_trades": {"available": False},
+                "changes": {"available": False, "high_watermark": None},
+            },
+            "accounts": [
+                {
+                    "id": chave,
+                    "source_id": _id_v3_material("account", chave),
+                    "snapshot_id": snapshot_id,
+                    "name": nome,
+                    "type": "brokerage",
+                }
+                for chave, nome in sorted(corretoras.items())
+            ],
+            "holdings": holdings,
+            "income": income,
+            "prices": {"current": quotes, "history": history},
         }
     )
     resposta.headers["Cache-Control"] = "no-store"

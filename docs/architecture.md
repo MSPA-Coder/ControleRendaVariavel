@@ -150,6 +150,34 @@ carteiras simuladas, opções e ativos de outros owners não entram. Valores via
 como texto e a resposta é `no-store`. Nenhum desses recursos aceita escrita,
 importação, categorização ou mutação de carteira.
 
+### Snapshot inicial v4 para integração com carteira externa
+
+`GET /patrimonio/v4/metadata` e `GET /patrimonio/v4/snapshot` publicam um
+snapshot atual somente-leitura, com o mesmo Bearer e escopo explícito de
+`PATRIMONIO_OWNER_ID`. O snapshot contém posições abertas de ações em carteiras
+reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
+já deteve. A janela de preços históricos é limitada por
+`PATRIMONIO_MAX_HISTORICO_DIAS`, que é um limite e não uma garantia de cobertura
+para todo o período. Preço ou valor de mercado ausente permanece nulo, sem
+estimativa; a cobertura informa as contagens de posições sem preço e excluídas.
+Cada resposta leva `snapshot_id`, e os recursos levam `source_id` estável e
+opaco. Posições declaram `price_kind` e `valuation_method`: o preço avaliado
+usa cotação específica do lado quando disponível e recorre ao preço geral do
+coletor somente quando necessário. A série de preços do coletor é marcada como
+informativa e não como o preço usado na avaliação da posição.
+
+Metadados e snapshot declaram opções e trades completos indisponíveis. O CRV
+não conserva execuções suficientes para reconstruir um ledger completo de
+compras e vendas; eventos de quantidade e encerramentos agregados não são
+substitutos. Proventos são fatos analíticos e podem também estar registrados no
+Controle Bancário; o consumidor não deve lançá-los novamente como movimento de
+caixa. Também não há change feed: `changes=false` e
+`high_watermark=null`, então o consumidor precisa buscar um snapshot completo
+para atualizar seu estado. Proventos representam o valor recebido, sem
+discriminação de imposto. Carteiras simuladas e opções não entram no snapshot.
+As rotas mantêm `Cache-Control: no-store` e usam `REPEATABLE READ` para compor
+uma resposta coerente.
+
 ### O endereço que chega à barra
 
 Um formulário HTML serializa todos os seus campos ao ser enviado, inclusive os
