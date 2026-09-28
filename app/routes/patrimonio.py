@@ -82,6 +82,7 @@ import hashlib
 import hmac
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 from flask import abort, current_app, jsonify, request, url_for
@@ -91,15 +92,16 @@ from sqlalchemy.orm import joinedload
 from app import db
 from app.core.domain import MARKET_TIMEZONE
 from app.models import (
+    Broker,
     Dividend,
     Market,
     OptionContract,
     OptionPosition,
+    PatrimonioV4ChangeCounter,
+    PatrimonioV4Outbox,
     Portfolio,
     Position,
     PositionMovementArchive,
-    PatrimonioV4ChangeCounter,
-    PatrimonioV4Outbox,
     Quote,
     QuoteHistory,
     Side,
