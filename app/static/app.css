@@ -228,6 +228,18 @@ main { padding: 1.1rem; }
 .dividend-summary article { padding: .7rem .8rem; }
 .dividend-summary strong { font-size: 1.05rem; }
 .portfolio-summary { align-items: stretch; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.portfolio-summary-actions { grid-template-columns: minmax(0, 1fr); }
+.portfolio-summary-actions-split { grid-template-columns: minmax(0, 1fr) minmax(0, 4fr); }
+.portfolio-summary-actions > .currency-card,
+.portfolio-summary-actions > .portfolio-currency-cards { min-width: 0; }
+.portfolio-currency-cards {
+  display: grid; gap: .75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 680px), 1fr));
+  min-width: 0;
+}
+.portfolio-summary-actions .portfolio-currency-cards .currency-card-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
 .portfolio-summary span { font-size: .75rem; }
 .portfolio-summary strong { font-size: 1.05rem; }
 .currency-card { display: flex; flex-direction: column; }
@@ -621,7 +633,7 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
   padding: .45rem .65rem;
 }
 .header-controls { align-items: end; display: flex; flex-wrap: wrap; gap: .6rem; }
-.dividend-actions { display: flex; gap: .6rem; }
+.dividend-actions { display: flex; gap: .6rem; margin-left: auto; }
 .topbar .filters {
   background: transparent;
   border: 0;
@@ -663,7 +675,7 @@ details.catalog-card > h2 { display: none; }
 
 @media (max-width: 700px) {
   .header-controls, .topbar .filters { align-items: stretch; width: 100%; }
-  .dividend-actions { width: 100%; }
+  .dividend-actions { flex-wrap: wrap; justify-content: flex-end; width: 100%; }
   .topbar .filters label { flex: 1 1 120px; }
   .topbar .filters select { min-width: 0; width: 100%; }
   .broker-fields { grid-template-columns: 1fr; }
@@ -802,10 +814,15 @@ details.catalog-card > h2 { display: none; }
   padding: .8rem; position: absolute; right: 0; top: calc(100% + .45rem); width: 13rem; z-index: 40;
 }
 .global-filters-menu[hidden] { display: none; }
-.global-currency-form { display: grid; gap: .35rem; margin: 0; }
-.global-currency-form label { color: var(--muted); font-size: .75rem; font-weight: 700; }
-.global-currency-form select { min-height: 2.2rem; padding: .35rem .5rem; width: 100%; }
+.global-currency-form { display: grid; gap: .55rem; margin: 0; }
+.global-currency-options { border: 1px solid var(--line); border-radius: .45rem; display: grid; gap: .2rem; margin: 0; min-width: 0; padding: .45rem .55rem .55rem; }
+.global-currency-options legend { color: var(--muted); font-size: .75rem; font-weight: 700; padding: 0 .2rem; }
+.global-currency-option { align-items: center; border-radius: .3rem; color: var(--ink); cursor: pointer; display: flex; font-size: .84rem; gap: .5rem; min-height: 2rem; padding: .2rem .25rem; }
+.global-currency-option:hover { background: var(--bg); }
+.global-currency-option input { accent-color: var(--accent); margin: 0; }
+.global-currency-status { color: var(--muted); font-size: .75rem; margin: 0; }
 .global-currency-form .button { min-height: 2.2rem; width: 100%; }
+.global-currency-form .button:disabled { cursor: not-allowed; }
 .privacy-menu-form { border-top: 1px solid var(--line); margin: 0; padding-top: .65rem; }
 .privacy-menu-toggle {
   align-items: center; background: transparent; border: 0; color: var(--ink); cursor: pointer;
@@ -1019,6 +1036,20 @@ tr.transaction-open { background: var(--accent-soft); }
 .position-metrics { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
 .position-metrics .currency-card { min-width: 0; }
 .position-detail-section { margin-top: 2rem; }
+.portfolio-summary-actions .currency-card-grid article { min-width: 0; }
+@media (max-width: 1100px) {
+  .portfolio-summary-actions-split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .portfolio-summary-actions .portfolio-currency-cards .currency-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 380px) {
+  .portfolio-summary-actions .portfolio-currency-cards .currency-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .quote-chart { margin: 0; padding: 1rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); }
 .quote-chart svg { display: block; width: 100%; height: auto; }
 .quote-chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }

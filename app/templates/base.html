@@ -25,6 +25,7 @@
     'portfolio.transactions': ('Carteira', 'Transações'),
     'portfolio.dividends': ('Carteira', 'Proventos'),
     'portfolio.quote_history': ('Mercado', 'Cotações'),
+    'portfolio.data_status': ('Mercado', 'Status dos dados'),
     'portfolio.risk_report': ('Análise', 'Risco'),
     'portfolio.monthly_performance': ('Análise', 'Performance'),
     'portfolio.exposure_asset': ('Análise', 'Alocação por Ativo'),
@@ -83,7 +84,7 @@
         </div>
 
         <div class="mega-wrap" data-group="analise">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market', 'portfolio.data_status'] }}" type="button" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market'] }}" type="button" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
             Análise <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-analise" data-mega="analise">
@@ -113,17 +114,12 @@
                 <span class="t">Exposição por Mercado</span>
                 <span class="d">Distribuição de capital entre mercados.</span>
               </a>
-              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.data_status' }}" href="{{ url_for('portfolio.data_status') }}">
-                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 7v5l3 2"/></svg></span>
-                <span class="t">Status dos dados</span>
-                <span class="d">Cotações, lacunas e conversão da carteira.</span>
-              </a>
             </div>
           </div>
         </div>
 
         <div class="mega-wrap" data-group="mercado">
-          <button class="grp-btn {{ 'group-active' if request.endpoint == 'portfolio.quote_history' }}" type="button" data-nav-group="mercado" aria-controls="mega-mercado" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.quote_history', 'portfolio.data_status'] }}" type="button" data-nav-group="mercado" aria-controls="mega-mercado" aria-expanded="false">
             Mercado <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-mercado" data-mega="mercado">
@@ -132,6 +128,11 @@
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"/><path d="M15 6h5v5"/></svg></span>
                 <span class="t">Cotações</span>
                 <span class="d">Histórico de preços e status do coletor RTD.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.data_status' }}" href="{{ url_for('portfolio.data_status') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 7v5l3 2"/></svg></span>
+                <span class="t">Status dos dados</span>
+                <span class="d">Cotações, lacunas e conversão da carteira.</span>
               </a>
             </div>
           </div>
@@ -225,17 +226,28 @@
             </button>
             <div class="global-filters-menu" id="global-filters-menu" data-global-filters-menu hidden>
               <form class="global-currency-form" method="get" action="{{ request.path }}" data-global-currency-form>
-                <label for="global-currency">Moeda</label>
                 {# Preserva filtros específicos da tela ao trocar o filtro global. #}
                 {% for key, value in request.args.items() if key != 'currency' %}
                 <input type="hidden" name="{{ key }}" value="{{ value }}">
                 {% endfor %}
                 {% set selected_currency = global_currency|default(request.args.get('currency', 'BRL'), true) %}
-                <select id="global-currency" name="currency" data-global-currency>
-                  <option value="BRL" {{ 'selected' if selected_currency == 'BRL' }}>Real</option>
-                  <option value="USD" {{ 'selected' if selected_currency == 'USD' }}>Dólar</option>
-                  <option value="ALL" {{ 'selected' if selected_currency == 'ALL' }}>Todas</option>
-                </select>
+                <input type="hidden" name="currency" value="{{ selected_currency }}" data-global-currency-value>
+                <fieldset class="global-currency-options" aria-describedby="global-currency-status">
+                  <legend>Moedas</legend>
+                  <label class="global-currency-option" for="global-currency-brl">
+                    <input id="global-currency-brl" type="checkbox" data-global-currency-option="BRL"
+                           {{ 'checked' if selected_currency in ('BRL', 'ALL') }}>
+                    Real (BRL)
+                  </label>
+                  <label class="global-currency-option" for="global-currency-usd">
+                    <input id="global-currency-usd" type="checkbox" data-global-currency-option="USD"
+                           {{ 'checked' if selected_currency in ('USD', 'ALL') }}>
+                    Dólar (USD)
+                  </label>
+                </fieldset>
+                <p class="global-currency-status visually-hidden" id="global-currency-status" data-global-currency-status
+                   role="status" aria-live="polite"></p>
+                <button class="button button-primary" type="submit" data-global-currency-submit>Aplicar</button>
               </form>
               <form class="privacy-menu-form" method="post" action="{{ url_for('portfolio.toggle_values_privacy') }}" data-privacy-form>
                 <input type="hidden" name="next" value="{{ request.full_path }}">

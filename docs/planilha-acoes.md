@@ -166,6 +166,52 @@ selecionado continua exibindo o histórico completo. Se não houver nenhuma
 data em comum, o gráfico não é desenhado e a tela informa explicitamente que
 a comparação está indisponível.
 
+## Resultado da posição com proventos
+
+Na aba **Ações**, o seletor de **Resultado** oferece **Ação** (padrão),
+**Proventos** e **Ação + Proventos**. O padrão pode ser omitido da URL; a
+seleção é preservada nos filtros e nos refreshes HTMX.
+
+Para uma posição aberta com cotação, a coluna **Resultado atualizado** usa o
+modo selecionado:
+
+```
+R_ação       = sinal × quantidade atual × (cotação efetiva atual − custo médio)
+R_proventos  = soma dos proventos pagos atribuídos à posição
+R_combinado  = R_ação + R_proventos
+%            = resultado selecionado / (quantidade atual × custo médio)
+Retorno      = signed_period_return(%, dias desde início, período escolhido)
+```
+
+`R_ação` conserva o resultado bruto já definido em **Fórmulas**. O provento é
+creditado na `payment_date`, como na Performance. Em cada data, o sistema
+reconstrói a quantidade por posição a partir de `PositionMovement` e,
+incluindo posições encerradas, de `PositionLedgerArchive`. Na `payment_date`,
+conta a posição ao fim do dia: movimentos dessa data já foram aplicados e um
+encerramento total nesse dia deixa quantidade zero para o rateio.
+`Dividend.broker_id` não é usado para atribuir renda: o provento é do ticker e
+o escopo segue os filtros escolhidos de carteira e corretora.
+
+O rateio segue duas etapas. Primeiro, `prorate_dividends` atribui ao escopo a
+fração da quantidade real líquida do ticker nessa data, sobre a quantidade
+real líquida total, usando `abs()` e descartando o evento quando o total é
+zero. Depois, o valor rateado ao escopo é distribuído entre as chaves de
+posição desse ticker no escopo, proporcionalmente ao valor absoluto da
+quantidade histórica de cada uma sobre a soma bruta dessas quantidades. As
+posições encerradas participam desse segundo denominador para que sua parcela
+não seja transferida às posições restantes; somente posições atualmente
+abertas aparecem na grade. Assim, uma posição só recebe provento pago numa
+data em que já detinha quantidade.
+
+Somente eventos de **ações reais** entram no cálculo; contratos de opções e
+carteiras simuladas não geram proventos atribuídos. Valores e rateios usam
+`Decimal`, sem arredondar no domínio. As linhas sem cotação continuam com
+resultado não aplicável e a indicação **Aguardando primeira cotação RTD**;
+totais e agregados seguem a cobertura atual, que não soma linhas sem cotação.
+O modo **Ação** preserva os resultados atuais. Em todos os modos, subtotais
+por corretora, cartões por carteira/moeda e agregados por ticker somam o mesmo
+resultado selecionado das linhas cotadas, sem misturar carteiras ou moedas.
+
 ## Performance mensal (retorno encadeado, TWR)
 
 O relatório de performance (`app/routes/performance.py`,
@@ -203,11 +249,11 @@ denominador é o capital empregado, e sem o valor absoluto o sinal do
 retorno inverteria com `V` negativo (posição vendida).
 
 **Rateio de proventos.** `Dividend` não tem `portfolio_id`, só `broker_id` e
-`ticker_id` — um provento é rateado pela quantidade detida no recorte
-filtrado sobre a quantidade real total do ticker naquela data
-(`D_creditado = D × quantidade_no_recorte / quantidade_real_total`), nunca
-por `Dividend.broker_id`. Quantidade total zero na data do pagamento
-descarta o provento.
+`ticker_id` — um provento é rateado pela quantidade líquida do recorte
+filtrado sobre a quantidade líquida real total do ticker naquela data, em
+módulo (`D_creditado = D × abs(Q_recorte) / abs(Q_real_total)`), nunca por
+`Dividend.broker_id`. `Q` é a soma assinada por posição (`C` positiva, `V`
+negativa); quantidade total zero na data do pagamento descarta o provento.
 
 **Mês a mês.** `Valor` é o patrimônio real (`V`) do último ponto do mês;
 `Retorno` é a variação do índice TWR entre os pontos finais de dois meses;

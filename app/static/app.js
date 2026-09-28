@@ -61,8 +61,8 @@ htmx.config.includeIndicatorStyles = false;
     const openGlobalFilters = () => {
       globalFiltersMenu.hidden = false;
       globalFiltersToggle.setAttribute("aria-expanded", "true");
-      const select = globalFiltersMenu.querySelector("[data-global-currency]");
-      if (select) select.focus({ preventScroll: true });
+      const firstCurrency = globalFiltersMenu.querySelector("[data-global-currency-option]");
+      if (firstCurrency) firstCurrency.focus({ preventScroll: true });
     };
     globalFiltersToggle.addEventListener("click", () => {
       if (globalFiltersMenu.hidden) openGlobalFilters();
@@ -80,20 +80,40 @@ htmx.config.includeIndicatorStyles = false;
 
     const currencyForm = globalFilters.querySelector("[data-global-currency-form]");
     if (currencyForm) {
-      currencyForm.addEventListener("change", (event) => {
-        if (!event.target.matches("[data-global-currency]")) return;
-        if (currencyForm.dataset.submitting === "1") return;
-        if (typeof currencyForm.requestSubmit === "function") currencyForm.requestSubmit();
-        else currencyForm.submit();
-      });
+      const currencyOptions = [...currencyForm.querySelectorAll("[data-global-currency-option]")];
+      const currencyValue = currencyForm.querySelector("[data-global-currency-value]");
+      const currencyStatus = currencyForm.querySelector("[data-global-currency-status]");
+      const currencySubmit = currencyForm.querySelector("[data-global-currency-submit]");
+      const updateCurrencyForm = () => {
+        const selected = currencyOptions.filter((option) => option.checked);
+        const hasSelection = selected.length > 0;
+        if (currencySubmit) currencySubmit.disabled = !hasSelection;
+        if (currencyStatus) {
+          currencyStatus.classList.toggle("visually-hidden", hasSelection);
+          currencyStatus.textContent = hasSelection ? "" : "Selecione pelo menos uma moeda.";
+        }
+      };
+      currencyOptions.forEach((option) => option.addEventListener("change", updateCurrencyForm));
+      updateCurrencyForm();
       currencyForm.addEventListener("submit", (event) => {
+        const selected = currencyOptions.filter((option) => option.checked);
+        if (!selected.length) {
+          event.preventDefault();
+          updateCurrencyForm();
+          if (currencyOptions[0]) currencyOptions[0].focus({ preventScroll: true });
+          return;
+        }
+        if (currencyValue) {
+          currencyValue.value = selected.length === 2 ? "ALL" : selected[0].dataset.globalCurrencyOption;
+        }
         // A native navigation cancels the previous page, but this guard also
-        // covers repeated change events before unload begins.
+        // covers repeated submits before unload begins.
         if (currencyForm.dataset.submitting === "1") {
           event.preventDefault();
           return;
         }
         currencyForm.dataset.submitting = "1";
+        if (currencySubmit) currencySubmit.disabled = true;
       });
     }
     const privacyForm = globalFilters.querySelector("[data-privacy-form]");
