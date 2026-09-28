@@ -59,6 +59,8 @@ FILTROS_PADRAO: dict[str, str] = {
     "broker": "",
     # `routes/positions.py::portfolio_results_context`
     "return_days": "365",
+    # `routes/positions.py::portfolio_results_context`
+    "result_mode": "acao",
     # `routes/transactions.py`
     "status": TransactionStatus.CLOSED.value,
     # `routes/performance.py` e `monthly_performance.normalize_performance_period`

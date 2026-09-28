@@ -61,6 +61,7 @@ from app.routes.helpers import (
     parse_positive_id,
     poll_interval_seconds,
     portfolio_records,
+    position_dividend_allocations,
     positions_query,
     quote_stale_after_seconds,
     real_portfolio_records,
@@ -76,6 +77,12 @@ RETURN_PERIODS = (
     (365, "Anual"),
 )
 RETURN_PERIOD_DAYS = tuple(days for days, _ in RETURN_PERIODS)
+RESULT_MODES = (
+    ("acao", "Ação"),
+    ("proventos", "Proventos"),
+    ("acao_proventos", "Ação + Proventos"),
+)
+RESULT_MODE_LABELS = dict(RESULT_MODES)
 
 
 # Janelas do gráfico de fechamentos, as mesmas do zoom da aba Cotações.
@@ -306,12 +313,27 @@ def portfolio_results_context() -> dict[str, object]:
     if selected_return_days not in RETURN_PERIOD_DAYS:
         selected_return_days = 365
     selected_return_label = dict(RETURN_PERIODS)[selected_return_days]
+    selected_result_mode = request.args.get("result_mode", "acao")
+    if selected_result_mode not in RESULT_MODE_LABELS:
+        selected_result_mode = "acao"
     poll_interval = poll_interval_seconds()
     agent_check_interval = agent_check_interval_seconds()
+    positions = positions_query(portfolio_id, broker, group_by_broker=group_by_broker)
+    dividends_by_position = (
+        position_dividend_allocations(
+            positions,
+            portfolio_id=portfolio_id,
+            broker=broker,
+        )
+        if selected_result_mode != "acao"
+        else {}
+    )
     portfolio = build_portfolio(
-        positions_query(portfolio_id, broker, group_by_broker=group_by_broker),
+        positions,
         stale_after_seconds=quote_stale_after_seconds(),
         return_period_days=selected_return_days,
+        result_mode=selected_result_mode,
+        dividends_by_position=dividends_by_position,
     )
     data_da_tela = date.today()
     conversao = converter_totais(
@@ -348,6 +370,9 @@ def portfolio_results_context() -> dict[str, object]:
         "selected_return_days": selected_return_days,
         "selected_return_label": selected_return_label,
         "return_periods": RETURN_PERIODS,
+        "selected_result_mode": selected_result_mode,
+        "selected_result_label": RESULT_MODE_LABELS[selected_result_mode],
+        "result_modes": RESULT_MODES,
     }
 
 

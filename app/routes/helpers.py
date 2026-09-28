@@ -36,7 +36,12 @@ from app.models import (
     UserPreference,
     UserTickerEntitlement,
 )
-from app.positions.holdings_history import DividendEvent, HoldingEvent
+from app.positions.holdings_history import (
+    DividendEvent,
+    HoldingEvent,
+    QuantityTimeline,
+    prorate_dividends,
+)
 from app.positions.portfolio import BrokerGroup, MarketGroup, PositionView
 
 
@@ -507,7 +512,11 @@ def open_real_cost_basis_by_ticker() -> dict[int, Decimal]:
 
 
 def position_movement_events(
-    portfolio_id: int | None = None, broker: str | None = None
+    portfolio_id: int | None = None,
+    broker: str | None = None,
+    *,
+    include_options: bool = True,
+    ticker_ids: Iterable[int] | None = None,
 ) -> list[HoldingEvent]:
     """Extrato de posições REAIS — ações e opções — como eventos de
     quantidade e fluxo assinados, insumo de ``app.positions.holdings_history`` para o
@@ -522,10 +531,13 @@ def position_movement_events(
     explícita, para o relatório financeiro não depender de um efeito
     colateral de outra função como única garantia.
 
-    Três consultas — ações vivas, opções vivas e o arquivo das já encerradas
-    (``PositionLedgerArchive``) —, nunca uma por posição (sem N+1). O arquivo
-    entra porque encerrar uma posição apaga o extrato dela em cascata: sem
-    ele, o relatório mediria apenas os ativos que continuaram na carteira. O sinal vem do ``side`` da POSIÇÃO, que não existe no
+    São até três consultas — ações vivas, opções vivas e o arquivo das já
+    encerradas (``PositionLedgerArchive``) —, nunca uma por posição (sem N+1).
+    ``include_options=False`` lê somente ações; ``ticker_ids`` limita o
+    histórico aos ativos necessários ao chamador. O arquivo entra porque
+    encerrar uma posição apaga o extrato dela em cascata: sem ele, o relatório
+    mediria apenas os ativos que continuaram na carteira. O sinal vem do
+    ``side`` da POSIÇÃO, que não existe no
     movimento, e é aplicado a ``resulting_quantity``. Como o saldo
     resultante já está gravado em cada linha do extrato, os quatro tipos de
     movimento (``PositionMovementKind``) são lidos pela mesma fórmula, sem
@@ -556,6 +568,10 @@ def position_movement_events(
     identifica as duas ao mesmo tempo — a mesma armadilha já documentada em
     ``Transaction.source_position_id``.
     """
+    ticker_filter = list(ticker_ids) if ticker_ids is not None else None
+    if ticker_filter == []:
+        return []
+
     stock_statement = (
         select(
             PositionMovement.occurred_on,
@@ -574,35 +590,40 @@ def position_movement_events(
         stock_statement = stock_statement.where(Position.portfolio_id == portfolio_id)
     if broker:
         stock_statement = stock_statement.where(Broker.name == broker)
+    if ticker_filter is not None:
+        stock_statement = stock_statement.where(Position.ticker_id.in_(ticker_filter))
 
-    option_event_date = func.coalesce(
-        OptionPositionMovement.occurred_on, OptionPosition.opened_on
-    ).label("occurred_on")
-    option_event_quantity = func.coalesce(
-        OptionPositionMovement.resulting_quantity, OptionPosition.quantity
-    ).label("resulting_quantity")
-    option_statement = (
-        select(
-            option_event_date,
-            OptionPosition.id,
-            OptionContract.ticker_id,
-            OptionPosition.side,
-            option_event_quantity,
+    if include_options:
+        option_event_date = func.coalesce(
+            OptionPositionMovement.occurred_on, OptionPosition.opened_on
+        ).label("occurred_on")
+        option_event_quantity = func.coalesce(
+            OptionPositionMovement.resulting_quantity, OptionPosition.quantity
+        ).label("resulting_quantity")
+        option_statement = (
+            select(
+                option_event_date,
+                OptionPosition.id,
+                OptionContract.ticker_id,
+                OptionPosition.side,
+                option_event_quantity,
+            )
+            .join(OptionPosition.contract)
+            .join(OptionPosition.broker_ref)
+            .join(OptionPosition.portfolio_ref)
+            .outerjoin(
+                OptionPositionMovement,
+                OptionPositionMovement.option_position_id == OptionPosition.id,
+            )
+            .where(OptionPosition.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
+            .order_by(option_event_date, OptionPositionMovement.id)
         )
-        .join(OptionPosition.contract)
-        .join(OptionPosition.broker_ref)
-        .join(OptionPosition.portfolio_ref)
-        .outerjoin(
-            OptionPositionMovement,
-            OptionPositionMovement.option_position_id == OptionPosition.id,
-        )
-        .where(OptionPosition.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
-        .order_by(option_event_date, OptionPositionMovement.id)
-    )
-    if portfolio_id is not None:
-        option_statement = option_statement.where(OptionPosition.portfolio_id == portfolio_id)
-    if broker:
-        option_statement = option_statement.where(Broker.name == broker)
+        if portfolio_id is not None:
+            option_statement = option_statement.where(OptionPosition.portfolio_id == portfolio_id)
+        if broker:
+            option_statement = option_statement.where(Broker.name == broker)
+        if ticker_filter is not None:
+            option_statement = option_statement.where(OptionContract.ticker_id.in_(ticker_filter))
 
     events: list[HoldingEvent] = []
     for (
@@ -621,22 +642,23 @@ def position_movement_events(
                 position_key=("stock", position_id),
             )
         )
-    for (
-        occurred_on,
-        position_id,
-        ticker_id,
-        side,
-        resulting_quantity,
-    ) in db.session.execute(option_statement):
-        sign = Decimal("1") if side == Side.BUY else Decimal("-1")
-        events.append(
-            HoldingEvent(
-                occurred_on=occurred_on,
-                ticker_id=ticker_id,
-                resulting_signed_quantity=sign * resulting_quantity,
-                position_key=("option", position_id),
+    if include_options:
+        for (
+            occurred_on,
+            position_id,
+            ticker_id,
+            side,
+            resulting_quantity,
+        ) in db.session.execute(option_statement):
+            sign = Decimal("1") if side == Side.BUY else Decimal("-1")
+            events.append(
+                HoldingEvent(
+                    occurred_on=occurred_on,
+                    ticker_id=ticker_id,
+                    resulting_signed_quantity=sign * resulting_quantity,
+                    position_key=("option", position_id),
+                )
             )
-        )
     # Posicoes ja encerradas nao tem mais extrato (a exclusao o leva em
     # cascata); o que sobrou delas esta no arquivo. Sem esta terceira
     # consulta o relatorio mediria so os ativos que continuaram na carteira
@@ -657,12 +679,20 @@ def position_movement_events(
         )
         .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
     )
+    if not include_options:
+        archive_statement = archive_statement.where(
+            PositionLedgerArchive.instrument == "stock"
+        )
     if portfolio_id is not None:
         archive_statement = archive_statement.where(
             PositionLedgerArchive.portfolio_id == portfolio_id
         )
     if broker:
         archive_statement = archive_statement.where(Broker.name == broker)
+    if ticker_filter is not None:
+        archive_statement = archive_statement.where(
+            PositionLedgerArchive.ticker_id.in_(ticker_filter)
+        )
     for (
         occurred_on,
         ticker_id,
@@ -719,6 +749,79 @@ def dividend_events(ticker_ids: Iterable[int]) -> list[DividendEvent]:
         )
         for payment_date, ticker_id, amount, kind in db.session.execute(statement)
     ]
+
+
+def position_dividend_allocations(
+    positions: Sequence[Position],
+    *,
+    portfolio_id: int | None,
+    broker: str | None,
+) -> dict[int, Decimal]:
+    """Proventos históricos atribuídos às posições reais atualmente visíveis.
+
+    Primeiro aplica-se o rateio vigente da performance ao escopo escolhido
+    (carteira/corretora) sobre o total real do ticker. A renda rateada nesse
+    escopo é então repartida por posição proporcionalmente a ``abs(quantidade)``
+    na data do pagamento. Posições encerradas participam desse peso por meio
+    de ``PositionLedgerArchive``, mas não aparecem no resultado desta função.
+
+    A consulta usa apenas eventos de ações: opções não são titulares de
+    proventos de ações, ainda que compartilhem ticker. Carteiras simuladas não
+    entram nem no numerador nem no denominador. Todas as operações monetárias
+    ficam em ``Decimal``.
+    """
+    visible_real = [position for position in positions if not position.simulated]
+    if not visible_real:
+        return {}
+    ticker_ids = {position.ticker_id for position in visible_real}
+    dividends = dividend_events(ticker_ids)
+    if not dividends:
+        return {}
+
+    ticker_filter = sorted(ticker_ids)
+    total_events = position_movement_events(
+        include_options=False, ticker_ids=ticker_filter
+    )
+    total_timeline = QuantityTimeline(total_events)
+    if portfolio_id is None and not broker:
+        # O escopo padrão já é o total real do usuário.
+        scope_timeline = total_timeline
+    else:
+        scope_events = position_movement_events(
+            portfolio_id,
+            broker,
+            include_options=False,
+            ticker_ids=ticker_filter,
+        )
+        scope_timeline = QuantityTimeline(scope_events)
+
+    prorated = prorate_dividends(dividends, scope_timeline, total_timeline)
+    current_position_ids = {position.id for position in visible_real}
+    result: dict[int, Decimal] = {}
+    for dividend in prorated:
+        quantities = scope_timeline.quantities_at(dividend.payment_date)
+        gross_scope_quantity = sum(
+            (
+                abs(quantity)
+                for key, quantity in quantities.items()
+                if scope_timeline.ticker_of(key) == dividend.ticker_id
+            ),
+            Decimal("0"),
+        )
+        if gross_scope_quantity == 0:
+            continue
+        for key, quantity in quantities.items():
+            instrument, position_id = key
+            if (
+                instrument != "stock"
+                or position_id not in current_position_ids
+                or scope_timeline.ticker_of(key) != dividend.ticker_id
+            ):
+                continue
+            result[position_id] = result.get(position_id, Decimal("0")) + (
+                dividend.amount * abs(quantity) / gross_scope_quantity
+            )
+    return result
 
 
 def poll_interval_seconds() -> int:

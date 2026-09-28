@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from app.core.domain import PositionMetrics, calculate_position, operation_result, safe_div
+from app.core.domain import (
+    PositionMetrics,
+    calculate_position,
+    operation_result,
+    safe_div,
+    signed_period_return,
+)
 from app.core.instrument_status import instrument_status_class, instrument_status_letter
 from app.models import Market, Position, PositionMovementKind, Side
 
@@ -31,6 +38,9 @@ class PositionView:
     quote_status: str
     instrument_status: str
     instrument_status_class: str
+    selected_result: Decimal | None = None
+    selected_return_pct: Decimal | None = None
+    selected_period_return: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +173,13 @@ def aggregate_by_ticker(views: list[PositionView]) -> list[TickerGroup]:
     for (_, currency, _), group_views in grouped.items():
         sample = group_views[0].position
         metrics = [view.metrics for view in group_views if view.metrics is not None]
+        results = [
+            view.selected_result
+            if view.selected_result is not None
+            else view.metrics.result
+            for view in group_views
+            if view.selected_result is not None or view.metrics is not None
+        ]
         groups.append(
             TickerGroup(
                 ticker=sample.ticker,
@@ -181,7 +198,7 @@ def aggregate_by_ticker(views: list[PositionView]) -> list[TickerGroup]:
                 ),
                 cost_total=sum((abs(metric.build_value) for metric in metrics), Decimal("0")),
                 current_total=sum((abs(metric.unwind_value) for metric in metrics), Decimal("0")),
-                result_total=sum((metric.result for metric in metrics), Decimal("0")),
+                result_total=sum(results, Decimal("0")),
                 brokers=tuple(sorted({view.position.broker for view in group_views})),
             )
         )
@@ -235,11 +252,22 @@ def build_portfolio(
     *,
     stale_after_seconds: int,
     return_period_days: int = 365,
+    result_mode: str = "acao",
+    dividends_by_position: Mapping[int, Decimal] | None = None,
     today: date | None = None,
     now: datetime | None = None,
 ) -> PortfolioView:
     observed_now = now or datetime.now(UTC)
-    calculated: list[tuple[Position, PositionMetrics | None, str]] = []
+    calculated: list[
+        tuple[
+            Position,
+            PositionMetrics | None,
+            str,
+            Decimal | None,
+            Decimal | None,
+            Decimal | None,
+        ]
+    ] = []
     # Chave (carteira, moeda): cada carteira e um bolso separado, e uma
     # posicao de uma nao deve inflar o total, o peso (%) nem o HHI de outra
     # -- mesmo com a mesma moeda, e mesmo quando as duas sao reais. A moeda
@@ -256,7 +284,7 @@ def build_portfolio(
         )
         quote = position.quote
         if quote is None:
-            calculated.append((position, None, "missing"))
+            calculated.append((position, None, "missing", None, None, None))
             continue
         status = quote.source_status
         effective_price, effective_observed_at = effective_position_quote(position)
@@ -273,10 +301,39 @@ def build_portfolio(
             return_period_days=return_period_days,
             today=today,
         )
+        selected_result = metrics.result
+        selected_return_pct = metrics.return_pct
+        selected_period_return = metrics.period_return
+        if result_mode in {"proventos", "acao_proventos"}:
+            dividend_result = (
+                Decimal("0")
+                if position.simulated or dividends_by_position is None
+                else dividends_by_position.get(position.id, Decimal("0"))
+            )
+            selected_result = (
+                dividend_result
+                if result_mode == "proventos"
+                else metrics.result + dividend_result
+            )
+            selected_return_pct = safe_div(
+                selected_result, position.quantity * position.average_cost
+            )
+            selected_period_return = signed_period_return(
+                selected_return_pct, metrics.days, return_period_days
+            )
         bucket_totals[0] += abs(metrics.unwind_value)
         bucket_totals[1] += abs(metrics.build_value)
-        bucket_totals[2] += metrics.result
-        calculated.append((position, metrics, status))
+        bucket_totals[2] += selected_result
+        calculated.append(
+            (
+                position,
+                metrics,
+                status,
+                selected_result,
+                selected_return_pct,
+                selected_period_return,
+            )
+        )
 
     views = [
         PositionView(
@@ -297,8 +354,18 @@ def build_portfolio(
             instrument_status_class=instrument_status_class(
                 instrument_status_letter(position.quote)
             ),
+            selected_result=selected_result,
+            selected_return_pct=selected_return_pct,
+            selected_period_return=selected_period_return,
         )
-        for position, metrics, status in calculated
+        for (
+            position,
+            metrics,
+            status,
+            selected_result,
+            selected_return_pct,
+            selected_period_return,
+        ) in calculated
     ]
     # Os grupos de corretora e mercado dividem o mesmo bucket dos totais
     # (carteira, moeda): o peso de uma corretora e a fatia dela dentro
@@ -318,7 +385,16 @@ def build_portfolio(
         group_metrics = [view.metrics for view in group_views if view.metrics is not None]
         current_total = sum((abs(metric.unwind_value) for metric in group_metrics), Decimal("0"))
         cost_total = sum((abs(metric.build_value) for metric in group_metrics), Decimal("0"))
-        result_total = sum((metric.result for metric in group_metrics), Decimal("0"))
+        result_total = sum(
+            (
+                view.selected_result
+                if view.selected_result is not None
+                else view.metrics.result
+                for view in group_views
+                if view.metrics is not None
+            ),
+            Decimal("0"),
+        )
         bucket_current_total, bucket_cost_total, _ = totals_by_bucket[bucket]
         return (
             current_total,

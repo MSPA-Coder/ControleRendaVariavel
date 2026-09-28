@@ -46,6 +46,13 @@
       {% endfor %}
     </select>
   </label>
+  <label>Resultado
+    <select name="result_mode">
+      {% for value, label in result_modes %}
+        <option value="{{ value }}" {{ 'selected' if selected_result_mode == value }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
   <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
   <label class="group-toggle" title="Mostrar o nome da corretora uma única vez por grupo, em vez de repeti-lo em cada linha">
     <input type="checkbox" name="group_by_broker" value="1" {{ 'checked' if group_by_broker }}>

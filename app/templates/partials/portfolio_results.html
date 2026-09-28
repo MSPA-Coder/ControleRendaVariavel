@@ -47,9 +47,9 @@
     {% if m %}
       <td class="number" data-sensitive-value="true">{{ m.current_price|currency(p.currency, trim=true) }}</td>
       <td class="number {{ m.daily_variation|sign_class }}" data-sensitive-value="true">{{ m.daily_variation|percent }}</td>
-      <td class="number {{ m.result|sign_class }}" data-sensitive-value="true">{{ m.result|currency(p.currency, 0) }}</td>
-      <td class="number {{ m.return_pct|sign_class }}" data-sensitive-value="true">{{ m.return_pct|percent }}</td>
-      <td class="number {{ m.period_return|sign_class }}" data-sensitive-value="true">{{ m.period_return|percent }}</td>
+      <td class="number {{ item.selected_result|sign_class }}" data-sensitive-value="true">{{ item.selected_result|currency(p.currency, 0) }}</td>
+      <td class="number {{ item.selected_return_pct|sign_class }}" data-sensitive-value="true">{{ item.selected_return_pct|percent }}</td>
+      <td class="number {{ item.selected_period_return|sign_class }}" data-sensitive-value="true">{{ item.selected_period_return|percent }}</td>
       <td class="number" data-sensitive-value="true">{{ m.stop_gain|currency(p.currency, trim=true) }}</td>
       <td class="number {{ m.distance_to_target|sign_class }}" data-sensitive-value="true">{{ m.distance_to_target|percent(2) }}</td>
       <td class="number {{ m.breakeven|sign_class }}" data-sensitive-value="true">{{ m.breakeven|percent }}</td>
@@ -85,7 +85,7 @@
       <tr class="group-head">
         <th colspan="{{ 2 if group_by_broker else 3 }}">Posição</th>
         <th colspan="3">Cotações</th>
-        <th colspan="3">Resultado</th>
+        <th colspan="3">Resultado ({{ selected_result_label }})</th>
         <th colspan="3">Targets</th>
         <th colspan="4">Carteira</th>
         <th colspan="4">Controle</th>
@@ -122,7 +122,7 @@
   </table>
 </div>
 
-<section class="summary portfolio-summary" aria-label="Resumo da carteira">
+<section class="summary portfolio-summary portfolio-summary-actions{{ ' portfolio-summary-actions-split' if portfolio.currency_totals }}" aria-label="Resumo da carteira">
   <article class="currency-card" aria-label="Total consolidado em moeda base">
     <h3 class="currency-card-title">Total consolidado · {{ moeda_base }}</h3>
     <div class="currency-card-grid">
@@ -137,6 +137,8 @@
       </article>
     </div>
   </article>
+  {% if portfolio.currency_totals %}
+  <div class="portfolio-currency-cards">
   {% for total in portfolio.currency_totals %}
   {# O simbolo acompanha o rotulo de cada valor, nao o numero: como prefixo
      ele consumia a largura do card e quebrava o numero em duas linhas. #}
@@ -174,6 +176,8 @@
     </div>
   </article>
   {% endfor %}
+  </div>
+  {% endif %}
 </section>
 
 {% if portfolio.ticker_groups %}
