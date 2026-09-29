@@ -1429,6 +1429,7 @@ def patrimonio_snapshot_v4():
             "sistema": SISTEMA,
             "source_id": _id_v3_material("source", SISTEMA),
             "snapshot_id": snapshot_id,
+            "generated_at": gerado_em.isoformat(),
             "gerado_em": gerado_em.isoformat(),
             "data_de_referencia": hoje.isoformat(),
             "high_watermark": watermark,
