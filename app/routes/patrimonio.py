@@ -1181,6 +1181,10 @@ def patrimonio_changes_v4():
 def patrimonio_snapshot_v4():
     """Publica um retrato completo atual, sem simular eventos de negociação."""
     _exigir_token()
+    include_prices = request.args.get("include_prices", "true").strip().lower()
+    if include_prices not in {"true", "false"}:
+        abort(400, "include_prices deve ser true ou false.")
+    include_prices = include_prices == "true"
     titular = identidade(_titular())
     owner_id = _owner_id()
     sessao = db.session()
@@ -1269,7 +1273,7 @@ def patrimonio_snapshot_v4():
 
     quotes = []
     history = []
-    if ticker_ids:
+    if ticker_ids and include_prices:
         for ticker, quote in db.session.execute(
             select(Ticker, Quote)
             .join(Quote, Quote.ticker_id == Ticker.id)
@@ -1410,6 +1414,8 @@ def patrimonio_snapshot_v4():
                 "prices": {
                     "current_included": len(quotes),
                     "history_included": len(history),
+                    "complete": include_prices,
+                    "omitted": None if include_prices else "consumer_requested",
                     "history_start": inicio_historico.isoformat(),
                     "history_end": hoje.isoformat(),
                     "history_days_limit": historico_dias,

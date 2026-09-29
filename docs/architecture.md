@@ -152,15 +152,18 @@ importação, categorização ou mutação de carteira.
 
 ### Snapshot inicial v4 para integração com carteira externa
 
-`GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot` e
-`GET /patrimonio/v4/changes` publicam um
+`GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot`,
+`GET /patrimonio/v4/changes` e `GET /patrimonio/v4/ledger` publicam um
 snapshot atual somente-leitura, com o mesmo Bearer e escopo explícito de
 `PATRIMONIO_OWNER_ID`. O snapshot contém posições abertas de ações em carteiras
 reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
 já deteve. A janela de preços históricos é limitada por
 `PATRIMONIO_MAX_HISTORICO_DIAS`, que é um limite e não uma garantia de cobertura
-para todo o período. Preço ou valor de mercado ausente permanece nulo, sem
-estimativa; a cobertura informa as contagens de posições sem preço e excluídas.
+para todo o período. O consumidor pode chamar o snapshot com
+`?include_prices=false` para receber posições e proventos sem a série de preços;
+`coverage.prices.complete` e `coverage.prices.omitted` declaram essa omissão.
+Preço ou valor de mercado ausente permanece nulo, sem estimativa; a cobertura
+informa as contagens de posições sem preço e excluídas.
 Cada resposta leva `snapshot_id`, e os recursos levam `source_id` estável e
 opaco. Cada item de `holdings` publica `instrument_type: "equity"`, identificando
 de forma explícita e estável o tipo das posições abertas de ações que compõem o
