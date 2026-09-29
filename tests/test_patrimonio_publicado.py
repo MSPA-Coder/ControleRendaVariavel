@@ -533,7 +533,7 @@ def test_ledger_sem_sessao_responde_pelo_token_da_integracao(client, app):
     resposta = client.get("/patrimonio/v4/ledger")
 
     assert resposta.status_code == 401
-    assert resposta.is_json
+    assert resposta.location is None
 
 
 @banco
