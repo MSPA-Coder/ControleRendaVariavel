@@ -27,3 +27,20 @@ def test_o_app_roda_no_fuso_do_mercado() -> None:
     for nome in ("web", "migrate"):
         ambiente = _servicos()[nome]["environment"]
         assert ambiente.get("TZ") == MARKET_TIMEZONE.key, nome
+
+
+def test_tokens_patrimoniais_separados_no_runtime_e_no_quality() -> None:
+    servicos = _servicos()
+    web = servicos["web"]
+    quality = servicos["quality"]
+
+    assert web["environment"]["PATRIMONIO_TOKEN_FILE"] == "/run/secrets/patrimonio_token"
+    assert web["environment"]["PATRIMONIO_INTEGRATION_TOKEN_FILE"] == (
+        "/run/secrets/patrimonio_integration_token"
+    )
+    assert "patrimonio_token" in web["secrets"]
+    assert "patrimonio_integration_token" in web["secrets"]
+    assert quality["environment"]["PATRIMONIO_INTEGRATION_TOKEN_FILE"] == (
+        "/run/secrets/patrimonio_integration_token_quality"
+    )
+    assert "patrimonio_integration_token_quality" in quality["secrets"]

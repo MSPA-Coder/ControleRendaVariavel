@@ -154,8 +154,11 @@ importação, categorização ou mutação de carteira.
 
 `GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot` e
 `GET /patrimonio/v4/changes` publicam um
-snapshot atual somente-leitura, com o mesmo Bearer e escopo explícito de
-`PATRIMONIO_OWNER_ID`. O snapshot contém posições abertas de ações em carteiras
+snapshot atual somente-leitura, com escopo explícito de `PATRIMONIO_OWNER_ID`.
+As rotas v4 usam o token exclusivo `PATRIMONIO_INTEGRATION_TOKEN`;
+`PATRIMONIO_TOKEN` segue autorizando apenas as rotas v1-v3. Os cursores v4
+são assinados pelo token exclusivo, e sua rotação invalida cursores emitidos
+anteriormente. O snapshot contém posições abertas de ações em carteiras
 reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
 já deteve. A janela de preços históricos é limitada por
 `PATRIMONIO_MAX_HISTORICO_DIAS`, que é um limite e não uma garantia de cobertura

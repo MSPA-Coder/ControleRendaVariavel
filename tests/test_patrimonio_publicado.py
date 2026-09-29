@@ -45,6 +45,7 @@ from app.patrimonio.fotografia import identidade
 ROTA = "/patrimonio/v1/resumo"
 ROTA_V2 = "/patrimonio/v2/resumo"
 TOKEN = "token-de-teste-com-mais-de-trinta-e-dois-caracteres"
+TOKEN_V4 = "token-de-integracao-v4-com-mais-de-trinta-e-dois-caracteres"
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +151,34 @@ def test_v2_exige_o_mesmo_bearer_e_so_responde_get(client, app):
     assert client.post(ROTA_V2, headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 405
 
 
+def test_v4_nao_usa_o_token_das_rotas_anteriores(client, app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = ""
+
+    resposta = client.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+
+    assert resposta.status_code == 503
+
+
+def test_v4_aceita_somente_o_token_de_integracao(client, app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
+    app.config["PATRIMONIO_TITULAR"] = ""
+
+    token_legado = client.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+    token_v4 = client.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN_V4}"}
+    )
+
+    assert token_legado.status_code == 401
+    assert token_v4.status_code == 503
+    assert b"sem titular" in token_v4.data
+
+
 # ---------------------------------------------------------------------------
 # O conteúdo -- com banco
 # ---------------------------------------------------------------------------
@@ -210,6 +239,7 @@ def _posicao(cenario, carteira, **campos):
 @pytest.fixture
 def publicando(app_com_banco, cenario):
     app_com_banco.config["PATRIMONIO_TOKEN"] = TOKEN
+    app_com_banco.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
     app_com_banco.config["PATRIMONIO_TITULAR"] = "Mariano"
     app_com_banco.config["PATRIMONIO_OWNER_ID"] = str(cenario["usuario"].id)
     return app_com_banco.test_client()
@@ -229,7 +259,7 @@ def pedir_v2(publicando, **parametros):
 
 def pedir_snapshot_v4(publicando):
     return publicando.get(
-        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN_V4}"}
     )
 
 

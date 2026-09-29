@@ -31,7 +31,8 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 2. Restaure por canal seguro `.secrets/secret_key`,
    `.secrets/postgres_password`, `.secrets/postgres_app_password`,
    `.secrets/collector_agent_read_token`,
-   `.secrets/collector_agent_write_token`, `.secrets/patrimonio_token` e o
+   `.secrets/collector_agent_write_token`, `.secrets/patrimonio_token`,
+   `.secrets/patrimonio_integration_token` e o
    material de `.certs/` exigido pelo build.
    Nunca registre ou exiba seus conteúdos. No Docker Compose não-Swarm, use modo
    `700` no diretório `.secrets` e `644` nos arquivos, pois PostgreSQL e Flask
@@ -42,6 +43,9 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
    Compose recusa subir com um segredo declarado e ausente, e o `deploy.sh`
    faria rollback de uma implantação sem defeito nenhum. Gere um valor novo com
    `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+   O contrato v4 usa `patrimonio_integration_token`, gerado e rotacionado de
+   forma independente. Preserve o token existente das rotas v1-v3 e entregue
+   o valor v4 ao consumidor por canal seguro.
 3. Suba a pilha:
 
    ```bash
