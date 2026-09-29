@@ -88,6 +88,7 @@ PUBLIC_ENDPOINTS = frozenset({
     "portfolio.patrimonio_holding_history_v3",
     "portfolio.patrimonio_metadata_v4",
     "portfolio.patrimonio_snapshot_v4",
+    "portfolio.patrimonio_activities_v4",
     "portfolio.patrimonio_changes_v4",
     "portfolio.patrimonio_ledger_v4",
     "static",
@@ -391,6 +392,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "portfolio.patrimonio_performance_v3",
         "portfolio.patrimonio_events_v3",
         "portfolio.patrimonio_holding_history_v3",
+        "portfolio.patrimonio_activities_v4",
         "portfolio.patrimonio_changes_v4",
         "portfolio.patrimonio_ledger_v4",
     ):

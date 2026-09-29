@@ -327,7 +327,9 @@ def _cursor_v4_ler(raw: str | None, owner_id: int) -> int:
         return 0 if not raw else abort(400, "Cursor inválido.")
     try:
         decoded = urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
-        material, signature = decoded.rsplit(b".", 1)
+        if len(decoded) < 34 or decoded[-33:-32] != b".":
+            abort(400, "Cursor inválido.")
+        material, signature = decoded[:-33], decoded[-32:]
         expected = hmac.new(
             str(current_app.config["PATRIMONIO_INTEGRATION_TOKEN"]).encode(),
             b"patrimonio-v4-cursor:" + material,
@@ -608,16 +610,39 @@ def patrimonio_resumo_v2():
 
 @bp.get("/patrimonio/v3/activities")
 def patrimonio_activities_v3():
-    """Atividades financeiras encerradas, somente leitura.
+    """Atividades encerradas, autenticadas pelo token legado v3."""
+    _exigir_token()
+    return _atividades_publicadas(CONTRATO_V3)
+
+
+@bp.get("/patrimonio/v4/activities")
+def patrimonio_activities_v4():
+    """Atividades encerradas autenticadas pelo token exclusivo v4."""
+    _exigir_token(v4=True)
+    return _atividades_publicadas(CONTRATO_V4)
+
+
+def _atividades_publicadas(contrato: str):
+    """Atividades financeiras encerradas, somente leitura e paginadas.
 
     A lista é deliberadamente materializada após consultas separadas: os dois
     modelos têm datas diferentes e o contrato precisa ordenar o conjunto
     combinado de forma determinística. Nenhuma linha aberta ou simulada entra.
+    Transações são resumos de resultado e não têm os lotes de execução.
     """
-    _exigir_token()
     titular_nome = _titular()
     owner_id = _owner_id()
     titular = identidade(titular_nome)
+    high_watermark = None
+    if contrato == CONTRATO_V4:
+        sessao = db.session()
+        if sessao.in_transaction():
+            isolamento = sessao.execute(text("SHOW transaction_isolation")).scalar_one()
+            if isolamento.replace("_", " ").lower() != "repeatable read":
+                raise RuntimeError("patrimonio/v4 exige transacao REPEATABLE READ")
+        else:
+            sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+        high_watermark = _cursor_v4(_watermark_v4(), owner_id)
     inicio, fim = _intervalo_v3()
     pagina, tamanho = _paginacao_v3()
 
@@ -647,41 +672,51 @@ def patrimonio_activities_v3():
         transacoes = transacoes.where(Transaction.closed_on <= fim)
         proventos = proventos.where(Dividend.payment_date <= fim)
 
+    transacoes = db.session.scalars(transacoes).unique().all()
+    proventos = db.session.scalars(proventos).unique().all()
     itens = [
         (item.closed_on, 0, item.id, _atividade_v3_transacao(item, titular))
-        for item in db.session.scalars(transacoes).unique().all()
+        for item in transacoes
     ] + [
         (item.payment_date, 1, item.id, _atividade_v3_provento(item, titular))
-        for item in db.session.scalars(proventos).unique().all()
+        for item in proventos
     ]
     itens.sort(key=lambda row: (row[0], row[1], row[2]), reverse=True)
     total = len(itens)
     inicio_fatia = (pagina - 1) * tamanho
     fatia = itens[inicio_fatia : inicio_fatia + tamanho]
     paginas = (total + tamanho - 1) // tamanho if total else 0
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO_V3,
-            "recurso": "atividades",
-            "sistema": SISTEMA,
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "filtros": {
-                "inicio": inicio.isoformat() if inicio else None,
-                "fim": fim.isoformat() if fim else None,
-            },
-            "paginacao": {
-                "pagina": pagina,
-                "tamanho": tamanho,
-                "total": total,
-                "paginas": paginas,
-                "tem_anterior": pagina > 1 and bool(total),
-                "tem_proxima": pagina < paginas,
-                "anterior": _link_pagina_v3(pagina - 1) if pagina > 1 and bool(total) else None,
-                "proxima": _link_pagina_v3(pagina + 1) if pagina < paginas else None,
-            },
-            "itens": [row[3] for row in fatia],
+    payload = {
+        "contrato": contrato,
+        "recurso": "activities" if contrato == CONTRATO_V4 else "atividades",
+        "sistema": SISTEMA,
+        "gerado_em": datetime.now(UTC).isoformat(),
+        **({"high_watermark": high_watermark} if high_watermark is not None else {}),
+        "filtros": {
+            "inicio": inicio.isoformat() if inicio else None,
+            "fim": fim.isoformat() if fim else None,
+        },
+        "paginacao": {
+            "pagina": pagina,
+            "tamanho": tamanho,
+            "total": total,
+            "paginas": paginas,
+            "tem_anterior": pagina > 1 and bool(total),
+            "tem_proxima": pagina < paginas,
+            "anterior": _link_pagina_v3(pagina - 1) if pagina > 1 and bool(total) else None,
+            "proxima": _link_pagina_v3(pagina + 1) if pagina < paginas else None,
+        },
+        "itens": [row[3] for row in fatia],
+    }
+    if contrato == CONTRATO_V4:
+        payload["coverage"] = {
+            "complete": inicio is None and fim is None,
+            "scope": "resultados de transações encerradas e proventos persistidos do owner configurado",
+            "closed_transactions_included": len(transacoes),
+            "income_included": len(proventos),
+            "limitations": "transações são resumos de resultado; não incluem lotes, preços de execução ou eventos de abertura",
         }
-    )
+    resposta = jsonify(payload)
     resposta.headers["Cache-Control"] = "no-store"
     return resposta
 
@@ -1068,6 +1103,7 @@ def patrimonio_metadata_v4():
                 "holdings": True,
                 "position_ledger": True,
                 "income": True,
+                "activities": True,
                 "prices": True,
                 "options": False,
                 "complete_trades": False,
@@ -1086,6 +1122,12 @@ def patrimonio_metadata_v4():
                     "role": "fato analítico; pode também existir no Controle Bancário",
                     "do_not_rebook_as_cash": True,
                 },
+                "activities": {
+                    "available": True,
+                    "endpoint": "/patrimonio/v4/activities",
+                    "scope": "resumos de transações encerradas e proventos persistidos",
+                    "trade_details": False,
+                },
                 "prices": {
                     "available": True,
                     "scope": "cotações apenas de instrumentos já detidos pelo owner",
@@ -1095,7 +1137,7 @@ def patrimonio_metadata_v4():
                 "options": {"available": False, "reason": "não publicadas neste contrato"},
                 "complete_trades": {
                     "available": False,
-                    "reason": "o ledger detalhado é prospectivo; posições encerradas antes da revisão 20260928_0024 não têm backfill",
+                    "reason": "atividades publicam somente resultados agregados de encerramentos; não incluem lotes ou preços de execução; o ledger detalhado é prospectivo e não tem backfill anterior",
                 },
                 "position_ledger": {
                     "available": True,
@@ -1394,6 +1436,7 @@ def patrimonio_snapshot_v4():
                 "holdings": True,
                 "position_ledger": True,
                 "income": True,
+                "activities": True,
                 "prices": True,
                 "options": False,
                 "complete_trades": False,
@@ -1411,6 +1454,12 @@ def patrimonio_snapshot_v4():
                     "scope": "todos os proventos persistidos do owner",
                     "role": "fato analítico; pode também existir no Controle Bancário",
                     "do_not_rebook_as_cash": True,
+                },
+                "activities": {
+                    "available": True,
+                    "endpoint": "/patrimonio/v4/activities",
+                    "scope": "resumos de transações encerradas e proventos persistidos",
+                    "trade_details": False,
                 },
                 "prices": {
                     "current_included": len(quotes),
