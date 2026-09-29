@@ -153,8 +153,9 @@ importação, categorização ou mutação de carteira.
 ### Snapshot inicial v4 para integração com carteira externa
 
 `GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot`,
-`GET /patrimonio/v4/changes` e `GET /patrimonio/v4/ledger` publicam um
-snapshot atual somente-leitura, com escopo explícito de `PATRIMONIO_OWNER_ID`.
+`GET /patrimonio/v4/activities`, `GET /patrimonio/v4/changes` e
+`GET /patrimonio/v4/ledger` publicam dados somente-leitura, com escopo
+explícito de `PATRIMONIO_OWNER_ID`.
 As rotas v4 usam o token exclusivo `PATRIMONIO_INTEGRATION_TOKEN`;
 `PATRIMONIO_TOKEN` segue autorizando apenas as rotas v1-v3. Os cursores v4
 são assinados pelo token exclusivo, e sua rotação invalida cursores emitidos
@@ -165,6 +166,11 @@ já deteve. A janela de preços históricos é limitada por
 para todo o período. O consumidor pode chamar o snapshot com
 `?include_prices=false` para receber posições e proventos sem a série de preços;
 `coverage.prices.complete` e `coverage.prices.omitted` declaram essa omissão.
+O endpoint de atividades publica resumos de resultados de transações encerradas
+e proventos persistidos. Não contém os lotes nem os preços de execução, portanto
+`complete_trades` continua indisponível. Ele usa o token exclusivo v4 e um
+`high_watermark` comum às páginas; o consumidor deve reiniciar a leitura se o
+watermark mudar entre páginas.
 Preço ou valor de mercado ausente permanece nulo, sem estimativa; a cobertura
 informa as contagens de posições sem preço e excluídas.
 Cada resposta leva `snapshot_id`, e os recursos levam `source_id` estável e

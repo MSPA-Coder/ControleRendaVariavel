@@ -780,7 +780,7 @@ class PatrimonioV4Outbox(Base):
     __tablename__ = "patrimonio_v4_outbox"
     __table_args__ = (
         CheckConstraint(
-            "resource IN ('holding', 'income', 'price_current', 'price_history', 'position_ledger')",
+            "resource IN ('holding', 'income', 'price_current', 'price_history', 'position_ledger', 'activity')",
             name="resource_valid",
         ),
         CheckConstraint("operation IN ('upsert', 'delete')", name="operation_valid"),

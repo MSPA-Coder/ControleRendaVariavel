@@ -39,6 +39,8 @@ from app.models import (
     QuoteHistory,
     Side,
     Ticker,
+    Transaction,
+    TransactionStatus,
     User,
 )
 from app.patrimonio.fotografia import identidade
@@ -187,6 +189,12 @@ def test_cursor_v4_usa_token_exclusivo_e_invalida_assinaturas_antigas(app):
     app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
 
     with app.app_context():
+        # A assinatura binária pode conter o byte usado como separador; o
+        # parser separa pelo tamanho fixo do HMAC, não pelo último '.'.
+        for position in range(200):
+            cursor = patrimonio_route._cursor_v4(position, owner_id=17)
+            assert patrimonio_route._cursor_v4_ler(cursor, owner_id=17) == position
+
         cursor_v4 = patrimonio_route._cursor_v4(41, owner_id=17)
         assert patrimonio_route._cursor_v4_ler(cursor_v4, owner_id=17) == 41
 
@@ -286,6 +294,14 @@ def pedir_v2(publicando, **parametros):
 def pedir_snapshot_v4(publicando, **parametros):
     return publicando.get(
         "/patrimonio/v4/snapshot",
+        query_string=parametros,
+        headers={"Authorization": f"Bearer {TOKEN_V4}"},
+    )
+
+
+def pedir_activities_v4(publicando, **parametros):
+    return publicando.get(
+        "/patrimonio/v4/activities",
         query_string=parametros,
         headers={"Authorization": f"Bearer {TOKEN_V4}"},
     )
@@ -534,6 +550,66 @@ def test_ledger_sem_sessao_responde_pelo_token_da_integracao(client, app):
 
     assert resposta.status_code == 401
     assert resposta.location is None
+
+
+@banco
+def test_activities_v4_pagina_resumos_encerrados_e_proventos(
+    sessao, cenario, publicando, client
+):
+    watermark_antes = patrimonio_route._watermark_v4()
+    cursor_antes = patrimonio_route._cursor_v4(watermark_antes, cenario["usuario"].id)
+    sessao.add_all([
+        Transaction(
+            owner_id=cenario["usuario"].id,
+            broker_id=cenario["corretora"].id,
+            ticker_id=cenario["papel"].id,
+            portfolio_id=cenario["real"].id,
+            quantity=Decimal("2"),
+            average_cost=Decimal("10"),
+            exit_price=Decimal("12"),
+            side=Side.BUY,
+            opened_on=date(2026, 1, 1),
+            closed_on=date(2026, 2, 1),
+            result=Decimal("4"),
+            status=TransactionStatus.CLOSED,
+        ),
+        Dividend(
+            owner_id=cenario["usuario"].id,
+            broker_id=cenario["corretora"].id,
+            ticker_id=cenario["papel"].id,
+            amount=Decimal("3.25"),
+            payment_date=date(2026, 1, 15),
+        ),
+    ])
+    sessao.flush()
+
+    sem_token = client.get("/patrimonio/v4/activities")
+    primeira = pedir_activities_v4(publicando, page_size=1)
+    segunda = pedir_activities_v4(publicando, page_size=1, page=2)
+
+    assert sem_token.status_code == 401
+    assert sem_token.location is None
+    assert primeira.status_code == segunda.status_code == 200
+    corpo = primeira.get_json()
+    assert corpo["contrato"] == "patrimonio/v4"
+    assert corpo["coverage"]["complete"] is True
+    assert corpo["coverage"]["closed_transactions_included"] == 1
+    assert corpo["coverage"]["income_included"] == 1
+    assert corpo["paginacao"]["total"] == 2
+    assert corpo["paginacao"]["tem_proxima"] is True
+    assert primeira.get_json()["itens"][0]["origem"] == "transacao"
+    assert segunda.get_json()["itens"][0]["origem"] == "provento"
+    assert segunda.get_json()["paginacao"]["tem_proxima"] is False
+    alteracoes = publicando.get(
+        "/patrimonio/v4/changes",
+        query_string={"after": cursor_antes},
+        headers={"Authorization": f"Bearer {TOKEN_V4}"},
+    )
+    assert alteracoes.status_code == 200
+    assert {item["resource"] for item in alteracoes.get_json()["items"]} >= {
+        "activity",
+        "income",
+    }
 
 
 @banco
