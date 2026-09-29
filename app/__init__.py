@@ -210,6 +210,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # `owner_id` aponta para o USUÁRIO do aplicativo, não para a pessoa
         # dona do dinheiro, e são conceitos diferentes com o mesmo nome.
         PATRIMONIO_TOKEN=resolver_segredo("PATRIMONIO_TOKEN") or "",
+        PATRIMONIO_INTEGRATION_TOKEN=resolver_segredo("PATRIMONIO_INTEGRATION_TOKEN") or "",
         PATRIMONIO_TITULAR=os.getenv("PATRIMONIO_TITULAR", "").strip(),
         PATRIMONIO_OWNER_ID=os.getenv("PATRIMONIO_OWNER_ID", "").strip(),
         PATRIMONIO_MAX_HISTORICO_DIAS=int(os.getenv("PATRIMONIO_MAX_HISTORICO_DIAS", "3650")),
