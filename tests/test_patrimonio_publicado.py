@@ -509,6 +509,7 @@ def test_snapshot_v4_identifica_explicitamente_cada_holding_como_equity(
     assert resposta.headers["Cache-Control"] == "no-store"
     corpo = resposta.get_json()
     assert corpo["contrato"] == "patrimonio/v4"
+    assert corpo["generated_at"] == corpo["gerado_em"]
     assert corpo["coverage"]["holdings"]["complete"] is True
     (holding,) = corpo["holdings"]
     assert holding["instrument"] == "WEGE3"
