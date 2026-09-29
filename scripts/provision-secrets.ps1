@@ -191,6 +191,10 @@ $collectorAgentReadTokenPath = Join-Path $secretsDir "collector_agent_read_token
 Ensure-SecretFile -Path $collectorAgentReadTokenPath -Value (New-ControlToken)
 $collectorAgentWriteTokenPath = Join-Path $secretsDir "collector_agent_write_token"
 Ensure-SecretFile -Path $collectorAgentWriteTokenPath -Value (New-ControlToken)
+$patrimonioIntegrationTokenPath = Join-Path $secretsDir "patrimonio_integration_token"
+Ensure-SecretFile -Path $patrimonioIntegrationTokenPath -Value (New-ControlToken)
+$patrimonioIntegrationTokenQualityPath = Join-Path $secretsDir "patrimonio_integration_token_quality"
+Ensure-SecretFile -Path $patrimonioIntegrationTokenQualityPath -Value (New-ControlToken)
 Migrate-DotEnvSecretPaths
 
 Write-Output "Arquivos de segredo provisionados em .secrets. Nenhum valor foi exibido; revise permissões locais antes de iniciar a pilha."

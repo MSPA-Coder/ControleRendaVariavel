@@ -83,6 +83,7 @@ services:
       # andam juntas: sem token a rota nao autentica, sem titular ela nao sabe
       # de quem e o dinheiro que publica.
       PATRIMONIO_TOKEN_FILE: /run/secrets/patrimonio_token
+      PATRIMONIO_INTEGRATION_TOKEN_FILE: /run/secrets/patrimonio_integration_token
       PATRIMONIO_TITULAR: ${PATRIMONIO_TITULAR:-}
       PATRIMONIO_OWNER_ID: ${PATRIMONIO_OWNER_ID:-}
       PATRIMONIO_MAX_HISTORICO_DIAS: ${PATRIMONIO_MAX_HISTORICO_DIAS:-3650}
@@ -102,6 +103,7 @@ services:
       - collector_agent_read_token
       - collector_agent_write_token
       - patrimonio_token
+      - patrimonio_integration_token
     ports:
       - "127.0.0.1:5301:5003"
     depends_on:
@@ -315,6 +317,7 @@ services:
       TESTE_POSTGRES_DB: investimentos
       TESTE_POSTGRES_USER: investimentos_app
       TESTE_POSTGRES_ADMIN_USER: investimentos
+      PATRIMONIO_INTEGRATION_TOKEN_FILE: /run/secrets/patrimonio_integration_token_quality
     read_only: true
     cap_drop:
       - ALL
@@ -326,6 +329,7 @@ services:
     secrets:
       - postgres_password_quality
       - postgres_app_password_quality
+      - patrimonio_integration_token_quality
     depends_on:
       db-teste:
         condition: service_healthy
@@ -360,3 +364,7 @@ secrets:
     file: .secrets/collector_agent_write_token
   patrimonio_token:
     file: .secrets/patrimonio_token
+  patrimonio_integration_token:
+    file: .secrets/patrimonio_integration_token
+  patrimonio_integration_token_quality:
+    file: .secrets/patrimonio_integration_token_quality

@@ -247,25 +247,26 @@ def _atividade_v3_provento(item: Dividend, titular: str) -> dict:
     }
 
 
-def token_valido_apresentado() -> bool:
+def token_valido_apresentado(nome_config: str = "PATRIMONIO_TOKEN") -> bool:
     """O pedido traz o token certo? Falso quando nenhum token está configurado."""
-    configurado = str(current_app.config.get("PATRIMONIO_TOKEN") or "")
+    configurado = str(current_app.config.get(nome_config) or "")
     if not configurado:
         return False
     apresentado = request.headers.get("Authorization", "")
     return hmac.compare_digest(apresentado, f"Bearer {configurado}")
 
 
-def _exigir_token() -> None:
+def _exigir_token(*, v4: bool = False) -> None:
     """Mesmo contrato do agente do coletor, e pelas mesmas razões.
 
     503 quando ninguém configurou a integração aqui; 401 quando o token está
     errado. A diferença importa: dizer 401 a quem nunca recebeu token mandaria o
     operador procurar por horas um segredo que nunca foi concedido.
     """
-    if not current_app.config.get("PATRIMONIO_TOKEN"):
+    nome_config = "PATRIMONIO_INTEGRATION_TOKEN" if v4 else "PATRIMONIO_TOKEN"
+    if not current_app.config.get(nome_config):
         abort(503, "Publicação de patrimônio não configurada.")
-    if not token_valido_apresentado():
+    if not token_valido_apresentado(nome_config):
         abort(401, "Não autorizado.")
 
 
@@ -316,7 +317,7 @@ def _watermark_v4() -> int:
 
 def _cursor_v4(cursor: int, owner_id: int) -> str:
     material = f"v1:{SISTEMA}:{owner_id}:{cursor}".encode()
-    secret = str(current_app.config["PATRIMONIO_TOKEN"]).encode()
+    secret = str(current_app.config["PATRIMONIO_INTEGRATION_TOKEN"]).encode()
     signature = hmac.new(secret, b"patrimonio-v4-cursor:" + material, hashlib.sha256).digest()
     return urlsafe_b64encode(material + b"." + signature).decode().rstrip("=")
 
@@ -328,7 +329,7 @@ def _cursor_v4_ler(raw: str | None, owner_id: int) -> int:
         decoded = urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
         material, signature = decoded.rsplit(b".", 1)
         expected = hmac.new(
-            str(current_app.config["PATRIMONIO_TOKEN"]).encode(),
+            str(current_app.config["PATRIMONIO_INTEGRATION_TOKEN"]).encode(),
             b"patrimonio-v4-cursor:" + material,
             hashlib.sha256,
         ).digest()
@@ -444,7 +445,7 @@ def patrimonio_ledger_v4():
     final e zera a quantidade. O recurso não publica lançamentos de caixa: o
     Controle Bancário continua sendo a fonte para esse lado da operação.
     """
-    _exigir_token()
+    _exigir_token(v4=True)
     owner_id = _owner_id()
     pagina, tamanho = _paginacao_v3()
     filtros = PositionMovementArchive.owner_id == owner_id
@@ -1047,7 +1048,7 @@ def patrimonio_holding_history_v3():
 @bp.get("/patrimonio/v4/metadata")
 def patrimonio_metadata_v4():
     """Descreve o retrato inicial e declara limites do que este publicador sabe."""
-    _exigir_token()
+    _exigir_token(v4=True)
     try:
         historico_dias = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
     except (KeyError, TypeError, ValueError):
@@ -1122,7 +1123,7 @@ def patrimonio_metadata_v4():
 @bp.get("/patrimonio/v4/changes")
 def patrimonio_changes_v4():
     """Invalidações ordenadas; o consumidor reconcilia pelo snapshot v4."""
-    _exigir_token()
+    _exigir_token(v4=True)
     owner_id = _owner_id()
     after = _cursor_v4_ler(request.args.get("after"), owner_id)
     limit = _change_limit_v4()
@@ -1180,7 +1181,7 @@ def patrimonio_changes_v4():
 @bp.get("/patrimonio/v4/snapshot")
 def patrimonio_snapshot_v4():
     """Publica um retrato completo atual, sem simular eventos de negociação."""
-    _exigir_token()
+    _exigir_token(v4=True)
     titular = identidade(_titular())
     owner_id = _owner_id()
     sessao = db.session()

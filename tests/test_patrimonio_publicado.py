@@ -22,6 +22,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
+from werkzeug.exceptions import HTTPException
 
 from app import login_manager
 from app.models import (
@@ -41,10 +42,13 @@ from app.models import (
     User,
 )
 from app.patrimonio.fotografia import identidade
+from app.routes import patrimonio as patrimonio_route
 
 ROTA = "/patrimonio/v1/resumo"
 ROTA_V2 = "/patrimonio/v2/resumo"
 TOKEN = "token-de-teste-com-mais-de-trinta-e-dois-caracteres"
+TOKEN_V4 = "token-de-integracao-v4-com-mais-de-trinta-e-dois-caracteres"
+TOKEN_V4_ROTACIONADO = "novo-token-de-integracao-v4-apos-rotacao-segura"
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +154,57 @@ def test_v2_exige_o_mesmo_bearer_e_so_responde_get(client, app):
     assert client.post(ROTA_V2, headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 405
 
 
+def test_v4_nao_usa_o_token_das_rotas_anteriores(client, app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = ""
+
+    resposta = client.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+
+    assert resposta.status_code == 503
+
+
+def test_v4_aceita_somente_o_token_de_integracao(client, app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
+    app.config["PATRIMONIO_TITULAR"] = ""
+
+    token_legado = client.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+    token_v4 = client.get(
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN_V4}"}
+    )
+
+    assert token_legado.status_code == 401
+    assert token_v4.status_code == 503
+    assert b"sem titular" in token_v4.data
+
+
+def test_cursor_v4_usa_token_exclusivo_e_invalida_assinaturas_antigas(app):
+    app.config["PATRIMONIO_TOKEN"] = TOKEN
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
+
+    with app.app_context():
+        cursor_v4 = patrimonio_route._cursor_v4(41, owner_id=17)
+        assert patrimonio_route._cursor_v4_ler(cursor_v4, owner_id=17) == 41
+
+        app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4_ROTACIONADO
+        with pytest.raises(HTTPException) as rotacionado:
+            patrimonio_route._cursor_v4_ler(cursor_v4, owner_id=17)
+        assert rotacionado.value.code == 400
+
+        # Simula o formato assinado pela implementação anterior com
+        # PATRIMONIO_TOKEN; a credencial exclusiva vigente o rejeita.
+        app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN
+        cursor_legado = patrimonio_route._cursor_v4(42, owner_id=17)
+        app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
+        with pytest.raises(HTTPException) as legado:
+            patrimonio_route._cursor_v4_ler(cursor_legado, owner_id=17)
+        assert legado.value.code == 400
+
+
 # ---------------------------------------------------------------------------
 # O conteúdo -- com banco
 # ---------------------------------------------------------------------------
@@ -210,6 +265,7 @@ def _posicao(cenario, carteira, **campos):
 @pytest.fixture
 def publicando(app_com_banco, cenario):
     app_com_banco.config["PATRIMONIO_TOKEN"] = TOKEN
+    app_com_banco.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
     app_com_banco.config["PATRIMONIO_TITULAR"] = "Mariano"
     app_com_banco.config["PATRIMONIO_OWNER_ID"] = str(cenario["usuario"].id)
     return app_com_banco.test_client()
@@ -229,7 +285,7 @@ def pedir_v2(publicando, **parametros):
 
 def pedir_snapshot_v4(publicando):
     return publicando.get(
-        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN}"}
+        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN_V4}"}
     )
 
 
