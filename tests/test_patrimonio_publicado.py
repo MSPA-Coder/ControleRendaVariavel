@@ -283,9 +283,11 @@ def pedir_v2(publicando, **parametros):
     )
 
 
-def pedir_snapshot_v4(publicando):
+def pedir_snapshot_v4(publicando, **parametros):
     return publicando.get(
-        "/patrimonio/v4/snapshot", headers={"Authorization": f"Bearer {TOKEN_V4}"}
+        "/patrimonio/v4/snapshot",
+        query_string=parametros,
+        headers={"Authorization": f"Bearer {TOKEN_V4}"},
     )
 
 
@@ -508,6 +510,30 @@ def test_snapshot_v4_declara_cobertura_completa_mesmo_sem_posicoes(
     assert corpo["holdings"] == []
     assert corpo["coverage"]["holdings"]["included"] == 0
     assert corpo["coverage"]["holdings"]["complete"] is True
+
+
+@banco
+def test_snapshot_v4_omite_precos_sem_omitir_posicoes(sessao, cenario, publicando):
+    """O consumidor pode manter o retrato abaixo do limite de resposta da rede privada."""
+    sessao.add(_posicao(cenario, cenario["real"]))
+    sessao.flush()
+
+    resposta = pedir_snapshot_v4(publicando, include_prices="false")
+
+    assert resposta.status_code == 200
+    corpo = resposta.get_json()
+    assert len(corpo["holdings"]) == 1
+    assert corpo["prices"] == {"current": [], "history": []}
+    assert corpo["coverage"]["prices"]["complete"] is False
+    assert corpo["coverage"]["prices"]["omitted"] == "consumer_requested"
+
+
+def test_ledger_sem_sessao_responde_pelo_token_da_integracao(client, app):
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
+    resposta = client.get("/patrimonio/v4/ledger")
+
+    assert resposta.status_code == 401
+    assert resposta.location is None
 
 
 @banco

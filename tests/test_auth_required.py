@@ -100,6 +100,7 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         "portfolio.patrimonio_holding_history_v3",
         "portfolio.patrimonio_snapshot_v4",
         "portfolio.patrimonio_changes_v4",
+        "portfolio.patrimonio_ledger_v4",
         "portfolio.patrimonio_metadata_v4",
         "static",
         # CSS do banner de mensagem, que `login.html` usa. Sem isto o
