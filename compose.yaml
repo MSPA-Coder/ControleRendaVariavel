@@ -2,7 +2,7 @@ name: controle-renda-variavel
 
 services:
   db:
-    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
     user: postgres
     restart: unless-stopped
     cpus: 1.0
@@ -169,7 +169,7 @@ services:
   # superusuário só aparece neste serviço e no `migrate`; nunca é montado no
   # `web`. O script é o mesmo no Docker Desktop e no VPS.
   db-provision:
-    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
     user: postgres
     read_only: true
     cpus: 0.5
@@ -221,7 +221,7 @@ services:
   # este contêiner morre no arranque e o `quality` só reporta "dependency failed
   # to start". No Docker Desktop do Windows não aparece: lá tudo chega 0777.
   db-teste:
-    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
     profiles: ["quality"]
     user: postgres
     cpus: 1.0
@@ -255,7 +255,7 @@ services:
       retries: 20
 
   db-teste-provision:
-    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
     profiles: ["quality"]
     user: postgres
     read_only: true
