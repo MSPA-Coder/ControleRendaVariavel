@@ -318,8 +318,9 @@ implantação, e um valor irreconhecível cai no padrão em vez de impedir a sub
 Dois `context_processor` alimentam a casca de todas as telas, e os dois têm
 guarda de custo, porque o que roda em toda página roda muitas vezes:
 
-- `_collector_heartbeat_context` só consulta nos cinco endpoints que de fato
-  mostram o pulso do coletor;
+- `_collector_heartbeat_context` só consulta nos endpoints de
+  `HEARTBEAT_ENDPOINTS` (`app/__init__.py`), que são os que de fato mostram o
+  pulso do coletor;
 - `_theme_context` guarda o tema na sessão depois da primeira leitura. Quem
   grava o tema em Configurações chama `esquecer_tema_da_sessao()`, então a troca
   aparece na página seguinte sem esperar a sessão expirar.
