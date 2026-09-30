@@ -29,6 +29,17 @@ RUN python -m pip install --no-cache-dir "pip==26.2.1" "setuptools==80.9.0" \
     && addgroup --system app \
     && adduser --system --ingroup app app
 
+# OpenSSL: a base ainda traz 3.5.7-1~deb13u2, que o Trivy reprova (6 HIGH desde
+# 30/09/2026: CVE-2026-75804, DoS por controle de fluxo QUIC, e CVE-2026-84782,
+# vazamento por retransmissao DTLS; este app nao usa nenhum dos dois, o TLS
+# termina no nginx). O Debian ja publicou a deb13u3 e nenhum digest de
+# `python:3.14-slim` a traz ainda. Versao explicita, como o `git=` abaixo.
+# REMOVER este bloco quando o digest da base trouxer a correcao: a CI acusa se
+# a versao fixada sumir do indice do Debian.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends "openssl=3.5.7-1~deb13u3" "libssl3t64=3.5.7-1~deb13u3" \
+    && rm -rf /var/lib/apt/lists/*
+
 # builder: resolve as dependencias a partir do `uv.lock`, num venv isolado.
 #
 # POR QUE `uv` E NAO `pip install .`: o `pip` resolvia as faixas do
