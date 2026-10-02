@@ -44,3 +44,23 @@ def test_tokens_patrimoniais_separados_no_runtime_e_no_quality() -> None:
         "/run/secrets/patrimonio_integration_token_quality"
     )
     assert "patrimonio_integration_token_quality" in quality["secrets"]
+
+
+def test_todo_servico_roda_sem_privilegios_extras() -> None:
+    """Nenhum contêiner ganha escrita na raiz, capability ou escalada.
+
+    O banco pode gravar PGDATA pelo volume, e só; o resto grava em tmpfs. Um
+    serviço novo sem endurecimento aparece pelo nome.
+    """
+    fora = {
+        nome: campo
+        for nome, servico in _servicos().items()
+        for campo, ok in (
+            ("read_only", servico.get("read_only") is True),
+            ("cap_drop", "ALL" in servico.get("cap_drop", [])),
+            ("security_opt", "no-new-privileges:true" in servico.get("security_opt", [])),
+            ("pids_limit", bool(servico.get("pids_limit"))),
+        )
+        if not ok
+    }
+    assert not fora, f"serviços sem endurecimento: {fora}"
