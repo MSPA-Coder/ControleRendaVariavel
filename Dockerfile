@@ -40,6 +40,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends "openssl=3.5.7-1~deb13u3" "libssl3t64=3.5.7-1~deb13u3" \
     && rm -rf /var/lib/apt/lists/*
 
+# libpcre2: a base traz 10.46-1~deb13u2, que o Trivy reprova (CVE-2026-103111,
+# HIGH, escrita fora dos limites por expressao regular forjada). O Debian ja
+# publicou a deb13u3 e o digest atual de `python:3.14-slim` ainda nao a traz.
+# Mesmo tratamento do OpenSSL acima: versao explicita, e REMOVER este bloco
+# quando o digest da base trouxer a correcao.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends "libpcre2-8-0=10.46-1~deb13u3" \
+    && rm -rf /var/lib/apt/lists/*
+
 # builder: resolve as dependencias a partir do `uv.lock`, num venv isolado.
 #
 # POR QUE `uv` E NAO `pip install .`: o `pip` resolvia as faixas do
