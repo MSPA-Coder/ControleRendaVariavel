@@ -97,7 +97,7 @@ categorias, metadata, renda, desempenho, eventos e histórico por posição) ser
 ao NetWorth, aposentado em 29/09/2026, e foram retirados em 03/10/2026: o nginx
 não registra acesso a eles desde 28/09, o Wealthfolio só lê o v4 (o patch dele
 recusa qualquer outro caminho), e o histórico está no Git. O `PATRIMONIO_TOKEN`
-antigo não autoriza mais nenhuma rota.
+antigo, que os autorizava, deixou de existir (Compose, código e CI).
 
 ### Snapshot inicial v4 para integração com carteira externa
 
@@ -106,7 +106,7 @@ antigo não autoriza mais nenhuma rota.
 `GET /patrimonio/v4/ledger` publicam dados somente-leitura, com escopo
 explícito de `PATRIMONIO_OWNER_ID`.
 As rotas v4 usam o token exclusivo `PATRIMONIO_INTEGRATION_TOKEN`;
-`PATRIMONIO_TOKEN` não autoriza mais nenhuma rota (revogável). Os cursores v4
+o `PATRIMONIO_TOKEN` antigo deixou de existir. Os cursores v4
 são assinados pelo token exclusivo, e sua rotação invalida cursores emitidos
 anteriormente. O snapshot contém posições abertas de ações em carteiras
 reais, proventos persistidos e cotações atuais e diárias de tickers que o owner

@@ -31,7 +31,7 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
 2. Restaure por canal seguro `.secrets/secret_key`,
    `.secrets/postgres_password`, `.secrets/postgres_app_password`,
    `.secrets/collector_agent_read_token`,
-   `.secrets/collector_agent_write_token`, `.secrets/patrimonio_token`,
+   `.secrets/collector_agent_write_token`,
    `.secrets/patrimonio_integration_token` e o
    material de `.certs/` exigido pelo build.
    Nunca registre ou exiba seus conteúdos. No Docker Compose não-Swarm, use modo
@@ -39,15 +39,12 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
    usam usuários Linux diferentes. `postgres_password` fica reservado ao banco
    e às migrações; `web` e o agente RTD recebem somente `postgres_app_password`.
 
-   **`patrimonio_token` precisa existir mesmo sem a integração em uso**: o
-   Compose recusa subir com um segredo declarado e ausente, e o `deploy.sh`
-   faria rollback de uma implantação sem defeito nenhum. Gere um valor novo com
-   `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
    O contrato v4 usa `patrimonio_integration_token`, gerado e rotacionado de
-   forma independente. O `patrimonio_token` antigo não autoriza mais nenhuma rota
-   (os contratos v1-v3 foram retirados em 03/10/2026), mas o segredo continua
-   declarado no Compose até ser removido de lá. Entregue o valor v4 ao
-   consumidor por canal seguro.
+   forma independente. Entregue o valor ao consumidor por canal seguro.
+   O `patrimonio_token` antigo deixou de existir no Compose em 03/10/2026
+   (os contratos v1-v3 que ele autorizava foram retirados): um arquivo
+   `.secrets/patrimonio_token` que sobrar no servidor não é lido por nada e
+   pode ser apagado.
 3. Suba a pilha:
 
    ```bash
