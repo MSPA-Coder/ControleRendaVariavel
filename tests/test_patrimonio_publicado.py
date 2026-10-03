@@ -167,7 +167,6 @@ def test_metodo_diferente_de_get_nao_existe(client, app):
 )
 def test_os_contratos_retirados_nao_existem(client, app, rota):
     """Retirados em 03/10/2026: nem com o token certo há o que responder."""
-    app.config["PATRIMONIO_TOKEN"] = TOKEN
     app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
 
     for token in (TOKEN, TOKEN_V4):
@@ -177,7 +176,6 @@ def test_os_contratos_retirados_nao_existem(client, app, rota):
 
 
 def test_v4_nao_usa_o_token_das_rotas_anteriores(client, app):
-    app.config["PATRIMONIO_TOKEN"] = TOKEN
     app.config["PATRIMONIO_INTEGRATION_TOKEN"] = ""
 
     resposta = client.get(
@@ -188,7 +186,6 @@ def test_v4_nao_usa_o_token_das_rotas_anteriores(client, app):
 
 
 def test_v4_aceita_somente_o_token_de_integracao(client, app):
-    app.config["PATRIMONIO_TOKEN"] = TOKEN
     app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
     app.config["PATRIMONIO_TITULAR"] = ""
 
@@ -205,7 +202,6 @@ def test_v4_aceita_somente_o_token_de_integracao(client, app):
 
 
 def test_cursor_v4_usa_token_exclusivo_e_invalida_assinaturas_antigas(app):
-    app.config["PATRIMONIO_TOKEN"] = TOKEN
     app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
 
     with app.app_context():
@@ -292,7 +288,6 @@ def _posicao(cenario, carteira, **campos):
 
 @pytest.fixture
 def publicando(app_com_banco, cenario):
-    app_com_banco.config["PATRIMONIO_TOKEN"] = TOKEN
     app_com_banco.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_V4
     app_com_banco.config["PATRIMONIO_TITULAR"] = "Mariano"
     app_com_banco.config["PATRIMONIO_OWNER_ID"] = str(cenario["usuario"].id)

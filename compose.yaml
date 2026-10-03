@@ -82,7 +82,6 @@ services:
       # Publicacao do resumo de patrimonio, lida pelo consolidador. As duas
       # andam juntas: sem token a rota nao autentica, sem titular ela nao sabe
       # de quem e o dinheiro que publica.
-      PATRIMONIO_TOKEN_FILE: /run/secrets/patrimonio_token
       PATRIMONIO_INTEGRATION_TOKEN_FILE: /run/secrets/patrimonio_integration_token
       PATRIMONIO_TITULAR: ${PATRIMONIO_TITULAR:-}
       PATRIMONIO_OWNER_ID: ${PATRIMONIO_OWNER_ID:-}
@@ -102,7 +101,6 @@ services:
       - postgres_app_password
       - collector_agent_read_token
       - collector_agent_write_token
-      - patrimonio_token
       - patrimonio_integration_token
     ports:
       - "127.0.0.1:5301:5003"
@@ -362,8 +360,6 @@ secrets:
     file: .secrets/collector_agent_read_token
   collector_agent_write_token:
     file: .secrets/collector_agent_write_token
-  patrimonio_token:
-    file: .secrets/patrimonio_token
   patrimonio_integration_token:
     file: .secrets/patrimonio_integration_token
   patrimonio_integration_token_quality:

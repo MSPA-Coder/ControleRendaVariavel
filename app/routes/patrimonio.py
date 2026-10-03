@@ -9,8 +9,8 @@ integração (`PATRIMONIO_INTEGRATION_TOKEN`).
 
 Os contratos `patrimonio/v1` a `v3` (resumo, dashboard, atividades, categorias,
 renda, desempenho, eventos e histórico por posição) serviam ao NetWorth,
-aposentado em 29/09/2026, e foram retirados em 03/10/2026. O `PATRIMONIO_TOKEN`
-antigo não autoriza mais nenhuma rota.
+aposentado em 29/09/2026, e foram retirados em 03/10/2026, junto com o
+`PATRIMONIO_TOKEN` que os autorizava.
 
 O VOCABULÁRIO COMUM
 
@@ -194,8 +194,8 @@ def _exigir_token() -> None:
     errado. A diferença importa: dizer 401 a quem nunca recebeu token mandaria o
     operador procurar por horas um segredo que nunca foi concedido.
 
-    O `PATRIMONIO_TOKEN` antigo não autoriza mais nenhuma rota: só autorizava os
-    contratos v1 a v3, retirados em 03/10/2026.
+    O `PATRIMONIO_TOKEN` antigo foi retirado com os contratos v1 a v3 que só ele
+    autorizava (03/10/2026).
     """
     if not current_app.config.get(TOKEN_DA_INTEGRACAO):
         abort(503, "Publicação de patrimônio não configurada.")
