@@ -252,7 +252,7 @@ requires-dist = [
     { name = "pywin32", marker = "sys_platform == 'win32' and extra == 'rtd'", specifier = ">=311,<400" },
     { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6,<7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.5,<1" },
-    { name = "sharedauth", extras = ["flask"], git = "https://github.com/MSPA-Coder/SharedAuth.git?rev=v0.12.0" },
+    { name = "sharedauth", extras = ["flask"], git = "https://github.com/MSPA-Coder/SharedAuth.git?rev=v0.13.0" },
 ]
 provides-extras = ["dev", "rtd"]
 
@@ -1073,8 +1073,8 @@ wheels = [
 
 [[package]]
 name = "sharedauth"
-version = "0.12.0"
-source = { git = "https://github.com/MSPA-Coder/SharedAuth.git?rev=v0.12.0#7d732085d3372c4939b6a1fe8d7b951b1129e3eb" }
+version = "0.13.0"
+source = { git = "https://github.com/MSPA-Coder/SharedAuth.git?rev=v0.13.0#c7a160f6d3d05670e182867da6ff834fafd1bee3" }
 
 [package.optional-dependencies]
 flask = [
