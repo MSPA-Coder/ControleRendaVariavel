@@ -1,10 +1,16 @@
-"""O resumo que este sistema publica para o consolidador de patrimônio.
+"""O que este sistema publica para o consolidador de patrimônio: o contrato `patrimonio/v4`.
 
-É a metade gêmea da rota que o Controle Bancário já publica: mesmo caminho,
-mesmo envelope, mesmo jeito de autenticar. Ele publica o **caixa**; este publica
-o **investimento**. Quem soma é um terceiro aplicativo, só de leitura, que não
-toca no banco de nenhum dos dois -- ler o banco alheio acoplaria os schemas e
-quebraria a cada migration.
+É a metade gêmea do que o Controle Bancário publica: ele publica o **caixa**;
+este publica o **investimento**. Quem soma (hoje, o Wealthfolio) é um terceiro
+aplicativo, só de leitura, que não toca no banco de nenhum dos dois -- ler o
+banco alheio acoplaria os schemas e quebraria a cada migration. As rotas são
+`metadata`, `snapshot`, `changes`, `ledger` e `activities`, todas com o token da
+integração (`PATRIMONIO_INTEGRATION_TOKEN`).
+
+Os contratos `patrimonio/v1` a `v3` (resumo, dashboard, atividades, categorias,
+renda, desempenho, eventos e histórico por posição) serviam ao NetWorth,
+aposentado em 29/09/2026, e foram retirados em 03/10/2026. O `PATRIMONIO_TOKEN`
+antigo não autoriza mais nenhuma rota.
 
 O VOCABULÁRIO COMUM
 
@@ -18,62 +24,18 @@ teste, com os mesmos casos, justamente para isso não derivar em silêncio.
 Todo valor viaja como **texto**: `float` não representa 0,10 e quem consolida
 somaria centavos que nunca existiram.
 
-TRÊS COISAS QUE ELE OMITE, E DIZ QUE OMITIU
+O QUE ELE OMITE, E DIZ QUE OMITIU
 
 1. **Carteira simulada.** Metade das posições desta base está numa, e somá-la ao
    patrimônio o infla com dinheiro que não existe -- sem que o número deixe de
-   parecer plausível. A tela de Posições já trata "Todas" como as carteiras
-   reais; aqui vale a mesma regra;
-2. **Opções.** Elas têm valor e ficarão de fora até serem publicadas com o mesmo
-   cuidado das ações. Enquanto isso, a contagem aparece no envelope;
+   parecer plausível;
+2. **Opções.** Elas têm valor e ficam de fora até serem publicadas com o mesmo
+   cuidado das ações. Enquanto isso, a contagem aparece na cobertura;
 3. **Posição sem cotação.** Sem preço não há valor a mercado, e inventar um
    seria pior do que faltar.
 
-As três contagens vão em `omitidas`. Omissão contada é omissão visível; omissão
-silenciosa é um patrimônio errado com cara de completo.
-
-O ENDEREÇO É DAQUI
-
-Cada posição leva `endereco`: o caminho, relativo à raiz deste sistema, da sua
-própria página analítica. Quem consome junta o caminho ao endereço público que
-já conhece; o id continua opaco. Posição já encerrada não tem tela, e vai com
-`endereco` nulo. A rota individual confere a posse no servidor, então um link
-de uma posição de outro dono não revela a carteira nem o ativo.
-
-HOJE E UMA DATA PASSADA SÃO DUAS PERGUNTAS
-
-**Hoje** é a carteira que está aberta, pela cotação ao vivo do coletor.
-
-**Uma data passada** é outra conta, e só pode ser respondida com o que era
-verdade NAQUELE dia:
-
-- a quantidade vem do extrato (`PositionMovement`, mais o arquivo das posições
-  já encerradas), pela mesma linha do tempo que o TWR usa -- nunca a
-  quantidade de hoje aplicada a março;
-- o preço é o **fechamento** daquele dia em `quote_history`, ou o último antes
-  dele, e a data do preço viaja em `preco_em`. Fechamento com mais de sete dias
-  não vale, e a posição conta como sem cotação.
-
-Aplicar a cotação de hoje a uma carteira de março responderia um número que
-nunca existiu; por isso, antes desta rota saber reconstruir a data, ela
-recusava a pergunta.
-
-"Hoje" é o dia em Brasília. Em UTC, das 21h à meia-noite a rota já estaria no
-dia seguinte, e pedir a data do dia seria recusado como data futura.
-
-Um limite herdado do extrato, o mesmo do relatório de performance:
-`opened_on` de uma posição antiga costuma ser a data em que ela foi
-**cadastrada**, e não a da compra. Antes dela, a posição não aparece.
-
-E um limite herdado da série de cotações: a linha de `quote_history` de um dia é
-a última observação daquele dia, e se a coleta parou no meio do pregão ela é um
-preço **parcial**, não o fechamento. Este módulo não tem como distinguir os dois
--- fazê-lo exigiria saber o horário de fechamento de cada bolsa, com feriado,
-leilão e fechamento antecipado, e erraria calado. O mesmo parcial contamina o
-TWR e o risco, então o conserto é de lá: apagar o dia e reimportar. Por isso
-`preco_em` leva o DIA do fechamento, e não o instante: a barra diária do Yahoo
-vem carimbada na abertura do pregão, e publicá-la como instante da observação
-seria pior do que publicar o dia.
+Omissão contada é omissão visível; omissão silenciosa é um patrimônio errado com
+cara de completo.
 """
 
 from __future__ import annotations
@@ -94,7 +56,6 @@ from app.core.domain import MARKET_TIMEZONE
 from app.models import (
     Broker,
     Dividend,
-    Market,
     OptionContract,
     OptionPosition,
     PatrimonioV4ChangeCounter,
@@ -112,30 +73,17 @@ from app.models import (
 from app.patrimonio import queries
 from app.patrimonio.fotografia import (
     SISTEMA,
-    _dinheiro,
-    _Foto,
-    _fotografar_hoje,
-    _fotografar_passado,
-    _numero,
-    _proventos,
+    dinheiro,
     identidade,
+    numero,
 )
-from app.positions.holdings_history import QuantityTimeline, closing_price_on
 from app.positions.portfolio import effective_position_quote
 from app.routes import bp
 
-CONTRATO = "patrimonio/v1"
-CONTRATO_V3 = "patrimonio/v3"
 CONTRATO_V4 = "patrimonio/v4"
 V3_PAGE_SIZE = 50
 V3_MAX_PAGE_SIZE = 100
 V4_MAX_CHANGE_LIMIT = 500
-
-#: Janela dos proventos publicados. Eles não entram no patrimônio de hoje (já
-#: foram recebidos e viraram caixa, que é do outro sistema); vão no envelope
-#: porque o consolidador mostra renda do período. Sem janela, a lista cresceria
-#: para sempre.
-JANELA_DE_PROVENTOS_EM_DIAS = 365
 
 
 def _id_v3(recurso: str, valor: int) -> str:
@@ -187,26 +135,6 @@ def _intervalo_v3() -> tuple[date | None, date | None]:
     return inicio, fim
 
 
-def _janela_analitica_v3() -> tuple[date, date]:
-    """Resolve a janela de uma série analítica sem aceitar datas futuras."""
-    hoje = datetime.now(MARKET_TIMEZONE).date()
-    try:
-        limite = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
-    except (KeyError, TypeError, ValueError):
-        abort(503, "Janela histórica do patrimônio não configurada.")
-    if limite <= 0:
-        abort(503, "Janela histórica do patrimônio inválida.")
-    inicio, fim = _intervalo_v3()
-    fim = fim or hoje
-    inicio = inicio or (fim - timedelta(days=limite))
-    if fim > hoje:
-        abort(400, "fim não pode ser uma data futura")
-    if inicio > fim:
-        abort(400, "inicio não pode ser posterior a fim")
-    if inicio < fim - timedelta(days=limite):
-        abort(400, "inicio fora da janela histórica pública configurada")
-    return inicio, fim
-
 
 def _atividade_v3_transacao(item: Transaction, titular: str) -> dict:
     instrumento = item.ticker
@@ -219,8 +147,8 @@ def _atividade_v3_transacao(item: Transaction, titular: str) -> dict:
         "tipo": "venda" if item.side == Side.BUY else "recompra",
         "status": "realizado",
         "moeda": item.currency,
-        "valor": _dinheiro(item.result),
-        "valor_realizado": _dinheiro(item.result),
+        "valor": dinheiro(item.result),
+        "valor_realizado": dinheiro(item.result),
         "instrumento": instrumento,
         "instituicao": identidade(item.broker),
         "titular": titular,
@@ -238,8 +166,8 @@ def _atividade_v3_provento(item: Dividend, titular: str) -> dict:
         "tipo": item.kind.value,
         "status": "realizado",
         "moeda": item.currency,
-        "valor": _dinheiro(item.amount),
-        "valor_realizado": _dinheiro(item.amount),
+        "valor": dinheiro(item.amount),
+        "valor_realizado": dinheiro(item.amount),
         "instrumento": item.ticker,
         "instituicao": identidade(item.broker),
         "titular": titular,
@@ -247,7 +175,10 @@ def _atividade_v3_provento(item: Dividend, titular: str) -> dict:
     }
 
 
-def token_valido_apresentado(nome_config: str = "PATRIMONIO_TOKEN") -> bool:
+TOKEN_DA_INTEGRACAO = "PATRIMONIO_INTEGRATION_TOKEN"
+
+
+def token_valido_apresentado(nome_config: str = TOKEN_DA_INTEGRACAO) -> bool:
     """O pedido traz o token certo? Falso quando nenhum token está configurado."""
     configurado = str(current_app.config.get(nome_config) or "")
     if not configurado:
@@ -256,17 +187,19 @@ def token_valido_apresentado(nome_config: str = "PATRIMONIO_TOKEN") -> bool:
     return hmac.compare_digest(apresentado, f"Bearer {configurado}")
 
 
-def _exigir_token(*, v4: bool = False) -> None:
+def _exigir_token() -> None:
     """Mesmo contrato do agente do coletor, e pelas mesmas razões.
 
     503 quando ninguém configurou a integração aqui; 401 quando o token está
     errado. A diferença importa: dizer 401 a quem nunca recebeu token mandaria o
     operador procurar por horas um segredo que nunca foi concedido.
+
+    O `PATRIMONIO_TOKEN` antigo não autoriza mais nenhuma rota: só autorizava os
+    contratos v1 a v3, retirados em 03/10/2026.
     """
-    nome_config = "PATRIMONIO_INTEGRATION_TOKEN" if v4 else "PATRIMONIO_TOKEN"
-    if not current_app.config.get(nome_config):
+    if not current_app.config.get(TOKEN_DA_INTEGRACAO):
         abort(503, "Publicação de patrimônio não configurada.")
-    if not token_valido_apresentado(nome_config):
+    if not token_valido_apresentado():
         abort(401, "Não autorizado.")
 
 
@@ -360,84 +293,6 @@ def _change_source_id_v4(item: PatrimonioV4Outbox) -> str:
     return _id_v3_material("change-target", f"{item.resource}:{item.source_record_id}")
 
 
-def _data_pedida(hoje: date) -> date:
-    pedida = (request.args.get("data") or "").strip()
-    if not pedida:
-        return hoje
-    try:
-        referencia = date.fromisoformat(pedida)
-    except ValueError:
-        abort(400, "Data inválida: use AAAA-MM-DD.")
-    if referencia > hoje:
-        abort(400, "Data futura: não há posição nem fechamento para ela.")
-    return referencia
-
-
-@bp.get("/patrimonio/v1/resumo")
-def patrimonio_resumo():
-    _exigir_token()
-    titular_nome = _titular()
-    owner_id = _owner_id()
-    foto = _Foto(titular=identidade(titular_nome))
-
-    hoje = datetime.now(MARKET_TIMEZONE).date()
-    try:
-        max_history_days = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
-    except (KeyError, TypeError, ValueError):
-        abort(503, "Janela histórica do patrimônio não configurada.")
-    if max_history_days <= 0:
-        abort(503, "Janela histórica do patrimônio inválida.")
-    referencia = _data_pedida(hoje)
-    if referencia < hoje - timedelta(days=max_history_days):
-        abort(400, "Data fora da janela histórica pública configurada.")
-    if referencia == hoje:
-        omitidas = _fotografar_hoje(foto, owner_id)
-    else:
-        omitidas = _fotografar_passado(foto, referencia, owner_id)
-
-    desde = referencia - timedelta(days=JANELA_DE_PROVENTOS_EM_DIAS)
-    proventos = []
-    for provento in _proventos(desde, referencia, owner_id):
-        proventos.append(
-            {
-                "id": f"{SISTEMA}:provento:{provento.id}",
-                "titular": foto.titular,
-                "instituicao": foto.instituicao(provento.broker),
-                "instrumento": provento.ticker_ref.symbol,
-                "tipo": provento.kind.value,
-                "moeda": provento.ticker_ref.currency,
-                "valor": _dinheiro(provento.amount),
-                "data": provento.payment_date.isoformat(),
-            }
-        )
-
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO,
-            "sistema": SISTEMA,
-            "papel": "investimento",
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "data_de_referencia": referencia.isoformat(),
-            "titulares": [{"id": foto.titular, "nome": titular_nome}],
-            "instituicoes": [foto.instituicoes[chave] for chave in sorted(foto.instituicoes)],
-            # Conta é do outro publicador: o caixa das corretoras vive no
-            # Controle Bancário desde a decisão de 16/09/2026.
-            "contas": [],
-            "totais_por_moeda": [
-                {"moeda": moeda, "total": _dinheiro(dados["total"]), "linhas": dados["linhas"]}
-                for moeda, dados in sorted(foto.totais.items())
-            ],
-            "posicoes": foto.linhas,
-            "proventos": proventos,
-            "proventos_desde": desde.isoformat(),
-            "ativos_alternativos": [],
-            "omitidas": omitidas,
-        }
-    )
-    # A foto carrega a carteira inteira: nenhum intermediário deve guardá-la.
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
 
 @bp.get("/patrimonio/v4/ledger")
 def patrimonio_ledger_v4():
@@ -447,7 +302,7 @@ def patrimonio_ledger_v4():
     final e zera a quantidade. O recurso não publica lançamentos de caixa: o
     Controle Bancário continua sendo a fonte para esse lado da operação.
     """
-    _exigir_token(v4=True)
+    _exigir_token()
     owner_id = _owner_id()
     pagina, tamanho = _paginacao_v3()
     filtros = PositionMovementArchive.owner_id == owner_id
@@ -502,11 +357,11 @@ def patrimonio_ledger_v4():
             "account_name": corretora.name,
             "portfolio": carteira.name,
             "position_side": lado_posicao,
-            "quantity_delta": _numero(direcao * linha.quantity_delta),
-            "resulting_quantity": _numero(direcao * linha.resulting_quantity),
-            "price": _numero(linha.price),
-            "average_cost_after": _numero(linha.resulting_average_cost),
-            "realized_result": _dinheiro(linha.result) if linha.result is not None else None,
+            "quantity_delta": numero(direcao * linha.quantity_delta),
+            "resulting_quantity": numero(direcao * linha.resulting_quantity),
+            "price": numero(linha.price),
+            "average_cost_after": numero(linha.resulting_average_cost),
+            "realized_result": dinheiro(linha.result) if linha.result is not None else None,
             "execution_side": lado_execucao,
             "source_transaction_id": (
                 _id_v3("ledger-transaction", linha.source_transaction_id)
@@ -538,87 +393,11 @@ def patrimonio_ledger_v4():
     return resposta
 
 
-@bp.get("/patrimonio/v2/resumo")
-def patrimonio_resumo_v2():
-    """Dashboard agregado de patrimônio, paralelo e compatível com a v1."""
-    _exigir_token()
-    titular_nome = _titular()
-    owner_id = _owner_id()
-    from app.patrimonio.dashboard import build_dashboard, parse_period
-
-    # Esta rota combina diversas consultas. Fixe o isolamento antes da primeira
-    # delas para que uma operacao concorrente nao misture posicoes, fluxos e
-    # desempenho de instantes diferentes. Se um chamador deliberadamente ja
-    # abriu uma transacao, ela precisa oferecer a mesma garantia.
-    sessao = db.session()
-    if sessao.in_transaction():
-        isolamento = sessao.execute(text("SHOW transaction_isolation")).scalar_one()
-        if isolamento.replace("_", " ").lower() != "repeatable read":
-            raise RuntimeError(
-                "patrimonio/v2 exige transacao REPEATABLE READ antes da primeira consulta"
-            )
-    else:
-        sessao.connection(execution_options={"isolation_level": "REPEATABLE READ"})
-
-    hoje = datetime.now(MARKET_TIMEZONE).date()
-    try:
-        max_history_days = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
-    except (KeyError, TypeError, ValueError):
-        abort(503, "Janela histórica do patrimônio não configurada.")
-    if max_history_days <= 0:
-        abort(503, "Janela histórica do patrimônio inválida.")
-    pedida = (request.args.get("data") or "").strip()
-    if not pedida:
-        referencia = hoje
-    else:
-        try:
-            referencia = date.fromisoformat(pedida)
-        except ValueError:
-            abort(400, "Data inválida: use AAAA-MM-DD.")
-        if referencia > hoje:
-            abort(400, "Data futura: não há posição nem fechamento para ela.")
-        if referencia < hoje - timedelta(days=max_history_days):
-            abort(400, "Data fora da janela histórica pública configurada.")
-    try:
-        periodo = parse_period(request.args.get("periodo"))
-    except ValueError as exc:
-        abort(400, str(exc))
-    inicio_raw = (request.args.get("inicio") or "").strip()
-    inicio = None
-    if inicio_raw:
-        try:
-            inicio = date.fromisoformat(inicio_raw)
-        except ValueError:
-            abort(400, "Início inválido: use AAAA-MM-DD.")
-        if inicio > referencia:
-            abort(400, "Início posterior à data de referência.")
-        if inicio < referencia - timedelta(days=max_history_days):
-            abort(400, "Início fora da janela histórica pública configurada.")
-    payload = build_dashboard(
-        titular=identidade(titular_nome),
-        titular_nome=titular_nome,
-        owner_id=owner_id,
-        reference=referencia,
-        period=periodo,
-        start_override=inicio,
-        max_history_days=max_history_days,
-    )
-    resposta = jsonify(payload)
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
-
-@bp.get("/patrimonio/v3/activities")
-def patrimonio_activities_v3():
-    """Atividades encerradas, autenticadas pelo token legado v3."""
-    _exigir_token()
-    return _atividades_publicadas(CONTRATO_V3)
-
 
 @bp.get("/patrimonio/v4/activities")
 def patrimonio_activities_v4():
     """Atividades encerradas autenticadas pelo token exclusivo v4."""
-    _exigir_token(v4=True)
+    _exigir_token()
     return _atividades_publicadas(CONTRATO_V4)
 
 
@@ -721,65 +500,6 @@ def _atividades_publicadas(contrato: str):
     return resposta
 
 
-@bp.get("/patrimonio/v3/categories")
-def patrimonio_categories_v3():
-    """Categorias derivadas dos tipos de provento já publicados."""
-    _exigir_token()
-    owner_id = _owner_id()
-    tipos = db.session.scalars(
-        select(Dividend.kind)
-        .where(Dividend.owner_id == owner_id)
-        .distinct()
-        .order_by(Dividend.kind)
-    ).all()
-    itens = [
-        {
-            "id": _id_v3("categoria", index),
-            "nome": tipo.value,
-            "natureza": "renda",
-            "deep_link": url_for("portfolio.dividends"),
-        }
-        for index, tipo in enumerate(tipos, start=1)
-    ]
-    resposta = jsonify(
-        {"contrato": CONTRATO_V3, "recurso": "categorias", "sistema": SISTEMA, "gerado_em": datetime.now(UTC).isoformat(), "itens": itens}
-    )
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
-
-@bp.get("/patrimonio/v3/metadata")
-def patrimonio_metadata_v3():
-    """Capacidades e limites do exportador, sem inventar catálogo."""
-    _exigir_token()
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO_V3,
-            "recurso": "metadata",
-            "sistema": SISTEMA,
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "capacidades": {
-                "atividades": True,
-                "categorias": True,
-                "income": True,
-                "performance": True,
-                "events": True,
-                "holding_history": True,
-                "renda": True,
-                "desempenho": True,
-                "eventos": True,
-                "escrita": False,
-                "paginacao_atividades": True,
-                "paginacao_income": True,
-                "paginacao_events": True,
-                "paginacao_holding_history": True,
-            },
-            "paginacao": {"padrao": V3_PAGE_SIZE, "maximo": V3_MAX_PAGE_SIZE},
-        }
-    )
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
 
 def _pagina_v3(pagina: int, tamanho: int, total: int) -> dict[str, object]:
     """Envelope de paginação compartilhado pelos recursos analíticos."""
@@ -796,294 +516,11 @@ def _pagina_v3(pagina: int, tamanho: int, total: int) -> dict[str, object]:
     }
 
 
-@bp.get("/patrimonio/v3/income")
-def patrimonio_income_v3():
-    """Renda recebida detalhada, somente leitura e paginada.
-
-    O recurso expõe somente ``Dividend`` já persistido. Não transforma renda
-    em caixa nem tenta calcular uma renda implícita a partir da cotação.
-    """
-    _exigir_token()
-    titular = identidade(_titular())
-    owner_id = _owner_id()
-    inicio, fim = _intervalo_v3()
-    pagina, tamanho = _paginacao_v3()
-    consulta = (
-        select(Dividend)
-        .where(Dividend.owner_id == owner_id)
-        .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
-    )
-    if inicio:
-        consulta = consulta.where(Dividend.payment_date >= inicio)
-    if fim:
-        consulta = consulta.where(Dividend.payment_date <= fim)
-    moeda = (request.args.get("moeda") or "").strip().upper()
-    if moeda:
-        consulta = consulta.join(Dividend.ticker_ref).where(Ticker.currency == moeda)
-    tipo = (request.args.get("tipo") or "").strip().lower()
-    if tipo:
-        consulta = consulta.where(Dividend.kind == tipo)
-    itens = list(
-        db.session.scalars(consulta.order_by(Dividend.payment_date, Dividend.id)).unique().all()
-    )
-    total = len(itens)
-    inicio_fatia = (pagina - 1) * tamanho
-    fatia = itens[inicio_fatia : inicio_fatia + tamanho]
-    payload = []
-    for item in fatia:
-        payload.append(
-            {
-                "id": _id_v3("renda", item.id),
-                "origem": "provento",
-                "data": item.payment_date.isoformat(),
-                "descricao": f"{item.kind.value.capitalize()} de {item.ticker}",
-                "tipo": item.kind.value,
-                "status": "realizado",
-                "moeda": item.currency,
-                "valor": _dinheiro(item.amount),
-                "instrumento": item.ticker,
-                "instituicao": identidade(item.broker),
-                "titular": titular,
-                "categoria": {
-                    "id": _id_v3_material("categoria", item.kind.value),
-                    "nome": item.kind.value,
-                    "natureza": "renda",
-                },
-                "deep_link": url_for("portfolio.edit_dividend", dividend_id=item.id),
-            }
-        )
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO_V3,
-            "recurso": "income",
-            "sistema": SISTEMA,
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "filtros": {
-                "inicio": inicio.isoformat() if inicio else None,
-                "fim": fim.isoformat() if fim else None,
-                "moeda": moeda or None,
-                "tipo": tipo or None,
-            },
-            "paginacao": _pagina_v3(pagina, tamanho, total),
-            "itens": payload,
-        }
-    )
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
-
-@bp.get("/patrimonio/v3/performance")
-def patrimonio_performance_v3():
-    """Séries mensais TWR já calculadas pelo domínio do CRV."""
-    _exigir_token()
-    titular = identidade(_titular())
-    owner_id = _owner_id()
-    inicio, fim = _janela_analitica_v3()
-    from app.patrimonio.dashboard import _performance
-
-    dividends = queries.dividends(inicio, fim, owner_id)
-    series = _performance(fim, inicio, dividends, owner_id)
-    itens = [
-        {
-            "id": _id_v3_material("performance", f"{item['moeda']}:{inicio}:{fim}"),
-            "titular": titular,
-            "moeda": item["moeda"],
-            "metodo": item["metodo"],
-            "inicio": item["inicio"],
-            "fim": item["fim"],
-            "pontos": item["pontos"],
-            "deep_link": item["endereco"],
-        }
-        for item in series
-    ]
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO_V3,
-            "recurso": "performance",
-            "sistema": SISTEMA,
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "filtros": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
-            "itens": itens,
-        }
-    )
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
-
-@bp.get("/patrimonio/v3/events")
-def patrimonio_events_v3():
-    """Eventos de quantidade usados para a série de performance.
-
-    O contrato publica a quantidade resultante, não preço ou patrimônio. A
-    ausência de preço é deliberada: o preço pertence à série de cotações e
-    não deve ser inferido pelo consumidor.
-    """
-    _exigir_token()
-    titular = identidade(_titular())
-    owner_id = _owner_id()
-    inicio, fim = _janela_analitica_v3()
-    pagina, tamanho = _paginacao_v3()
-    eventos = [
-        event
-        for event in queries.performance_events(fim, owner_id)
-        if inicio <= event.occurred_on <= fim
-    ]
-    tickers = queries.tickers(event.ticker_id for event in eventos)
-    # A ordem inclui todos os campos do evento para permanecer determinística
-    # mesmo quando duas linhas têm a mesma data e quantidade.
-    eventos.sort(
-        key=lambda event: (
-            event.occurred_on,
-            event.position_key[0],
-            event.position_key[1],
-            event.ticker_id,
-            event.resulting_signed_quantity,
-        ),
-        reverse=True,
-    )
-    ocorrencias: dict[str, int] = {}
-    itens = []
-    for event in eventos:
-        ticker = tickers.get(event.ticker_id)
-        if ticker is None:
-            continue
-        classe, posicao_id = event.position_key
-        material = (
-            f"{event.occurred_on.isoformat()}:{classe}:{posicao_id}:"
-            f"{event.ticker_id}:{event.resulting_signed_quantity}"
-        )
-        ocorrencias[material] = ocorrencias.get(material, 0) + 1
-        material = f"{material}:{ocorrencias[material]}"
-        deep_link = (
-            url_for("portfolio.position_detail", position_id=posicao_id)
-            if classe == "stock"
-            else url_for("options.edit_position", position_id=posicao_id)
-        )
-        itens.append(
-            {
-                "id": _id_v3_material("evento", material),
-                "titular": titular,
-                "data": event.occurred_on.isoformat(),
-                "tipo": "movimentacao",
-                "status": "realizado",
-                "classe": classe,
-                "instrumento": ticker.symbol,
-                "moeda": ticker.currency,
-                "mercado": ticker.market.value,
-                "quantidade_resultante": _numero(event.resulting_signed_quantity),
-                "deep_link": deep_link,
-            }
-        )
-    total = len(itens)
-    inicio_fatia = (pagina - 1) * tamanho
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO_V3,
-            "recurso": "events",
-            "sistema": SISTEMA,
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "filtros": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
-            "paginacao": _pagina_v3(pagina, tamanho, total),
-            "itens": itens[inicio_fatia : inicio_fatia + tamanho],
-        }
-    )
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
-
-@bp.get("/patrimonio/v3/holding-history")
-def patrimonio_holding_history_v3():
-    """Série histórica de preço e valor de mercado de um ticker detido.
-
-    A quantidade é reconstruída a partir do extrato real do owner. A resposta
-    publica somente datas com fechamento válido e quantidade diferente de
-    zero; nunca estima preço nem inclui posições simuladas ou opções.
-    """
-    _exigir_token()
-    titular = identidade(_titular())
-    owner_id = _owner_id()
-    inicio, fim = _janela_analitica_v3()
-    pagina, tamanho = _paginacao_v3()
-
-    symbol = (request.args.get("ticker") or "").strip().upper()
-    if not symbol:
-        abort(400, "ticker é obrigatório")
-    raw_market = (request.args.get("mercado") or "").strip().upper()
-    if raw_market and raw_market not in {market.value for market in Market}:
-        abort(400, "mercado deve ser B3, NYSE ou NASDAQ")
-    ticker = queries.ticker_by_symbol(symbol, raw_market or None)
-    if ticker is None:
-        abort(404, "Ticker não encontrado")
-
-    # `performance_events` já restringe posições reais ao owner informado;
-    # descartar option evita misturar contratos com ações do mesmo ticker.
-    eventos = [
-        event
-        for event in queries.performance_events(fim, owner_id)
-        if event.ticker_id == ticker.id and event.position_key[0] == "stock"
-    ]
-    if not eventos:
-        # Também impede que o endpoint vire uma forma de consultar todo o
-        # catálogo global de preços por meio de um token de integração.
-        abort(404, "Ticker não pertence à carteira publicada")
-
-    timeline = QuantityTimeline(eventos)
-    serie = queries.quote_series(
-        [ticker.id], start=inicio - timedelta(days=7), end=fim
-    )[ticker.id]
-    datas = {inicio, fim}
-    datas.update(data for data, _preco in serie if inicio <= data <= fim)
-    datas.update(event.occurred_on for event in eventos if inicio <= event.occurred_on <= fim)
-
-    pontos = []
-    for dia in sorted(datas):
-        fechamento = closing_price_on(serie, dia)
-        quantidade = timeline.quantity_at(ticker.id, dia)
-        if fechamento is None or quantidade == 0:
-            continue
-        preco_em, preco = fechamento
-        pontos.append(
-            {
-                "data": dia.isoformat(),
-                "preco": _numero(preco),
-                "preco_em": preco_em.isoformat(),
-                "quantidade": _numero(quantidade),
-                "valor": _dinheiro(preco * quantidade),
-                "moeda": ticker.currency,
-            }
-        )
-
-    total = len(pontos)
-    inicio_fatia = (pagina - 1) * tamanho
-    resposta = jsonify(
-        {
-            "contrato": CONTRATO_V3,
-            "recurso": "holding-history",
-            "sistema": SISTEMA,
-            "gerado_em": datetime.now(UTC).isoformat(),
-            "estado": "ok" if total else "empty",
-            "titular": titular,
-            "ticker": ticker.symbol,
-            "mercado": ticker.market.value,
-            "moeda": ticker.currency,
-            "filtros": {
-                "ticker": ticker.symbol,
-                "mercado": ticker.market.value,
-                "inicio": inicio.isoformat(),
-                "fim": fim.isoformat(),
-            },
-            "paginacao": _pagina_v3(pagina, tamanho, total),
-            "itens": pontos[inicio_fatia : inicio_fatia + tamanho],
-        }
-    )
-    resposta.headers["Cache-Control"] = "no-store"
-    return resposta
-
 
 @bp.get("/patrimonio/v4/metadata")
 def patrimonio_metadata_v4():
     """Descreve o retrato inicial e declara limites do que este publicador sabe."""
-    _exigir_token(v4=True)
+    _exigir_token()
     try:
         historico_dias = int(current_app.config["PATRIMONIO_MAX_HISTORICO_DIAS"])
     except (KeyError, TypeError, ValueError):
@@ -1165,7 +602,7 @@ def patrimonio_metadata_v4():
 @bp.get("/patrimonio/v4/changes")
 def patrimonio_changes_v4():
     """Invalidações ordenadas; o consumidor reconcilia pelo snapshot v4."""
-    _exigir_token(v4=True)
+    _exigir_token()
     owner_id = _owner_id()
     after = _cursor_v4_ler(request.args.get("after"), owner_id)
     limit = _change_limit_v4()
@@ -1223,7 +660,7 @@ def patrimonio_changes_v4():
 @bp.get("/patrimonio/v4/snapshot")
 def patrimonio_snapshot_v4():
     """Publica um retrato completo atual, sem simular eventos de negociação."""
-    _exigir_token(v4=True)
+    _exigir_token()
     include_prices = request.args.get("include_prices", "true").strip().lower()
     if include_prices not in {"true", "false"}:
         abort(400, "include_prices deve ser true ou false.")
@@ -1298,10 +735,10 @@ def patrimonio_snapshot_v4():
                 "market": posicao.ticker_ref.market.value,
                 "currency": posicao.currency,
                 "side": "long" if sinal > 0 else "short",
-                "quantity": _numero(sinal * posicao.quantity),
-                "average_cost": _numero(posicao.average_cost),
-                "current_price": _numero(preco) if preco is not None else None,
-                "market_value": _dinheiro(sinal * posicao.quantity * preco) if preco is not None else None,
+                "quantity": numero(sinal * posicao.quantity),
+                "average_cost": numero(posicao.average_cost),
+                "current_price": numero(preco) if preco is not None else None,
+                "market_value": dinheiro(sinal * posicao.quantity * preco) if preco is not None else None,
                 "price_kind": price_kind,
                 "valuation_method": (
                     "unavailable_no_price"
@@ -1332,7 +769,7 @@ def patrimonio_snapshot_v4():
                     "instrument": ticker.symbol,
                     "market": ticker.market.value,
                     "currency": ticker.currency,
-                    "price": _numero(quote.last_price),
+                    "price": numero(quote.last_price),
                     "observed_at": quote.observed_at.isoformat(),
                     "status": quote.source_status,
                     "price_kind": "collector_last_price",
@@ -1360,7 +797,7 @@ def patrimonio_snapshot_v4():
                     "instrument": ticker.symbol,
                     "market": ticker.market.value,
                     "currency": ticker.currency,
-                    "price": _numero(point.price),
+                    "price": numero(point.price),
                     "date": point.recorded_date.isoformat(),
                     "observed_at": point.recorded_at.isoformat(),
                     "price_kind": "daily_last_observation",
@@ -1388,7 +825,7 @@ def patrimonio_snapshot_v4():
                 "instrument": item.ticker,
                 "kind": item.kind.value,
                 "currency": item.currency,
-                "amount": _dinheiro(item.amount),
+                "amount": dinheiro(item.amount),
                 "role": "analytic_only",
                 "cash_accounting_role": "not_a_cash_entry",
                 "duplicate_risk": "may_also_be_recorded_in_controle_bancario",
