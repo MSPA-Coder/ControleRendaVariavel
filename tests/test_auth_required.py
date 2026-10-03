@@ -89,15 +89,6 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         # a rota não devolve dado nenhum. Escopo por usuário seria pior que
         # inútil: produziria um patrimônio consolidado que esconde posições sem
         # avisar.
-        "portfolio.patrimonio_resumo",
-        "portfolio.patrimonio_resumo_v2",
-        "portfolio.patrimonio_activities_v3",
-        "portfolio.patrimonio_categories_v3",
-        "portfolio.patrimonio_metadata_v3",
-        "portfolio.patrimonio_income_v3",
-        "portfolio.patrimonio_performance_v3",
-        "portfolio.patrimonio_events_v3",
-        "portfolio.patrimonio_holding_history_v3",
         "portfolio.patrimonio_snapshot_v4",
         "portfolio.patrimonio_activities_v4",
         "portfolio.patrimonio_changes_v4",

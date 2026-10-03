@@ -56,99 +56,48 @@ servidor, igual para os dois tipos de requisição.
 
 ### As duas exceções: rotas que não devolvem HTML
 
-O agente RTD (`/api/collector/*`) e o resumo de patrimônio
-(`GET /patrimonio/v1/resumo`) falam JSON, e as duas são máquina a máquina:
+O agente RTD (`/api/collector/*`) e a publicação de patrimônio
+(`/patrimonio/v4/*`) falam JSON, e as duas são máquina a máquina:
 não têm sessão, e a permissão delas é um token conferido em tempo constante
 dentro da própria view. Estão declaradas em `PUBLIC_ENDPOINTS` — uma rota nova
 nasce protegida, e entrar nessa lista é decisão consciente, com o motivo
 escrito.
 
-O resumo de patrimônio publica **posições e proventos** para um consolidador
-externo, que soma isto ao caixa publicado pelo Controle Bancário. Ele não
-escreve nada, não recebe nada e não conhece o consolidador. O contrato é
-`patrimonio/v1`: todo valor viaja como **texto** (`float` não representa 0,10),
-titular e instituição são identificados pelo **nome normalizado** — o que os
-dois sistemas compartilham — e nada é somado entre moedas.
+A publicação de patrimônio entrega **posições, proventos e cotações** a um
+consolidador externo (hoje, o Wealthfolio), que soma isto ao caixa publicado pelo
+Controle Bancário. Ele não escreve nada, não recebe nada e não conhece o
+consolidador. O contrato é `patrimonio/v4`: todo valor viaja como **texto**
+(`float` não representa 0,10), titular e instituição são identificados pelo
+**nome normalizado** — o que os dois sistemas compartilham — e nada é somado
+entre moedas.
 
-Três coisas ficam **sempre** de fora, com a contagem no envelope: carteira
-simulada (não é patrimônio), opções (ainda não publicadas) e posição sem
-cotação. Omissão contada é omissão visível.
-
-`?data=AAAA-MM-DD` responde **uma data passada**, e isso é outra conta, não a
-de hoje com outro rótulo: a quantidade de cada posição vem do extrato
-(`position_movements` mais o arquivo das encerradas, pela mesma linha do tempo
-que o TWR usa) e o preço é o **fechamento** daquele dia em `quote_history`, ou
-o último antes dele. A data do preço viaja em `preco_em` -- sábado vale o
-fechamento de sexta, e quem lê precisa poder ver isso. Fechamento com mais de
-sete dias não serve, e a posição conta como sem cotação: aplicar o preço de um
-mês antes produziria um valor que nunca existiu. "Hoje" é o dia em **Brasília**,
-e o preço de hoje é a cotação ao vivo do coletor. Uma herança do extrato
-fica registrada: `opened_on` de posição antiga costuma ser a data do
-cadastro, não a da compra.
+Três coisas ficam **sempre** de fora, com a contagem na cobertura: carteira
+simulada (não é patrimônio), opções (ainda não publicadas) e, no valor a mercado,
+a posição sem cotação (a posição vai, com `market_value` nulo). Omissão contada
+é omissão visível.
 
 O teto de requisições vale também para quem apresenta o token correto: o token
-autoriza a integração, mas não transforma uma consulta histórica cara em um
-caminho ilimitado. O consolidador deve agrupar pedidos ou usar uma exportação
-controlada quando precisar de volume maior.
+autoriza a integração, mas não transforma uma consulta cara em um caminho
+ilimitado. O consolidador deve agrupar pedidos ou usar uma exportação controlada
+quando precisar de volume maior.
 
 `PATRIMONIO_TITULAR` e `PATRIMONIO_OWNER_ID` são obrigatórios para publicar.
 Titular é a identidade externa; `PATRIMONIO_OWNER_ID` é o usuário financeiro
 explicitamente autorizado. Toda consulta do publicador aplica esse `owner_id`,
 inclusive posições, carteiras, proventos, transações e histórico.
 
-O resumo aceita no máximo `PATRIMONIO_MAX_HISTORICO_DIAS` para data e período
-públicos, com padrão de dez anos. Isso protege o worker contra reconstruções
-sem limite; exportações mais antigas devem ser produzidas por fluxo controlado.
+O snapshot limita a janela de preços históricos a `PATRIMONIO_MAX_HISTORICO_DIAS`,
+com padrão de dez anos. Isso protege o worker contra reconstruções sem limite;
+exportações mais antigas devem ser produzidas por fluxo controlado.
 
-### Dashboard patrimonial v2
+### Contratos v1 a v3 (retirados)
 
-`GET /patrimonio/v2/resumo` é uma extensão somente-leitura, paralela à v1:
-mantém o envelope e as listas legadas e acrescenta `carteiras`,
-`posicoes_atuais`, desempenho TWR por moeda, ganhos realizados agregados,
-renda por moeda/tipo e `enderecos` para as telas de posição, transação,
-provento, performance e qualidade. Movimentos e transações nunca são enviados
-como linhas brutas; são apenas insumos para os agregados.
-
-Além de `data=AAAA-MM-DD`, aceita `periodo=week|month|quarter|semester|year|all`.
-Para integração com o consolidador, `inicio=AAAA-MM-DD` define o início
-inclusivo do intervalo e prevalece sobre `periodo`; `data` define o fim
-inclusivo. Todos os valores decimais são strings, a autenticação é Bearer e a
-resposta usa `Cache-Control: no-store`. O snapshot histórico deixa custo e
-resultado nulos quando não há reconstrução confiável, acompanhado do motivo.
-As consultas que formam uma resposta v2 compartilham uma transação
-`REPEATABLE READ`, evitando misturar posições, fluxos e desempenho de estados
-concorrentes do banco.
-
-### Recursos analíticos v3 para o shell
-
-O contrato `patrimonio/v3` acrescenta três recursos somente-leitura, sempre
-autenticados pelo mesmo Bearer e filtrados por `PATRIMONIO_OWNER_ID`:
-
-| Recurso | Rota | Conteúdo |
-| --- | --- | --- |
-| `income` | `GET /patrimonio/v3/income` | proventos persistidos, paginados, com moeda, tipo, categoria e deep link |
-| `performance` | `GET /patrimonio/v3/performance` | séries mensais TWR por moeda, com valor, fluxo, renda e retorno acumulado |
-| `events` | `GET /patrimonio/v3/events` | eventos de quantidade da linha do tempo de posições, paginados |
-| `holding-history` | `GET /patrimonio/v3/holding-history` | série de preço e valor histórico de um ticker detido, paginada |
-
-`income` aceita `inicio`, `fim`, `moeda`, `tipo`, `page` e `page_size`. Os
-outros dois aceitam `inicio` e `fim`; `events` também aceita a paginação. A
-janela analítica respeita `PATRIMONIO_MAX_HISTORICO_DIAS` e recusa datas
-futuras. IDs dos três recursos são opacos, prefixados pelo sistema e não
-expõem chaves primárias. Quantidades e dinheiro continuam como texto no JSON;
-um evento não recebe preço inventado quando a série de cotações não o possui.
-
-`GET /patrimonio/v3/metadata` declara `income`, `performance`, `events` e
-`holding_history` como capacidades, além das atividades/categorias já existentes.
-`holding_history`
-publica preço, preço em vigor (`preco_em`), quantidade reconstruída e valor
-para `ticker` e, opcionalmente, `mercado`; a janela usa `inicio`/`fim` e a
-paginação usa `page`/`page_size` (máximo 100 por página). Cada ponto só existe
-quando há fechamento conhecido há no máximo sete dias e quantidade real não
-zero. A rota exige que o owner publicado tenha detido o ticker em carteira real;
-carteiras simuladas, opções e ativos de outros owners não entram. Valores viajam
-como texto e a resposta é `no-store`. Nenhum desses recursos aceita escrita,
-importação, categorização ou mutação de carteira.
+Os contratos `patrimonio/v1` (resumo), `v2` (dashboard) e `v3` (atividades,
+categorias, metadata, renda, desempenho, eventos e histórico por posição) serviam
+ao NetWorth, aposentado em 29/09/2026, e foram retirados em 03/10/2026: o nginx
+não registra acesso a eles desde 28/09, o Wealthfolio só lê o v4 (o patch dele
+recusa qualquer outro caminho), e o histórico está no Git. O `PATRIMONIO_TOKEN`
+antigo não autoriza mais nenhuma rota.
 
 ### Snapshot inicial v4 para integração com carteira externa
 
@@ -157,7 +106,7 @@ importação, categorização ou mutação de carteira.
 `GET /patrimonio/v4/ledger` publicam dados somente-leitura, com escopo
 explícito de `PATRIMONIO_OWNER_ID`.
 As rotas v4 usam o token exclusivo `PATRIMONIO_INTEGRATION_TOKEN`;
-`PATRIMONIO_TOKEN` segue autorizando apenas as rotas v1-v3. Os cursores v4
+`PATRIMONIO_TOKEN` não autoriza mais nenhuma rota (revogável). Os cursores v4
 são assinados pelo token exclusivo, e sua rotação invalida cursores emitidos
 anteriormente. O snapshot contém posições abertas de ações em carteiras
 reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
@@ -625,9 +574,9 @@ fica na borda** — o vhost deste projeto, versionado em
 implantação atual. Outra topologia precisa manter proteção equivalente na borda
 ou adotar armazenamento compartilhado para o limitador. As rotas fora do gate de
 sessão têm limite próprio aplicado pela própria aplicação: as três do agente
-coletor (`/api/collector/*`), `60 per minute; 2000 per hour`, e o resumo de
-patrimônio, `30 per minute; 600 per hour` — este último isentando quem
-apresenta o token, pelo motivo escrito na seção do resumo.
+coletor (`/api/collector/*`), `60 per minute; 2000 per hour`, e as rotas v4 de
+atividades, mudanças e extrato, `60 per minute; 1200 per hour`, que valem também
+para quem apresenta o token, pelo motivo escrito na seção da publicação.
 
 Detalhes de operação, publicação e verificação estão em
 [`docs/deployment-vps.md`](deployment-vps.md).
