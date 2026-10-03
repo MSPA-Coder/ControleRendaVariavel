@@ -44,8 +44,10 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
    faria rollback de uma implantação sem defeito nenhum. Gere um valor novo com
    `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
    O contrato v4 usa `patrimonio_integration_token`, gerado e rotacionado de
-   forma independente. Preserve o token existente das rotas v1-v3 e entregue
-   o valor v4 ao consumidor por canal seguro.
+   forma independente. O `patrimonio_token` antigo não autoriza mais nenhuma rota
+   (os contratos v1-v3 foram retirados em 03/10/2026), mas o segredo continua
+   declarado no Compose até ser removido de lá. Entregue o valor v4 ao
+   consumidor por canal seguro.
 3. Suba a pilha:
 
    ```bash
