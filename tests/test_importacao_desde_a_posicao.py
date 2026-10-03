@@ -26,7 +26,18 @@ import pytest
 from sqlalchemy import delete, select
 
 from app import db
-from app.models import Broker, Market, Portfolio, Position, QuoteHistory, Side, Ticker, User
+from app.models import (
+    Broker,
+    Market,
+    Portfolio,
+    Position,
+    QuoteHistory,
+    Side,
+    Ticker,
+    Transaction,
+    TransactionStatus,
+    User,
+)
 from app.quotes import history_import
 from app.quotes.history import upsert_quote_history
 
@@ -185,3 +196,116 @@ def test_cli_nao_sobrescreve_a_linha_gravada_depois_do_fechamento_do_yahoo(
         # Leitura posterior ao carimbo do Yahoo: fica.
         (date(2026, 9, 16), Decimal("48.71"), leitura_rtd),
     ]
+
+
+@pytest.fixture
+def acao_encerrada(app_com_banco):
+    """Ação da B3 detida só em agosto de 2026; devolve o símbolo.
+
+    Sem posição aberta, só a operação encerrada: o período dela termina no
+    encerramento, e é isso que a separa do ticker que ainda importa hoje.
+    """
+
+    sufixo = uuid4().hex[:8].upper()
+    with app_com_banco.app_context():
+        usuario = User(username=f"cli-enc-{sufixo}", role="operador", is_active_user=True)
+        usuario.set_password("Synthetic-cli-only-2026!")
+        corretora = Broker(name=f"CLI ENC {sufixo}", acronym=sufixo[:6])
+        ticker = Ticker(
+            symbol=f"E{sufixo}",
+            trading_name="Ação encerrada de teste",
+            market=Market.B3,
+            rtd_market_code="B",
+            currency="BRL",
+        )
+        db.session.add_all([usuario, corretora, ticker])
+        db.session.flush()
+        carteira = Portfolio(
+            owner_id=usuario.id, name=f"CLI-ENC-{sufixo}", currency="BRL", simulated=False
+        )
+        db.session.add(carteira)
+        db.session.flush()
+        db.session.add(
+            Transaction(
+                owner_id=usuario.id,
+                broker_id=corretora.id,
+                ticker_id=ticker.id,
+                portfolio_id=carteira.id,
+                quantity=Decimal("10"),
+                average_cost=Decimal("20"),
+                exit_price=Decimal("22"),
+                side=Side.BUY,
+                opened_on=date(2026, 8, 3),
+                closed_on=date(2026, 8, 20),
+                result=Decimal("20"),
+                status=TransactionStatus.CLOSED,
+            )
+        )
+        db.session.commit()
+        ids = {
+            "usuario": usuario.id,
+            "corretora": corretora.id,
+            "ticker": ticker.id,
+            "carteira": carteira.id,
+        }
+        simbolo = ticker.symbol
+    try:
+        yield simbolo
+    finally:
+        with app_com_banco.app_context():
+            db.session.rollback()
+            db.session.execute(delete(Transaction).where(Transaction.owner_id == ids["usuario"]))
+            db.session.execute(delete(Portfolio).where(Portfolio.id == ids["carteira"]))
+            db.session.execute(delete(Ticker).where(Ticker.id == ids["ticker"]))
+            db.session.execute(delete(Broker).where(Broker.id == ids["corretora"]))
+            db.session.execute(delete(User).where(User.id == ids["usuario"]))
+            db.session.commit()
+
+
+def test_estrito_reprova_quando_um_ticker_ainda_detido_fica_sem_serie(
+    app_com_banco, acao_em_carteira, yahoo
+):
+    """Quem roda sem ninguém olhando precisa de um código de saída que diga a verdade.
+
+    O timer diário do `manutencao` chama o comando com `--estrito`. Sem a
+    opção, um Yahoo fora do ar só deixava uma linha no stderr e a execução
+    agendada terminava com sucesso, então o alerta nunca disparava. Sem ela o
+    comportamento continua o de antes, para quem roda à mão.
+    """
+
+    _ticker_id, simbolo = acao_em_carteira
+    # Nenhuma série cadastrada no `yahoo`: o símbolo detido recebe "sem série".
+    with app_com_banco.app_context():
+        runner = app_com_banco.test_cli_runner()
+        sem_opcao = runner.invoke(args=["import-position-history"])
+        estrito = runner.invoke(args=["import-position-history", "--estrito"])
+
+    assert sem_opcao.exit_code == 0, sem_opcao.output
+    assert estrito.exit_code == 1, estrito.output
+    assert simbolo in estrito.stderr.splitlines()[-1]
+
+
+def test_estrito_nao_reprova_por_ticker_ja_encerrado_sem_serie(
+    app_com_banco, acao_encerrada, yahoo
+):
+    """Ativo encerrado que o Yahoo deixou de servir não vira alerta diário.
+
+    A série dele já foi gravada enquanto era detido. Reprovar por ele todo dia
+    ensinaria a ignorar o alerta do timer. Ele continua listado entre as falhas,
+    mas fica fora da linha que decide o código de saída.
+
+    O `db-teste` é compartilhado e o comando importa tudo o que achar, então o
+    teste confere a linha do `--estrito`, e não só o código de saída: outro
+    ticker detido que tenha sobrado de um teste anterior apareceria ali.
+    """
+
+    simbolo = acao_encerrada
+    with app_com_banco.app_context():
+        resultado = app_com_banco.test_cli_runner().invoke(
+            args=["import-position-history", "--estrito"]
+        )
+
+    linhas = resultado.stderr.splitlines()
+    falhas = next(linha for linha in linhas if linha.startswith("No Yahoo history for:"))
+    assert simbolo in falhas
+    assert not any(simbolo in linha for linha in linhas if linha.startswith("Error:"))

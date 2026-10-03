@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import click
@@ -185,20 +185,40 @@ def _poll_rtd(watch: bool) -> None:
 
 
 @click.command("import-position-history")
-def import_position_history() -> None:
+@click.option(
+    "--estrito",
+    is_flag=True,
+    help="Sai com erro se um ticker ainda detido, ou de referência, ficar sem série.",
+)
+def import_position_history(estrito: bool) -> None:
     """Import daily history for every ticker the portfolio ever held, over
-    the period it was held, plus every comparison benchmark."""
+    the period it was held, plus every comparison benchmark.
+
+    ``--estrito`` é para quem roda sem ninguém olhando -- o timer diário do
+    ``manutencao``. Sem ele, um ticker sem série só vira uma linha no stderr,
+    e uma execução agendada terminaria com sucesso mesmo com o Yahoo fora.
+    Com ele, o comando sai com erro, e o ``OnFailure=`` da unidade alerta.
+
+    Só conta o ticker que ainda importa hoje: o detido e o de referência. Um
+    ticker já encerrado que o Yahoo deixou de servir (ativo deslistado) tem
+    a série gravada da época em que foi detido, e reprovar por ele todo dia
+    ensinaria a ignorar o alerta.
+    """
 
     targets = quote_update_targets()
     db.session.rollback()
+    today = date.today()
 
     imported: list[tuple[int, DailyQuote]] = []
     failures: list[str] = []
+    current_failures: list[str] = []
     for target, start_date, end_date in targets:
         try:
             quotes = fetch_yahoo_daily_quotes(target, start_date, end_date)
         except QuoteHistoryImportError:
             failures.append(target.symbol)
+            if end_date == today:
+                current_failures.append(target.symbol)
             continue
         imported.extend((target.id, quote) for quote in quotes)
     if imported:
@@ -210,6 +230,10 @@ def import_position_history() -> None:
     click.echo(f"{len(imported)} daily quotes imported for {len(targets) - len(failures)} tickers.")
     if failures:
         click.echo("No Yahoo history for: " + ", ".join(failures), err=True)
+    if estrito and current_failures:
+        raise click.ClickException(
+            "Ainda detidos ou de referência, sem série: " + ", ".join(current_failures)
+        )
 
 
 @click.group("users")
