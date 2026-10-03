@@ -7,7 +7,6 @@ O token autoriza a integração; o owner limita o conjunto financeiro publicado.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
 
@@ -16,7 +15,6 @@ from sqlalchemy.orm import joinedload
 
 from app import db
 from app.models import (
-    Dividend,
     OptionContract,
     OptionPosition,
     OptionPositionMovement,
@@ -24,23 +22,9 @@ from app.models import (
     Position,
     PositionLedgerArchive,
     PositionMovement,
-    QuoteHistory,
     Side,
-    Ticker,
-    Transaction,
-    TransactionStatus,
 )
 from app.positions.holdings_history import HoldingEvent
-
-
-def portfolios(owner_id: int) -> list[Portfolio]:
-    return list(
-        db.session.scalars(
-            select(Portfolio)
-            .where(Portfolio.owner_id == owner_id)
-            .order_by(Portfolio.simulated, Portfolio.name, Portfolio.id)
-        )
-    )
 
 
 def real_positions(owner_id: int) -> list[Position]:
@@ -59,70 +43,6 @@ def real_positions(owner_id: int) -> list[Position]:
     )
     return list(db.session.scalars(statement).unique())
 
-
-def quote_series(
-    ticker_ids: Iterable[int], *, start: date, end: date
-) -> dict[int, list[tuple[date, Decimal]]]:
-    ids = sorted(set(ticker_ids))
-    result: dict[int, list[tuple[date, Decimal]]] = {ticker_id: [] for ticker_id in ids}
-    if not ids:
-        return result
-    rows = db.session.execute(
-        select(QuoteHistory.ticker_id, QuoteHistory.recorded_date, QuoteHistory.price)
-        .where(
-            QuoteHistory.ticker_id.in_(ids),
-            QuoteHistory.recorded_date >= start,
-            QuoteHistory.recorded_date <= end,
-        )
-        .order_by(QuoteHistory.ticker_id, QuoteHistory.recorded_date)
-    )
-    for ticker_id, recorded_date, price in rows:
-        result[ticker_id].append((recorded_date, price))
-    return result
-
-
-def ticker_by_symbol(symbol: str, market: str | None = None) -> Ticker | None:
-    """Resolve um ticker público pelo símbolo e, opcionalmente, mercado."""
-    statement = select(Ticker).where(Ticker.symbol == symbol)
-    if market:
-        statement = statement.where(Ticker.market == market)
-    return db.session.scalar(statement)
-
-
-def dividends(desde: date, ate: date, owner_id: int) -> list[Dividend]:
-    statement = (
-        select(Dividend)
-        .where(
-            Dividend.owner_id == owner_id,
-            Dividend.payment_date >= desde,
-            Dividend.payment_date <= ate,
-        )
-        .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
-        .order_by(Dividend.payment_date, Dividend.id)
-    )
-    return list(db.session.scalars(statement))
-
-
-def closed_transactions(desde: date, ate: date, owner_id: int) -> list[Transaction]:
-    statement = (
-        select(Transaction)
-        .join(Transaction.portfolio_ref)
-        .where(
-            Portfolio.simulated.is_(False),
-            Transaction.owner_id == owner_id,
-            Transaction.status == TransactionStatus.CLOSED,
-            Transaction.closed_on >= desde,
-            Transaction.closed_on <= ate,
-        )
-        .options(
-            joinedload(Transaction.broker_ref),
-            joinedload(Transaction.ticker_ref),
-            joinedload(Transaction.option_contract_ref).joinedload(OptionContract.ticker_ref),
-            joinedload(Transaction.portfolio_ref),
-        )
-        .order_by(Transaction.closed_on, Transaction.id)
-    )
-    return list(db.session.scalars(statement).unique())
 
 
 def performance_events(reference: date, owner_id: int) -> list[HoldingEvent]:
@@ -198,8 +118,3 @@ def performance_events(reference: date, owner_id: int) -> list[HoldingEvent]:
     return events
 
 
-def tickers(ticker_ids: Iterable[int]) -> dict[int, Ticker]:
-    ids = sorted(set(ticker_ids))
-    if not ids:
-        return {}
-    return {ticker.id: ticker for ticker in db.session.scalars(select(Ticker).where(Ticker.id.in_(ids)))}
