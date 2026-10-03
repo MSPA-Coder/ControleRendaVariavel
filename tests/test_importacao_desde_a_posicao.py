@@ -29,6 +29,10 @@ from app import db
 from app.models import (
     Broker,
     Market,
+    OptionContract,
+    OptionExpiration,
+    OptionPosition,
+    OptionType,
     Portfolio,
     Position,
     QuoteHistory,
@@ -309,3 +313,114 @@ def test_estrito_nao_reprova_por_ticker_ja_encerrado_sem_serie(
     falhas = next(linha for linha in linhas if linha.startswith("No Yahoo history for:"))
     assert simbolo in falhas
     assert not any(simbolo in linha for linha in linhas if linha.startswith("Error:"))
+
+
+@pytest.fixture
+def opcao_em_carteira(app_com_banco):
+    """Opção de compra da B3 com posição aberta; devolve o símbolo dela.
+
+    É o caso real de 02/10/2026: AUREL110, RAIZH150 e outras três, compradas e
+    sem série no Yahoo. O ativo-objeto fica de fora da carteira, porque o que
+    se quer provar é que a opção sozinha não reprova o `--estrito`.
+    """
+
+    sufixo = uuid4().hex[:8].upper()
+    with app_com_banco.app_context():
+        usuario = User(username=f"cli-opc-{sufixo}", role="operador", is_active_user=True)
+        usuario.set_password("Synthetic-cli-only-2026!")
+        corretora = Broker(name=f"CLI OPC {sufixo}", acronym=sufixo[:6])
+        opcao = Ticker(
+            symbol=f"O{sufixo}",
+            trading_name="Opção de teste",
+            market=Market.B3,
+            rtd_market_code="B",
+            currency="BRL",
+        )
+        objeto = Ticker(
+            symbol=f"U{sufixo}",
+            trading_name="Objeto de teste",
+            market=Market.B3,
+            rtd_market_code="B",
+            currency="BRL",
+        )
+        # `call_code`/`put_code` têm 5 caracteres e `exercise_date` é única.
+        vencimento = OptionExpiration(
+            call_code=sufixo[:5], put_code=sufixo[3:], exercise_date=date(2031, 12, 19)
+        )
+        db.session.add_all([usuario, corretora, opcao, objeto, vencimento])
+        db.session.flush()
+        carteira = Portfolio(
+            owner_id=usuario.id, name=f"CLI-OPC-{sufixo}", currency="BRL", simulated=False
+        )
+        contrato = OptionContract(
+            ticker_id=opcao.id,
+            underlying_ticker_id=objeto.id,
+            expiration_id=vencimento.id,
+            option_type=OptionType.CALL,
+            strike=Decimal("10"),
+        )
+        db.session.add_all([carteira, contrato])
+        db.session.flush()
+        db.session.add(
+            OptionPosition(
+                owner_id=usuario.id,
+                broker_id=corretora.id,
+                contract_id=contrato.id,
+                portfolio_id=carteira.id,
+                quantity=Decimal("100"),
+                average_cost=Decimal("1"),
+                side=Side.BUY,
+                opened_on=date(2026, 9, 14),
+            )
+        )
+        db.session.commit()
+        ids = {
+            "usuario": usuario.id,
+            "corretora": corretora.id,
+            "opcao": opcao.id,
+            "objeto": objeto.id,
+            "vencimento": vencimento.id,
+            "contrato": contrato.id,
+            "carteira": carteira.id,
+        }
+        simbolo = opcao.symbol
+    try:
+        yield simbolo
+    finally:
+        with app_com_banco.app_context():
+            db.session.rollback()
+            db.session.execute(
+                delete(OptionPosition).where(OptionPosition.owner_id == ids["usuario"])
+            )
+            db.session.execute(delete(OptionContract).where(OptionContract.id == ids["contrato"]))
+            db.session.execute(
+                delete(OptionExpiration).where(OptionExpiration.id == ids["vencimento"])
+            )
+            db.session.execute(delete(Portfolio).where(Portfolio.id == ids["carteira"]))
+            db.session.execute(
+                delete(Ticker).where(Ticker.id.in_([ids["opcao"], ids["objeto"]]))
+            )
+            db.session.execute(delete(Broker).where(Broker.id == ids["corretora"]))
+            db.session.execute(delete(User).where(User.id == ids["usuario"]))
+            db.session.commit()
+
+
+def test_estrito_nao_reprova_por_opcao_aberta_que_o_yahoo_nao_serve(
+    app_com_banco, opcao_em_carteira, yahoo
+):
+    """Opção da B3 não existe no Yahoo e a série dela vem do coletor RTD.
+
+    Com a opção como alvo, o `--estrito` reprovava todo dia útil, o timer do
+    `manutencao` acionava o Telegram, e o alarme não tinha como se apagar. Como
+    o `db-teste` é compartilhado, o teste confere se o símbolo da opção sumiu
+    da lista de falhas e da linha `Error:`, e não só o código de saída.
+    """
+
+    simbolo = opcao_em_carteira
+    with app_com_banco.app_context():
+        resultado = app_com_banco.test_cli_runner().invoke(
+            args=["import-position-history", "--estrito"]
+        )
+
+    linhas = resultado.stderr.splitlines()
+    assert not any(simbolo in linha for linha in linhas), resultado.stderr

@@ -29,8 +29,14 @@ class _Rows(list):
         return list(self)
 
 
-def _ticker(ticker_id, symbol, *, is_benchmark=False):
-    return SimpleNamespace(id=ticker_id, symbol=symbol, market=Market.B3, is_benchmark=is_benchmark)
+def _ticker(ticker_id, symbol, *, is_benchmark=False, is_option=False):
+    return SimpleNamespace(
+        id=ticker_id,
+        symbol=symbol,
+        market=Market.B3,
+        is_benchmark=is_benchmark,
+        is_option=is_option,
+    )
 
 
 def _executar(monkeypatch, *, abertas=(), opcoes=(), operacoes=(), arquivo=(), tickers=()):
@@ -80,14 +86,37 @@ def test_benchmark_cobre_a_carteira_inteira_ate_hoje(monkeypatch):
         abertas=[(1, date(2026, 6, 16), None)],
         opcoes=[(4, date(2025, 11, 7), None)],
         operacoes=[(2, date(2024, 1, 10), date(2024, 5, 1))],
-        tickers=[_ticker(1, "CGC"), _ticker(2, "HODL11"), _ticker(4, "RAIZH150"), _ticker(9, "BOVA11", is_benchmark=True)],
+        tickers=[_ticker(1, "CGC"), _ticker(2, "HODL11"), _ticker(9, "BOVA11", is_benchmark=True)],
     )
 
     periodos = _periodos(history.quote_update_targets())
 
     assert periodos["BOVA11"] == (date(2024, 1, 10), HOJE)
-    assert periodos["RAIZH150"] == (date(2025, 11, 7), HOJE)
-    assert list(periodos) == ["BOVA11", "CGC", "HODL11", "RAIZH150"]
+    assert list(periodos) == ["BOVA11", "CGC", "HODL11"]
+
+
+def test_contrato_de_opcao_fica_fora_da_importacao_do_yahoo(monkeypatch):
+    """O Yahoo não serve opção da B3: pedir RAIZH150.SA só gerava "sem série".
+
+    A opção aberta continua contando como posição (a abertura dela puxa o
+    início do benchmark), mas ela mesma não é alvo. A série vem do coletor RTD.
+    """
+    _executar(
+        monkeypatch,
+        abertas=[(1, date(2026, 6, 16), None)],
+        opcoes=[(4, date(2025, 11, 7), None)],
+        tickers=[
+            _ticker(1, "CGC"),
+            _ticker(4, "RAIZH150", is_option=True),
+            _ticker(9, "BOVA11", is_benchmark=True),
+        ],
+    )
+
+    periodos = _periodos(history.quote_update_targets())
+
+    assert "RAIZH150" not in periodos
+    assert periodos["BOVA11"][0] == date(2025, 11, 7)
+    assert list(periodos) == ["BOVA11", "CGC"]
 
 
 def test_sem_nenhuma_posicao_benchmark_usa_o_lookback(monkeypatch):

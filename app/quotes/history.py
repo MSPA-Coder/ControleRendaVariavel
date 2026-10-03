@@ -91,6 +91,13 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date, date]]:
       antiga da carteira até hoje, para cobrir qualquer comparação possível
       sem uma posição "fantasma". Sem nenhuma posição, usa
       ``DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS``.
+
+    O contrato de opção fica de fora: o Yahoo não serve opção da B3, então
+    pedir ``RAIZH150.SA`` só produzia "sem série" todo dia -- e, com
+    ``--estrito``, um alarme que nunca se apagava. A série da opção vem do
+    coletor RTD (``app.collector.database``), que grava no mesmo
+    ``quote_history``. O ativo-objeto da opção continua na lista quando é
+    detido ou de referência por conta própria.
     """
     today = date.today()
     periods = _held_periods(today)
@@ -99,12 +106,21 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date, date]]:
         default=today - timedelta(days=DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS),
     )
     tickers = db.session.execute(
-        select(Ticker.id, Ticker.symbol, Ticker.market, Ticker.is_benchmark).where(
-            Ticker.id.in_(list(periods)) | Ticker.is_benchmark.is_(True)
-        )
+        select(
+            Ticker.id,
+            Ticker.symbol,
+            Ticker.market,
+            Ticker.is_benchmark,
+            select(OptionContract.id)
+            .where(OptionContract.ticker_id == Ticker.id)
+            .exists()
+            .label("is_option"),
+        ).where(Ticker.id.in_(list(periods)) | Ticker.is_benchmark.is_(True))
     ).all()
     targets = []
     for row in tickers:
+        if row.is_option:
+            continue
         target = TickerImportTarget(row.id, row.symbol, row.market, row.is_benchmark)
         if row.is_benchmark:
             # Referência cobre a carteira inteira, mesmo que tenha sido detida.
