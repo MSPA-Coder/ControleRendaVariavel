@@ -247,7 +247,7 @@ operá-lo.
 
 Ao atualizar dependências, alargue o teto compatível e preserve o piso mínimo
 já verificado. O Dependabot acompanha o `uv.lock` pelo ecossistema `uv`, com
-`versioning-strategy: widen`. Elevar o piso
+`versioning-strategy: increase-if-necessary`. Elevar o piso
 declara uma incompatibilidade e só deve ocorrer com justificativa e validação.
 Toda ampliação de faixa reconstrói a imagem e roda `quality`. Migrações são
 aditivas e imutáveis depois de aplicadas; mudanças incompatíveis usam nova
