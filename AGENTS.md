@@ -122,6 +122,10 @@ que a fixture `app_com_banco` monta o cenário. Uma revisão que falha ao
 executar reprova na CI, e não mais no `deploy.sh` — que reverte código e
 imagem, mas não reverte migração.
 
+Colunas lidas pelo esquema `leitura` (ver `docs/architecture.md`, seção
+Persistência) não podem ser removidas nem ter o tipo trocado sem recriar a view
+na mesma revisão: o PostgreSQL recusa, de propósito.
+
 Mudança de schema cria nova revisão Alembic, revisada manualmente.
 Não edite uma migração que possa ter sido aplicada. Banco vazio nasce por
 `alembic upgrade head`, nunca por `create_all()` ou `stamp`; adoção de banco

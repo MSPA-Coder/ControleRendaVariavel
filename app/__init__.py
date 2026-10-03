@@ -77,15 +77,6 @@ PUBLIC_ENDPOINTS = frozenset({
     # que não tem sessão nem usuário aqui. A permissão dela é o token
     # compartilhado, conferido em tempo constante dentro da própria view, e sem
     # ele a rota não devolve dado nenhum.
-    "portfolio.patrimonio_resumo",
-    "portfolio.patrimonio_resumo_v2",
-    "portfolio.patrimonio_activities_v3",
-    "portfolio.patrimonio_categories_v3",
-    "portfolio.patrimonio_metadata_v3",
-    "portfolio.patrimonio_income_v3",
-    "portfolio.patrimonio_performance_v3",
-    "portfolio.patrimonio_events_v3",
-    "portfolio.patrimonio_holding_history_v3",
     "portfolio.patrimonio_metadata_v4",
     "portfolio.patrimonio_snapshot_v4",
     "portfolio.patrimonio_activities_v4",
@@ -366,32 +357,11 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "60 per minute; 2000 per hour",
         override_defaults=True,
     )
-    # O resumo de patrimônio é uma integração cara mesmo quando o token está
-    # correto: ele consulta histórico, cotas e agregados. O limite vale para
+    # A publicação de patrimônio é uma integração cara mesmo quando o token está
+    # correto: ela consulta histórico, cotas e agregados. O limite vale para
     # todas as chamadas; integrações que precisam de mais volume devem agrupar
     # pedidos ou usar uma fila de exportação, não ganhar um caminho ilimitado.
-    aplicar_limite(
-        app,
-        limiter,
-        "portfolio.patrimonio_resumo",
-        "30 per minute; 600 per hour",
-        override_defaults=True,
-    )
-    aplicar_limite(
-        app,
-        limiter,
-        "portfolio.patrimonio_resumo_v2",
-        "30 per minute; 600 per hour",
-        override_defaults=True,
-    )
     for endpoint in (
-        "portfolio.patrimonio_activities_v3",
-        "portfolio.patrimonio_categories_v3",
-        "portfolio.patrimonio_metadata_v3",
-        "portfolio.patrimonio_income_v3",
-        "portfolio.patrimonio_performance_v3",
-        "portfolio.patrimonio_events_v3",
-        "portfolio.patrimonio_holding_history_v3",
         "portfolio.patrimonio_activities_v4",
         "portfolio.patrimonio_changes_v4",
         "portfolio.patrimonio_ledger_v4",

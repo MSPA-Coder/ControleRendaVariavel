@@ -38,7 +38,7 @@ dependencies = [
   # O extra `[flask]` é obrigatório a partir da v0.2.0: o núcleo do pacote
   # deixou de depender de Flask (para o ControleBancario, que é Django, poder
   # instalar só a parte de Python puro) e sem o extra o Flask não vem junto.
-  "sharedauth[flask] @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.12.0",
+  "sharedauth[flask] @ git+https://github.com/MSPA-Coder/SharedAuth.git@v0.13.0",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +52,9 @@ dev = [
   # Os testes de configuracao leem o `compose.yaml` pelo que ele declara, e
   # nao pelo texto (docs/TESTES.md, T4).
   "pyyaml>=6,<7",
+  # O contrato patrimonio/v4 tem um JSON Schema (tests/contrato/); os testes
+  # validam a saída real das rotas contra ele.
+  "jsonschema>=4.23,<5",
 ]
 rtd = [
   "comtypes>=1.4.16,<2; sys_platform == 'win32'",

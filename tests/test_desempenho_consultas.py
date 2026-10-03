@@ -378,9 +378,7 @@ TELAS = [
     "/tables/options/expirations", "/settings",
 ]
 PATRIMONIO = [
-    "/patrimonio/v1/resumo", "/patrimonio/v2/resumo", "/patrimonio/v3/activities",
-    "/patrimonio/v3/categories", "/patrimonio/v3/events", "/patrimonio/v3/income",
-    "/patrimonio/v3/performance",
+    "/patrimonio/v4/metadata", "/patrimonio/v4/snapshot", "/patrimonio/v4/activities",
 ]
 TOKEN_PATRIMONIO = "token-de-medicao-com-mais-de-trinta-e-dois-caracteres"
 
@@ -395,7 +393,7 @@ def test_nenhuma_tela_consulta_o_banco_uma_vez_por_linha(carteira_medida):
     Configurações checava a permissão de cada ticker cadastrado.
     """
     app, criados, abrir, _ = carteira_medida
-    app.config.update(PATRIMONIO_TOKEN=TOKEN_PATRIMONIO, PATRIMONIO_TITULAR="Medição",
+    app.config.update(PATRIMONIO_INTEGRATION_TOKEN=TOKEN_PATRIMONIO, PATRIMONIO_TITULAR="Medição",
                       PATRIMONIO_OWNER_ID=str(criados["usuario"]))
     with app.app_context():
         # As tabelas e Configurações são exclusivas de admin.
