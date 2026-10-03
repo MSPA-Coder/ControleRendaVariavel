@@ -24,11 +24,8 @@ from app.models import (
     OptionContract,
     OptionExpiration,
     OptionPosition,
-    OptionPositionMovement,
     Portfolio,
     Position,
-    PositionLedgerArchive,
-    PositionMovement,
     QuoteHistory,
     Side,
     Ticker,
@@ -36,6 +33,7 @@ from app.models import (
     UserPreference,
     UserTickerEntitlement,
 )
+from app.patrimonio.queries import position_timeline
 from app.positions.holdings_history import (
     DividendEvent,
     HoldingEvent,
@@ -568,150 +566,13 @@ def position_movement_events(
     identifica as duas ao mesmo tempo — a mesma armadilha já documentada em
     ``Transaction.source_position_id``.
     """
-    ticker_filter = list(ticker_ids) if ticker_ids is not None else None
-    if ticker_filter == []:
-        return []
-
-    stock_statement = (
-        select(
-            PositionMovement.occurred_on,
-            Position.id,
-            Position.ticker_id,
-            Position.side,
-            PositionMovement.resulting_quantity,
-        )
-        .join(PositionMovement.position)
-        .join(Position.broker_ref)
-        .join(Position.portfolio_ref)
-        .where(Position.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
-        .order_by(PositionMovement.occurred_on, PositionMovement.id)
+    return position_timeline(
+        current_owner_id(),
+        portfolio_id=portfolio_id,
+        broker=broker,
+        include_options=include_options,
+        ticker_ids=ticker_ids,
     )
-    if portfolio_id is not None:
-        stock_statement = stock_statement.where(Position.portfolio_id == portfolio_id)
-    if broker:
-        stock_statement = stock_statement.where(Broker.name == broker)
-    if ticker_filter is not None:
-        stock_statement = stock_statement.where(Position.ticker_id.in_(ticker_filter))
-
-    if include_options:
-        option_event_date = func.coalesce(
-            OptionPositionMovement.occurred_on, OptionPosition.opened_on
-        ).label("occurred_on")
-        option_event_quantity = func.coalesce(
-            OptionPositionMovement.resulting_quantity, OptionPosition.quantity
-        ).label("resulting_quantity")
-        option_statement = (
-            select(
-                option_event_date,
-                OptionPosition.id,
-                OptionContract.ticker_id,
-                OptionPosition.side,
-                option_event_quantity,
-            )
-            .join(OptionPosition.contract)
-            .join(OptionPosition.broker_ref)
-            .join(OptionPosition.portfolio_ref)
-            .outerjoin(
-                OptionPositionMovement,
-                OptionPositionMovement.option_position_id == OptionPosition.id,
-            )
-            .where(OptionPosition.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
-            .order_by(option_event_date, OptionPositionMovement.id)
-        )
-        if portfolio_id is not None:
-            option_statement = option_statement.where(OptionPosition.portfolio_id == portfolio_id)
-        if broker:
-            option_statement = option_statement.where(Broker.name == broker)
-        if ticker_filter is not None:
-            option_statement = option_statement.where(OptionContract.ticker_id.in_(ticker_filter))
-
-    events: list[HoldingEvent] = []
-    for (
-        occurred_on,
-        position_id,
-        ticker_id,
-        side,
-        resulting_quantity,
-    ) in db.session.execute(stock_statement):
-        sign = Decimal("1") if side == Side.BUY else Decimal("-1")
-        events.append(
-            HoldingEvent(
-                occurred_on=occurred_on,
-                ticker_id=ticker_id,
-                resulting_signed_quantity=sign * resulting_quantity,
-                position_key=("stock", position_id),
-            )
-        )
-    if include_options:
-        for (
-            occurred_on,
-            position_id,
-            ticker_id,
-            side,
-            resulting_quantity,
-        ) in db.session.execute(option_statement):
-            sign = Decimal("1") if side == Side.BUY else Decimal("-1")
-            events.append(
-                HoldingEvent(
-                    occurred_on=occurred_on,
-                    ticker_id=ticker_id,
-                    resulting_signed_quantity=sign * resulting_quantity,
-                    position_key=("option", position_id),
-                )
-            )
-    # Posicoes ja encerradas nao tem mais extrato (a exclusao o leva em
-    # cascata); o que sobrou delas esta no arquivo. Sem esta terceira
-    # consulta o relatorio mediria so os ativos que continuaram na carteira
-    # -- vies de sobrevivencia. Ver `app.positions.ledger`.
-    archive_statement = (
-        select(
-            PositionLedgerArchive.occurred_on,
-            PositionLedgerArchive.ticker_id,
-            PositionLedgerArchive.instrument,
-            PositionLedgerArchive.source_position_id,
-            PositionLedgerArchive.resulting_signed_quantity,
-        )
-        .join(Broker, Broker.id == PositionLedgerArchive.broker_id)
-        .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
-        .where(
-            PositionLedgerArchive.owner_id == current_owner_id(),
-            Portfolio.simulated.is_(False),
-        )
-        .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
-    )
-    if not include_options:
-        archive_statement = archive_statement.where(
-            PositionLedgerArchive.instrument == "stock"
-        )
-    if portfolio_id is not None:
-        archive_statement = archive_statement.where(
-            PositionLedgerArchive.portfolio_id == portfolio_id
-        )
-    if broker:
-        archive_statement = archive_statement.where(Broker.name == broker)
-    if ticker_filter is not None:
-        archive_statement = archive_statement.where(
-            PositionLedgerArchive.ticker_id.in_(ticker_filter)
-        )
-    for (
-        occurred_on,
-        ticker_id,
-        instrument,
-        source_position_id,
-        resulting_signed_quantity,
-    ) in db.session.execute(archive_statement):
-        events.append(
-            HoldingEvent(
-                occurred_on=occurred_on,
-                ticker_id=ticker_id,
-                # O sinal ja foi aplicado na gravacao do arquivo.
-                resulting_signed_quantity=resulting_signed_quantity,
-                position_key=(instrument, source_position_id),
-            )
-        )
-
-    events.sort(key=lambda event: event.occurred_on)
-    return events
 
 
 def dividend_events(ticker_ids: Iterable[int]) -> list[DividendEvent]:
