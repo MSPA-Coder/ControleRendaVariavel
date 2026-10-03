@@ -523,6 +523,32 @@ O schema evolui só por revisões em `migrations/versions/`. Banco vazio nasce d
 restauração pertencem ao BackupRestore, projeto irmão, e não são replicados
 aqui.
 
+### Esquema `leitura`: o contrato para quem lê o banco de fora
+
+Quem lê o PostgreSQL direto (hoje, o FinancasMCP, por um usuário `mcp_leitura`
+só de leitura) não deve ler as tabelas: acopla o próprio SQL ao schema e
+reescreve as regras do domínio. Em 24/09/2026 uma coluna removida quebrou o
+`crv_carteira` em produção. A revisão `20261003_0027` cria o esquema `leitura`
+com views que carregam essas regras, e o usuário de leitura recebe `SELECT` só
+nelas.
+
+| View | O que carrega |
+|---|---|
+| `leitura.posicao` | posições abertas de ações e opções juntas: preço que vale (última cotação ou fechamento anterior), valor de mercado e resultado em aberto com o sinal do lado (`SELL` é negativo) |
+| `leitura.operacao`, `leitura.provento` | operações com o resultado bruto gravado, e proventos por tipo, com os campos opcionais nulos quando não informados |
+| `leitura.cotacao`, `leitura.cotacao_historico`, `leitura.opcao`, `leitura.cotacao_opcao` | cotação atual e série diária, contratos de opção e suas cotações |
+| `leitura.movimento_posicao`, `leitura.movimento_opcao`, `leitura.posicao_historica` | extrato das posições e o histórico preservado das encerradas |
+| `leitura.ativo`, `leitura.carteira`, `leitura.corretora`, `leitura.carteira_ativo` | cadastros |
+
+Ficam de fora, de propósito, usuários, senhas, sessões, preferências e
+auditoria. O PostgreSQL recusa `DROP COLUMN` e `ALTER ... TYPE` de coluna que uma
+view lê. Quem precisar mudar uma coluna lida aqui escreve a revisão dependendo
+de `20261003_0027`, recria a view e atualiza `tests/test_esquema_leitura.py`: a
+quebra deixa de aparecer em produção, no leitor, e passa a reprovar a revisão na
+suíte, que aplica todas elas a um banco vazio. Uma view nova só chega ao usuário
+de leitura depois de rodar de novo `python -m financas_mcp.usuario_leitura`
+(ver o FinancasMCP).
+
 ## Segurança e implantação
 
 - **autenticação por padrão**: `requer_login` nega toda requisição sem sessão;
