@@ -252,13 +252,16 @@ SELECT
     pf.simulated AS simulada,
     br.name AS corretora,
     tr.option_contract_id IS NOT NULL AS e_opcao,
+    obj.symbol AS objeto,
     tr.notes AS notas
 FROM transactions tr
-JOIN tickers t ON t.id = tr.ticker_id
+LEFT JOIN option_contracts oc ON oc.id = tr.option_contract_id
+LEFT JOIN tickers obj ON obj.id = oc.underlying_ticker_id
+JOIN tickers t ON t.id = COALESCE(tr.ticker_id, oc.ticker_id)
 LEFT JOIN portfolios pf ON pf.id = tr.portfolio_id
 LEFT JOIN brokers br ON br.id = tr.broker_id""",
     """COMMENT ON VIEW leitura.operacao IS
-    'Operações de compra e venda. status OPEN ou CLOSED; resultado é o realizado ao fechar, BRUTO (sem custos nem IR). Resultados anteriores a 25/09/2026 podem trazer o fator 0,9996 do modo líquido antigo, sem como distinguir.'""",
+    'Operações de compra e venda de ações e de opções (e_opcao; ativo é o código da opção e objeto, o ativo-objeto). status OPEN ou CLOSED; resultado é o realizado ao fechar, BRUTO (sem custos nem IR). Resultados anteriores a 25/09/2026 podem trazer o fator 0,9996 do modo líquido antigo, sem como distinguir.'""",
     """CREATE VIEW leitura.provento AS
 SELECT
     d.id,

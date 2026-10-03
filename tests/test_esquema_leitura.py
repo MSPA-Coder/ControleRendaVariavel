@@ -28,6 +28,9 @@ from app.models import (
     Dividend,
     IncomeKind,
     Market,
+    OptionContract,
+    OptionExpiration,
+    OptionType,
     Portfolio,
     Position,
     Quote,
@@ -201,6 +204,35 @@ def test_operacao_fechada_traz_o_resultado_bruto_gravado(sessao_admin, cenario):
         "SELECT lado, status, resultado, preco_de_saida, e_opcao FROM leitura.operacao WHERE ativo = 'LTRA3'",
     )[0]
     assert (lado, status, resultado, saida, e_opcao) == ("BUY", "CLOSED", Decimal("10.00"), Decimal("11.00"), False)
+
+
+def test_operacao_de_opcao_aparece_com_o_codigo_da_opcao_e_o_ativo_objeto(sessao_admin, cenario):
+    """A operação de opção não tem `ticker_id`: o SQL antigo do MCP a descartava em silêncio."""
+    c = cenario
+    opcao = Ticker(symbol="LTRAK120", trading_name="Opção leitura", market=Market.B3, rtd_market_code="B", currency="BRL")
+    vencimento = OptionExpiration(call_code="LK", put_code="LW", exercise_date=date(2026, 11, 20))
+    sessao_admin.add_all([opcao, vencimento])
+    sessao_admin.flush()
+    contrato = OptionContract(
+        ticker_id=opcao.id, underlying_ticker_id=c["comprada"].id, expiration_id=vencimento.id,
+        option_type=OptionType.CALL, strike=Decimal("12.00"),
+    )
+    sessao_admin.add(contrato)
+    sessao_admin.flush()
+    sessao_admin.add(
+        Transaction(
+            owner_id=c["usuario"].id, broker_id=c["corretora"].id, option_contract_id=contrato.id,
+            portfolio_id=c["real"].id, quantity=Decimal("100"), average_cost=Decimal("0.50"),
+            exit_price=Decimal("0.80"), side=Side.SELL, opened_on=date(2026, 9, 1),
+            closed_on=date(2026, 9, 10), status=TransactionStatus.CLOSED, result=Decimal("30.00"),
+        )
+    )
+    sessao_admin.flush()
+
+    (ativo, objeto, e_opcao, resultado) = _consulta(
+        sessao_admin, "SELECT ativo, objeto, e_opcao, resultado FROM leitura.operacao WHERE e_opcao"
+    )[0]
+    assert (ativo, objeto, e_opcao, resultado) == ("LTRAK120", "LTRA3", True, Decimal("30.00"))
 
 
 def test_provento_traz_o_tipo_e_o_valor(sessao_admin, cenario):
