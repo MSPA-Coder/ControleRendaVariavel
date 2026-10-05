@@ -456,6 +456,13 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
 .form-actions { display: flex; gap: .6rem; justify-content: flex-end; }
 .delete-form { margin: 1rem auto; max-width: 850px; text-align: right; }
 .inline-form { display: inline; }
+.sr-only { height: 1px; margin: -1px; overflow: hidden; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); }
+.movement-actions { display: flex; gap: .3rem; justify-content: flex-end; white-space: nowrap; }
+.movement-action { align-items: center; background: none; border: 0; color: var(--accent); cursor: pointer; display: inline-flex; padding: .2rem; }
+.movement-action svg { fill: none; height: 1.1rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 1.1rem; }
+.movement-action:hover { color: var(--navy-dark); }
+.movement-action-danger { color: var(--negative); }
+.movement-action:focus-visible { outline: 3px solid #63b3c8; }
 .link-button {
   background: none; border: none; color: var(--accent); cursor: pointer; font: inherit;
   padding: 0; text-decoration: underline;

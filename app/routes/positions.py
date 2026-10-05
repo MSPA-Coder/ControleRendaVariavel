@@ -14,7 +14,17 @@ from sqlalchemy import select
 from app import db
 from app.core.currency import converter_totais
 from app.core.validation import parse_finite_decimal
-from app.models import Broker, Portfolio, Position, QuoteHistory, Side, Ticker
+from app.models import (
+    Broker,
+    Portfolio,
+    Position,
+    PositionMovement,
+    PositionMovementKind,
+    QuoteHistory,
+    Side,
+    Ticker,
+    Transaction,
+)
 from app.positions.average_cost_line import (
     Aporte,
     Degrau,
@@ -30,6 +40,7 @@ from app.positions.closure import (
     duplicate_entry,
     prior_opening,
     record_position_adjustment,
+    replay_movements,
     sync_open_transaction_for_position,
 )
 from app.positions.portfolio import (
@@ -646,6 +657,87 @@ def delete_position(position_id: int) -> ResponseReturnValue:
     db.session.commit()
     flash("Posição excluída.", "success")
     return redirect(url_for("portfolio.index"))
+
+
+def _owned_movement(position_id: int, movement_id: int, *, for_update: bool = False) -> tuple[Position, PositionMovement]:
+    position = owned_or_404_for_update(Position, position_id) if for_update else owned_or_404(Position, position_id)
+    movement = db.session.get(PositionMovement, movement_id)
+    if movement is None or movement.position_id != position.id or movement.owner_id != current_owner_id():
+        from flask import abort
+
+        abort(404)
+    return position, movement
+
+
+def _movement_values() -> tuple[Decimal, Decimal, date]:
+    raw = {key: value.strip() for key, value in request.form.items()}
+    try:
+        quantity = parse_finite_decimal(raw["quantity"], field_name="uma quantidade")
+        price = parse_finite_decimal(raw["price"], field_name="um preço")
+        occurred_on = date.fromisoformat(raw["occurred_on"])
+    except (KeyError, ValueError, ArithmeticError) as exc:
+        raise ValueError("Informe quantidade, preço e data válidos.") from exc
+    if quantity <= 0 or price < 0:
+        raise ValueError("A quantidade deve ser positiva e o preço não pode ser negativo.")
+    return quantity, price, occurred_on
+
+
+@bp.get("/positions/<int:position_id>/movements/<int:movement_id>/edit")
+def edit_position_movement(position_id: int, movement_id: int) -> str:
+    position, movement = _owned_movement(position_id, movement_id)
+    if movement.kind is PositionMovementKind.ADJUSTMENT:
+        flash("Ajustes são corrigidos pela edição da posição.", "error")
+        return redirect(url_for("portfolio.edit_position", position_id=position.id))
+    return render_template("position_movement_form.html", position=position, movement=movement)
+
+
+@bp.post("/positions/<int:position_id>/movements/<int:movement_id>")
+def update_position_movement(position_id: int, movement_id: int) -> ResponseReturnValue:
+    position, movement = _owned_movement(position_id, movement_id, for_update=True)
+    if movement.kind is PositionMovementKind.ADJUSTMENT:
+        flash("Ajustes são corrigidos pela edição da posição.", "error")
+        return redirect(url_for("portfolio.edit_position", position_id=position.id))
+    try:
+        quantity, price, occurred_on = _movement_values()
+        movement.quantity_delta = -quantity if movement.kind is PositionMovementKind.DECREASE else quantity
+        movement.price = price
+        movement.occurred_on = occurred_on
+        replay_movements(position)
+        position.opened_on = min(item.occurred_on for item in position.movements)
+        sync_open_transaction_for_position(position)
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("portfolio.edit_position_movement", position_id=position_id, movement_id=movement_id))
+    flash("Lançamento atualizado e extrato recalculado.", "success")
+    return redirect(url_for("portfolio.index", expanded=position_id))
+
+
+@bp.post("/positions/<int:position_id>/movements/<int:movement_id>/delete")
+def delete_position_movement(position_id: int, movement_id: int) -> ResponseReturnValue:
+    position, movement = _owned_movement(position_id, movement_id, for_update=True)
+    if movement.kind is PositionMovementKind.OPEN:
+        flash("A abertura só pode ser removida ao excluir a posição inteira.", "error")
+        return redirect(url_for("portfolio.index", expanded=position_id))
+    transaction = (
+        db.session.get(Transaction, movement.transaction_id)
+        if movement.transaction_id
+        else None
+    )
+    position.movements.remove(movement)
+    if transaction is not None:
+        db.session.delete(transaction)
+    try:
+        replay_movements(position)
+        sync_open_transaction_for_position(position)
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("portfolio.index", expanded=position_id))
+    flash("Lançamento removido e extrato recalculado.", "success")
+    return redirect(url_for("portfolio.index", expanded=position_id))
 
 
 @bp.get("/positions/<int:position_id>/close")

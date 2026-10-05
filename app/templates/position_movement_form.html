@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Editar lançamento{% endblock %}
+{% block content %}
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_position_movement', position_id=position.id, movement_id=movement.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>Editar {{ movement.kind|movement_label|lower }} · {{ position.ticker }}</h1>
+  <p class="form-help">Ao salvar, os saldos, o custo médio e qualquer encerramento parcial posterior serão recalculados em ordem cronológica.</p>
+  <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ movement.quantity_delta|abs }}" data-sensitive-input="true"></label>
+  <label>{{ 'Preço de saída' if movement.kind.value == 'decrease' else 'Preço do lançamento' }}<input required type="number" min="0" step="any" name="price" value="{{ movement.price }}" data-sensitive-input="true"></label>
+  <label>Data<input required type="date" name="occurred_on" value="{{ movement.occurred_on.isoformat() }}"></label>
+  <div class="form-actions"><a class="button" href="{{ url_for('portfolio.index', expanded=position.id) }}">Cancelar</a><button class="button button-primary" type="submit" data-sa-confirmar="Salvar este lançamento e recalcular a posição?" data-sa-titulo="Salvar lançamento" data-sa-severidade="warning">Salvar</button></div>
+</form>
+{% endblock %}

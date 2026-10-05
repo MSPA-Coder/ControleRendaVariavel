@@ -21,6 +21,7 @@ from app import db
 from app.core.domain import (
     StatementEntry,
     is_duplicate_entry,
+    operation_result,
     plan_position_closure,
     replay_statement,
     weighted_average_cost,
@@ -201,12 +202,28 @@ def replay_movements(position: Position) -> None:
         ]
     )
     if replayed is None:
-        # Sem um lançamento de abertura não há de onde partir; preserva o que
-        # está gravado em vez de zerar a posição.
-        return
+        raise ValueError("O extrato precisa começar por uma abertura.")
+    if any(result.resulting_quantity <= 0 for result in replayed):
+        raise ValueError("O lançamento deixaria a posição sem saldo em uma data do extrato.")
     for movement, result in zip(movements, replayed, strict=True):
         movement.resulting_quantity = result.resulting_quantity
         movement.resulting_average_cost = result.resulting_average_cost
+    for index, movement in enumerate(movements):
+        if movement.kind is not PositionMovementKind.DECREASE or movement.transaction_id is None:
+            continue
+        transaction = db.session.get(Transaction, movement.transaction_id)
+        if transaction is None:
+            continue
+        average_cost = replayed[index - 1].resulting_average_cost
+        quantity = -movement.quantity_delta
+        result = operation_result(position.side.value, quantity, average_cost, movement.price)
+        movement.result = result
+        transaction.quantity = quantity
+        transaction.average_cost = average_cost
+        transaction.exit_price = movement.price
+        transaction.closed_on = movement.occurred_on
+        transaction.opened_on = position.opened_on
+        transaction.result = result
     position.quantity = replayed[-1].resulting_quantity
     position.average_cost = replayed[-1].resulting_average_cost
 
