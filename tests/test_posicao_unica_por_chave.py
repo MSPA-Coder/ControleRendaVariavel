@@ -127,6 +127,54 @@ def test_tela_exige_confirmacao_para_aporte_anterior_e_reconstroi_o_extrato(revi
         ]
 
 
+def test_editar_aumento_para_data_anterior_exige_confirmacao_e_reclassifica(review_case):
+    app, data = review_case
+    client, token = client_for(app, data["ids"][0])
+    form = {
+        "csrf_token": token,
+        "broker_id": data["broker"],
+        "ticker_id": data["ticker_ids"][0],
+        "portfolio_id": data["portfolio_ids"][0],
+        "quantity": "100",
+        "average_cost": "10",
+        "side": "C",
+        "opened_on": "2026-06-10",
+        "target_multiplier": "1.5",
+    }
+    assert client.post("/positions", data=form).status_code == 302
+    assert client.post(
+        "/positions", data={**form, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-11"}
+    ).status_code == 302
+    with app.app_context():
+        position = db.session.query(Position).filter_by(
+            owner_id=data["user_ids"][0], ticker_id=data["ticker_ids"][0]
+        ).one()
+        increase = next(item for item in position.movements if item.kind is PositionMovementKind.INCREASE)
+        position_id, movement_id = position.id, increase.id
+
+    edited = {"csrf_token": token, "quantity": "50", "price": "20", "occurred_on": "2026-06-01"}
+    aviso = client.post(f"/positions/{position_id}/movements/{movement_id}", data=edited)
+
+    assert aviso.status_code == 409
+    assert "Data anterior à abertura registrada." in aviso.get_data(as_text=True)
+    assert client.post(
+        f"/positions/{position_id}/movements/{movement_id}",
+        data={**edited, "confirm_prior_opening": "1"},
+    ).status_code == 302
+    with app.app_context():
+        position = db.session.get(Position, position_id)
+        assert position.opened_on == date(2026, 6, 1)
+        assert position.quantity == Decimal("150")
+        assert position.average_cost == Decimal("13.33333333")
+        assert [
+            (item.kind, item.occurred_on, item.resulting_quantity, item.resulting_average_cost)
+            for item in position.movements
+        ] == [
+            (PositionMovementKind.OPEN, date(2026, 6, 1), Decimal("50"), Decimal("20")),
+            (PositionMovementKind.INCREASE, date(2026, 6, 10), Decimal("150"), Decimal("13.33333333")),
+        ]
+
+
 def test_tela_recusa_edicao_que_colide_com_422(review_case):
     """Sem a checagem, o índice único responderia com erro 500."""
     app, data = review_case
