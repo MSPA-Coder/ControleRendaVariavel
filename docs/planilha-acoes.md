@@ -114,6 +114,9 @@ extrato em ordem cronológica e atualiza os saldos, o custo médio e a transaç�
 espelhada de qualquer encerramento parcial. A lixeira remove aumentos e
 diminuições, também reaplicando o extrato; a abertura é removida pela exclusão
 da posição inteira. Ajustes continuam sendo corrigidos pela edição da posição.
+Se a edição de um aumento ou diminuição o mover para antes da abertura, o
+sistema também pede confirmação: confirmado, esse lançamento passa a ser a
+abertura e a abertura anterior passa a ser aumento antes do recálculo.
 
 Regras de um **encerramento parcial**:
 

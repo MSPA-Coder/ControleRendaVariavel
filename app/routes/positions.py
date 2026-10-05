@@ -699,11 +699,37 @@ def update_position_movement(position_id: int, movement_id: int) -> ResponseRetu
         return redirect(url_for("portfolio.edit_position", position_id=position.id))
     try:
         quantity, price, occurred_on = _movement_values()
+        opening = next(
+            (item for item in position.movements if item.kind is PositionMovementKind.OPEN), None
+        )
+        moves_before_opening = (
+            movement.kind is not PositionMovementKind.OPEN
+            and opening is not None
+            and occurred_on < opening.occurred_on
+        )
+        if moves_before_opening and request.form.get("confirm_prior_opening") != "1":
+            return render_template(
+                "position_movement_form.html",
+                position=position,
+                movement=movement,
+                values={"quantity": quantity, "price": price, "occurred_on": occurred_on},
+                prior_opening_warning=True,
+                prior_opening_date=opening.occurred_on,
+            ), 409
+
+        if moves_before_opening:
+            # A cronologia do extrato define a abertura. Confirmada a correção,
+            # o lançamento editado toma esse papel e a abertura antiga vira um
+            # aumento, para que o replay recalcule todos os snapshots.
+            opening.kind = PositionMovementKind.INCREASE
+            movement.kind = PositionMovementKind.OPEN
         movement.quantity_delta = -quantity if movement.kind is PositionMovementKind.DECREASE else quantity
         movement.price = price
         movement.occurred_on = occurred_on
+        position.opened_on = next(
+            item.occurred_on for item in position.movements if item.kind is PositionMovementKind.OPEN
+        )
         replay_movements(position)
-        position.opened_on = min(item.occurred_on for item in position.movements)
         sync_open_transaction_for_position(position)
         db.session.commit()
     except ValueError as exc:
