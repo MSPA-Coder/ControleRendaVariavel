@@ -19,6 +19,15 @@
   </p>
   <input type="hidden" name="confirm_duplicate" value="1">
   {% endif %}
+  {% if prior_opening_warning %}
+  <p class="form-warning" role="alert">
+    <strong>Data anterior à abertura registrada.</strong>
+    A posição atual começou em {{ prior_opening_date.strftime('%d/%m/%Y') }}. Se confirmar,
+    este lançamento será a abertura e os lançamentos posteriores serão reaplicados como
+    aumentos, diminuições ou ajustes conforme o extrato.
+  </p>
+  <input type="hidden" name="confirm_prior_opening" value="1">
+  {% endif %}
   {% if not editing %}
   <p class="form-help">
     Se já houver uma posição do mesmo ticker na mesma corretora, com o mesmo tipo e a mesma
@@ -66,7 +75,7 @@
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Salvar as alterações desta posição?"
             data-sa-titulo="Salvar posição" data-sa-severidade="warning">
-      {{ "Confirmar mesmo assim" if duplicate_warning else "Salvar" }}
+      {{ "Confirmar mesmo assim" if duplicate_warning or prior_opening_warning else "Salvar" }}
     </button>
   </div>
 </form>

@@ -28,6 +28,7 @@ from app.positions.closure import (
     delete_open_transaction_for_position,
     discard_simulation_history,
     duplicate_entry,
+    prior_opening,
     record_position_adjustment,
     sync_open_transaction_for_position,
 )
@@ -489,6 +490,18 @@ def create_position() -> ResponseReturnValue:
             portfolios=portfolio_records(),
         ), 422
     candidate = Position(owner_id=current_owner_id(), **asdict(data))
+    earlier = prior_opening(candidate)
+    if earlier is not None and request.form.get("confirm_prior_opening") != "1":
+        return render_template(
+            "position_form.html",
+            position=request.form,
+            brokers=broker_records(),
+            tickers=investable_ticker_records(),
+            sides=Side,
+            portfolios=portfolio_records(),
+            prior_opening_warning=True,
+            prior_opening_date=earlier.opened_on,
+        ), 409
     # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
     # indistinguível de um aporte real. Só o usuário sabe qual dos dois é.
     if request.form.get("confirm_duplicate") != "1" and duplicate_entry(candidate) is not None:
@@ -506,7 +519,10 @@ def create_position() -> ResponseReturnValue:
         # vez de tratar como aporte. `duplicate_entry` acima não pega esse
         # caso porque uma posição simulada nunca tem movimento algum no
         # extrato, então nunca é vista como "idêntica ao anterior".
-        position, merged = create_or_merge_position(candidate)
+        position, merged = create_or_merge_position(
+            candidate,
+            confirm_prior_opening=request.form.get("confirm_prior_opening") == "1",
+        )
         grant_ticker_entitlement(user_id=position.owner_id, ticker_id=position.ticker_id, held_on=position.opened_on)
     except ValueError as exc:
         db.session.rollback()
@@ -521,13 +537,20 @@ def create_position() -> ResponseReturnValue:
         ), 409
     db.session.commit()
     if merged:
-        flash(
-            f"Aporte unificado à posição já existente em {position.ticker} · "
-            f"{position.broker}: quantidade somada e custo médio recalculado. "
-            "Os parâmetros da posição anterior (multiplicador do target e modo "
-            "de resultado) foram preservados.",
-            "success",
-        )
+        if earlier is not None:
+            flash(
+                f"Lançamento anterior confirmado para {position.ticker} · {position.broker}: "
+                "ele passou a ser a abertura e o extrato foi recalculado em ordem cronológica.",
+                "success",
+            )
+        else:
+            flash(
+                f"Aporte unificado à posição já existente em {position.ticker} · "
+                f"{position.broker}: quantidade somada e custo médio recalculado. "
+                "Os parâmetros da posição anterior (multiplicador do target e modo "
+                "de resultado) foram preservados.",
+                "success",
+            )
     else:
         flash("Posição adicionada.", "success")
     return redirect(url_for("portfolio.index"))

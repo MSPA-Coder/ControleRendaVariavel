@@ -102,6 +102,12 @@ Regras de um **aumento**:
   andamento;
 - nenhum resultado é realizado.
 
+Se a data de um novo lançamento for anterior à abertura registrada, o sistema
+não o funde silenciosamente. Ele mostra um aviso e exige confirmação. Confirmado,
+o novo lançamento passa a ser a **abertura**; a abertura anterior passa a ser
+**aumento** e todo o extrato posterior é reaplicado cronologicamente, mantendo
+baixas parciais e ajustes nos seus respectivos papéis.
+
 Regras de um **encerramento parcial**:
 
 - o resultado realizado usa a mesma fórmula do encerramento total, aplicada

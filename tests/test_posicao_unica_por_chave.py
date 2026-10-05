@@ -16,7 +16,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.models import Broker, Market, Portfolio, Position, Side, Ticker, User
+from app.models import Broker, Market, Portfolio, Position, PositionMovementKind, Side, Ticker, User
 from app.positions.closure import conflicting_position, create_or_merge_position
 from tests.test_financial_isolation_http import client_for
 from tests.test_financial_isolation_http import review_case as review_case
@@ -71,6 +71,60 @@ def test_segundo_aporte_reforca_a_primeira(sessao, cenario):
     assert segunda.quantity == Decimal("200")
     assert segunda.average_cost == Decimal("15.00")
     assert sessao.query(Position).filter_by(ticker_id=primeira.ticker_id).count() == 1
+
+
+def test_aporte_anterior_confirmado_reconstroi_o_extrato_desde_a_nova_abertura(sessao, cenario):
+    """Um aporte com data anterior não pode deixar a antiga abertura no meio do extrato."""
+    primeira, _ = create_or_merge_position(_posicao(cenario, quantidade="100", custo="10.00"))
+    anterior = _posicao(cenario, quantidade="50", custo="20.00")
+    anterior.opened_on = date(2026, 6, 1)
+
+    reconstruida, merged = create_or_merge_position(anterior, confirm_prior_opening=True)
+
+    assert merged is True
+    assert reconstruida.id == primeira.id
+    assert reconstruida.opened_on == date(2026, 6, 1)
+    assert reconstruida.quantity == Decimal("150")
+    assert reconstruida.average_cost == Decimal("13.33333333")
+    assert [
+        (movement.occurred_on, movement.kind, movement.resulting_quantity, movement.resulting_average_cost)
+        for movement in sorted(reconstruida.movements, key=lambda movement: movement.occurred_on)
+    ] == [
+        (date(2026, 6, 1), PositionMovementKind.OPEN, Decimal("50"), Decimal("20.00")),
+        (date(2026, 6, 10), PositionMovementKind.INCREASE, Decimal("150"), Decimal("13.33333333")),
+    ]
+
+
+def test_tela_exige_confirmacao_para_aporte_anterior_e_reconstroi_o_extrato(review_case):
+    app, data = review_case
+    client, token = client_for(app, data["ids"][0])
+    form = {
+        "csrf_token": token,
+        "broker_id": data["broker"],
+        "ticker_id": data["ticker_ids"][0],
+        "portfolio_id": data["portfolio_ids"][0],
+        "quantity": "100",
+        "average_cost": "10",
+        "side": "C",
+        "opened_on": "2026-06-10",
+        "target_multiplier": "1.5",
+    }
+    assert client.post("/positions", data=form).status_code == 302
+
+    anterior = {**form, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-01"}
+    aviso = client.post("/positions", data=anterior)
+
+    assert aviso.status_code == 409
+    assert "Data anterior à abertura registrada." in aviso.get_data(as_text=True)
+    assert client.post("/positions", data={**anterior, "confirm_prior_opening": "1"}).status_code == 302
+    with app.app_context():
+        position = db.session.query(Position).filter_by(
+            owner_id=data["user_ids"][0], ticker_id=data["ticker_ids"][0]
+        ).one()
+        assert [(movement.kind, movement.occurred_on) for movement in position.movements] == [
+            (PositionMovementKind.OPEN, date(2026, 6, 1)),
+            (PositionMovementKind.INCREASE, date(2026, 6, 10)),
+        ]
 
 
 def test_tela_recusa_edicao_que_colide_com_422(review_case):
