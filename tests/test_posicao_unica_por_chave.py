@@ -175,6 +175,46 @@ def test_editar_aumento_para_data_anterior_exige_confirmacao_e_reclassifica(revi
         ]
 
 
+def test_excluir_abertura_promove_primeiro_aumento_e_recalcula(review_case):
+    app, data = review_case
+    client, token = client_for(app, data["ids"][0])
+    form = {
+        "csrf_token": token,
+        "broker_id": data["broker"],
+        "ticker_id": data["ticker_ids"][0],
+        "portfolio_id": data["portfolio_ids"][0],
+        "quantity": "100",
+        "average_cost": "10",
+        "side": "C",
+        "opened_on": "2026-06-10",
+        "target_multiplier": "1.5",
+    }
+    assert client.post("/positions", data=form).status_code == 302
+    assert client.post(
+        "/positions", data={**form, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-11"}
+    ).status_code == 302
+    with app.app_context():
+        position = db.session.query(Position).filter_by(
+            owner_id=data["user_ids"][0], ticker_id=data["ticker_ids"][0]
+        ).one()
+        opening = next(item for item in position.movements if item.kind is PositionMovementKind.OPEN)
+        position_id, movement_id = position.id, opening.id
+
+    response = client.post(
+        f"/positions/{position_id}/movements/{movement_id}/delete", data={"csrf_token": token}
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        position = db.session.get(Position, position_id)
+        assert position.opened_on == date(2026, 6, 11)
+        assert position.quantity == Decimal("50")
+        assert position.average_cost == Decimal("20")
+        assert [(item.kind, item.occurred_on) for item in position.movements] == [
+            (PositionMovementKind.OPEN, date(2026, 6, 11)),
+        ]
+
+
 def test_tela_recusa_edicao_que_colide_com_422(review_case):
     """Sem a checagem, o índice único responderia com erro 500."""
     app, data = review_case
