@@ -108,6 +108,13 @@ o novo lançamento passa a ser a **abertura**; a abertura anterior passa a ser
 **aumento** e todo o extrato posterior é reaplicado cronologicamente, mantendo
 baixas parciais e ajustes nos seus respectivos papéis.
 
+Cada lançamento do extrato que seja abertura, aumento ou diminuição pode ser
+editado pelo ícone de lápis. Alterar quantidade, preço ou data reaplica todo o
+extrato em ordem cronológica e atualiza os saldos, o custo médio e a transação
+espelhada de qualquer encerramento parcial. A lixeira remove aumentos e
+diminuições, também reaplicando o extrato; a abertura é removida pela exclusão
+da posição inteira. Ajustes continuam sendo corrigidos pela edição da posição.
+
 Regras de um **encerramento parcial**:
 
 - o resultado realizado usa a mesma fórmula do encerramento total, aplicada

@@ -10,7 +10,7 @@
   <thead>
     <tr>
       <th>Data</th><th>Movimento</th><th>Qtde</th><th>Preço</th>
-      <th>Resultado</th><th>Saldo</th><th>Custo médio</th>
+      <th>Resultado</th><th>Saldo</th><th>Custo médio</th><th><span class="sr-only">Ações</span></th>
     </tr>
   </thead>
   <tbody>
@@ -30,9 +30,24 @@
       </td>
       <td class="number" data-sensitive-value="true">{{ movement.resulting_quantity|quantity(position.currency) }}</td>
       <td class="number" data-sensitive-value="true">{{ movement.resulting_average_cost|currency(position.currency, trim=true) }}</td>
+      <td class="movement-actions">
+        {% if movement.kind.value != 'adjustment' %}
+        <a class="movement-action" href="{{ url_for('portfolio.edit_position_movement', position_id=position.id, movement_id=movement.id) }}" aria-label="Editar lançamento de {{ movement.kind|movement_label }}" title="Editar lançamento">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L19 8.5 15.5 5 4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>
+        </a>
+        {% if movement.kind.value != 'open' %}
+        <form class="inline-form" method="post" action="{{ url_for('portfolio.delete_position_movement', position_id=position.id, movement_id=movement.id) }}" data-sa-titulo="Excluir lançamento" data-sa-severidade="error">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="movement-action movement-action-danger" type="submit" aria-label="Excluir lançamento de {{ movement.kind|movement_label }}" title="Excluir lançamento" data-sa-confirmar="Excluir este lançamento e recalcular a posição?" data-sa-titulo="Excluir lançamento" data-sa-severidade="error">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M7 7l1 14h8l1-14"/></svg>
+          </button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="empty">Sem movimentos registrados.</td></tr>
+    <tr><td colspan="8" class="empty">Sem movimentos registrados.</td></tr>
     {% endfor %}
   </tbody>
 </table>
