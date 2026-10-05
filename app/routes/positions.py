@@ -743,9 +743,24 @@ def update_position_movement(position_id: int, movement_id: int) -> ResponseRetu
 @bp.post("/positions/<int:position_id>/movements/<int:movement_id>/delete")
 def delete_position_movement(position_id: int, movement_id: int) -> ResponseReturnValue:
     position, movement = _owned_movement(position_id, movement_id, for_update=True)
+    replacement_opening: PositionMovement | None = None
     if movement.kind is PositionMovementKind.OPEN:
-        flash("A abertura só pode ser removida ao excluir a posição inteira.", "error")
-        return redirect(url_for("portfolio.index", expanded=position_id))
+        remaining = sorted(
+            (item for item in position.movements if item.id != movement.id),
+            key=lambda item: (item.occurred_on, item.id or 0),
+        )
+        if not remaining or remaining[0].kind is not PositionMovementKind.INCREASE:
+            flash(
+                "A abertura só pode ser removida quando o próximo lançamento for um aumento.",
+                "error",
+            )
+            return redirect(url_for("portfolio.index", expanded=position_id))
+        # Sem a abertura original, o primeiro aumento cronológico é a nova
+        # origem da posição. Promovê-lo antes do replay preserva a cadeia de
+        # saldos e custos médios a partir da nova data inicial.
+        replacement_opening = remaining[0]
+        replacement_opening.kind = PositionMovementKind.OPEN
+        position.opened_on = replacement_opening.occurred_on
     transaction = (
         db.session.get(Transaction, movement.transaction_id)
         if movement.transaction_id
@@ -762,7 +777,10 @@ def delete_position_movement(position_id: int, movement_id: int) -> ResponseRetu
         db.session.rollback()
         flash(str(exc), "error")
         return redirect(url_for("portfolio.index", expanded=position_id))
-    flash("Lançamento removido e extrato recalculado.", "success")
+    if replacement_opening is not None:
+        flash("Abertura removida; o primeiro aumento virou abertura e o extrato foi recalculado.", "success")
+    else:
+        flash("Lançamento removido e extrato recalculado.", "success")
     return redirect(url_for("portfolio.index", expanded=position_id))
 
 
