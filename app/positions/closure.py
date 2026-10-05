@@ -165,7 +165,11 @@ def record_movement(
         resulting_average_cost=position.average_cost,
         owner_id=position.owner_id,
     )
-    db.session.add(movement)
+    # Manter a coleção em memória em sincronia também importa para o replay
+    # logo abaixo de um novo lançamento. A FK sozinha seria suficiente no
+    # próximo carregamento, mas uma coleção já carregada não passaria a conter
+    # este movimento antes de expirar a sessão.
+    position.movements.append(movement)
     return movement
 
 
@@ -183,7 +187,11 @@ def replay_movements(position: Position) -> None:
     esta função só traduz de/para os modelos ORM.
     """
 
-    movements = list(position.movements)
+    # A relação vem ordenada do banco, mas o novo movimento ainda pode estar
+    # apenas na coleção desta sessão. Ordenar aqui torna o replay correto nos
+    # dois casos, inclusive quando uma abertura confirmada entra antes de todo
+    # o extrato que já existia.
+    movements = sorted(position.movements, key=lambda movement: (movement.occurred_on, movement.id or 0))
     replayed = replay_statement(
         [
             StatementEntry(
@@ -352,7 +360,26 @@ def duplicate_entry(candidate: Position) -> PositionMovement | None:
     return None
 
 
-def create_or_merge_position(candidate: Position) -> tuple[Position, bool]:
+def prior_opening(candidate: Position) -> Position | None:
+    """Posição real que o candidato passaria a abrir, se confirmado.
+
+    Um aporte com data anterior não pode ser fundido silenciosamente: ele muda
+    qual lançamento é a abertura do extrato e pode alterar os saldos históricos.
+    A rota usa esta leitura para pedir a confirmação; ``create_or_merge_position``
+    repete a verificação sob lock antes de escrever.
+    """
+
+    if _is_simulated(candidate.portfolio_id):
+        return None
+    existing = db.session.scalar(_mergeable_statement(candidate))
+    if existing is not None and candidate.opened_on < existing.opened_on:
+        return existing
+    return None
+
+
+def create_or_merge_position(
+    candidate: Position, *, confirm_prior_opening: bool = False
+) -> tuple[Position, bool]:
     """Registra um aporte, abrindo uma posição nova ou reforçando a existente.
 
     Devolve a posição persistida e se ela já existia. Quando já existia, o
@@ -387,21 +414,43 @@ def create_or_merge_position(candidate: Position) -> tuple[Position, bool]:
             create_open_transaction_for_position(candidate)
         return candidate, False
 
-    existing.average_cost = weighted_average_cost(
-        existing.quantity,
-        existing.average_cost,
-        candidate.quantity,
-        candidate.average_cost,
-    )
-    existing.quantity = existing.quantity + candidate.quantity
-    existing.opened_on = min(existing.opened_on, candidate.opened_on)
-    record_movement(
-        existing,
-        PositionMovementKind.INCREASE,
-        quantity_delta=candidate.quantity,
-        price=candidate.average_cost,
-        occurred_on=candidate.opened_on,
-    )
+    if candidate.opened_on < existing.opened_on:
+        if not confirm_prior_opening:
+            raise ValueError(
+                "Este lançamento antecede a abertura da posição e exige confirmação."
+            )
+        # O novo lote passa a ser a abertura efetiva. A abertura que já
+        # existia vira aumento e a cadeia inteira é reaplicada em ordem de
+        # data, preservando baixas e ajustes posteriores como fatos do
+        # extrato, agora sobre a nova base.
+        existing.opened_on = candidate.opened_on
+        for movement in existing.movements:
+            if movement.kind is PositionMovementKind.OPEN:
+                movement.kind = PositionMovementKind.INCREASE
+        record_movement(
+            existing,
+            PositionMovementKind.OPEN,
+            quantity_delta=candidate.quantity,
+            price=candidate.average_cost,
+            occurred_on=candidate.opened_on,
+        )
+        replay_movements(existing)
+    else:
+        existing.average_cost = weighted_average_cost(
+            existing.quantity,
+            existing.average_cost,
+            candidate.quantity,
+            candidate.average_cost,
+        )
+        existing.quantity = existing.quantity + candidate.quantity
+        existing.opened_on = min(existing.opened_on, candidate.opened_on)
+        record_movement(
+            existing,
+            PositionMovementKind.INCREASE,
+            quantity_delta=candidate.quantity,
+            price=candidate.average_cost,
+            occurred_on=candidate.opened_on,
+        )
     sync_open_transaction_for_position(existing)
     return existing, True
 
