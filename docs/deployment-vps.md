@@ -116,7 +116,7 @@ git commit -m "Descreve a mudança"
 git push -u origin codex/minha-mudanca
 gh pr create --base main --head codex/minha-mudanca
 gh pr checks <numero-do-pr> --watch
-gh pr merge <numero-do-pr> --merge --delete-branch
+gh pr merge <numero-do-pr> --squash --delete-branch
 git switch main
 git pull --ff-only origin main
 ```
@@ -199,14 +199,14 @@ dependência inesperada interrompe a transação integralmente.
 Use o script de implantação do VPS:
 
 ```bash
-~/deploy.sh renda --check
 ~/deploy.sh renda
-~/deploy.sh --status
 ```
 
-Ele confere a árvore, atualiza `main`, reconstrói a imagem, aguarda os health
-checks e valida o endereço público. Se detectar alteração local, corrija a
-origem no ambiente de desenvolvimento e publique pelo fluxo normal.
+Ele confere a árvore, o commit elegível no GitHub, atualiza `main`, reconstrói a
+imagem, aguarda os health checks e valida o endereço público. `~/deploy.sh
+--status` é apenas diagnóstico transversal, não uma etapa obrigatória do
+deploy. Se detectar alteração local, corrija a origem no ambiente de
+desenvolvimento e publique pelo fluxo normal.
 
 Os dados financeiros e as configurações persistem no volume
 `controle-renda-variavel_postgres_data`, fora do checkout. Não use
