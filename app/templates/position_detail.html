@@ -36,7 +36,7 @@
   </nav>
   {% if grafico %}
   <figure class="quote-chart">
-    <svg viewBox="0 0 {{ grafico.largura }} {{ grafico.altura }}" role="img" aria-label="Variação dos fechamentos de {{ position.ticker }}">
+    <svg viewBox="0 0 {{ grafico.largura }} {{ grafico.altura }}" role="img" aria-label="Variação dos fechamentos de {{ position.ticker }} em escala logarítmica">
       {% for marca in grafico.eixo_y %}
       <line class="quote-chart-grid" x1="{{ grafico.esquerda }}" x2="{{ grafico.direita }}" y1="{{ marca.y }}" y2="{{ marca.y }}"></line>
       <text class="quote-chart-axis quote-chart-axis-y" x="{{ grafico.esquerda|int - 6 }}" y="{{ marca.y }}">{{ marca.valor|currency(position.currency) }}</text>
@@ -53,7 +53,7 @@
       {% endif %}
     </svg>
     <figcaption>
-      De {{ grafico.minimo|currency(position.currency, trim=true) }} a {{ grafico.maximo|currency(position.currency, trim=true) }} em {{ fechamentos|length }} fechamentos desde {{ fechamentos[0].recorded_date.strftime('%d/%m/%Y') }}.
+      Escala logarítmica. De {{ grafico.minimo|currency(position.currency, trim=true) }} a {{ grafico.maximo|currency(position.currency, trim=true) }} em {{ fechamentos|length }} fechamentos desde {{ fechamentos[0].recorded_date.strftime('%d/%m/%Y') }}.
       <ul class="quote-chart-legend">
         <li><svg class="quote-chart-swatch" viewBox="0 0 28 8" aria-hidden="true"><line class="quote-chart-cost" x1="0" y1="4" x2="28" y2="4"></line></svg>Custo médio, hoje <span data-sensitive-value="true">{{ position.average_cost|currency(position.currency, trim=true) }}</span></li>
         {% for aporte in grafico.aportes %}

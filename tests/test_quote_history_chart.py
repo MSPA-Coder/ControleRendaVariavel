@@ -18,3 +18,12 @@ def test_comparacao_rebaseia_as_duas_series_na_primeira_data_comum():
     assert "var firstCommon = commonLabels[0];" in SCRIPT
     assert "rebaseToPercent(labels, primaryCloses, firstCommon)" in SCRIPT
     assert "rebaseToPercent(labels, benchmarkCloses, firstCommon)" in SCRIPT
+
+
+@pytest.mark.sentinela_front
+def test_grafico_de_preco_usa_escala_logaritmica_e_nao_desnatura_custo_zero():
+    """Preço é estritamente positivo; custo zero não pode virar preço artificial
+    no eixo logarítmico e precisa ficar fora da linha de referência."""
+    assert 'type: "logarithmic"' in SCRIPT
+    assert "return value !== null && value > 0 ? value : null;" in SCRIPT
+    assert "Math.log10(value)" in SCRIPT

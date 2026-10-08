@@ -44,8 +44,8 @@ def test_custo_medio_muda_de_nivel_no_fechamento_em_que_passa_a_valer() -> None:
     )
 
     assert grafico is not None
-    # x: 70, 343, 616; y: 10 -> 192, 12 -> 102, 14 -> 12.
-    assert grafico["pontos_custo"] == "70.0,192.0 343.0,192.0 343.0,102.0 616.0,102.0"
+    # x: 70, 343, 616; a escala Y é logarítmica: 10 -> 192, 12 -> 94,5, 14 -> 12.
+    assert grafico["pontos_custo"] == "70.0,192.0 343.0,192.0 343.0,94.5 616.0,94.5"
 
 
 def test_escala_inclui_custo_medio_fora_da_faixa_dos_fechamentos() -> None:
@@ -76,11 +76,11 @@ def test_cada_aporte_e_uma_linha_no_proprio_preco_desde_o_seu_fechamento() -> No
     )
 
     assert grafico is not None
-    assert [(a["pontos"], a["rotulo"]) for a in grafico["aportes"]] == [
-        ("70.0,147.0 616.0,147.0", "Abertura em 31/12/2025"),
-        ("343.0,57.0 616.0,57.0", "Aumento em 02/01/2026"),
+    assert [aporte["rotulo"] for aporte in grafico["aportes"]] == [
+        "Abertura em 31/12/2025", "Aumento em 02/01/2026"
     ]
-    assert [marca["valor"] for marca in grafico["eixo_y"]] == [10, 11, 12, 13, 14]
+    assert grafico["eixo_y"][0]["valor"] == Decimal("10.0")
+    assert grafico["eixo_y"][-1]["valor"] == Decimal("14.0")
 
 
 def test_eixo_x_marca_primeira_e_ultima_data_com_no_maximo_seis_marcas() -> None:

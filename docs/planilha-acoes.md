@@ -165,6 +165,13 @@ começou antes da janela aparece desde o início dela. A comparação com
 benchmark permanece em evolução percentual e, portanto, não mostra
 referências de preço absoluto.
 
+Os gráficos de preço absoluto da aba **Cotações** e do detalhe da posição usam
+eixo Y logarítmico: deslocamentos verticais iguais representam variações
+percentuais iguais. A comparação com benchmark permanece linear porque o eixo
+representa retorno percentual, que pode ser zero ou negativo. Uma referência
+de custo ou aporte igual a zero não é desenhada, pois não existe em escala
+logarítmica.
+
 Os dois gráficos têm o mesmo seletor de período: 1 mês, 3 meses, 6 meses
 (padrão), 1 ano, YTD e todo o período. A janela conta para trás a partir do
 último fechamento; YTD começa em 1º de janeiro do ano desse fechamento.

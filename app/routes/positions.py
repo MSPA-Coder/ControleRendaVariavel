@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
+from math import log10
 from typing import Any
 
 from flask import flash, redirect, render_template, request, url_for
@@ -161,28 +162,43 @@ def _grafico_de_fechamentos(
     inicios = [
         (aporte, next(i for i, dia in enumerate(datas) if dia >= aporte.data))
         for aporte in aportes
-        if aporte.data <= datas[-1]
+        if aporte.data <= datas[-1] and aporte.preco > 0
     ]
     escala = (
         valores
-        + [custo for custo in custos if custo is not None]
+        # Custo zero é permitido no domínio, mas não possui representação em
+        # escala logarítmica; a referência correspondente fica oculta.
+        + [custo for custo in custos if custo is not None and custo > 0]
         + [aporte.preco for aporte, _ in inicios]
     )
     menor, maior = min(escala), max(escala)
-    amplitude = maior - menor or Decimal("1")
+    log_menor, log_maior = log10(float(menor)), log10(float(maior))
+    escala_constante = log_menor == log_maior
+    if escala_constante:
+        margem = log10(1.1)
+        log_menor -= margem
+        log_maior += margem
+    amplitude_log = log_maior - log_menor
     ultimo = len(valores) - 1
 
     def x(indice: int) -> float:
         return esquerda + (largura - esquerda - direita) * indice / ultimo
 
     def y(valor: Decimal) -> float:
-        return topo + (altura - topo - base) * float((maior - valor) / amplitude)
+        return topo + (altura - topo - base) * (log_maior - log10(float(valor))) / amplitude_log
+
+    def valor_da_marca(indice: int) -> Decimal:
+        if not escala_constante and indice == 0:
+            return menor
+        if not escala_constante and indice == 4:
+            return maior
+        return Decimal(str(10 ** (log_menor + amplitude_log * indice / 4)))
 
     pontos = [f"{x(indice):.1f},{y(valor):.1f}" for indice, valor in enumerate(valores)]
     pontos_custo: list[str] = []
     anterior: Decimal | None = None
     for indice, custo in enumerate(custos):
-        if custo is None:
+        if custo is None or custo <= 0:
             continue
         if anterior is not None and custo != anterior:
             pontos_custo.append(f"{x(indice):.1f},{y(anterior):.1f}")
@@ -203,8 +219,11 @@ def _grafico_de_fechamentos(
             for indice, (aporte, inicio) in enumerate(inicios)
         ],
         "eixo_y": [
-            {"y": f"{y(valor):.1f}", "valor": valor}
-            for valor in (menor + amplitude * k / 4 for k in range(5))
+            {
+                "y": f"{topo + (altura - topo - base) * (4 - k) / 4:.1f}",
+                "valor": valor_da_marca(k),
+            }
+            for k in range(5)
         ],
         "eixo_x": [
             {"x": f"{x(indice):.1f}", "rotulo": datas[indice].strftime("%d/%m/%y")}
