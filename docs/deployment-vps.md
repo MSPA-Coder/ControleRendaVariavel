@@ -102,6 +102,29 @@ memória dos workers não deve ser tratado como limite global.
 
 ## Atualização
 
+### Publicação pelo GitHub
+
+`main` é protegido e o VPS o espelha. Portanto, antes de chamar o script do
+servidor, publique a mudança neste fluxo, a partir da máquina de
+desenvolvimento:
+
+```bash
+git switch -c codex/minha-mudanca
+# valide a mudança pelo portão quality
+git add <arquivos>
+git commit -m "Descreve a mudança"
+git push -u origin codex/minha-mudanca
+gh pr create --base main --head codex/minha-mudanca
+gh pr checks <numero-do-pr> --watch
+gh pr merge <numero-do-pr> --merge --delete-branch
+git switch main
+git pull --ff-only origin main
+```
+
+O push direto para `main` é recusado. Não inicie a implantação se algum check
+obrigatório falhar: corrija a causa, valide novamente e atualize o mesmo PR.
+Somente o `main` remoto já mesclado é elegível ao `~/deploy.sh`.
+
 As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
 roteiros continuam valendo para qualquer instalação que ainda esteja antes
 delas — a local, por exemplo.

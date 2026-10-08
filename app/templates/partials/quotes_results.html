@@ -84,7 +84,7 @@
          data-benchmark-dates='{{ chart_benchmark_history|map(attribute='recorded_date')|map('string')|list|tojson }}'
          data-benchmark-prices='{{ chart_benchmark_history|map(attribute='price')|map('string')|list|tojson }}'
          {% endif %}
-         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a primeira data com cotação para os dois ativos' if selected_benchmark }}"></div>
+         aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a primeira data com cotação para os dois ativos' if selected_benchmark else ' em escala logarítmica' }}"></div>
     {% endif %}
     {% if history %}
     <div class="quote-history-browser" aria-label="Cotações registradas">

@@ -14,7 +14,7 @@
   function aggregate(dates, prices, period) {
     var rows = new Map();
     dates.forEach(function (date, index) {
-      var value = prices[index]; if (!Number.isFinite(value)) return;
+      var value = prices[index]; if (!Number.isFinite(value) || value <= 0) return;
       var key = periodKey(date, period), row = rows.get(key);
       if (!row) { rows.set(key, { label: key, open: value, high: value, low: value, close: value }); return; }
       row.high = Math.max(row.high, value); row.low = Math.min(row.low, value); row.close = value;
@@ -54,7 +54,9 @@
     if (line.until && key > periodKey(line.until, period)) return null;
     var value = null;
     line.steps.forEach(function (step) { if (periodKey(step.from, period) <= key) value = Number(step.averageCost); });
-    return value;
+    // Zero é um custo válido no domínio, mas não tem coordenada numa escala
+    // logarítmica. Não o desenhamos para não adulterar a escala dos preços.
+    return value !== null && value > 0 ? value : null;
   }
   // Valores de cada linha nos rótulos dados; linhas sem nenhum ponto na
   // janela visível somem, para não ocupar legenda nem escala.
@@ -138,11 +140,17 @@
     var values = rows.flatMap(function (row) { return [row.low, row.high]; }).concat(
       visibleLines.flatMap(function (item) { return item.values.filter(function (value) { return value !== null; }); })
     );
-    var min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
+    var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
+    var minLog = Math.log10(min), maxLog = Math.log10(max);
+    if (minLog === maxLog) {
+      var margin = Math.log10(1.1);
+      minLog -= margin; maxLog += margin;
+    }
+    var spanLog = maxLog - minLog;
     var left = 54, right = 16, top = 16, bottom = 38, plotWidth = width - left - right, plotHeight = height - top - bottom;
-    function y(value) { return top + (max - value) / span * plotHeight; }
+    function y(value) { return top + (maxLog - Math.log10(value)) / spanLog * plotHeight; }
     ctx.strokeStyle = "#c9d8e2"; ctx.fillStyle = "#5c7180"; ctx.font = "12px sans-serif";
-    for (var tick = 0; tick <= 4; tick += 1) { var yy = top + plotHeight * tick / 4, value = max - span * tick / 4; ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke(); ctx.fillText(formatCurrency(value, currency), 2, yy + 4); }
+    for (var tick = 0; tick <= 4; tick += 1) { var yy = top + plotHeight * tick / 4, value = 10 ** (maxLog - spanLog * tick / 4); ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke(); ctx.fillText(formatCurrency(value, currency), 2, yy + 4); }
     var step = plotWidth / rows.length, body = Math.max(2, Math.min(16, step * .62));
     rows.forEach(function (row, index) {
       var x = left + step * (index + .5), rising = row.close >= row.open;
@@ -246,7 +254,7 @@
     container.replaceChildren(); var canvas = document.createElement("canvas"); container.appendChild(canvas);
     // spanGaps na cotação: os únicos rótulos sem preço são as datas de troca
     // de custo médio injetadas acima, e elas não devem cortar a série.
-    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: true }, ...costLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: costLines.length > 0 }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
+    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: true }, ...costLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: costLines.length > 0 }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { type: "logarithmic", ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
   }
   function init() {
     var type = document.querySelector("[data-quote-chart-type]"), period = document.querySelector("[data-quote-chart-period]"), zoom = document.querySelector("[data-quote-chart-zoom]");

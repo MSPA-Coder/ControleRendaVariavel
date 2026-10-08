@@ -249,6 +249,12 @@ A produção roda atrás de Nginx com TLS em
 edite, faça commit ou merge no VPS. Consulte `docs/deployment-vps.md` antes de
 operá-lo.
 
+O branch `main` é protegido: toda mudança nasce em um branch (use o prefixo
+`codex/` quando não houver outro nome pedido), passa pelo `quality`, é enviada
+em pull request e só chega a `main` após todos os checks obrigatórios passarem.
+Não faça commit ou `git push origin main` direto; depois do merge, atualize o
+checkout local e só então execute o `~/deploy.sh` no VPS.
+
 Ao atualizar dependências, alargue o teto compatível e preserve o piso mínimo
 já verificado. O Dependabot acompanha o `uv.lock` pelo ecossistema `uv`, com
 `versioning-strategy: increase-if-necessary`. Elevar o piso
