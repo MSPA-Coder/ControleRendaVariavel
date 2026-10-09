@@ -33,7 +33,7 @@
   <label>Contrato<select required name="contract_id">
     <option value="">Selecione</option>
     {% for contract in contracts %}
-      <option value="{{ contract.id }}" {{ 'selected' if value and value.contract_id|int == contract.id }}>{{ contract.ticker_ref.symbol }} · {{ contract.option_type.value|upper }} · {{ contract.expiration.exercise_date.strftime('%d/%m/%Y') }}</option>
+      <option value="{{ contract.id }}" {{ 'selected' if value and value.contract_id|int == contract.id }}>{{ contract.ticker_ref.symbol }} · {{ contract.option_type.value|upper }} · {{ contract.expiration.exercise_date|udate }}</option>
     {% endfor %}
   </select></label>
   <label>Operação<select name="side">

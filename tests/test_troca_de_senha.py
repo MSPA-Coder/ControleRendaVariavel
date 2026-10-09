@@ -17,8 +17,16 @@ from __future__ import annotations
 import pytest
 from sharedauth.session import marca_de_sessao
 
-from app import CHAVE_TEMA_NA_SESSAO, CHAVE_USUARIO_TEMA_NA_SESSAO, PUBLIC_ENDPOINTS, login_manager
+from app import (
+    CHAVE_REGIONAL_NA_SESSAO,
+    CHAVE_TEMA_NA_SESSAO,
+    CHAVE_USUARIO_REGIONAL_NA_SESSAO,
+    CHAVE_USUARIO_TEMA_NA_SESSAO,
+    PUBLIC_ENDPOINTS,
+    login_manager,
+)
 from app.accounts import users as um
+from app.core.regional import DEFAULT_REGIONAL_FORMAT
 from app.core.themes import DEFAULT_THEME
 from app.models import ROLE_ADMIN, ROLE_OPERADOR, User
 
@@ -409,6 +417,10 @@ def test_sessao_com_a_marca_atual_continua_valendo(app, client, monkeypatch):
         sessao["_user_id"] = identificador
         sessao["_fresh"] = True
         sessao[CHAVE_TEMA_NA_SESSAO] = DEFAULT_THEME
+        # O formato regional tem cache próprio na sessão, como o tema: sem ele
+        # a requisição consulta `UserPreference`, e esta suíte não tem banco.
+        sessao[CHAVE_REGIONAL_NA_SESSAO] = DEFAULT_REGIONAL_FORMAT
+        sessao[CHAVE_USUARIO_REGIONAL_NA_SESSAO] = usuario.id
 
     assert client.get("/rota-sintetica").status_code == 200
 
@@ -443,6 +455,8 @@ def test_trocar_a_propria_senha_nao_derruba_quem_trocou(app, client, monkeypatch
         sessao["_user_id"] = identificador
         sessao["_fresh"] = True
         sessao[CHAVE_TEMA_NA_SESSAO] = DEFAULT_THEME
+        sessao[CHAVE_REGIONAL_NA_SESSAO] = DEFAULT_REGIONAL_FORMAT
+        sessao[CHAVE_USUARIO_REGIONAL_NA_SESSAO] = usuario.id
 
     resposta = client.post(
         "/minha-senha",

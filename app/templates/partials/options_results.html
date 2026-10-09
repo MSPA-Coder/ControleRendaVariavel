@@ -65,7 +65,7 @@
             <td class="number {{ m.breakeven_cushion_pct|sign_class }}" data-sensitive-value="true">{{ m.breakeven_cushion_pct|percent }}</td>
             <td class="number" data-sensitive-value="true">{{ m.notional|currency(c.ticker_ref.currency, trim=true) }}</td>
             <td class="number" data-sensitive-value="true">{{ m.business_days|number(0) }}</td>
-          <td>{{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</td>
+          <td>{{ c.expiration.exercise_date|ushort }}</td>
             <td class="number" data-sensitive-value="true">{{ m.build_value|currency(c.ticker_ref.currency, 0) }}</td>
           {% if g and g.delta is not none %}
             <td class="number" data-sensitive-value="true">{{ g.delta|number(3, trim=true) }}</td>
@@ -77,7 +77,7 @@
             <td colspan="5" class="missing" title="Prêmio não permitiu calcular volatilidade implícita">sem gregas</td>
           {% endif %}
           <td><span class="status moneyness-{{ g.moneyness }}">{{ g.moneyness }}</span></td>
-          <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
+          <td>{{ p.opened_on|ushort }}</td>
           <td class="ticker-status">
             {% if item.instrument_status %}<span class="instrument-code instrument-{{ item.instrument_status_class }}"
                     title="{{ item.instrument_status|instrument_status_description }}">{{ item.instrument_status|instrument_status_label }}</span>{% endif %}
@@ -161,7 +161,7 @@
       <tbody>
       {% for total in portfolio.expirations %}
         <tr>
-          <td>{{ total.expiration_date.strftime('%d-%b-%y') }}</td>
+          <td>{{ total.expiration_date|ushort }}</td>
           <td class="number" data-sensitive-value="true">{{ total.provisional_notional|currency('BRL', 0) }}</td>
           <td class="number" data-sensitive-value="true">{{ total.notional|currency('BRL', 0) }}</td>
           <td class="number" data-sensitive-value="true">{{ total.unwind|currency('BRL', 0) }}</td>

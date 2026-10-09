@@ -17,7 +17,7 @@
   }
 
   function formatCurrencyBRL(value) {
-    return value.toLocaleString("pt-BR", {
+    return value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), {
       style: "currency",
       currency: "BRL",
       maximumFractionDigits: 0,

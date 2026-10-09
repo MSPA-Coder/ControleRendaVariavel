@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app import Base
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.core.regional import DEFAULT_REGIONAL_FORMAT
 from app.core.themes import DEFAULT_THEME
 
 
@@ -1318,8 +1319,15 @@ class UserPreference(Base):
     """Preferências de apresentação e análise, isoladas do coletor global."""
 
     __tablename__ = "user_preferences"
+    __table_args__ = (
+        CheckConstraint("regional_format IN ('br', 'us')", name="regional_format_valid"),
+    )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     theme: Mapped[str] = mapped_column(String(24), default=DEFAULT_THEME, server_default=DEFAULT_THEME)
+    regional_format: Mapped[str] = mapped_column(
+        String(2), default=DEFAULT_REGIONAL_FORMAT, server_default=DEFAULT_REGIONAL_FORMAT
+    )
+    """Formato de datas e números na tela (``br`` ou ``us``); só apresentação."""
     benchmark_ticker_id: Mapped[int | None] = mapped_column(ForeignKey("tickers.id", ondelete="SET NULL"))
     risk_free_rate_annual: Mapped[Decimal] = mapped_column(
         Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL

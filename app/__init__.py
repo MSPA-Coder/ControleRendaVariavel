@@ -100,6 +100,51 @@ CHAVE_TEMA_NA_SESSAO = "app_theme"
 CHAVE_USUARIO_TEMA_NA_SESSAO = "app_theme_user_id"
 
 
+#: Mesmo desenho do tema: o formato regional fica na sessão para não custar uma
+#: consulta por requisição. Ver `_formato_regional_do_usuario`.
+CHAVE_REGIONAL_NA_SESSAO = "app_regional_format"
+CHAVE_USUARIO_REGIONAL_NA_SESSAO = "app_regional_user_id"
+
+
+def esquecer_formato_regional_da_sessao() -> None:
+    """Descarta o formato guardado, para a próxima requisição reler do banco."""
+    session.pop(CHAVE_REGIONAL_NA_SESSAO, None)
+    session.pop(CHAVE_USUARIO_REGIONAL_NA_SESSAO, None)
+
+
+def _formato_regional_do_usuario() -> str:
+    """Formato de datas e números do usuário logado (padrão Brasil sem login).
+
+    Lê a sessão primeiro; sem cache (ou de outro usuário), consulta a
+    preferência e guarda. Falha de banco não derruba a página: vale o padrão.
+    """
+    from app.core import regional
+
+    if not current_user.is_authenticated:
+        return regional.DEFAULT_REGIONAL_FORMAT
+    usuario = int(current_user.id)
+    em_cache = session.get(CHAVE_REGIONAL_NA_SESSAO)
+    if (
+        session.get(CHAVE_USUARIO_REGIONAL_NA_SESSAO) == usuario
+        and em_cache in regional.VALID_REGIONAL_FORMATS
+    ):
+        return str(em_cache)
+
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.models import UserPreference
+
+    try:
+        preferencia = db.session.get(UserPreference, usuario)
+    except SQLAlchemyError:
+        db.session.rollback()
+        return regional.DEFAULT_REGIONAL_FORMAT
+    formato = regional.normalize_regional_format(preferencia.regional_format if preferencia else None)
+    session[CHAVE_REGIONAL_NA_SESSAO] = formato
+    session[CHAVE_USUARIO_REGIONAL_NA_SESSAO] = usuario
+    return formato
+
+
 def esquecer_tema_da_sessao() -> None:
     """Descarta o tema guardado, para a próxima página reler do banco.
 
@@ -428,6 +473,35 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         session[CHAVE_TEMA_NA_SESSAO] = theme
         session[CHAVE_USUARIO_TEMA_NA_SESSAO] = int(current_user.id)
         return {"app_theme": theme}
+
+    @app.before_request
+    def _ativar_formato_regional() -> None:
+        from flask import g
+
+        from app.core import regional
+
+        g.token_formato_regional = regional.ativar(_formato_regional_do_usuario())
+
+    @app.teardown_request
+    def _desativar_formato_regional(_exc: BaseException | None) -> None:
+        from flask import g
+
+        from app.core import regional
+
+        token = g.pop("token_formato_regional", None)
+        if token is not None:
+            try:
+                regional.desativar(token)
+            except ValueError:
+                # Contexto diferente do que ativou (teste com `with client`):
+                # volta ao padrão em vez de deixar o formato vazar.
+                regional.ativar(regional.DEFAULT_REGIONAL_FORMAT)
+
+    @app.context_processor
+    def _regional_context() -> dict[str, str]:
+        from app.core import regional
+
+        return {"regional_format": regional.formato_ativo()}
 
     @app.context_processor
     def _privacy_context() -> dict[str, bool]:

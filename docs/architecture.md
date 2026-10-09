@@ -217,6 +217,24 @@ recebem a série pronta do servidor, em atributos `data-*` do contêiner do
 gráfico — nunca em script inline, que a CSP não admite. Não calculam nada e não
 chamam a aplicação.
 
+## Formato regional (Brasil/EUA)
+
+Cada usuário escolhe em Minhas preferências como datas e números aparecem e são
+digitados (`UserPreference.regional_format`, padrão `br`). É só UX: banco,
+cálculos, importação, API e o agente RTD seguem em ISO e decimal com ponto.
+
+- `app/core/regional.py` guarda o formato da requisição numa `ContextVar`,
+  preenchida em `before_request` e devolvida em `teardown_request`; o valor fica
+  na sessão como o tema. Fora de requisição (CLI, coletor) vale Brasil.
+- Números passam por `_number` (`app/core/presentation.py`); datas, pelos
+  filtros `udate`, `ushort` e `uday_month`. Valores de `<input>` seguem ISO.
+  Texto de tela em Python usa `regional.formatar_*`.
+- `app/static/regional.js` troca `input[type=date|month]` e os decimais
+  (`step` fracionário ou `data-regional-kind="decimal"`) por um campo de texto no
+  formato escolhido; o original fica escondido, com o mesmo `name`, o mesmo valor
+  e o atributo `data-sensitive-input`. Campo novo de data ou valor não precisa de
+  código.
+
 ## Inicialização e configuração
 
 `app.create_app()` é a factory. Ela, em ordem:

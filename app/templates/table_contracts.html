@@ -18,7 +18,7 @@
     </select></label>
     <label>Vencimento<select required name="expiration_id">
       <option value="">Selecione</option>
-      {% for expiration in expirations %}<option value="{{ expiration.id }}">{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
+      {% for expiration in expirations %}<option value="{{ expiration.id }}">{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date|udate }}</option>{% endfor %}
     </select></label>
     <label>Strike<input required type="number" min="0" step="any" name="strike" data-sensitive-input="true"></label>
     <button class="button button-primary" type="submit"
@@ -46,7 +46,7 @@
             {% for option_type in option_types %}<option value="{{ option_type.value }}" {{ 'selected' if option_type == contract.option_type }}>{{ option_type.value|upper }}</option>{% endfor %}
           </select></td>
           <td><select required name="expiration_id" form="contract-{{ contract.id }}" aria-label="Vencimento de {{ contract.ticker_ref.symbol }}">
-            {% for expiration in expirations %}<option value="{{ expiration.id }}" {{ 'selected' if expiration.id == contract.expiration_id }}>{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date.strftime('%d/%m/%Y') }}</option>{% endfor %}
+            {% for expiration in expirations %}<option value="{{ expiration.id }}" {{ 'selected' if expiration.id == contract.expiration_id }}>{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date|udate }}</option>{% endfor %}
           </select></td>
           <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}" data-sensitive-input="true"></td>
           <td class="catalog-actions">

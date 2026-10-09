@@ -7,11 +7,11 @@
     try { return JSON.parse(container.dataset[attr] || "[]"); } catch (_) { return []; }
   }
   function formatPercent(value) {
-    return (value * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
+    return (value * 100).toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { maximumFractionDigits: 1 }) + "%";
   }
   function formatCurrency(value, currency) {
     var prefix = currency === "USD" ? "US$ " : "R$ ";
-    return prefix + Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return prefix + Number(value).toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function render(container, chartType) {
     var labels = parseData(container, "labels");

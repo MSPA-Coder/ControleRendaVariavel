@@ -63,7 +63,7 @@
       <td colspan="12" class="missing">Aguardando primeira cotação RTD</td>
       <td>{{ p.side.value }}</td><td class="number" data-sensitive-value="true">-</td>
     {% endif %}
-    <td>{{ p.opened_on.strftime('%d-%b-%y') }}</td>
+    <td>{{ p.opened_on|ushort }}</td>
     <td class="ticker-status">
       {% if item.instrument_status %}<span class="instrument-code instrument-{{ item.instrument_status_class }}"
               title="{{ item.instrument_status|instrument_status_description }}">{{ item.instrument_status|instrument_status_label }}</span>{% endif %}
@@ -130,7 +130,7 @@
         <span>Valor atual</span>
         {% if conversao.possivel %}
           <strong data-sensitive-value="true">{{ conversao.total|currency(moeda_base, 0) }}</strong>
-          {% if conversao.taxa %}<small>USD/BRL de {{ conversao.taxa.data.strftime('%d/%m/%Y') }}</small>{% endif %}
+          {% if conversao.taxa %}<small>USD/BRL de {{ conversao.taxa.data|udate }}</small>{% endif %}
         {% else %}
           <strong>-</strong><small>{{ conversao.motivo }}</small>
         {% endif %}

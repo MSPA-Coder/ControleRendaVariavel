@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app import db
+from app.core import regional
 from app.models import (
     Portfolio,
     Position,
@@ -111,7 +112,7 @@ def aportes_da_posicao(position: Position) -> list[Aporte]:
             movimento.occurred_on,
             movimento.price,
             ("Abertura" if movimento.kind is PositionMovementKind.OPEN else "Aumento")
-            + f" em {movimento.occurred_on.strftime('%d/%m/%Y')}",
+            + f" em {regional.formatar_data(movimento.occurred_on)}",
         )
         for movimento in position.movements
         if movimento.kind in (PositionMovementKind.OPEN, PositionMovementKind.INCREASE)
@@ -181,8 +182,8 @@ def linhas_de_custo_medio_do_ticker(ticker_id: int, owner_id: int) -> list[dict[
             linha_para_grafico(
                 [Degrau(transacao.opened_on, transacao.average_cost)],
                 rotulo=(
-                    f"Encerrada · {transacao.opened_on.strftime('%d/%m/%Y')}"
-                    f" a {transacao.closed_on.strftime('%d/%m/%Y')}"
+                    f"Encerrada · {regional.formatar_data(transacao.opened_on)}"
+                    f" a {regional.formatar_data(transacao.closed_on)}"
                 ),
                 encerrada_em=transacao.closed_on,
             )
