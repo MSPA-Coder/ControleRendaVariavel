@@ -61,8 +61,8 @@
                 {% for entry in total.entries %}
                 <tr>
                   <td>{{ entry.broker }}</td>
-                  <td>{{ entry.payment_date.strftime('%d-%b-%y') }}</td>
-                  <td>{{ entry.com_date.strftime('%d-%b-%y') if entry.com_date else '' }}</td>
+                  <td>{{ entry.payment_date|ushort }}</td>
+                  <td>{{ entry.com_date|ushort if entry.com_date else '' }}</td>
                   <td>{{ entry.kind|income_kind_label }}</td>
                   <td class="number" data-sensitive-value="true">{{ entry.amount|currency(entry.currency) }}</td>
                   <td class="number" data-sensitive-value="true">{{ entry.yield_on_cost|percent_points(2) if entry.yield_on_cost is not none else '' }}</td>

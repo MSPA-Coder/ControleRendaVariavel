@@ -1,8 +1,8 @@
 (function () {
   "use strict";
   function parseData(container, attr) { try { return JSON.parse(container.dataset[attr] || "[]"); } catch (_) { return []; } }
-  function formatCurrency(value, currency) { return (currency === "USD" ? "US$ " : "R$ ") + value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-  function formatPercent(value) { return (value >= 0 ? "+" : "") + value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%"; }
+  function formatCurrency(value, currency) { return (currency === "USD" ? "US$ " : "R$ ") + value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function formatPercent(value) { return (value >= 0 ? "+" : "") + value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%"; }
   function periodKey(dateString, period) {
     if (period === "daily") return dateString;
     if (period === "monthly") return dateString.slice(0, 7);

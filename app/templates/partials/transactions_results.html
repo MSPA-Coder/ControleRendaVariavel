@@ -33,7 +33,7 @@
           {% endif %}
           {% if tx.option_contract_id %}
             {% set c = tx.option_contract_ref %}
-            <br><small>{{ c.option_type.value|upper }} · <span data-sensitive-value="true">{{ c.strike|currency(tx.currency, trim=true) }}</span> · {{ c.expiration.exercise_date.strftime('%d-%b-%y') }}</small>
+            <br><small>{{ c.option_type.value|upper }} · <span data-sensitive-value="true">{{ c.strike|currency(tx.currency, trim=true) }}</span> · {{ c.expiration.exercise_date|ushort }}</small>
           {% endif %}
         </td>
         <td>{{ tx.side.value }}</td>
@@ -41,8 +41,8 @@
         <td class="number" data-sensitive-value="true">{{ tx.average_cost|currency(tx.currency) }}</td>
         <td class="number" data-sensitive-value="true">{{ tx.exit_price|currency(tx.currency) }}</td>
         <td class="number {{ tx.result|sign_class }}" data-sensitive-value="true">{{ tx.result|currency(tx.currency) }}</td>
-        <td>{{ tx.opened_on.strftime('%d-%b-%y') }}</td>
-        <td>{{ tx.closed_on.strftime('%d-%b-%y') if tx.closed_on else '—' }}</td>
+        <td>{{ tx.opened_on|ushort }}</td>
+        <td>{{ tx.closed_on|ushort if tx.closed_on else '—' }}</td>
         <td class="number" data-sensitive-value="true">{{ tx.days_held|number(0) if tx.days_held is not none else '—' }}</td>
         <td>{{ tx.portfolio_ref.name }}</td>
         <td>{{ tx.notes or '' }}</td>

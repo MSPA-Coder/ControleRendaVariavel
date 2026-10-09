@@ -13,6 +13,7 @@ from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
 from app import db
+from app.core import regional
 from app.core.currency import converter_totais
 from app.core.validation import parse_finite_decimal
 from app.models import (
@@ -226,7 +227,7 @@ def _grafico_de_fechamentos(
             for k in range(5)
         ],
         "eixo_x": [
-            {"x": f"{x(indice):.1f}", "rotulo": datas[indice].strftime("%d/%m/%y")}
+            {"x": f"{x(indice):.1f}", "rotulo": regional.formatar_dia_mes_ano2(datas[indice])}
             for indice in indices_x
         ],
         "esquerda": str(esquerda),

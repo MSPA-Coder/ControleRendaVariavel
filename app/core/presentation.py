@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from flask import Flask
 from sharedauth.formatting import numero
 
+from app.core import regional
 from app.core.domain import MARKET_TIMEZONE
 from app.core.instrument_status import (
     INSTRUMENT_STATUS_DESCRIPTIONS,
@@ -52,7 +53,7 @@ def _number(value: Decimal, decimals: int, trim: bool = False) -> str:
     alinhamento de casas decimais importa mais que a largura continuam sem
     ele.
     """
-    return numero(value, casas=decimals, remover_decimal_zero=trim)
+    return regional.adaptar_numero(numero(value, casas=decimals, remover_decimal_zero=trim))
 
 
 def register_filters(app: Flask) -> None:
@@ -145,9 +146,24 @@ def register_filters(app: Flask) -> None:
         """
         if not value:
             return "Sem leitura registrada"
-        return datetime.fromisoformat(value).astimezone(MARKET_TIMEZONE).strftime(
-            "%d/%m/%Y %H:%M:%S"
+        return regional.formatar_data_hora(
+            datetime.fromisoformat(value).astimezone(MARKET_TIMEZONE), segundos=True
         )
+
+    @app.template_filter("udate")
+    def udate(value: date | datetime | None) -> str:
+        """31/12/2026 no Brasil, 12/31/2026 nos EUA (formato do usuário)."""
+        return regional.formatar_data(value)
+
+    @app.template_filter("ushort")
+    def ushort(value: date | datetime | None) -> str:
+        """31-Dez-26 no Brasil, Dez-31-26 nos EUA: a data curta das tabelas."""
+        return regional.formatar_data_curta(value)
+
+    @app.template_filter("uday_month")
+    def uday_month(value: date | datetime | None) -> str:
+        """31/12 no Brasil, 12/31 nos EUA."""
+        return regional.formatar_dia_mes(value)
 
     @app.template_filter("collector_status_label")
     def collector_status_label(status: str | None) -> str:

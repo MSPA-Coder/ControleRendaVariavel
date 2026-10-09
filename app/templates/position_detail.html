@@ -53,7 +53,7 @@
       {% endif %}
     </svg>
     <figcaption>
-      Escala logarítmica. De {{ grafico.minimo|currency(position.currency, trim=true) }} a {{ grafico.maximo|currency(position.currency, trim=true) }} em {{ fechamentos|length }} fechamentos desde {{ fechamentos[0].recorded_date.strftime('%d/%m/%Y') }}.
+      Escala logarítmica. De {{ grafico.minimo|currency(position.currency, trim=true) }} a {{ grafico.maximo|currency(position.currency, trim=true) }} em {{ fechamentos|length }} fechamentos desde {{ fechamentos[0].recorded_date|udate }}.
       <ul class="quote-chart-legend">
         <li><svg class="quote-chart-swatch" viewBox="0 0 28 8" aria-hidden="true"><line class="quote-chart-cost" x1="0" y1="4" x2="28" y2="4"></line></svg>Custo médio, hoje <span data-sensitive-value="true">{{ position.average_cost|currency(position.currency, trim=true) }}</span></li>
         {% for aporte in grafico.aportes %}

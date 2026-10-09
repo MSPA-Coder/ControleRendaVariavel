@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-theme="{{ app_theme }}" data-values-hidden="{{ 'true' if values_hidden else 'false' }}">
+<html lang="pt-BR" data-theme="{{ app_theme }}" data-regional="{{ regional_format }}" data-values-hidden="{{ 'true' if values_hidden else 'false' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,6 +13,7 @@
   <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
   <script src="{{ url_for('sharedauth_ui.static', filename='sharedauth-ui.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='regional.js') }}" defer></script>
 </head>
 {# hx-headers é um atributo, não handler inline: envia o token CSRF em toda
    requisição HTMX sem violar a CSP. Toda escrita continua protegida no

@@ -7,7 +7,7 @@
   {% if prior_opening_warning %}
   <p class="form-warning" role="alert">
     <strong>Data anterior à abertura registrada.</strong>
-    A posição atual começou em {{ prior_opening_date.strftime('%d/%m/%Y') }}. Se confirmar,
+    A posição atual começou em {{ prior_opening_date|udate }}. Se confirmar,
     este lançamento será a abertura e a abertura anterior passará a ser aumento; todo o
     extrato posterior será reaplicado cronologicamente.
   </p>

@@ -17,6 +17,16 @@
       {% endfor %}
     </div>
     <p class="form-help">A paleta é aplicada ao menu, formulários, tabelas, indicadores e gráficos.</p>
+    <div class="theme-grid">
+      {% for value, label, example in regional_options %}
+      <label class="theme-option {% if values.regional_format == value %}active{% endif %}">
+        <input type="radio" name="regional_format" value="{{ value }}" aria-label="Formato {{ label }}" {% if values.regional_format == value %}checked{% endif %}>
+        <span class="theme-name">Formato {{ label }}</span>
+        <span class="theme-desc">{{ example }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="form-help">Muda só como datas e valores aparecem e são digitados. Não altera o que está gravado, nem importações.</p>
     <label>Taxa livre de risco anual
       <input name="risk_free_rate_annual" type="number" data-sensitive-input="true" min="0" max="1" step="0.0001" required value="{{ values.risk_free_rate_annual }}">
     </label>

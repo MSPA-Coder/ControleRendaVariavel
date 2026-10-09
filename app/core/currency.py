@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.core import regional
+
 MOEDA_BASE = "BRL"
 DIAS_MAXIMOS_DE_DEFASAGEM = 7
 CENTAVO = Decimal("0.01")
@@ -61,7 +63,7 @@ def converter_totais(
             return ConversaoDaCarteira(
                 None,
                 taxa_usd_brl,
-                f"taxa USD/BRL de {taxa_usd_brl.data.strftime('%d/%m/%Y')} está velha demais",
+                f"taxa USD/BRL de {regional.formatar_data(taxa_usd_brl.data)} está velha demais",
             )
     total = sum(
         (

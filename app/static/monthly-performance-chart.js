@@ -13,7 +13,7 @@
     var prefix = currency === "USD" ? "US$ " : "R$ ";
     return (
       prefix +
-      value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 

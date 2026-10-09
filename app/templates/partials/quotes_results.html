@@ -98,7 +98,7 @@
               <ul class="quote-history-values">
                 {% for entry in month_entries|reverse %}
                   <li>
-                    <time datetime="{{ entry.recorded_date.isoformat() }}">{{ entry.recorded_date.strftime('%d/%m') }}</time>
+                    <time datetime="{{ entry.recorded_date.isoformat() }}">{{ entry.recorded_date|uday_month }}</time>
                     <strong data-sensitive-value="true">{{ entry.price|currency(selected_ticker.currency) }}</strong>
                   </li>
                 {% endfor %}
