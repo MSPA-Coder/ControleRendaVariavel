@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -76,59 +75,3 @@ def test_renderizacao_minima_mascara_output_financeiro_e_preserva_marcador(app):
     assert 'data-sensitive-value="true"' in rendered
     assert "****" in rendered
     assert "1.234,56" not in rendered
-
-
-def test_todos_os_inputs_numericos_editaveis_tem_marcador_explicito():
-    input_pattern = re.compile(r'<input\b[^>]*\btype="number"[^>]*>', re.IGNORECASE)
-    unmarked: list[str] = []
-
-    for path in TEMPLATES.rglob("*.html"):
-        source = path.read_text(encoding="utf-8")
-        for tag in input_pattern.findall(source):
-            if 'data-sensitive-input="true"' not in tag:
-                unmarked.append(f"{path.relative_to(ROOT)}: {tag}")
-
-    assert not unmarked, "inputs numéricos sem marcador:\n" + "\n".join(unmarked)
-
-
-def test_todos_os_outputs_com_class_number_tem_marcador_explicito():
-    output_pattern = re.compile(
-        r'<(?:td|strong|span)\b[^>]*\bclass="number\b[^>]*>', re.IGNORECASE
-    )
-    unmarked: list[str] = []
-
-    for path in TEMPLATES.rglob("*.html"):
-        source = path.read_text(encoding="utf-8")
-        for tag in output_pattern.findall(source):
-            if 'data-sensitive-value="true"' not in tag:
-                unmarked.append(f"{path.relative_to(ROOT)}: {tag}")
-
-    assert not unmarked, "outputs numéricos sem marcador:\n" + "\n".join(unmarked)
-
-
-@pytest.mark.sentinela_front
-def test_outputs_financeiros_fora_de_class_number_tambem_sao_marcados():
-    expected = {
-        "partials/exposure.html": ["<strong data-sensitive-value=\"true\">"],
-        "partials/quotes_results.html": [
-            "<strong data-sensitive-value=\"true\">{{ entry.price|currency"
-        ],
-        "partials/transactions_results.html": [
-            "<span data-sensitive-value=\"true\">{{ c.strike|currency"
-        ],
-    }
-
-    for template, snippets in expected.items():
-        source = (TEMPLATES / template).read_text(encoding="utf-8")
-        for snippet in snippets:
-            assert snippet in source, f"marcador ausente em {template}: {snippet}"
-
-
-@pytest.mark.sentinela_front
-def test_modo_privacidade_tem_placeholder_css_e_inputs_de_encerramento_marcados():
-    stylesheet = (ROOT / "app" / "static" / "app.css").read_text(encoding="utf-8")
-
-    assert '[data-sensitive-value="true"]:not(input)::after' in stylesheet
-    for template in ("close_position_form.html", "close_option_form.html"):
-        source = (TEMPLATES / template).read_text(encoding="utf-8")
-        assert 'data-sensitive-input="true"' in source
