@@ -25,6 +25,7 @@ from app.models import (
     VALID_ROLES,
     User,
 )
+from app.patrimonio.outbox import DIAS_DE_RETENCAO, expurgar_outbox_v4
 from app.quotes.history import quote_update_targets, upsert_quote_history
 from app.quotes.history_import import (
     DailyQuote,
@@ -38,6 +39,7 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(poll_rtd)
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
+    app.cli.add_command(expurgar_outbox)
     app.cli.add_command(users_group)
 
 
@@ -234,6 +236,23 @@ def import_position_history(estrito: bool) -> None:
         raise click.ClickException(
             "Ainda detidos ou de referência, sem série: " + ", ".join(current_failures)
         )
+
+
+@click.command("expurgar-outbox-v4")
+@click.option(
+    "--dias",
+    default=DIAS_DE_RETENCAO,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="Idade mínima, em dias, da linha que pode sair.",
+)
+def expurgar_outbox(dias: int) -> None:
+    """Apaga do outbox do contrato v4 as linhas antigas que nenhum consumidor
+    precisa mais. Ver `app/patrimonio/outbox.py` para o porquê de a linha mais
+    nova de cada dono nunca sair. Roda no timer diário do ``manutencao``."""
+    with db.session.begin():
+        removidas = expurgar_outbox_v4(datetime.now(UTC), dias)
+    click.echo(f"{removidas} linha(s) do outbox v4 com mais de {dias} dia(s) removida(s).")
 
 
 @click.group("users")

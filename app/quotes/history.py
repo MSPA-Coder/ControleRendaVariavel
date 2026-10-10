@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import Date, func, literal, select
+from sqlalchemy import Date, and_, func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app import db
@@ -166,6 +166,14 @@ def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]])
     chave faz duas gravações concorrentes (coletor e importação) travarem as
     linhas na mesma sequência, sem deadlock.
 
+    Preço igual ao gravado não regrava a linha, nem o instante. Até 10/10/2026
+    a importação diária, que traz de novo o histórico inteiro, reescrevia cada
+    linha só para trocar o ``recorded_at``, e o gatilho do outbox do contrato
+    v4 emitia uma invalidação por linha: ~7.400 por dia, 85% do outbox, sem
+    nenhum preço ter mudado. O instante que fica é o da primeira observação
+    daquele preço no dia; o frescor da série é medido pela data
+    (``recorded_date``), não por ele.
+
     Não faz ``commit``: quem inicia a operação de escrita é dono do limite
     transacional.
     """
@@ -195,6 +203,9 @@ def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]])
                     "price": statement.excluded.price,
                     "recorded_at": statement.excluded.recorded_at,
                 },
-                where=statement.excluded.recorded_at >= QuoteHistory.recorded_at,
+                where=and_(
+                    statement.excluded.recorded_at >= QuoteHistory.recorded_at,
+                    statement.excluded.price.is_distinct_from(QuoteHistory.price),
+                ),
             )
         )

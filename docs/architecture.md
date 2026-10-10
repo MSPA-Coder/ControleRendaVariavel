@@ -158,7 +158,12 @@ caixa. O feed de mudanças é uma outbox de invalidação transacional: o contad
 singleton é atualizado dentro da mesma transação que muda a origem, e seu lock
 preserva a ordem de commit dos cursores. Cada invalidação exige a leitura de um
 novo snapshot coerente; ela não tenta reconstruir fatos operacionais. Após
-aplicar o snapshot, o consumidor persiste o high watermark retornado. Proventos representam o valor recebido, sem
+aplicar o snapshot, o consumidor persiste o high watermark retornado. A
+outbox guarda 30 dias: `flask expurgar-outbox-v4`, no timer diário do
+`manutencao`, apaga o que é mais velho, menos a linha mais nova de cada dono e
+a mais nova sem dono, para que um checkpoint antigo continue vendo que houve
+mudança (`app/patrimonio/outbox.py`). Regravar uma cotação de histórico com o
+mesmo preço não emite invalidação. Proventos representam o valor recebido, sem
 discriminação de imposto. Carteiras simuladas e opções não entram no snapshot.
 As rotas mantêm `Cache-Control: no-store` e usam `REPEATABLE READ` para compor
 uma resposta coerente.
