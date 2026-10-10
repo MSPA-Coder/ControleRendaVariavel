@@ -170,3 +170,17 @@ class TestPreferenciaDoUsuario:
         c2, _ = cliente(1)
         assert 'data-regional="br"' in c2.get("/preferences").get_data(as_text=True)
         assert regional.formato_ativo() == REGIONAL_FORMAT_BR
+
+
+@pytest.mark.sentinela_front
+def test_o_javascript_regional_ignora_o_auxiliar_do_calendario():
+    """O campo auxiliar do calendario nunca vira campo regional.
+
+    Risco que protege: o auxiliar e um `<input type="date">` dentro do wrapper.
+    Sem a guarda, conteudo inserido depois do carregamento (troca de HTMX, campo
+    criado por JS) faz o observador tratar o auxiliar como campo novo e criar
+    wrapper dentro de wrapper sem fim, travando a aba.
+    """
+    texto = (RAIZ / "app/static/regional.js").read_text(encoding="utf-8")
+    assert "classList.contains('regional-picker-proxy')" in texto
+    assert ":not(.regional-picker-proxy)" in texto
