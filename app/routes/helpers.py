@@ -440,20 +440,6 @@ def price_series_by_ticker(ticker_ids: Iterable[int]) -> dict[int, list[tuple[da
     return series
 
 
-def ticker_position_start_date(ticker_id: int) -> date | None:
-    """Data de abertura mais antiga entre as posições (reais ou
-    hipotéticas) de um ticker, ou ``None`` se ele nunca foi usado em uma
-    posição. Usada para ancorar o comparador de índice em "desde que a
-    posição foi aberta" em vez de todo o histórico de cotações disponível
-    (que costuma remontar a muito antes da compra) — ver
-    ``app.routes.helpers.benchmark_candidates``."""
-    return db.session.scalar(
-        select(func.min(Position.opened_on)).where(
-            Position.ticker_id == ticker_id, Position.owner_id == current_owner_id()
-        )
-    )
-
-
 def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     """Quantidade líquida por ticker das posições REAIS ainda abertas.
     Usada pelos relatórios de risco e de performance mensal para

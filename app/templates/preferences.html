@@ -8,7 +8,7 @@
     <p class="form-help">Estas escolhas afetam a apresentação e os cálculos da sua conta.</p>
     <div class="theme-grid">
       {% for theme_value, theme_label in theme_options.items() %}
-      <label class="theme-option {% if values.theme == theme_value %}active{% endif %}">
+      <label class="theme-option">
         <input type="radio" name="theme" value="{{ theme_value }}" aria-label="Tema {{ theme_label }}" {% if values.theme == theme_value %}checked{% endif %}>
         <div class="theme-preview preview-{{ theme_value }}"></div>
         <span class="theme-name">{{ theme_label }}</span>
@@ -19,7 +19,7 @@
     <p class="form-help">A paleta é aplicada ao menu, formulários, tabelas, indicadores e gráficos.</p>
     <div class="theme-grid">
       {% for value, label, example in regional_options %}
-      <label class="theme-option {% if values.regional_format == value %}active{% endif %}">
+      <label class="theme-option">
         <input type="radio" name="regional_format" value="{{ value }}" aria-label="Formato {{ label }}" {% if values.regional_format == value %}checked{% endif %}>
         <span class="theme-name">Formato {{ label }}</span>
         <span class="theme-desc">{{ example }}</span>
