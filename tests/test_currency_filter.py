@@ -5,7 +5,6 @@ from app.core.currency_filter import (
     BRL,
     DEFAULT_CURRENCY_FILTER,
     USD,
-    currency_matches,
     parse_currency_filter,
 )
 
@@ -24,9 +23,3 @@ def test_currency_filter_accepts_supported_values(value):
 def test_currency_filter_rejects_untrusted_values(value):
     with pytest.raises(ValueError):
         parse_currency_filter({"currency": value})
-
-
-def test_all_matches_each_currency_without_merging_totals():
-    assert currency_matches(ALL, BRL)
-    assert currency_matches(ALL, USD)
-    assert not currency_matches(BRL, USD)

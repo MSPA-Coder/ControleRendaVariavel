@@ -11,12 +11,12 @@ from app.collector.remote_agent import (
     _load_agent_check_interval,
     _load_collector_schedule,
     _quotes_payload,
-    _store_agent_check_interval,
     _store_agent_state,
 )
 from app.collector.rtd import QuoteValue
 from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
+    DEFAULT_COLLECTOR_SCHEDULE,
     CollectorSchedule,
     schedule_from_payload,
     valid_agent_check_interval,
@@ -115,7 +115,7 @@ def test_agente_guarda_e_reaproveita_intervalo_no_arquivo_local(tmp_path) -> Non
     state_path = tmp_path / "remote-collector-state.json"
 
     assert _load_agent_check_interval(state_path) == DEFAULT_AGENT_CHECK_INTERVAL_SECONDS
-    _store_agent_check_interval(state_path, 30)
+    _store_agent_state(state_path, 30, DEFAULT_COLLECTOR_SCHEDULE)
 
     assert _load_agent_check_interval(state_path) == 30
     assert valid_agent_check_interval(5) == 5

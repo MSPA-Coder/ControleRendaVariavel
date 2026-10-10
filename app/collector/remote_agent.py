@@ -138,11 +138,6 @@ def _store_agent_state(path: Path, interval: int, schedule: CollectorSchedule) -
     temporary.replace(path)
 
 
-def _store_agent_check_interval(path: Path, interval: int) -> None:
-    """Compatibilidade com o arquivo de estado anterior, sem perder a agenda."""
-    _store_agent_state(path, interval, _load_collector_schedule(path))
-
-
 class CollectorApi:
     def __init__(
         self,

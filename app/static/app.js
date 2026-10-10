@@ -338,20 +338,14 @@ htmx.config.includeIndicatorStyles = false;
   });
 
   document.addEventListener("click", (event) => {
-    // Preview instantaneo do tema: marca visualmente a opcao clicada e
-    // aplica o data-theme na hora, sem esperar o submit do formulario. O
-    // valor so e persistido quando "Salvar configuracoes" for enviado --
-    // isto e so o retorno visual do clique no seletor.
+    // Preview instantaneo do tema: aplica o data-theme na hora, sem esperar o
+    // submit do formulario. O destaque da opcao escolhida e do CSS
+    // (`:has(input:checked)`). O valor so e persistido quando "Salvar
+    // configuracoes" for enviado.
     const themeOption = event.target.closest(".theme-option");
     if (themeOption) {
       const input = themeOption.querySelector('input[type="radio"]');
-      if (input) {
-        document.querySelectorAll(".theme-option").forEach((option) => {
-          option.classList.remove("active");
-        });
-        themeOption.classList.add("active");
-        document.documentElement.setAttribute("data-theme", input.value);
-      }
+      if (input) document.documentElement.setAttribute("data-theme", input.value);
     }
 
     const portfoliosToggle = event.target.closest("[data-portfolios-toggle]");

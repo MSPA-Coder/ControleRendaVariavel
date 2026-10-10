@@ -22,8 +22,3 @@ def parse_currency_filter(params: Mapping[str, str]) -> str:
     if value not in CURRENCY_FILTER_VALUES:
         raise ValueError("Selecione uma moeda válida.")
     return value
-
-
-def currency_matches(selected: str, currency: str) -> bool:
-    """Diz se um registro deve aparecer no filtro selecionado."""
-    return selected in (ALL, currency)

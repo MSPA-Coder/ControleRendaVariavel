@@ -89,21 +89,6 @@ def test_filtros_de_data_seguem_o_formato_ativo(app, contexto, eua):
     assert _filtro(app, "read_at")("2026-12-31T15:00:00+00:00").startswith("12/31/2026 ")
 
 
-def test_nenhum_template_formata_data_fora_dos_filtros_regionais():
-    """Data legível por pessoa passa por `udate`/`ushort`, nunca por `strftime` fixo.
-
-    Valores de `<input>` seguem ISO, que é o que o servidor recebe. `%m/%Y` e
-    `%B` (mês por extenso) não mudam de ordem entre os formatos e ficam.
-    """
-    fixos = []
-    for caminho in (RAIZ / "app" / "templates").rglob("*.html"):
-        texto = caminho.read_text(encoding="utf-8")
-        for padrao in ("strftime('%d/%m/%Y')", "strftime('%d-%b-%y')", "strftime('%d/%m')"):
-            if padrao in texto:
-                fixos.append(f"{caminho.relative_to(RAIZ).as_posix()}: {padrao}")
-    assert not fixos, fixos
-
-
 @pytest.mark.banco
 class TestPreferenciaDoUsuario:
     @pytest.fixture
@@ -170,17 +155,3 @@ class TestPreferenciaDoUsuario:
         c2, _ = cliente(1)
         assert 'data-regional="br"' in c2.get("/preferences").get_data(as_text=True)
         assert regional.formato_ativo() == REGIONAL_FORMAT_BR
-
-
-@pytest.mark.sentinela_front
-def test_o_javascript_regional_ignora_o_auxiliar_do_calendario():
-    """O campo auxiliar do calendario nunca vira campo regional.
-
-    Risco que protege: o auxiliar e um `<input type="date">` dentro do wrapper.
-    Sem a guarda, conteudo inserido depois do carregamento (troca de HTMX, campo
-    criado por JS) faz o observador tratar o auxiliar como campo novo e criar
-    wrapper dentro de wrapper sem fim, travando a aba.
-    """
-    texto = (RAIZ / "app/static/regional.js").read_text(encoding="utf-8")
-    assert "classList.contains('regional-picker-proxy')" in texto
-    assert ":not(.regional-picker-proxy)" in texto

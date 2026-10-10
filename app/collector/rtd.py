@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,10 +40,6 @@ class QuoteValue:
     def quote_history_price(self) -> Decimal:
         """ULT for charts/history, even when an open position uses book price."""
         return self.last_trade_price if self.last_trade_price is not None else self.last_price
-
-
-class QuoteProvider(Protocol):
-    def fetch(self, instruments: list[Instrument]) -> list[QuoteValue]: ...
 
 
 def parse_decimal(value: object) -> Decimal:

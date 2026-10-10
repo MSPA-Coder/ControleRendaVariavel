@@ -178,19 +178,6 @@ def _weekdays_from_field(weekdays: str) -> frozenset[int]:
         return frozenset()
 
 
-def collector_schedule_is_active(
-    weekdays: str,
-    start_time: time,
-    end_time: time,
-    *,
-    now: datetime | None = None,
-) -> bool:
-    """Return whether a collector may run in the configured B3-time window."""
-    return CollectorSchedule(
-        _weekdays_from_field(weekdays), start_time, end_time
-    ).is_active(now)
-
-
 def default_collector_settings() -> AppSetting:
     return AppSetting(
         id=1,
