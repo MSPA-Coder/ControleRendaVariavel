@@ -43,7 +43,8 @@ testes e auditorias antes de integrar atualizações de dependências. O serviç
 `migrate` roda `flask db upgrade` e termina com sucesso antes de `web` iniciar;
 `create_app()` só monta a aplicação e não consulta o banco.
 
-A aplicação fica em <http://127.0.0.1:5301> e o PostgreSQL em `127.0.0.1:5302`.
+A aplicação fica em <http://127.0.0.1:5301> e o PostgreSQL em `127.0.0.1:5302`
+por padrão (`POSTGRES_BIND_ADDRESS` pode alterar o endereço de publicação).
 O primeiro acesso precisa de uma conta:
 
 ```powershell

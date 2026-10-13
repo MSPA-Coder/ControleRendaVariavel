@@ -36,7 +36,7 @@ services:
     secrets:
       - postgres_password
     ports:
-      - "127.0.0.1:5302:5432"
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:5302:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
