@@ -6,8 +6,8 @@
 #
 #   docker compose -f compose.yaml -f compose.dev.yaml up
 #
-# Portanto `docker compose up` sobe a imagem imutável, sem código do host --
-# que é o padrão desejado, e o único jeito de validar o que vai para produção.
+# Portanto `docker compose up` reconstrói sem cache a imagem atual, sem código
+# do host. A CI testa e audita as atualizações antes de integrá-las.
 
 services:
   web:

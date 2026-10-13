@@ -35,20 +35,20 @@ globalmente** — use um ambiente isolado, descartável, fora da árvore do
 projeto:
 
 ```powershell
-python -m venv $env:TEMP\venv-relatorio
-& $env:TEMP\venv-relatorio\Scripts\python.exe -m pip install reportlab matplotlib
+# uv creates an isolated environment on demand.
+uv run --no-project --python 3.15 --with reportlab --with matplotlib python -c "import reportlab, matplotlib"
 ```
 
 A auditoria (os dois argumentos são os padrões, pode omitir):
 
 ```powershell
-& $env:TEMP\venv-relatorio\Scripts\python.exe docs\security-audit\gerar_relatorio.py
+uv run --no-project --python 3.15 --with reportlab --with matplotlib python docs\security-audit\gerar_relatorio.py
 ```
 
 O estado final:
 
 ```powershell
-& $env:TEMP\venv-relatorio\Scripts\python.exe docs\security-audit\gerar_relatorio.py --dados achados-estado-final.json --saida relatorio-auditoria-seguranca-estado-final.pdf
+uv run --no-project --python 3.15 --with reportlab --with matplotlib python docs\security-audit\gerar_relatorio.py --dados achados-estado-final.json --saida relatorio-auditoria-seguranca-estado-final.pdf
 ```
 
 Caminho relativo se resolve contra `docs/security-audit/`, não contra o
@@ -81,8 +81,8 @@ A verificação visual usada nesta rodada rasteriza as páginas e confere
 contagem, gráficos e legibilidade das tabelas:
 
 ```powershell
-& $env:TEMP\venv-relatorio\Scripts\python.exe -m pip install pymupdf
-& $env:TEMP\venv-relatorio\Scripts\python.exe -c "import pymupdf; d=pymupdf.open('docs/security-audit/relatorio-auditoria-seguranca-estado-final.pdf'); print(d.page_count); [d[i].get_pixmap(dpi=110).save(f'pagina-{i+1}.png') for i in range(d.page_count)]"
+uv run --no-project --python 3.15 --with pymupdf python -c "import pymupdf"
+uv run --no-project --python 3.15 --with pymupdf python -c "import pymupdf; d=pymupdf.open('docs/security-audit/relatorio-auditoria-seguranca-estado-final.pdf'); print(d.page_count); [d[i].get_pixmap(dpi=110).save(f'pagina-{i+1}.png') for i in range(d.page_count)]"
 ```
 
 ## Convenções do relatório

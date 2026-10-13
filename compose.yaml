@@ -2,7 +2,13 @@ name: controle-renda-variavel
 
 services:
   db:
-    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
+    image: mspa-postgres:17-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      pull: true
+      no_cache: true
+    pull_policy: build
     user: postgres
     restart: unless-stopped
     cpus: 1.0
@@ -30,7 +36,7 @@ services:
     secrets:
       - postgres_password
     ports:
-      - "127.0.0.1:5302:5432"
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:5302:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,8 +52,11 @@ services:
     # vulnerabilidade precisa apontar para uma imagem por NOME, e nome que
     # depende do caminho do checkout nao serve de alvo.
     image: controle-renda-variavel:local
+    pull_policy: build
     build:
       context: .
+      pull: true
+      no_cache: true
       target: runtime
       secrets:
         - local_ca
@@ -124,8 +133,11 @@ services:
     # Mesma imagem do `web` (ver comentario la em cima): os dois constroem o
     # mesmo estagio `runtime`, e nomear igual evita construir duas vezes.
     image: controle-renda-variavel:local
+    pull_policy: build
     build:
       context: .
+      pull: true
+      no_cache: true
       target: runtime
       secrets:
         - local_ca
@@ -167,7 +179,13 @@ services:
   # superusuário só aparece neste serviço e no `migrate`; nunca é montado no
   # `web`. O script é o mesmo no Docker Desktop e no VPS.
   db-provision:
-    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
+    image: mspa-postgres:17-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      pull: true
+      no_cache: true
+    pull_policy: build
     user: postgres
     read_only: true
     cpus: 0.5
@@ -219,7 +237,13 @@ services:
   # este contêiner morre no arranque e o `quality` só reporta "dependency failed
   # to start". No Docker Desktop do Windows não aparece: lá tudo chega 0777.
   db-teste:
-    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
+    image: mspa-postgres:17-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      pull: true
+      no_cache: true
+    pull_policy: build
     profiles: ["quality"]
     user: postgres
     cpus: 1.0
@@ -253,7 +277,13 @@ services:
       retries: 20
 
   db-teste-provision:
-    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
+    image: mspa-postgres:17-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      pull: true
+      no_cache: true
+    pull_policy: build
     profiles: ["quality"]
     user: postgres
     read_only: true
@@ -293,6 +323,7 @@ services:
   quality:
     build:
       context: .
+      pull: true
       target: quality
       secrets:
         - local_ca

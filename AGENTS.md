@@ -50,45 +50,19 @@ docker compose exec web flask --app app:create_app <comando>
 Invoke-WebRequest http://127.0.0.1:5301/health
 ```
 
-### Loop rápido no host
-
-O portão `quality` custa dezenas de segundos por rodada -- caro demais para o
-ciclo de edição. Para isso existe um venv do projeto:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m pytest -q -m "not banco"
-.\.venv\Scripts\python.exe -m ruff check .
-```
-
-O `-m "not banco"` exclui a camada que precisa de PostgreSQL, que não existe no
-venv. Sem o filtro, esses testes são pulados com uma mensagem explicando o
-motivo — não falham silenciosamente, mas também não medem nada. Eles rodam no
-`quality`, que sobe o `db-teste` junto. **Não desmarque um teste `banco` para
-fazer o laço rápido passar**: essa camada existe justamente para cobrir o que o
-laço rápido não alcança.
-
-O `.venv/` é uma pasta do projeto, já ignorada pelo Git: não altera o Python
-do sistema nem o PATH, e apagar a pasta desfaz a instalação por inteiro. A
-proibição que vale é outra, e continua de pé -- nada de instalar dependências
-do projeto no Python global do Windows.
-
-`sharedauth` é instalado direto do GitHub, na tag que `pyproject.toml` fixa e
-no commit que o `uv.lock` registra. O repositório é **público**: o build precisa
-só de `git` no PATH, nenhuma credencial.
-
-Os dois ambientes acham defeitos diferentes, então nenhum substitui o outro.
-Foi o venv que revelou dois defeitos só-Windows que o contêiner nunca
-mostrou (ver o docstring de `tests/conftest.py`); e é o contêiner que tem
-`ruff` e `pip-audit` na versão que a CI usa. Itere no venv e passe pelo
-`quality` antes de commitar.
+O `.venv` local existe apenas para o agente RTD do Windows, que precisa da
+integração COM do ProfitPro. Crie-o ou atualize-o com `uv sync --locked
+--extra rtd --python 3.15`; não instale dependências de desenvolvimento nele.
+Lint, testes, migrações, banco e auditorias rodam nos serviços Compose acima.
+`sharedauth` é instalado do GitHub na tag declarada em `pyproject.toml` e no
+commit registrado em `uv.lock`.
 
 O Compose publica a aplicação em `127.0.0.1:5301` e PostgreSQL em
 `127.0.0.1:5302`; na rede interna, o banco é `db:5432`. `migrate` aplica
-Alembic antes de `web`. O runtime padrão usa a imagem sem bind mount; edição ao
-vivo exige `docker compose -f compose.yaml -f compose.dev.yaml up` e não serve
-para validar a imagem imutável.
+Alembic antes de `web`. O runtime padrão reconstrói sem cache a partir das tags
+base móveis em cada subida; atualizações de dependências são integradas após
+os testes e auditorias. Edição ao vivo exige
+`docker compose -f compose.yaml -f compose.dev.yaml up`.
 
 Dados financeiros e configurações vivem no volume `postgres_data`. Nunca use
 `docker compose down --volumes` fora de ambiente descartável. Backup, retenção
@@ -219,9 +193,8 @@ A interface de validação do projeto é:
 docker compose --profile quality run --build --rm quality
 ```
 
-O `--build` faz parte do comando, não é refinamento: o serviço não monta o
-código do host e `docker compose run` reutiliza a imagem existente sem
-reconstruí-la. Sem ele, a validação roda o código anterior e passa.
+O `--build` mantém o comando explícito: o serviço não monta o código do host;
+Compose reconstrói sem cache a partir das tags base atuais antes dos testes.
 
 Registre o que foi executado e omitido. Além do comando acima:
 
