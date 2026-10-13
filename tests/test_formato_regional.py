@@ -155,3 +155,17 @@ class TestPreferenciaDoUsuario:
         c2, _ = cliente(1)
         assert 'data-regional="br"' in c2.get("/preferences").get_data(as_text=True)
         assert regional.formato_ativo() == REGIONAL_FORMAT_BR
+
+@pytest.mark.sentinela_front
+def test_portador_regional_nao_dispara_validacao_nativa_de_step() -> None:
+    """O campo canônico precisa continuar enviado sem competir com a visão local.
+
+    Só ocultar um ``input[type=number]`` preserva a validação nativa de
+    ``step``. Assim, por exemplo, 1,35 é barrado quando o navegador assume
+    incrementos inteiros, embora a visão regional e a regra do domínio aceitem
+    decimais.
+    """
+    fonte = (RAIZ / "app" / "static" / "regional.js").read_text(encoding="utf-8")
+    inicio = fonte.index("input.setAttribute('data-regional-original-type', original);")
+    trecho = fonte[inicio : inicio + 500]
+    assert "input.type = 'hidden';" in trecho
