@@ -230,6 +230,10 @@
         input.removeAttribute('step');
         input.required = false;
         input.setAttribute('data-regional-original-type', original);
+        // O portador precisa ser do tipo hidden, e não apenas oculto: campos
+        // numericos escondidos ainda sofrem a validacao nativa de step e
+        // podem impedir o POST mesmo quando o campo regional visivel e valido.
+        input.type = 'hidden';
         input.hidden = true;
         input.tabIndex = -1;
         input.style.display = 'none';
