@@ -1,4 +1,4 @@
-FROM postgres:17-alpine
+FROM postgres:18-alpine
 
 # The upstream gosu binary currently fails the HIGH/CRITICAL image gate.
 # Alpine's su-exec provides the same final-user exec behavior with a smaller
