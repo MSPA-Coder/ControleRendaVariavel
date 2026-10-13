@@ -59,6 +59,11 @@ updates:
       interval: weekly
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 3
+    # A major PostgreSQL version changes the data directory; production upgrades
+    # require a separately tested migration, so update this image within v17.
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         applies-to: version-updates
