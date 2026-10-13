@@ -37,8 +37,9 @@ Falta um arquivo que o script não cria, porque não é segredo gerado aqui:
   valida a cadeia. Em máquina sem interceptação, um arquivo vazio basta:
   `New-Item -ItemType File .certs\local-root-ca.crt`.
 
-Sem `compose.dev.yaml`, o Compose usa a imagem imutável, sem montar o código do
-host — é essa a forma de validar o que de fato vai para produção. O serviço
+Sem `compose.dev.yaml`, o Compose não monta o código do host. Cada subida
+reconstrói as imagens sem cache a partir das tags base móveis; a CI executa
+testes e auditorias antes de integrar atualizações de dependências. O serviço
 `migrate` roda `flask db upgrade` e termina com sucesso antes de `web` iniciar;
 `create_app()` só monta a aplicação e não consulta o banco.
 
@@ -68,13 +69,10 @@ A imagem `quality` instala exatamente o que a imagem servida instala, mais as
 ferramentas de teste — o que se valida é o ambiente que roda, não um arquivo de
 requisitos.
 
-**`--build` não é opcional.** O serviço `quality` não monta o código do host: o
-que ele executa é o que foi copiado para a imagem. `docker compose run`
-reconstrói apenas quando a imagem não existe — se ela já existe, o comando roda
-a versão anterior do código e passa em verde sem ter visto nenhuma das suas
-alterações. É uma falha silenciosa na direção pior: dá confiança sem dar
-evidência. A CI não corre esse risco porque reconstrói sem cache antes de
-executar; o comando local precisa do `--build` para ter o mesmo significado.
+**`--build` mantém o comando explícito.** O serviço `quality` não monta o código
+do host; Compose reconstrói sem cache a partir das tags base atuais antes de
+executar os testes. A CI semanal repete esse build, os testes e as auditorias
+para verificar atualizações de sistema e dependências.
 
 A suíte protege os contratos que valem para toda requisição: negação por padrão,
 autorização por papel, CSRF, cabeçalhos e CSP, health check, resolução de

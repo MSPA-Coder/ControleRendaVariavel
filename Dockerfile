@@ -1,13 +1,7 @@
 # syntax=docker/dockerfile:1.7
-# Base fixada por DIGEST do indice multi-arquitetura, e nao pela tag.
-#
-# `python:3.14-slim` e alvo movel: a tag e reapontada a cada republicacao, e
-# como o `deploy.sh` reconstroi no VPS, a imagem servida podia nascer de uma
-# base diferente da que a CI varreu. Mesmo raciocinio que ja fixa as actions
-# por SHA e o Trivy por digest.
-#
-# E digest de INDICE, nao de manifesto: continua valendo para amd64 e arm64.
-FROM python:3.14-slim@sha256:0097bb60d0c7a2c6af5a56e747eabc2016218f837f76daa70b9526fb883bc499 AS base
+# A tag da série 3.15 acompanha correções de segurança. A CI semanal reconstrói
+# com `--pull`, testa a imagem e barra CVEs corrigíveis antes da adoção.
+FROM python:3.15-slim AS base
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -21,33 +15,15 @@ RUN --mount=type=secret,id=local_ca,required=false \
       && update-ca-certificates; \
     fi
 
-# A base está fixada por digest. Não fazemos `apt-get upgrade` contra o índice
-# corrente: isso tornaria dois builds do mesmo commit diferentes. A varredura
-# Trivy da imagem e a atualização periódica do digest são o caminho de segurança
-# da base; pacotes adicionais são instalados com versão explícita abaixo.
-RUN python -m pip install --no-cache-dir "pip==26.2.1" "setuptools==80.9.0" \
+# Atualiza os pacotes do Debian antes de construir. Os testes e a varredura de
+# imagem da CI validam exatamente esse conjunto antes de ele ser adotado.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends openssl libssl3t64 libpcre2-8-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir --upgrade pip setuptools \
     && addgroup --system app \
     && adduser --system --ingroup app app
-
-# OpenSSL: a base ainda traz 3.5.7-1~deb13u2, que o Trivy reprova (6 HIGH desde
-# 30/09/2026: CVE-2026-75804, DoS por controle de fluxo QUIC, e CVE-2026-84782,
-# vazamento por retransmissao DTLS; este app nao usa nenhum dos dois, o TLS
-# termina no nginx). O Debian ja publicou a deb13u3 e nenhum digest de
-# `python:3.14-slim` a traz ainda. Versao explicita, como o `git=` abaixo.
-# REMOVER este bloco quando o digest da base trouxer a correcao: a CI acusa se
-# a versao fixada sumir do indice do Debian.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends "openssl=3.5.7-1~deb13u3" "libssl3t64=3.5.7-1~deb13u3" \
-    && rm -rf /var/lib/apt/lists/*
-
-# libpcre2: a base traz 10.46-1~deb13u2, que o Trivy reprova (CVE-2026-103111,
-# HIGH, escrita fora dos limites por expressao regular forjada). O Debian ja
-# publicou a deb13u3 e o digest atual de `python:3.14-slim` ainda nao a traz.
-# Mesmo tratamento do OpenSSL acima: versao explicita, e REMOVER este bloco
-# quando o digest da base trouxer a correcao.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends "libpcre2-8-0=10.46-1~deb13u3" \
-    && rm -rf /var/lib/apt/lists/*
 
 # builder: resolve as dependencias a partir do `uv.lock`, num venv isolado.
 #
@@ -73,12 +49,11 @@ RUN apt-get update \
 # token, porque o repositorio e publico.
 FROM base AS builder
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends "git=1:2.47.3-0+deb13u1" \
+    && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
-# Versao fixa: o instalador que garante reprodutibilidade nao pode ser ele
-# proprio uma variavel. O binario e autocontido, e o estagio `quality` o copia
-# daqui em vez de reinstala-lo.
-RUN python -m pip install --no-cache-dir --upgrade "uv==0.12.10"
+# O instalador acompanha a última versão e é validado pela mesma CI que testa
+# a aplicação; o estágio `quality` copia o binário deste estágio.
+RUN python -m pip install --no-cache-dir --upgrade uv
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 COPY pyproject.toml uv.lock README.md ./
 COPY app ./app
@@ -122,7 +97,7 @@ FROM base AS quality
 # que reinstalar um gerenciador de pacotes.
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends "git=1:2.47.3-0+deb13u1" \
+    && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:${PATH}"

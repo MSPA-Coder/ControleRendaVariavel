@@ -1,0 +1,52 @@
+name: Dependabot auto-merge
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    name: Auto merge
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Merge only the exact tested Dependabot commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prs="$(gh pr list --repo "$REPO" --state open --head "$HEAD_BRANCH" --json number,headRefOid,author,baseRefName)"
+          pr="$(jq -er --arg sha "$HEAD_SHA" '[.[] | select(.headRefOid == $sha and .author.login == "dependabot[bot]" and .baseRefName == "main")] | if length == 1 then .[0].number else error("no unique matching Dependabot PR") end' <<< "$prs")"
+          checks="$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs?per_page=100")"
+          jq -e '
+            .total_count > 0 and
+            .total_count == (.check_runs | length) and
+            ([.check_runs[] | select(.name != "Auto merge")] | length) > 0 and
+            all(.check_runs[] | select(.name != "Auto merge");
+              .status == "completed" and
+              (.conclusion == "success" or .conclusion == "neutral" or .conclusion == "skipped"))
+          ' <<< "$checks" >/dev/null
+          pr_base="$(gh pr view "$pr" --repo "$REPO" --json baseRefOid --jq .baseRefOid)"
+          main_base="$(gh api "repos/$REPO/branches/main" --jq .commit.sha)"
+          if [[ "$pr_base" != "$main_base" ]]; then
+            gh pr update-branch "$pr" --repo "$REPO"
+            echo "PR atualizado contra main; o merge aguarda os novos checks."
+            exit 0
+          fi
+          gh pr merge "$pr" --repo "$REPO" --squash
+          # O merge com GITHUB_TOKEN não dispara workflows de push; reexecuta
+          # a CI em main para que o deploy valide exatamente o commit integrado.
+          gh workflow run ci.yml --repo "$REPO" --ref main

@@ -129,8 +129,7 @@ agenda ou o intervalo de verificação muda.
 Prepare o ambiente isolado do agente, se ainda não existir:
 
 ```powershell
-py -3.14 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[rtd]"
+uv sync --locked --extra rtd --python 3.15
 .\scripts\provision-collector-agent-token.ps1
 .\scripts\rtd-agent.ps1 -Action Install -ApiUrl https://renda-mspa.duckdns.org
 ```
@@ -212,9 +211,8 @@ Execute a verificação do projeto no estágio `quality`:
 docker compose --profile quality run --build --rm quality
 ```
 
-`--build` é necessário: o serviço `quality` não monta o código do host, e
-`docker compose run` só reconstrói quando a imagem não existe — sem ele, o
-comando passa em verde sobre a versão anterior do código.
+`--build` mantém a validação explícita: o serviço não monta o código do host;
+Compose reconstrói sem cache com as tags base atuais antes dos testes.
 
 Para mudanças de runtime, também reconstrua a imagem e confira `/health`. Para
 alterações apenas documentais, valide o Compose, links, caminhos, buscas

@@ -1,0 +1,23 @@
+name: security-scanner
+
+services:
+  trivy:
+    image: aquasec/trivy:0.75.0
+    pull_policy: always
+    entrypoint: ["trivy"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    volumes:
+      - type: bind
+        source: ${RUNNER_TEMP:?RUNNER_TEMP must be set}
+        target: /varredura
+        read_only: true
+      - type: bind
+        source: ${RUNNER_TEMP:?RUNNER_TEMP must be set}/trivy-cache
+        target: /tmp/trivy-cache
