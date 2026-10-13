@@ -44,8 +44,21 @@ updates:
     # do diretorio de dados muda e o contêiner nao sobe sobre o volume antigo. Vira
     # decisao e procedimento de um mantenedor, nunca um PR automatico.
     ignore:
+      # Imagem local; a base e atualizada pelo bloco docker abaixo.
+      - dependency-name: "mspa-postgres"
       - dependency-name: "postgres"
         update-types: ["version-update:semver-major"]
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: "/docker/sandbox-postgres"
+    schedule:
+      interval: weekly
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 3
     groups:
       minor-and-patch:
         applies-to: version-updates
