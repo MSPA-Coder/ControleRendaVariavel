@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Encerrar posição{% endblock %}
 {% block content %}
-<form class="position-form" method="post" action="{{ url_for('portfolio.close_position', position_id=position.id) }}"
-      data-sa-titulo="Encerrar posição" data-sa-severidade="error">
+<form class="position-form" method="post" action="{{ url_for('portfolio.close_position', position_id=position.id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h1>Encerrar {{ position.ticker }} · {{ position.broker }}</h1>
   <p class="form-help">
@@ -20,9 +19,8 @@
   <label>Data de encerramento<input required type="date" name="closed_on" value="{{ default_date }}"></label>
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit"
-            data-sa-confirmar="Encerrar apaga o extrato de movimentos desta posição — e a posição inteira, se for o valor total — e não pode ser desfeito. Continuar?"
-            data-sa-titulo="Encerrar posição" data-sa-severidade="error">Encerrar posição</button>
+    {# Esta tela já é a confirmação: o segundo modal global impedia o POST em alguns navegadores. #}
+    <button class="button button-primary" type="submit">Encerrar posição</button>
   </div>
 </form>
 {% if movements|length > 1 %}
