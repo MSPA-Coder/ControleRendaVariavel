@@ -7,6 +7,8 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from app.positions.average_cost_line import Aporte, Degrau
 from app.routes.positions import _grafico_de_fechamentos, _inicio_da_janela
 
@@ -128,3 +130,16 @@ def test_nenhum_template_tem_script_ou_estilo_inline() -> None:
     # varredura passaria vazia.
     assert len(templates) >= 10
     assert sobras == []
+
+
+@pytest.mark.sentinela_front
+def test_telas_de_encerramento_nao_abrem_uma_segunda_confirmacao() -> None:
+    """A tela inteira já explica a irreversibilidade e pede a decisão.
+
+    Uma confirmação global adicional bloqueava o POST de encerramento em
+    navegadores afetados, deixando a pessoa presa nesta tela.
+    """
+    raiz = Path(__file__).resolve().parents[1] / "app" / "templates"
+    for nome in ("close_position_form.html", "close_option_form.html"):
+        fonte = (raiz / nome).read_text(encoding="utf-8")
+        assert "data-sa-confirmar" not in fonte, nome
