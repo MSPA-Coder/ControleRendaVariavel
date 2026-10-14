@@ -39,7 +39,8 @@
   <label>Operação<select name="side">
     {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
   </select></label>
-  <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ value.quantity if value else '' }}" data-sensitive-input="true"></label>
+  <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ value.quantity if value else '' }}" data-sensitive-input="true" aria-describedby="option-quantity-help"></label>
+  <small id="option-quantity-help" class="form-help">Os cálculos multiplicam a quantidade pelo prêmio e pelo strike, sem aplicar fator do contrato. Informe uma quantidade compatível com a unidade da cotação cadastrada; confira na B3 se o prêmio está expresso por unidade ou lote. O aplicativo não infere nem aplica esse fator.</small>
   <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}" data-sensitive-input="true"></label>
   <label>Target<input type="number" min="0" step="any" name="target_price" value="{{ value.target_price if value and value.target_price is not none else '' }}" data-sensitive-input="true"></label>
   <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal, localcontext
+from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 MARKET_TIMEZONE = ZoneInfo("America/Sao_Paulo")
@@ -99,34 +99,6 @@ def breakeven_distance(side: str, average_cost: Decimal, current: Decimal) -> De
     return average_cost / current - ONE
 
 
-def signed_period_return(
-    total_return: Decimal | None,
-    elapsed_days: int,
-    period_days: int,
-) -> Decimal | None:
-    """Projeta o retorno da posição para o horizonte escolhido, por
-    capitalização composta: ``(1 + r) ** (período / dias) - 1``.
-
-    DIVERGE DA PLANILHA de propósito (decisão de 15/09/2026). A planilha usa
-    ``sinal(r) * ((1 + |r|) ** (período / dias) - 1)``, que coincide com a
-    composta para ganho e erra para perda: -30% em 100 dias virava -160,6% ao
-    ano, perda impossível para uma posição comprada. Pela composta, -72,8%.
-
-    Perda total (``r = -1``) projeta -100%. Perda maior que o investido
-    (``r < -1``, possível numa venda) não tem projeção composta com sentido e
-    devolve ``None`` -- "não aplicável", como as divisões por zero.
-    """
-    if total_return is None or elapsed_days <= 0 or period_days <= 0:
-        return None
-    base = ONE + total_return
-    if base < ZERO:
-        return None
-    with localcontext() as context:
-        context.prec = 28
-        exponent = Decimal(period_days) / Decimal(elapsed_days)
-        return base**exponent - ONE
-
-
 @dataclass(frozen=True, slots=True)
 class PositionMetrics:
     days: int
@@ -134,7 +106,6 @@ class PositionMetrics:
     daily_variation: Decimal | None
     result: Decimal
     return_pct: Decimal | None
-    period_return: Decimal | None
     stop_gain: Decimal
     distance_to_target: Decimal | None
     breakeven: Decimal | None
@@ -151,7 +122,6 @@ def calculate_position(
     previous_close: Decimal,
     target_multiplier: Decimal,
     opened_on: date,
-    return_period_days: int = 365,
     today: date | None = None,
 ) -> PositionMetrics:
     current = raw_price
@@ -178,7 +148,6 @@ def calculate_position(
         daily_variation=daily,
         result=result,
         return_pct=return_pct,
-        period_return=signed_period_return(return_pct, days, return_period_days),
         stop_gain=stop_gain,
         distance_to_target=distance_to_target,
         breakeven=breakeven,

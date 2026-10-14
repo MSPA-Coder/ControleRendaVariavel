@@ -57,7 +57,7 @@
          data-currency="{{ chart.currency }}"
          aria-label="Gráfico de exposição por {{ subject }} em {{ chart.currency }}"></div>
     <div class="allocation-list-heading" aria-hidden="true">
-      <span>{{ subject|capitalize }}</span><span>Valor atual</span><span>Alocação</span>
+      <span>{{ subject|capitalize }}</span><span>Valor bruto</span><span>Alocação</span>
     </div>
     <ul class="allocation-list" aria-label="Dados da exposição por {{ subject }}">
       {% for label in chart.labels %}
@@ -81,7 +81,7 @@
 <div class="exposure-table">
   <table>
     <thead>
-      <tr><th>{{ group_heading }}</th><th>Moeda</th><th>Atual</th><th>%</th></tr>
+      <tr><th>{{ group_heading }}</th><th>Moeda</th><th>Valor bruto</th><th>%</th></tr>
     </thead>
     <tbody>
       {% for group in groups %}

@@ -39,13 +39,6 @@
       {% endfor %}
     </select>
   </label>
-  <label>Retorno
-    <select name="return_days">
-      {% for days, label in return_periods %}
-        <option value="{{ days }}" {{ 'selected' if selected_return_days == days }}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </label>
   <label>Resultado
     <select name="result_mode">
       {% for value, label in result_modes %}

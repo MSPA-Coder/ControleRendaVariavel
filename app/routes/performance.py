@@ -86,9 +86,9 @@ def monthly_performance() -> str:
             continue
         events_by_currency.setdefault(ticker.currency, []).append(event)
 
-    # Proventos entram no numerador do retorno (o app nao tem conta caixa:
-    # sem esse credito o dinheiro recebido sumiria na data ex). So fazem
-    # sentido com acoes no recorte — opcao nao paga provento.
+    # Proventos entram no numerador do retorno na Data Pgto (o app nao tem
+    # conta caixa). Como o cadastro nao tem data ex, o credito pode cair em
+    # mes diferente do ajuste de preco. So fazem sentido com acoes no recorte.
     #
     # O rateio existe porque `Dividend` nao tem `portfolio_id`, so
     # `broker_id` e `ticker_id`: sem ele, filtrar por uma corretora que

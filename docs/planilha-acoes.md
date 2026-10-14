@@ -204,8 +204,7 @@ modo selecionado:
 R_ação       = sinal × quantidade atual × (cotação efetiva atual − custo médio)
 R_proventos  = soma dos proventos pagos atribuídos à posição
 R_combinado  = R_ação + R_proventos
-%            = resultado selecionado / (quantidade atual × custo médio)
-Retorno      = signed_period_return(%, dias desde início, período escolhido)
+Retorno acumulado = resultado selecionado / (quantidade atual × custo médio)
 ```
 
 `R_ação` conserva o resultado bruto já definido em **Fórmulas**. O provento é
@@ -218,15 +217,15 @@ encerramento total nesse dia deixa quantidade zero para o rateio.
 o escopo segue os filtros escolhidos de carteira e corretora.
 
 O rateio segue duas etapas. Primeiro, `prorate_dividends` atribui ao escopo a
-fração da quantidade real líquida do ticker nessa data, sobre a quantidade
-real líquida total, usando `abs()` e descartando o evento quando o total é
-zero. Depois, o valor rateado ao escopo é distribuído entre as chaves de
-posição desse ticker no escopo, proporcionalmente ao valor absoluto da
-quantidade histórica de cada uma sobre a soma bruta dessas quantidades. As
-posições encerradas participam desse segundo denominador para que sua parcela
-não seja transferida às posições restantes; somente posições atualmente
-abertas aparecem na grade. Assim, uma posição só recebe provento pago numa
-data em que já detinha quantidade.
+fração das quantidades reais compradas do ticker nessa data, sobre a soma das
+quantidades reais compradas, descartando o evento quando essa soma é zero.
+Depois, o valor rateado ao escopo é distribuído entre as posições compradas
+desse ticker no escopo, proporcionalmente à quantidade histórica positiva de
+cada uma sobre a soma dessas quantidades. Posições encerradas participam
+desse segundo denominador para que sua parcela não seja transferida às
+posições restantes; somente posições atualmente abertas aparecem na grade.
+Assim, uma posição só recebe provento pago numa data em que já detinha
+quantidade comprada.
 
 Somente eventos de **ações reais** entram no cálculo; contratos de opções e
 carteiras simuladas não geram proventos atribuídos. Valores e rateios usam
@@ -273,16 +272,28 @@ corretas pela mesma conta: o numerador é o resultado econômico, o
 denominador é o capital empregado, e sem o valor absoluto o sinal do
 retorno inverteria com `V` negativo (posição vendida).
 
-**Rateio de proventos.** `Dividend` não tem `portfolio_id`, só `broker_id` e
-`ticker_id` — um provento é rateado pela quantidade líquida do recorte
-filtrado sobre a quantidade líquida real total do ticker naquela data, em
-módulo (`D_creditado = D × abs(Q_recorte) / abs(Q_real_total)`), nunca por
-`Dividend.broker_id`. `Q` é a soma assinada por posição (`C` positiva, `V`
-negativa); quantidade total zero na data do pagamento descarta o provento.
+**Rateio de proventos.** `Dividend` registra valores efetivamente recebidos e
+não tem `portfolio_id`, só `broker_id` e `ticker_id`. O crédito é rateado entre
+as quantidades compradas do ticker na data do pagamento, nunca por
+`Dividend.broker_id` nem para posições vendidas:
 
-**Mês a mês.** `Valor` é o patrimônio real (`V`) do último ponto do mês;
-`Retorno` é a variação do índice TWR entre os pontos finais de dois meses;
-`Aporte líquido` e `Proventos` são as somas de `F` e `D` dentro do mês.
+```
+L(data) = Σ max(quantidade_da_posição(data), 0)
+D_recorte = D × L_recorte / L_total
+```
+
+O segundo rateio reparte o valor do recorte entre suas posições compradas,
+proporcionalmente à quantidade histórica positiva de cada uma. Posições
+vendidas não recebem crédito. O aplicativo não registra a obrigação de
+repassar proventos nem os demais encargos da venda a descoberto; a apuração
+oficial dessas operações continua sendo feita pelo sistema integrado à B3 e
+pela contabilidade.
+
+**Mês a mês.** Exposição líquida é a soma assinada das posições (V) no
+último ponto do mês; não é o patrimônio total da conta, pois o app não mantém
+saldo de caixa e não inclui ativos sem cotação histórica. Retorno é a
+variação do índice TWR entre os pontos finais de dois meses; aporte líquido e
+proventos são as somas dos fluxos dentro do mês.
 
 O comparador de índice/benchmark (`build_benchmark_shadow_series`) usa a
 mesma lista de fluxos reais, acumulando cotas (`cotas += F(d) /
@@ -293,11 +304,18 @@ por carteira (`app/performance/risk.py`,
 
 ### Limitações aceitas
 
-- **Crédito no pagamento.** `Dividend` guarda também `com_date`, mas a série
-  de retorno credita a renda em `payment_date`; preço e crédito do provento
-  podem cair em meses diferentes na série mensal.
+- **Crédito no pagamento.** `Dividend` guarda também `com_date`, mas não há
+  campo específico de data ex. A Performance credita a renda em
+  `payment_date`, conforme a regra atual do aplicativo; o preço e o crédito
+  do provento podem cair em meses diferentes na série mensal.
 - **A renda depende do cadastro.** A série de preços é nominal (não embute
   provento); uma renda não lançada é retorno que simplesmente não aparece.
+- **Venda a descoberto.** O aplicativo não modela a obrigação de repassar
+  proventos ao doador das ações nem encargos do aluguel. Portanto, a
+  performance de posições vendidas permanece incompleta e não substitui a
+  apuração oficial feita pelo sistema integrado à B3 e pela contabilidade. A
+  B3 prevê o reembolso dos eventos corporativos pelo tomador ao doador no
+  empréstimo de ativos ([regras da B3](https://www.b3.com.br/pt_br/produtos-e-servicos/solucoes-para-emissores/aumento-de-liquidez/emprestimo-de-ativos/)).
 - **Comprado e vendido na mesma moeda** podem levar `|V|` a perto de zero e
   produzir retornos explosivos — comportamento definido (`None` quando
   `V == 0`), sem tratamento especial além disso.
@@ -322,16 +340,20 @@ Pode haver colunas adicionais e a ordem não importa. Os totais e preços da
 linha são snapshots do arquivo; o CRV recalcula o YOC e o DY históricos da
 linha por eles, em pontos percentuais.
 
-No resumo por ticker, os indicadores não somam esses percentuais históricos:
+No resumo por ticker, os indicadores não somam esses percentuais históricos.
+O YOC atual usa os proventos por ação pagos nos últimos 365 dias e o custo
+médio ponderado atual das posições compradas reais abertas:
 
 ```
 DY 12m    = soma dos proventos por cota pagos nos últimos 365 dias / cotação atual
-YOC atual = todos os proventos recebidos / custo das posições reais abertas
+YOC 12m   = soma dos proventos por cota pagos nos últimos 365 dias / custo médio atual por cota
 ```
 
 O DY depende da última cotação disponível no CRV. O YOC não é exibido para
-um ticker sem posição real aberta. Ambos são indicadores informativos e não
-incluem valorização, impostos ou custos de negociação.
+um ticker sem posição comprada real aberta. Na lista de cada lançamento,
+Evento/custo continua mostrando o valor daquele pagamento dividido pelo total
+investido informado; não é o YOC anual. Ambos os indicadores anuais são
+informativos e não incluem valorização, impostos ou custos de negociação.
 
 ## Cotações RTD
 
@@ -368,16 +390,15 @@ ProgID: `rtdtrading.rtdserver`.
 
 ## Fórmulas
 
-Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
-`s = 1` para compra e `-1` para venda:
+Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `s = 1`
+para compra e `-1` para venda:
 
 | Saída | Fórmula |
 |---|---|
 | Atual | `delta * preço RTD` |
 | Var. dia | `s * (p / f - 1)` |
 | Bruto | `s * q * (p - c)` |
-| Retorno | `Resultado / (q * c)` |
-| Retorno no período | `(1 + r) ** (período / d) - 1` |
+| Retorno acumulado | `Resultado selecionado / (q * c)` |
 | Stop gain | compra: `c * m`; venda: `max(0, c * (2 - m))`, com `m` o multiplicador do target |
 | Distância do target | `Stop gain / p - 1` |
 | Breakeven | compra: `p/c - 1` quando `c < p`, senão `-(c/p - 1)`; venda: `1 - p/c` quando `p < c`, senão `c/p - 1` |
@@ -387,20 +408,17 @@ Para `q` quantidade, `c` custo, `p` preço atual, `f` fechamento, `d` dias,
 | Peso de custo | `abs(Montar) / soma(abs(Montar))` |
 | Dias | `hoje - início` |
 
-Divisões por zero e anualização com zero dias produzem "não aplicável"
-(`None`), nunca erro nem infinito. Perda maior que o valor investido (`r < -1`,
-possível numa venda) também: não há projeção composta com sentido.
+Divisões por zero produzem "não aplicável" (`None`), nunca erro nem infinito.
 
-**Duas fórmulas divergem da planilha, de propósito** (decisão de 15/09/2026):
+**A variação diária diverge da planilha, de propósito** (decisão de 15/09/2026):
 
 - **Var. dia.** A planilha usa `s * (1 - f / p)`, que mede a variação contra o
   preço atual: fechamento 100 e preço 110 davam +9,09%, onde qualquer cotação
   mostra +10%. O sistema mede contra o fechamento. Vale também para as opções.
-- **Retorno no período.** A planilha usa
-  `sinal(r) * ((1 + abs(r)) ** (período / d) - 1)`. Para ganho é a
-  capitalização composta; para perda, não: -30% em 100 dias virava -160,6% ao
-  ano, perda maior que o investido numa compra. Pela composta, -72,8%. O
-  retorno anualizado da aba **Risco** usava a mesma forma e passou junto.
+
+A coluna **Retorno acumulado** da aba Ações não anualiza: mostra o resultado
+selecionado dividido pelo custo da quantidade ainda aberta. A anualização
+permanece apenas na análise de risco, calculada sobre a série de preços.
 
 **Resultado bruto** (decisão de 25/09/2026). O resultado é sempre
 `s * q * (p - c)`, sem custos nem IR. A planilha tinha um modo `L`
@@ -415,9 +433,6 @@ realizados gravados antes continuam com o valor calculado no encerramento.
 sistema usavam a fórmula da compra também na venda: o alvo de uma venda com
 `m = 1,5` ficava 50% acima do custo, onde ela perde. Na venda o alvo é
 espelhado abaixo do custo e o breakeven é positivo quando o preço cai.
-
-O período é selecionável como semanal (`7` dias), mensal (`30`), trimestral
-(`90`), semestral (`182`) ou anual (`365`, padrão).
 
 ## Valores de referência
 
@@ -458,6 +473,11 @@ Corretora e prazo não alteram o resultado.
   manter dados pessoais fora do repositório.
 
 ## Exposição
+
+Na aba **Ações** e nas análises de exposição, **posição bruta** é a soma dos
+valores absolutos das ações com cotação. Ela não é o patrimônio total da conta:
+não inclui caixa, opções ou posições sem cotação. A Performance mensal usa
+**exposição líquida**, a soma assinada das posições cotadas, também sem caixa.
 
 Os gráficos de alocação, corretora e mercado mostram, em cada item, o valor
 atual e seu percentual, com títulos de coluna. Cada tela conserva as visões

@@ -457,42 +457,34 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
     return {ticker_id: quantity for ticker_id, quantity in totals.items() if quantity != 0}
 
 
-def accumulate_invested_amount(
-    ticker_id: int,
-    quantity: Decimal,
-    average_cost: Decimal,
-    invested_amount_by_ticker: dict[int, Decimal],
-) -> None:
-    """Acumula, em ``invested_amount_by_ticker``, o valor investido
-    (quantidade × custo médio) de uma posição. Usada tanto pelo
-    relatório de performance mensal (curva hipotética do comparador de
-    benchmark, restrita a ações — ver ``app.routes.performance``) quanto
-    por ``open_real_cost_basis_by_ticker`` (base de custo dos
-    proventos)."""
-    invested_amount_by_ticker[ticker_id] = (
-        invested_amount_by_ticker.get(ticker_id, Decimal("0")) + quantity * average_cost
-    )
+def open_real_average_cost_by_ticker() -> dict[int, Decimal]:
+    """Custo médio ponderado atual das posições compradas reais por ticker.
 
-
-def open_real_cost_basis_by_ticker() -> dict[int, Decimal]:
-    """Custo de aquisição atual por ticker: soma de quantidade × custo
-    médio das posições REAIS ainda abertas (base de cálculo do
-    "yield on cost" no Relatório de Proventos).
-
-    Deliberadamente não filtra por corretora nem por outros filtros de
-    página: representa a base de custo total do ativo hoje, não uma
-    fatia por corretora — um provento é um evento do ativo, não da
-    corretora que o pagou. Tickers sem posição REAL aberta simplesmente
-    não aparecem no mapeamento resultante."""
+    É a base unitária do YOC anual: proventos por ação recebidos nos últimos
+    365 dias divididos pelo custo médio por ação das posições compradas que
+    continuam abertas. Vendas não têm YOC de custo de aquisição.
+    """
     statement = (
-        select(Position.ticker_id, Position.quantity, Position.average_cost).where(Position.owner_id == current_owner_id())
+        select(Position.ticker_id, Position.quantity, Position.average_cost)
         .join(Position.portfolio_ref)
-        .where(Position.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
+        .where(
+            Position.owner_id == current_owner_id(),
+            Position.side == Side.BUY,
+            Portfolio.simulated.is_(False),
+        )
     )
-    totals: dict[int, Decimal] = {}
+    totals: dict[int, list[Decimal]] = {}
     for ticker_id, quantity, average_cost in db.session.execute(statement):
-        accumulate_invested_amount(ticker_id, quantity, average_cost, totals)
-    return totals
+        cost_and_quantity = totals.setdefault(
+            ticker_id, [Decimal("0"), Decimal("0")]
+        )
+        cost_and_quantity[0] += quantity * average_cost
+        cost_and_quantity[1] += quantity
+    return {
+        ticker_id: cost / quantity
+        for ticker_id, (cost, quantity) in totals.items()
+        if quantity > 0
+    }
 
 
 def position_movement_events(
@@ -574,11 +566,10 @@ def dividend_events(ticker_ids: Iterable[int]) -> list[DividendEvent]:
     Sem filtro de corretora: ``Dividend`` não tem ``portfolio_id``, e
     atribuí-lo à corretora do lançamento inflaria ou apagaria o crédito
     dependendo de qual corretora detém o ativo no recorte filtrado. O
-    rateio pela quantidade efetivamente detida (``prorate_dividends``, a
-    partir das duas linhas do tempo — filtrada e total — de
-    ``position_movement_events``) resolve carteira e corretora com a mesma
-    regra já documentada em ``open_real_cost_basis_by_ticker``: "um provento
-    é um evento do ativo, não da corretora que o pagou". Lista vazia devolve
+    rateio pelas quantidades compradas efetivamente detidas
+    (``prorate_dividends``, a partir das linhas do tempo filtrada e total de
+    ``position_movement_events``) resolve carteira e corretora com a regra:
+    "um provento é um evento do ativo, não da corretora que o pagou". Lista vazia devolve
     lista vazia sem consultar o banco — evita uma query com ``IN ()`` vazio
     quando o relatório não tem nenhum ticker com posição no recorte.
     """
@@ -607,10 +598,12 @@ def position_dividend_allocations(
     """Proventos históricos atribuídos às posições reais atualmente visíveis.
 
     Primeiro aplica-se o rateio vigente da performance ao escopo escolhido
-    (carteira/corretora) sobre o total real do ticker. A renda rateada nesse
-    escopo é então repartida por posição proporcionalmente a ``abs(quantidade)``
-    na data do pagamento. Posições encerradas participam desse peso por meio
-    de ``PositionLedgerArchive``, mas não aparecem no resultado desta função.
+    (carteira/corretora) sobre a quantidade comprada real do ticker. A renda
+    rateada nesse escopo é então repartida entre posições compradas,
+    proporcionalmente à quantidade histórica na data do pagamento. Posições
+    encerradas participam desse peso por meio de ``PositionLedgerArchive``,
+    mas não aparecem no resultado desta função. Posições vendidas não recebem
+    crédito; a obrigação de provento correspondente não é registrada pelo app.
 
     A consulta usa apenas eventos de ações: opções não são titulares de
     proventos de ações, ainda que compartilhem ticker. Carteiras simuladas não
@@ -647,26 +640,27 @@ def position_dividend_allocations(
     result: dict[int, Decimal] = {}
     for dividend in prorated:
         quantities = scope_timeline.quantities_at(dividend.payment_date)
-        gross_scope_quantity = sum(
+        long_scope_quantity = sum(
             (
-                abs(quantity)
+                quantity
                 for key, quantity in quantities.items()
-                if scope_timeline.ticker_of(key) == dividend.ticker_id
+                if quantity > 0 and scope_timeline.ticker_of(key) == dividend.ticker_id
             ),
             Decimal("0"),
         )
-        if gross_scope_quantity == 0:
+        if long_scope_quantity == 0:
             continue
         for key, quantity in quantities.items():
             instrument, position_id = key
             if (
                 instrument != "stock"
                 or position_id not in current_position_ids
+                or quantity <= 0
                 or scope_timeline.ticker_of(key) != dividend.ticker_id
             ):
                 continue
             result[position_id] = result.get(position_id, Decimal("0")) + (
-                dividend.amount * abs(quantity) / gross_scope_quantity
+                dividend.amount * quantity / long_scope_quantity
             )
     return result
 

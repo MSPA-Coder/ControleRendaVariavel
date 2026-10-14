@@ -61,6 +61,19 @@ Para direção `s = 1` em compra e `-1` em venda:
 
 Divisões por zero produzem "não aplicável" (`None`).
 
+### Limitação de unidade e tamanho do contrato
+
+O aplicativo calcula os valores como `quantidade × prêmio` e
+`quantidade × strike`, sem um campo de tamanho ou fator do contrato. A
+quantidade cadastrada precisa, portanto, estar na unidade compatível com a
+cotação usada. A especificação da B3 informa que o tamanho do contrato
+corresponde à quantidade de ativos-objeto e que o prêmio pode ser cotado por
+unidade ou por lote, conforme o fator de cotação ([especificação da B3](https://b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/opcoes-sobre-acoes.htm)).
+O aplicativo não consulta essas especificações nem consegue deduzir o
+significado da quantidade pelos valores lançados; confira cada série na B3.
+Esta aproximação atende ao uso ocasional atual, mas não substitui cálculo
+oficial de opções.
+
 ## Gregas
 
 As gregas usam Black-Scholes europeu, com a taxa livre de risco anual

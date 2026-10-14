@@ -81,8 +81,8 @@ class DividendEvent:
 
 @dataclass(frozen=True, slots=True)
 class PortfolioFlowPoint:
-    """Um ponto da carteira na malha de datas: o patrimônio (``value``) e o
-    que o moveu sem ser desempenho (``net_flow``, ``income_by_kind``) nessa
+    """Um ponto da carteira na malha de datas: a exposição líquida (``value``) e o
+    que a moveu sem ser desempenho (``net_flow``, ``income_by_kind``) nessa
     data — a separação que ``twr_index_series`` usa para neutralizar
     fluxo."""
 
@@ -154,6 +154,22 @@ class QuantityTimeline:
                 total += quantities[index]
         return total
 
+    def long_quantity_at(self, ticker_id: int, on: date) -> Decimal:
+        """Soma apenas as quantidades positivas do ticker na data.
+
+        A quantidade líquida continua sendo usada para valorar posições e
+        fluxos. Proventos registrados como recebidos, porém, só podem ser
+        atribuídos a posições compradas: a quantidade vendida gera uma
+        obrigação que este modelo não registra.
+        """
+        total = Decimal("0")
+        for position_key in self._positions_by_ticker.get(ticker_id, []):
+            dates, quantities = self._series_by_position[position_key]
+            index = bisect_right(dates, on) - 1
+            if index >= 0 and quantities[index] > 0:
+                total += quantities[index]
+        return total
+
     def quantities_at(self, on: date) -> dict[tuple[str, int], Decimal]:
         """Quantidade de CADA posição em ``on`` (inclusive), com o sinal do lado.
 
@@ -218,10 +234,10 @@ def prorate_dividends(
     detinha na data do pagamento — necessário porque ``Dividend`` não
     conhece carteira nem corretora, só o ticker (ver docstring do módulo).
 
-    ``abs()`` nas duas quantidades porque uma posição vendida tem
-    quantidade negativa, e o rateio é sobre TAMANHO da posição, não sobre o
-    sinal — sem o ``abs()``, um recorte vendido dentro de um total comprado
-    (ou vice-versa) produziria uma razão negativa sem sentido econômico.
+    O rateio considera somente quantidades compradas. ``Dividend`` registra
+    valores efetivamente recebidos; atribuí-los a uma posição vendida criaria
+    um crédito indevido. O app não registra a obrigação de repassar o
+    provento ao tomador das ações vendidas, que permanece uma limitação.
 
     Descarta (não gera ``DividendEvent`` nenhum, nem com valor zero) quando
     o total é zero — posição encerrada na data do pagamento, extrato
@@ -235,8 +251,10 @@ def prorate_dividends(
     """
     result: list[DividendEvent] = []
     for dividend in dividends:
-        filtered_quantity = abs(filtered.quantity_at(dividend.ticker_id, dividend.payment_date))
-        total_quantity = abs(total.quantity_at(dividend.ticker_id, dividend.payment_date))
+        filtered_quantity = filtered.long_quantity_at(
+            dividend.ticker_id, dividend.payment_date
+        )
+        total_quantity = total.long_quantity_at(dividend.ticker_id, dividend.payment_date)
         if total_quantity == 0 or filtered_quantity == 0:
             continue
         ratio = filtered_quantity / total_quantity
@@ -280,7 +298,7 @@ def portfolio_flow_series(
     price_series: Mapping[int, Sequence[tuple[date, Decimal]]],
     dividends: Sequence[DividendEvent] = (),
 ) -> list[PortfolioFlowPoint]:
-    """Patrimônio dia a dia, com aporte líquido e proventos de cada data
+    """Exposição líquida dia a dia, com aporte líquido e proventos de cada data
     separados do valor — a matéria-prima do índice TWR
     (``twr_index_series``).
 

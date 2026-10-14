@@ -1,18 +1,18 @@
-"""Anualização de perdas e variação diária: onde o sistema diverge da planilha.
+"""Retorno anualizado de risco e variação diária das posições.
 
 Decisão de 15/09/2026, a partir do laudo dos oito repositórios (item 2.4 do
 plano de ação):
 
-- a projeção do retorno no período (carteira de ações) e o retorno anualizado
-  da aba Risco usavam ``sinal(r) * ((1 + |r|) ** (período / dias) - 1)``, a
-  forma da planilha. Ela coincide com a capitalização composta para ganho e
-  erra para perda: -30% em 100 dias virava -160,6% ao ano. Passaram à composta;
+- o retorno anualizado da aba Risco usava
+  ``sinal(r) * ((1 + |r|) ** (período / dias) - 1)``, a forma da planilha.
+  Ela coincide com a capitalização composta para ganho e erra para perda:
+  -30% em 100 dias virava -160,6% ao ano. Passou à composta;
 - a variação diária de ações e opções era ``s * (1 - fechamento / atual)``,
   medida contra o preço atual. Passou a ``s * (atual / fechamento - 1)``:
   fechamento 100 e atual 110 é +10%, e não +9,09%.
 
-Nenhum desses cálculos tinha teste. Os valores esperados saem da definição de
-capitalização composta, não da planilha -- que é justamente a fonte do erro.
+Os valores esperados saem da definição de capitalização composta, não da
+planilha -- que é justamente a fonte do erro.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.core.domain import calculate_position, signed_period_return
+from app.core.domain import calculate_position
 from app.models import OptionType
 from app.options.metrics import calculate_option
 from app.performance.risk import annualized_return_from_prices
@@ -51,55 +51,16 @@ def _posicao(*, lado="C", custo="10", atual="7", fechamento="7", dias=100, quant
     )
 
 
-# --------------------------------------------------------------------------
-# Retorno no período (carteira de ações)
-# --------------------------------------------------------------------------
-
-
-def test_perda_e_projetada_pela_composta_e_nunca_passa_de_menos_cem():
-    projetado = signed_period_return(Decimal("-0.30"), 100, 365)
-
-    assert _perto(projetado, QUEDA_DE_30_EM_100_DIAS_AO_ANO)
-    assert projetado > Decimal("-1")
-
-
-def test_ganho_projetado_continua_igual_ao_da_planilha():
-    """Para ganho, a forma da planilha e a composta coincidem."""
-    assert _perto(signed_period_return(Decimal("0.30"), 100, 365), ALTA_DE_30_EM_100_DIAS_AO_ANO)
-
-
-def test_perda_total_projeta_menos_cem_por_cento():
-    assert signed_period_return(Decimal("-1"), 100, 365) == Decimal("-1")
-
-
-def test_perda_maior_que_o_investido_nao_tem_projecao():
-    """Possível numa venda: recomprar por mais do que o dobro do preço."""
-    assert signed_period_return(Decimal("-1.5"), 100, 365) is None
-
-
-def test_perda_em_janela_curta_nao_explode():
-    projetado = signed_period_return(Decimal("-0.20"), 1, 365)
-
-    assert Decimal("-1") <= projetado < Decimal("-0.99")
-
-
-@pytest.mark.parametrize(("dias", "periodo"), [(0, 365), (-3, 365), (100, 0)])
-def test_sem_dias_decorridos_ou_sem_periodo_nao_se_aplica(dias, periodo):
-    assert signed_period_return(Decimal("0.10"), dias, periodo) is None
-
-
-def test_compra_em_queda_mostra_a_perda_anualizada_composta():
+def test_retorno_da_posicao_e_acumulado_sem_anualizacao():
     metricas = _posicao(custo="10", atual="7")
 
     assert metricas.return_pct == Decimal("-0.3")
-    assert _perto(metricas.period_return, QUEDA_DE_30_EM_100_DIAS_AO_ANO)
 
 
-def test_venda_com_perda_acima_do_investido_fica_sem_projecao():
+def test_retorno_acumulado_de_venda_pode_ser_menor_que_menos_cem_por_cento():
     metricas = _posicao(lado="V", custo="10", atual="25", fechamento="25")
 
     assert metricas.return_pct == Decimal("-1.5")
-    assert metricas.period_return is None
 
 
 # --------------------------------------------------------------------------

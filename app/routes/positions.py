@@ -83,14 +83,6 @@ from app.routes.helpers import (
     usd_brl_rate_on,
 )
 
-RETURN_PERIODS = (
-    (7, "Semanal"),
-    (30, "Mensal"),
-    (90, "Trimestral"),
-    (182, "Semestral"),
-    (365, "Anual"),
-)
-RETURN_PERIOD_DAYS = tuple(days for days, _ in RETURN_PERIODS)
 RESULT_MODES = (
     ("acao", "Ação"),
     ("proventos", "Proventos"),
@@ -338,13 +330,6 @@ def portfolio_results_context() -> dict[str, object]:
     # toda vez que a tela abria.
     portfolio_id, broker, selected_portfolio_id = selected_filters()
     group_by_broker = request.args.get("group_by_broker") == "1"
-    try:
-        selected_return_days = int(request.args.get("return_days", "365"))
-    except ValueError:
-        selected_return_days = 365
-    if selected_return_days not in RETURN_PERIOD_DAYS:
-        selected_return_days = 365
-    selected_return_label = dict(RETURN_PERIODS)[selected_return_days]
     selected_result_mode = request.args.get("result_mode", "acao")
     if selected_result_mode not in RESULT_MODE_LABELS:
         selected_result_mode = "acao"
@@ -363,7 +348,6 @@ def portfolio_results_context() -> dict[str, object]:
     portfolio = build_portfolio(
         positions,
         stale_after_seconds=quote_stale_after_seconds(),
-        return_period_days=selected_return_days,
         result_mode=selected_result_mode,
         dividends_by_position=dividends_by_position,
     )
@@ -376,6 +360,9 @@ def portfolio_results_context() -> dict[str, object]:
     expanded = expanded_position_ids()
     return {
         "portfolio": portfolio,
+        "has_short_positions": any(
+            position.side == Side.SELL for position in positions
+        ),
         "conversao": conversao,
         "moeda_base": "BRL",
         # Resultado hipotético por aporte é exclusivo do extrato de Ações.
@@ -399,9 +386,6 @@ def portfolio_results_context() -> dict[str, object]:
         "selected_broker": broker or "",
         "selected_portfolio_id": selected_portfolio_id,
         "portfolios": portfolio_records(),
-        "selected_return_days": selected_return_days,
-        "selected_return_label": selected_return_label,
-        "return_periods": RETURN_PERIODS,
         "selected_result_mode": selected_result_mode,
         "selected_result_label": RESULT_MODE_LABELS[selected_result_mode],
         "result_modes": RESULT_MODES,

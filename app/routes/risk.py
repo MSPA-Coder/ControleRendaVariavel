@@ -16,7 +16,12 @@ from app.performance.risk import (
     build_portfolio_drawdown,
     build_ticker_risk_metrics,
 )
-from app.positions.holdings_history import DividendEvent, HoldingEvent
+from app.positions.holdings_history import (
+    DividendEvent,
+    HoldingEvent,
+    QuantityTimeline,
+    prorate_dividends,
+)
 from app.routes import bp
 from app.routes.helpers import (
     dividend_events,
@@ -106,13 +111,19 @@ def risk_report() -> str:
             continue
         events_by_currency.setdefault(ticker.currency, []).append(event)
 
-    # Os proventos entram no numerador do retorno porque o app não tem conta
-    # caixa: sem esse crédito o dinheiro recebido sumiria na data ex (o preço
-    # cai, o patrimônio cai, e nada compensa). Aqui não se rateia
-    # (`prorate_dividends`) como em Performance: sem filtro, o recorte É o
-    # total e a razão seria sempre 1.
+    # Os proventos recebidos entram no numerador do retorno porque o app não
+    # tem conta caixa. O mesmo rateio da Performance filtra eventos para os
+    # tickers com quantidade comprada na data; posições vendidas não recebem
+    # esse crédito (a obrigação de repasse não é registrada pelo app).
+    stock_events = [event for event in events if event.position_key[0] == "stock"]
+    stock_timeline = QuantityTimeline(stock_events)
+    prorated_dividends = prorate_dividends(
+        dividend_events({event.ticker_id for event in stock_events}),
+        stock_timeline,
+        stock_timeline,
+    )
     dividends_by_currency: dict[str, list[DividendEvent]] = {}
-    for dividend in dividend_events({event.ticker_id for event in events}):
+    for dividend in prorated_dividends:
         ticker = tickers.get(dividend.ticker_id)
         if ticker is not None and (selected_currency == ALL or ticker.currency == selected_currency):
             dividends_by_currency.setdefault(ticker.currency, []).append(dividend)

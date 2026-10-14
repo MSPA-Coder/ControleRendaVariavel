@@ -173,7 +173,7 @@ uma resposta coerente.
 Um formulário HTML serializa todos os seus campos ao ser enviado, inclusive os
 que estão vazios ou no valor padrão. Sem tratamento, a Carteira sem nenhum
 filtro aplicado aparecia na barra como
-`/?portfolio_id=all&broker=&return_days=365` — nada ali foi escolhido por
+`/?portfolio_id=all&broker=` — nada ali foi escolhido por
 ninguém.
 
 `app/core/url_limpa.py` monta o endereço equivalente sem esse ruído, e o

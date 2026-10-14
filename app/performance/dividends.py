@@ -28,7 +28,7 @@ class TickerDividendTotal:
     dividend_yield_12m: Decimal | None
     """Proventos por cota nos últimos 365 dias ÷ cotação atual."""
     yield_on_cost_current: Decimal | None
-    """Todos os proventos recebidos ÷ custo das posições reais abertas."""
+    """Proventos por cota nos últimos 365 dias ÷ custo médio atual das posições compradas."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +59,7 @@ class DividendReport:
 def build_dividend_report(
     dividends: list[Dividend],
     *,
-    cost_basis_by_ticker: Mapping[int, Decimal],
+    average_cost_by_ticker: Mapping[int, Decimal],
     quotes_by_ticker: Mapping[int, Decimal],
     reference_date: date | None = None,
 ) -> DividendReport:
@@ -110,8 +110,8 @@ def build_dividend_report(
                     quotes_by_ticker.get(ticker_ids[(ticker, currency)], Decimal("0")),
                 ),
                 yield_on_cost_current=safe_div(
-                    total,
-                    cost_basis_by_ticker.get(ticker_ids[(ticker, currency)], Decimal("0")),
+                    trailing_per_share.get((ticker, currency), Decimal("0")),
+                    average_cost_by_ticker.get(ticker_ids[(ticker, currency)], Decimal("0")),
                 ),
             )
         )
