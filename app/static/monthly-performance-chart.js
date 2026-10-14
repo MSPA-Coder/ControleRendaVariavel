@@ -29,7 +29,7 @@
     canvas.setAttribute("role", "img");
     canvas.setAttribute(
       "aria-label",
-      container.getAttribute("aria-label") || "Evolução patrimonial mensal"
+      container.getAttribute("aria-label") || "Evolução da exposição líquida mensal"
     );
     container.appendChild(canvas);
 
@@ -57,7 +57,7 @@
           labels: months,
           datasets: [
             {
-              label: "Carteira",
+              label: "Exposição líquida",
               data: values,
               borderColor: navy,
               backgroundColor: navy,
@@ -117,7 +117,7 @@
         labels: months,
         datasets: [
           {
-            label: "Valor da carteira",
+            label: "Exposição líquida",
             data: values,
             borderColor: navy,
             backgroundColor: navy,

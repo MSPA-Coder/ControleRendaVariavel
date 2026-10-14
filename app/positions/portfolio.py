@@ -10,7 +10,6 @@ from app.core.domain import (
     calculate_position,
     operation_result,
     safe_div,
-    signed_period_return,
 )
 from app.core.instrument_status import instrument_status_class, instrument_status_letter
 from app.models import Market, Position, PositionMovementKind, Side
@@ -40,7 +39,6 @@ class PositionView:
     instrument_status_class: str
     selected_result: Decimal | None = None
     selected_return_pct: Decimal | None = None
-    selected_period_return: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,7 +249,6 @@ def build_portfolio(
     positions: list[Position],
     *,
     stale_after_seconds: int,
-    return_period_days: int = 365,
     result_mode: str = "acao",
     dividends_by_position: Mapping[int, Decimal] | None = None,
     today: date | None = None,
@@ -263,7 +260,6 @@ def build_portfolio(
             Position,
             PositionMetrics | None,
             str,
-            Decimal | None,
             Decimal | None,
             Decimal | None,
         ]
@@ -284,7 +280,7 @@ def build_portfolio(
         )
         quote = position.quote
         if quote is None:
-            calculated.append((position, None, "missing", None, None, None))
+            calculated.append((position, None, "missing", None, None))
             continue
         status = quote.source_status
         effective_price, effective_observed_at = effective_position_quote(position)
@@ -298,12 +294,10 @@ def build_portfolio(
             previous_close=quote.previous_close,
             target_multiplier=position.target_multiplier,
             opened_on=position.opened_on,
-            return_period_days=return_period_days,
             today=today,
         )
         selected_result = metrics.result
         selected_return_pct = metrics.return_pct
-        selected_period_return = metrics.period_return
         if result_mode in {"proventos", "acao_proventos"}:
             dividend_result = (
                 Decimal("0")
@@ -318,9 +312,6 @@ def build_portfolio(
             selected_return_pct = safe_div(
                 selected_result, position.quantity * position.average_cost
             )
-            selected_period_return = signed_period_return(
-                selected_return_pct, metrics.days, return_period_days
-            )
         bucket_totals[0] += abs(metrics.unwind_value)
         bucket_totals[1] += abs(metrics.build_value)
         bucket_totals[2] += selected_result
@@ -331,7 +322,6 @@ def build_portfolio(
                 status,
                 selected_result,
                 selected_return_pct,
-                selected_period_return,
             )
         )
 
@@ -356,7 +346,6 @@ def build_portfolio(
             ),
             selected_result=selected_result,
             selected_return_pct=selected_return_pct,
-            selected_period_return=selected_period_return,
         )
         for (
             position,
@@ -364,7 +353,6 @@ def build_portfolio(
             status,
             selected_result,
             selected_return_pct,
-            selected_period_return,
         ) in calculated
     ]
     # Os grupos de corretora e mercado dividem o mesmo bucket dos totais

@@ -28,7 +28,7 @@ from app.routes.helpers import (
     grant_ticker_entitlement,
     investable_ticker_records,
     is_htmx_request,
-    open_real_cost_basis_by_ticker,
+    open_real_average_cost_by_ticker,
     owned_or_404,
     parse_positive_id,
     selected_currency_filter,
@@ -186,7 +186,7 @@ def dividends_results_context() -> dict[str, object]:
     }
     report = build_dividend_report(
         records,
-        cost_basis_by_ticker=open_real_cost_basis_by_ticker(),
+        average_cost_by_ticker=open_real_average_cost_by_ticker(),
         quotes_by_ticker=quotes_by_ticker,
     )
     return {

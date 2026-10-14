@@ -4,7 +4,7 @@ Um formulário HTML serializa **todos** os seus campos quando é enviado,
 inclusive os que estão no valor padrão e os que estão vazios. Sem tratamento, a
 Carteira sem nenhum filtro aplicado aparece na barra de endereços como::
 
-    /?portfolio_id=all&broker=&return_days=365
+    /?portfolio_id=all&broker=
 
 Nada ali foi escolhido por ninguém. É ruído que ocupa a barra, atrapalha quem
 quer copiar o endereço e faz dois links iguais parecerem diferentes.
@@ -58,8 +58,6 @@ FILTROS_PADRAO: dict[str, str] = {
     # "Todas as corretoras" é a opção de valor vazio nos selects
     "broker": "",
     # `routes/positions.py::portfolio_results_context`
-    "return_days": "365",
-    # `routes/positions.py::portfolio_results_context`
     "result_mode": "acao",
     # `routes/transactions.py`
     "status": TransactionStatus.CLOSED.value,
@@ -71,11 +69,13 @@ FILTROS_PADRAO: dict[str, str] = {
     "ticker_id": "",
 }
 
-#: Parâmetros que descrevem como a tela está desenhada, não quais dados ela
-#: mostra. Eles viajam na requisição do fragmento (o botão `+` de cada linha) e
-#: **nunca** devem chegar à barra: são longos, não interessam a quem recebe o
-#: link e mudam a cada clique.
-ESTADO_DE_INTERFACE = frozenset({"expanded", "expanded_tickers", "expanded_years"})
+#: Parâmetros que não definem os dados do relatório. Os `expanded*` descrevem
+#: como a tela está desenhada e mudam a cada clique; `return_days` é o filtro
+#: de anualização de posição que deixou de existir. Nenhum deve permanecer em
+#: um link compartilhado.
+ESTADO_DE_INTERFACE = frozenset(
+    {"expanded", "expanded_tickers", "expanded_years", "return_days"}
+)
 
 #: Sentinela para "este parâmetro não tem padrão declarado". Não pode ser
 #: ``None`` nem ``""``: os dois são valores possíveis de um filtro, e usar

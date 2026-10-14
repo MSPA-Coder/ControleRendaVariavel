@@ -273,6 +273,54 @@ def test_prorate_dividends_metade_da_quantidade_credita_metade_e_total_zero_desc
     assert result[0].amount == Decimal("40")  # metade de 80
 
 
+def test_prorate_dividends_considera_apenas_quantidade_comprada():
+    """Um evento de valor recebido não pode virar crédito de posição vendida.
+
+    O total líquido do ticker é vendido, embora existam 100 ações compradas;
+    o rateio deve usar só as 100 compradas e descartar o recorte que contém
+    apenas a posição vendida.
+    """
+    total = QuantityTimeline(
+        [
+            _event(
+                date(2026, 1, 1),
+                resulting_signed_quantity=Decimal("100"),
+                position_key=("stock", 1),
+            ),
+            _event(
+                date(2026, 1, 1),
+                resulting_signed_quantity=Decimal("-150"),
+                position_key=("stock", 2),
+            ),
+        ]
+    )
+    recorte_comprado = QuantityTimeline(
+        [
+            _event(
+                date(2026, 1, 1),
+                resulting_signed_quantity=Decimal("40"),
+                position_key=("stock", 1),
+            )
+        ]
+    )
+    recorte_vendido = QuantityTimeline(
+        [
+            _event(
+                date(2026, 1, 1),
+                resulting_signed_quantity=Decimal("-150"),
+                position_key=("stock", 2),
+            )
+        ]
+    )
+    dividend = [
+        DividendEvent(payment_date=date(2026, 2, 1), ticker_id=1, amount=Decimal("100"))
+    ]
+
+    assert total.quantity_at(1, date(2026, 2, 1)) == Decimal("-50")
+    assert prorate_dividends(dividend, recorte_comprado, total)[0].amount == Decimal("40")
+    assert prorate_dividends(dividend, recorte_vendido, total) == []
+
+
 def test_prorate_dividends_recorte_zero_tambem_descarta():
     total_events = [_event(date(2026, 1, 1), resulting_signed_quantity=Decimal("100"))]
     filtered_events: list[HoldingEvent] = []  # o recorte nunca deteve o ticker

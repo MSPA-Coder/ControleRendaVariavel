@@ -523,7 +523,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
         Um formulário HTML serializa todos os seus campos, então a Carteira sem
         filtro nenhum chegava à barra como
-        `/?portfolio_id=all&broker=&return_days=365` -- nada ali foi escolhido
+        `/?portfolio_id=all&broker=` -- nada ali foi escolhido
         por ninguém. `HX-Replace-Url` entrega o endereço equivalente sem esse
         ruído, e o navegador troca a barra sem recarregar nada.
 

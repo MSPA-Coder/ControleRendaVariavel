@@ -2,9 +2,9 @@
    a pagina e a resposta HTMX saiam do mesmo template. #}
 <div id="performance-results">
 <p class="form-help">
-  Evolução patrimonial e retorno mensal a partir das cotações em
+  Exposição líquida e retorno mensal a partir das cotações em
   <a href="{{ url_for('portfolio.quote_history') }}">Cotações</a>. O valor de
-  cada mês é o patrimônio real daquele mês: a quantidade considerada é a que
+  cada mês é a exposição líquida naquele mês: a quantidade considerada é a que
   a posição de fato tinha na data, reconstruída do extrato de cada posição —
   aumentar uma posição não faz o passado dela crescer junto.
   O retorno mensal neutraliza aportes e retiradas, então reforçar uma posição
@@ -13,6 +13,9 @@
   passou a guardar a cotação nominal, nenhuma renda está embutida no preço.
   O drawdown por carteira em
   <a href="{{ url_for('portfolio.risk_report') }}">Risco</a> usa o mesmo critério.
+  Para posições vendidas, o app não desconta o repasse de proventos ao doador
+  nem encargos do aluguel; essa performance fica incompleta e não substitui a
+  apuração oficial integrada à B3 e à contabilidade.
   O período é aplicado no servidor sobre todas as cotações históricas
   disponíveis para os ativos selecionados.
   {% if selected_benchmark %}
@@ -47,7 +50,7 @@
              data-benchmark-label="{{ selected_benchmark.symbol }}"
              data-benchmark-values='{{ benchmark_values_by_currency.get(report.currency, [])|tojson }}'
              {% endif %}
-             aria-label="Gráfico de linha com a evolução patrimonial mensal em {{ report.currency }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a abertura da posição' if selected_benchmark }}"></div>
+             aria-label="Gráfico de linha com a exposição líquida mensal em {{ report.currency }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a abertura da posição' if selected_benchmark }}"></div>
         {% else %}
         <p class="form-help">Sem meses no período em {{ report.currency }} desde a abertura da posição.</p>
         {% endif %}
@@ -57,7 +60,7 @@
         <summary>Dados</summary>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Mês</th><th>Valor</th><th>Aporte líquido</th>{% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}<th>Retorno mensal</th></tr></thead>
+            <thead><tr><th>Mês</th><th>Exposição líquida</th><th>Aporte líquido</th>{% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}<th>Retorno mensal</th></tr></thead>
             <tbody>
               {% for point in report.points|reverse %}
               <tr>

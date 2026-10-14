@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from app.performance.dividends import build_dividend_report
 
 
-def test_ticker_indicators_use_current_quote_and_open_cost_basis():
+def test_ticker_indicators_use_trailing_per_share_payout_and_current_cost():
     today = date(2026, 9, 26)
     current = SimpleNamespace(
         ticker="ABCD3", ticker_id=1, currency="BRL", amount=Decimal("30"),
@@ -22,7 +22,7 @@ def test_ticker_indicators_use_current_quote_and_open_cost_basis():
 
     report = build_dividend_report(
         [current, old],
-        cost_basis_by_ticker={1: Decimal("100")},
+        average_cost_by_ticker={1: Decimal("10")},
         quotes_by_ticker={1: Decimal("10")},
         reference_date=today,
     )
@@ -30,4 +30,4 @@ def test_ticker_indicators_use_current_quote_and_open_cost_basis():
     total = report.by_ticker[0]
     assert total.total_amount == Decimal("40")
     assert total.dividend_yield_12m == Decimal("0.3")
-    assert total.yield_on_cost_current == Decimal("0.4")
+    assert total.yield_on_cost_current == Decimal("0.3")

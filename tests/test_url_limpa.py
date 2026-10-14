@@ -34,12 +34,12 @@ def test_filtro_escolhido_permanece(app) -> None:
         assert url_canonica() == "/?broker=XP"
 
 
-def test_varios_filtros_escolhidos_permanecem(app) -> None:
+def test_filtros_escolhidos_permanecem_e_filtro_antigo_some(app) -> None:
     with _em(app, "/?portfolio_id=7&broker=XP&return_days=30", "portfolio.index"):
         destino = url_canonica()
         assert "portfolio_id=7" in destino
         assert "broker=XP" in destino
-        assert "return_days=30" in destino
+        assert "return_days" not in destino
 
 
 def test_estado_de_interface_nunca_chega_a_barra(app) -> None:

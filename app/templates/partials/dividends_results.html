@@ -25,7 +25,7 @@
           {% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}
           <th>Recebido</th>
           <th>DY 12m</th>
-          <th>YOC atual</th>
+          <th>YOC 12m</th>
         </tr>
       </thead>
       <tbody>
@@ -55,7 +55,7 @@
           <td colspan="{{ ticker_columns }}">
             <table class="movements-table">
               <thead>
-                <tr><th>Corretora</th><th>Pagamento</th><th>Data com</th><th>Tipo</th><th>Valor</th><th>YOC</th><th>DY</th><th>Cotas</th><th></th></tr>
+                <tr><th>Corretora</th><th>Pagamento</th><th>Data com</th><th>Tipo</th><th>Valor</th><th>Evento/custo</th><th>DY informado</th><th>Cotas</th><th></th></tr>
               </thead>
               <tbody>
                 {% for entry in total.entries %}

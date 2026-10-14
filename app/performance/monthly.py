@@ -18,8 +18,9 @@ até cada data, nunca a de hoje aplicada ao passado) e retorno TWR
 encadeado, em que cada elo neutraliza o aporte/retirada do dia no
 numerador — um aumento de posição não pode aparecer como desempenho — e
 credita o provento recebido nesse mesmo numerador, porque este app não tem
-conta caixa: sem esse crédito, o dinheiro do provento simplesmente some na
-data ex (o preço cai, o patrimônio cai, e nada compensa).
+conta caixa: sem esse crédito, o dinheiro recebido simplesmente some. O
+cadastro não tem data ex, então a Performance usa `payment_date`; o crédito
+pode cair em mês diferente do ajuste de preço na data ex.
 
 O comparador de índice (``build_benchmark_shadow_series``) acumula COTAS
 hipotéticas do benchmark a partir dos MESMOS fluxos reais da carteira —
@@ -50,9 +51,9 @@ class MonthlyPerformancePoint:
     month: date
     """Primeiro dia do mês, usado apenas para ordenação/formatação."""
     ending_value: Decimal
-    """Patrimônio VERDADEIRO (quantidade histórica × preço, não mais a
-    quantidade de hoje aplicada ao passado) no último ponto observado
-    dentro do mês."""
+    """Exposição líquida assinada das posições cotadas no último ponto
+    observado dentro do mês. Não inclui caixa nem posições sem preço
+    histórico; portanto não representa o patrimônio total da conta."""
     net_flow: Decimal
     """Soma dos aportes (positivo) e retiradas (negativo) do mês — soma de
     ``PortfolioFlowPoint.net_flow`` dia a dia, nunca o saldo do último dia:
