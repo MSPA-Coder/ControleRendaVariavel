@@ -24,18 +24,16 @@ os segredos deliberadamente, exigindo tratar a senha do banco, a troca dos
 tokens e a invalidação das sessões abertas.
 
 Em uma cópia antiga que ainda guardava valores no `.env`, execute também
-`.scripts\provision-secrets.ps1 -MigrateDotEnv` depois de confirmar os arquivos
+`.\scripts\provision-secrets.ps1 -MigrateDotEnv` depois de confirmar os arquivos
 em `.secrets`; o comando substitui os valores por referências locais e preserva
 as demais variáveis.
 
-Falta um arquivo que o script não cria, porque não é segredo gerado aqui:
-
-- `.certs/local-root-ca.crt` — o Compose declara esse arquivo como secret, então
-  ele **precisa existir** ou `docker compose config` falha antes de qualquer
-  coisa. Numa máquina cujo antivírus ou proxy intercepta TLS, ele guarda a raiz
-  a acrescentar ao truststore da imagem, sem a qual o `pip install` do build não
-  valida a cadeia. Em máquina sem interceptação, um arquivo vazio basta:
-  `New-Item -ItemType File .certs\local-root-ca.crt`.
+`.certs/local-root-ca.crt` é opcional. Só crie esse arquivo com a raiz CA
+confiável do antivírus ou proxy quando o host inspeciona/intercepta HTTPS e o
+build precisa validar essa cadeia durante a instalação de dependências. O
+Dockerfile declara o secret BuildKit como `required=false`, portanto o build e
+`docker compose config --quiet` funcionam sem o arquivo em hosts sem inspeção
+TLS; não é necessário criar um arquivo vazio.
 
 Sem `compose.dev.yaml`, o Compose não monta o código do host. Cada subida
 reconstrói as imagens sem cache a partir das tags base móveis; a CI executa
