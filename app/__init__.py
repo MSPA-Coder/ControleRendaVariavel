@@ -261,6 +261,10 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         CB_CORRESPONDENCIA_CONTAS=os.getenv("CB_CORRESPONDENCIA_CONTAS", "").strip(),
         CONFERENCIA_TOLERANCIA=os.getenv("CONFERENCIA_TOLERANCIA", "").strip(),
         MYPROFIT_INSTITUICOES=os.getenv("MYPROFIT_INSTITUICOES", "").strip(),
+        # Proventos de 2026 em diante vêm do CB (corte AAAA-MM-DD) para as
+        # corretoras em reais listadas (nomes no CRV, separados por vírgula).
+        PROVENTOS_CB_CORTE=os.getenv("PROVENTOS_CB_CORTE", "").strip(),
+        PROVENTOS_CB_CORRETORAS=os.getenv("PROVENTOS_CB_CORRETORAS", "").strip(),
         REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),

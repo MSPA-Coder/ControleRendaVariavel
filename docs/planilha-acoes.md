@@ -355,6 +355,32 @@ Evento/custo continua mostrando o valor daquele pagamento dividido pelo total
 investido informado; não é o YOC anual. Ambos os indicadores anuais são
 informativos e não incluem valorização, impostos ou custos de negociação.
 
+### Proventos do Controle Bancário (a partir de 01/01/2026)
+
+Desde 18/10/2026 o dinheiro dos proventos é do Controle Bancário (CB). De
+01/01/2026 em diante, dividendo, JCP e aluguel de ações **em reais**, nas
+corretoras que o CB cobre (Genial e XP), vêm do CB (`origin = 'cb'`), não da
+planilha. Duas regras de produto mudam em relação ao painel do myProfit:
+
+* **O aluguel é o líquido do caixa.** A planilha e o myProfit mostram 57,5% do
+  crédito bruto; o caixa recebe menos (corretagem de cerca de 30% e IRRF de 22,5%
+  do bruto, mais taxas, líquidos de estornos). O CRV grava o líquido em `Recebido`
+  e guarda o bruto e as retenções ao lado, exibidos na lista. Dividendo e JCP não
+  têm retenção lançada: líquido = bruto. A série do aluguel cai cerca de 17% por
+  crédito só por esta regra, e essa quebra de série é aceita.
+* **O que sai da planilha.** O formulário e a importação por planilha recusam
+  pagamento em reais dessas corretoras a partir do corte, com a mensagem de que
+  o CB é a fonte. Dólar (Nomad), Avenue e as demais corretoras seguem na
+  planilha. Até 31/12/2025 o histórico fica como está, e a tela o mostra como o
+  subtotal "Até 31/12/2025 · saldo de corte".
+
+Linha do CB não traz YOC, DY nem cotas; a tela as calcula como a importação da
+planilha: cotas = quantidade comprada na corretora na data do pagamento; YOC =
+recebido ÷ (cotas × custo médio atual); DY = recebido ÷ (cotas × cotação do
+fechamento da data), em pontos percentuais. Valores calculados não são gravados.
+O DY 12m e o YOC 12m do resumo por ticker usam essas cotas para os proventos do
+CB. Detalhes de leitura, fila de revisão e substituição: `docs/architecture.md`.
+
 ## Cotações RTD
 
 ProgID: `rtdtrading.rtdserver`.

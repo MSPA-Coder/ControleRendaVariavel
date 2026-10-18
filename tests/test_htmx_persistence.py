@@ -70,9 +70,14 @@ def test_update_option_position_retorna_formulario_em_modo_edicao_apos_erro(monk
 
 
 def test_update_dividend_retorna_formulario_em_modo_edicao_apos_erro(monkeypatch, app):
+    class Dividend:
+        owner_id = 0
+        superseded_at = None
+        from_cb = False
+
     capturado: dict[str, object] = {}
 
-    monkeypatch.setattr(dividends.db, "get_or_404", lambda *_args: object())
+    monkeypatch.setattr(dividends.db, "get_or_404", lambda *_args: Dividend())
     monkeypatch.setattr(
         dividends,
         "_parse_form",

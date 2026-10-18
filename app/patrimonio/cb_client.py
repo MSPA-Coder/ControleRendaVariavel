@@ -11,7 +11,9 @@ configurado": a conferência é um recurso opcional e não pode derrubar o resto
 
 O contrato publica tudo em um snapshot (contas, categorias e lançamentos). Este
 cliente o lê inteiro e filtra: os lançamentos da categoria "Operações em
-Bolsa", em ordem de data de pregão.
+Bolsa", em ordem de data de pregão (``read_settlements``), e os lançamentos de
+renda que o CB marcou com ``income_kind``/``income_role`` (``read_income_entries``),
+que alimentam os proventos de 2026 em diante do CRV.
 
 TRANSIÇÃO (CB-1): o CB está acrescentando ao ``cash_entry`` o campo opcional
 ``settlement`` (``pregao_date`` e ``note``). Enquanto ele não está em produção, o
@@ -184,12 +186,10 @@ def _pregao(payload: dict[str, Any]) -> date | None:
     return pregao_da_descricao(payload.get("description"))
 
 
-def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbSettlements:
-    """Lê o snapshot v4 e devolve as liquidações de pregão, só leitura.
-
-    ``fetcher(url, token)`` existe para os testes trocarem a rede; em produção
-    é :func:`_fetch_json`.
-    """
+def _read_snapshot(
+    config: CbConfig, fetcher: Fetcher | None
+) -> tuple[dict[str, dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
+    """Lê o snapshot v4 e separa contas, categorias (id -> nome) e lançamentos."""
     fetch = fetcher or _fetch_json
     document = fetch(f"{config.base_url}/snapshot", config.token)
     if not isinstance(document, dict) or not isinstance(document.get("items"), list):
@@ -208,6 +208,16 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
             categories[str(payload.get("source_id"))] = str(payload.get("name") or "")
         elif item.get("resource") == "cash_entry":
             entries.append(payload)
+    return accounts, categories, entries
+
+
+def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbSettlements:
+    """Lê o snapshot v4 e devolve as liquidações de pregão, só leitura.
+
+    ``fetcher(url, token)`` existe para os testes trocarem a rede; em produção
+    é :func:`_fetch_json`.
+    """
+    accounts, categories, entries = _read_snapshot(config, fetcher)
 
     wanted = _fold(SETTLEMENT_CATEGORY)
     settlements: list[CbSettlement] = []
@@ -234,3 +244,78 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
         without_pregao=[item for item in stocks if item.pregao_date is None],
         futures=futures,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class CbIncomeEntry:
+    """Um lançamento de renda (crédito, retenção ou estorno) das contas de corretora.
+
+    ``amount`` é sempre o módulo; ``flow`` diz se entrou (``receita``) ou saiu
+    (``despesa``) da conta. ``instrument``, ``kind`` e ``role`` são os campos
+    opcionais do contrato v4 (CB-1) e podem faltar.
+    """
+
+    entry_id: str
+    account_id: str
+    institution: str
+    account_name: str
+    currency: str
+    realized_date: date
+    amount: Decimal
+    flow: str
+    instrument: str | None
+    kind: str | None
+    role: str | None
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class CbIncome:
+    entries: list[CbIncomeEntry]
+    #: Lançamentos de renda ainda não realizados ou sem data realizada: ficam
+    #: fora, mas contados, porque só o dinheiro que já entrou vira provento.
+    not_realized: int = 0
+
+
+def read_income_entries(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbIncome:
+    """Lançamentos com ``income_role`` ou ``income_kind``, só leitura.
+
+    A categoria não é consultada: o CB-1 marca cada lançamento de renda, e a
+    categoria tem erro de grafia histórico ("Açoes"). Quem não foi marcado não é
+    renda para o CRV.
+    """
+    accounts, _categories, entries = _read_snapshot(config, fetcher)
+    result: list[CbIncomeEntry] = []
+    not_realized = 0
+    for payload in entries:
+        role = payload.get("income_role")
+        kind = payload.get("income_kind")
+        if not role and not kind:
+            continue
+        realized = payload.get("realized_date")
+        if payload.get("status") != "realizado" or not realized:
+            not_realized += 1
+            continue
+        try:
+            realized_date = date.fromisoformat(str(realized))
+        except ValueError:
+            not_realized += 1
+            continue
+        account = accounts.get(str(payload.get("account_id")), {})
+        result.append(
+            CbIncomeEntry(
+                entry_id=str(payload.get("source_id")),
+                account_id=str(payload.get("account_id")),
+                institution=str(account.get("institution") or institution_identity(account.get("institution_name"))),
+                account_name=str(account.get("name") or ""),
+                currency=str(payload.get("currency") or account.get("currency") or ""),
+                realized_date=realized_date,
+                amount=abs(_amount(payload)),
+                flow="despesa" if payload.get("entry_type") == "despesa" else "receita",
+                instrument=str(payload["instrument"]).upper() if payload.get("instrument") else None,
+                kind=str(kind) if kind else None,
+                role=str(role) if role else None,
+                description=str(payload.get("description") or ""),
+            )
+        )
+    return CbIncome(entries=result, not_realized=not_realized)

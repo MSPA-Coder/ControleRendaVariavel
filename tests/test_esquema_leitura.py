@@ -252,6 +252,28 @@ def test_provento_traz_o_tipo_e_o_valor(sessao_admin, cenario):
     assert (tipo, valor, pago_em, moeda, opcional) == ("JCP", Decimal("42.00"), date(2026, 9, 15), "BRL", None)
 
 
+def test_provento_substituido_pelo_cb_sai_da_view_e_o_do_cb_traz_o_liquido(sessao_admin, cenario):
+    """Contar a linha de planilha e a do CB que a cobre dobraria o provento no FinancasMCP."""
+    c = cenario
+    base = {"owner_id": c["usuario"].id, "broker_id": c["corretora"].id, "ticker_id": c["comprada"].id,
+            "kind": IncomeKind.ALUGUEL, "payment_date": date(2026, 1, 29)}
+    sessao_admin.add_all(
+        [
+            Dividend(**base, amount=Decimal("202.73"), superseded_at=datetime(2026, 10, 18, tzinfo=UTC)),
+            Dividend(**base, amount=Decimal("167.48"), gross_amount=Decimal("352.56"),
+                     withheld_amount=Decimal("185.08"), origin="cb", origin_id="10"),
+            Dividend(**{**base, "payment_date": date(2025, 12, 15)}, amount=Decimal("30.00")),
+        ]
+    )
+    sessao_admin.flush()
+
+    valores = sorted(
+        linha[0] for linha in _consulta(sessao_admin, "SELECT valor FROM leitura.provento WHERE ativo = 'LTRA3'")
+    )
+
+    assert valores == [Decimal("30.00"), Decimal("167.48")]
+
+
 @pytest.mark.parametrize(
     "alteracao",
     [

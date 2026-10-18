@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
+from sqlalchemy import func, select
 
 from app.models import (
     Broker,
@@ -239,3 +240,46 @@ def test_o_schema_aceita_um_acrescimo_opcional(snapshot):
     novo["extra_na_raiz"] = True
 
     validar("crv_snapshot", novo)
+
+
+def _renda_por_valor(snapshot, valor: str):
+    return [item for item in snapshot["income"] if item["amount"] == valor]
+
+
+def test_renda_lida_do_cb_sai_com_origin_e_a_substituida_pela_planilha_nao_sai(sessao, cenario, publicando):
+    """O CB é o dono do dinheiro: a linha dele diz de onde veio, e a linha de planilha
+    que ele passou a cobrir não pode ser publicada, ou o consolidador contaria duas vezes."""
+    usuario = cenario["usuario"]
+    corretora = sessao.scalar(select(Broker).where(Broker.name == "Genial"))
+    ticker = sessao.scalar(select(Ticker).where(Ticker.symbol == "WEGE3"))
+    sessao.add_all(
+        [
+            Dividend(owner_id=usuario.id, kind=IncomeKind.ALUGUEL, broker_id=corretora.id, ticker_id=ticker.id,
+                     amount=Decimal("167.48"), gross_amount=Decimal("352.56"), withheld_amount=Decimal("185.08"),
+                     payment_date=date(2026, 1, 29), origin="cb", origin_id="10"),
+            Dividend(owner_id=usuario.id, kind=IncomeKind.ALUGUEL, broker_id=corretora.id, ticker_id=ticker.id,
+                     amount=Decimal("202.73"), payment_date=date(2026, 1, 27), superseded_at=func.now()),
+        ]
+    )
+    sessao.flush()
+
+    corpo = pedir(publicando, "/patrimonio/v4/snapshot")
+
+    validar("crv_snapshot", corpo)
+    (do_cb,) = _renda_por_valor(corpo, "167.48")
+    assert do_cb["origin"] == "cb"
+    assert do_cb["duplicate_risk"] == "already_recorded_as_controle_bancario_entry"
+    assert _renda_por_valor(corpo, "202.73") == []
+    da_planilha = _renda_por_valor(corpo, "42.50")[0]
+    assert "origin" not in da_planilha
+    assert da_planilha["duplicate_risk"] == "may_also_be_recorded_in_controle_bancario"
+
+
+def test_origin_da_renda_so_aceita_cb(snapshot):
+    """O campo é opcional, mas quando existe só tem um valor: `cb`."""
+    novo = copy.deepcopy(snapshot)
+    _primeiro(novo["income"])["origin"] = "cb"
+    validar("crv_snapshot", novo)
+
+    _primeiro(novo["income"])["origin"] = "planilha"
+    assert invalido("crv_snapshot", novo)

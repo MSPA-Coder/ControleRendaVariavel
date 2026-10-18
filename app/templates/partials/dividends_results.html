@@ -55,20 +55,37 @@
           <td colspan="{{ ticker_columns }}">
             <table class="movements-table">
               <thead>
-                <tr><th>Corretora</th><th>Pagamento</th><th>Data com</th><th>Tipo</th><th>Valor</th><th>Evento/custo</th><th>DY informado</th><th>Cotas</th><th></th></tr>
+                <tr><th>Corretora</th><th>Origem</th><th>Pagamento</th><th>Data com</th><th>Tipo</th><th>Valor líquido</th><th>Bruto</th><th>Retenções</th><th>Evento/custo</th><th>DY</th><th>Cotas</th><th></th></tr>
               </thead>
               <tbody>
                 {% for entry in total.entries %}
+                {% set calc = derived.get(entry.id) %}
                 <tr>
                   <td>{{ entry.broker }}</td>
+                  <td>{% if entry.from_cb %}<span title="Lido do Controle Bancário (somente leitura): o valor é o líquido que entrou no caixa.">CB</span>{% else %}<span title="Lançado à mão ou importado da planilha do myProfit.">Planilha</span>{% endif %}</td>
                   <td>{{ entry.payment_date|ushort }}</td>
                   <td>{{ entry.com_date|ushort if entry.com_date else '' }}</td>
                   <td>{{ entry.kind|income_kind_label }}</td>
                   <td class="number" data-sensitive-value="true">{{ entry.amount|currency(entry.currency) }}</td>
-                  <td class="number" data-sensitive-value="true">{{ entry.yield_on_cost|percent_points(2) if entry.yield_on_cost is not none else '' }}</td>
-                  <td class="number" data-sensitive-value="true">{{ entry.dividend_yield|percent_points(2) if entry.dividend_yield is not none else '' }}</td>
-                  <td class="number" data-sensitive-value="true">{{ entry.quotas|number(8, trim=true) if entry.quotas is not none else '' }}</td>
-                  <td><a href="{{ url_for('portfolio.edit_dividend', dividend_id=entry.id) }}">editar</a></td>
+                  <td class="number" data-sensitive-value="true">{{ entry.gross_amount|currency(entry.currency) if entry.gross_amount is not none else '' }}</td>
+                  <td class="number" data-sensitive-value="true">{{ entry.withheld_amount|currency(entry.currency) if entry.withheld_amount else '' }}</td>
+                  {# Sem cotas na linha (as do CB), YOC, DY e cotas são calculados sobre as posições; o title avisa. #}
+                  {% if entry.yield_on_cost is not none %}
+                  <td class="number" data-sensitive-value="true">{{ entry.yield_on_cost|percent_points(2) }}</td>
+                  {% elif calc and calc.yield_on_cost is not none %}
+                  <td class="number" data-sensitive-value="true" title="Calculado sobre a posição na data do pagamento e o custo médio atual">{{ calc.yield_on_cost|percent_points(2) }}</td>
+                  {% else %}<td></td>{% endif %}
+                  {% if entry.dividend_yield is not none %}
+                  <td class="number" data-sensitive-value="true">{{ entry.dividend_yield|percent_points(2) }}</td>
+                  {% elif calc and calc.dividend_yield is not none %}
+                  <td class="number" data-sensitive-value="true" title="Calculado sobre a posição e a cotação na data do pagamento">{{ calc.dividend_yield|percent_points(2) }}</td>
+                  {% else %}<td></td>{% endif %}
+                  {% if entry.quotas is not none %}
+                  <td class="number" data-sensitive-value="true">{{ entry.quotas|number(8, trim=true) }}</td>
+                  {% elif calc %}
+                  <td class="number" data-sensitive-value="true" title="Quantidade comprada na corretora na data do pagamento">{{ calc.quotas|number(8, trim=true) }}</td>
+                  {% else %}<td></td>{% endif %}
+                  <td>{% if entry.from_cb %}somente leitura{% else %}<a href="{{ url_for('portfolio.edit_dividend', dividend_id=entry.id) }}">editar</a>{% endif %}</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -126,6 +143,16 @@
         {% endif %}
         {% endfor %}
       </tbody>
+      {% if cutoff_subtotals %}
+      <tfoot>
+        {% for currency, total, count in cutoff_subtotals %}
+        <tr title="{{ count }} provento(s) pagos antes de {{ cutoff|udate }}, congelados; a partir dessa data o CB é a fonte (reais) e a planilha segue valendo para dólar e Avenue.">
+          <td>Até {{ cutoff_last_day|udate }} · saldo de corte{{ ' · ' + currency if currency != 'BRL' }}</td>
+          <td class="number" data-sensitive-value="true">{{ total|currency(currency) }}</td>
+        </tr>
+        {% endfor %}
+      </tfoot>
+      {% endif %}
     </table>
   </div>
   {% endif %}
@@ -149,6 +176,9 @@
   {% endfor %}
   {% for currency, total in totals_by_currency %}
     <article><span>Total recebido · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
+  {% endfor %}
+  {% for currency, total, count in cutoff_subtotals %}
+    <article><span>Até {{ cutoff_last_day|udate }} · {{ currency }}</span><strong data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
   {% endfor %}
 </section>
 {% endif %}

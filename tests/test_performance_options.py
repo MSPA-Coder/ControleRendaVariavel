@@ -34,6 +34,7 @@ def test_posicao_de_opcao_sem_extrato_recebe_abertura_sintetica(monkeypatch):
                 901,
                 Side.BUY,
                 Decimal("500"),
+                3,
             )
         ]
     )
@@ -47,6 +48,7 @@ def test_posicao_de_opcao_sem_extrato_recebe_abertura_sintetica(monkeypatch):
             ticker_id=901,
             resulting_signed_quantity=Decimal("500"),
             position_key=("option", 42),
+            broker_id=3,
         )
     ]
 
@@ -58,8 +60,8 @@ def test_posicao_de_opcao_sem_extrato_recebe_abertura_sintetica(monkeypatch):
 def test_posicao_de_opcao_com_extrato_nao_recebe_linha_sintetica(monkeypatch):
     spy = _SessionSpy(
         [
-            (date(2025, 11, 7), 42, 901, Side.BUY, Decimal("500")),
-            (date(2026, 1, 8), 42, 901, Side.BUY, Decimal("700")),
+            (date(2025, 11, 7), 42, 901, Side.BUY, Decimal("500"), 3),
+            (date(2026, 1, 8), 42, 901, Side.BUY, Decimal("700"), 3),
         ]
     )
     monkeypatch.setattr(helpers.db, "session", spy)

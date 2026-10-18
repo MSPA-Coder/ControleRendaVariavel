@@ -107,6 +107,7 @@ def position_timeline(
             Position.ticker_id,
             Position.side,
             func.coalesce(PositionMovement.resulting_quantity, Position.quantity),
+            Position.broker_id,
         )
         .select_from(Position)
         .join(Position.portfolio_ref)
@@ -124,9 +125,9 @@ def position_timeline(
         stock = stock.where(Position.ticker_id.in_(ticker_filter))
 
     events: list[HoldingEvent] = []
-    for occurred_on, position_id, ticker_id, side, quantity in db.session.execute(stock):
+    for occurred_on, position_id, ticker_id, side, quantity, broker_id in db.session.execute(stock):
         sign = Decimal("1") if side == Side.BUY else Decimal("-1")
-        events.append(HoldingEvent(occurred_on, ticker_id, sign * quantity, ("stock", position_id)))
+        events.append(HoldingEvent(occurred_on, ticker_id, sign * quantity, ("stock", position_id), broker_id))
 
     if include_options:
         option_date = func.coalesce(OptionPositionMovement.occurred_on, OptionPosition.opened_on)
@@ -137,6 +138,7 @@ def position_timeline(
                 OptionContract.ticker_id,
                 OptionPosition.side,
                 func.coalesce(OptionPositionMovement.resulting_quantity, OptionPosition.quantity),
+                OptionPosition.broker_id,
             )
             .select_from(OptionPosition)
             .join(OptionPosition.contract)
@@ -156,9 +158,9 @@ def position_timeline(
             option = option.join(OptionPosition.broker_ref).where(Broker.name == broker)
         if ticker_filter is not None:
             option = option.where(OptionContract.ticker_id.in_(ticker_filter))
-        for occurred_on, position_id, ticker_id, side, quantity in db.session.execute(option):
+        for occurred_on, position_id, ticker_id, side, quantity, broker_id in db.session.execute(option):
             sign = Decimal("1") if side == Side.BUY else Decimal("-1")
-            events.append(HoldingEvent(occurred_on, ticker_id, sign * quantity, ("option", position_id)))
+            events.append(HoldingEvent(occurred_on, ticker_id, sign * quantity, ("option", position_id), broker_id))
 
     # Posições já encerradas não têm mais extrato (a exclusão o leva em cascata); o
     # que sobrou delas está no arquivo. O sinal já foi aplicado na gravação.
@@ -169,6 +171,7 @@ def position_timeline(
             PositionLedgerArchive.instrument,
             PositionLedgerArchive.source_position_id,
             PositionLedgerArchive.resulting_signed_quantity,
+            PositionLedgerArchive.broker_id,
         )
         .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
         .where(PositionLedgerArchive.owner_id == owner_id, Portfolio.simulated.is_(False))
@@ -184,8 +187,8 @@ def position_timeline(
         archive = archive.join(Broker, Broker.id == PositionLedgerArchive.broker_id).where(Broker.name == broker)
     if ticker_filter is not None:
         archive = archive.where(PositionLedgerArchive.ticker_id.in_(ticker_filter))
-    for occurred_on, ticker_id, instrument, position_id, quantity in db.session.execute(archive):
-        events.append(HoldingEvent(occurred_on, ticker_id, quantity, (instrument, position_id)))
+    for occurred_on, ticker_id, instrument, position_id, quantity, broker_id in db.session.execute(archive):
+        events.append(HoldingEvent(occurred_on, ticker_id, quantity, (instrument, position_id), broker_id))
 
     events.sort(key=lambda event: event.occurred_on)
     return events

@@ -173,7 +173,10 @@ recurso declaram `completeness=prospective`, a revisão inicial e
 devem ser relançados como movimento operacional do Controle Bancário.
 Proventos são fatos analíticos e podem também estar registrados no
 Controle Bancário; o consumidor não deve lançá-los novamente como movimento de
-caixa. O feed de mudanças é uma outbox de invalidação transacional: o contador
+caixa. A renda lida do CB (`origin = 'cb'`, a partir de 01/01/2026) sai com o
+campo opcional `origin: "cb"`, `amount` líquido e `duplicate_risk =
+already_recorded_as_controle_bancario_entry`; a linha de planilha que o CB
+passou a cobrir (substituída) não é publicada. O feed de mudanças é uma outbox de invalidação transacional: o contador
 singleton é atualizado dentro da mesma transação que muda a origem, e seu lock
 preserva a ordem de commit dos cursores. Cada invalidação exige a leitura de um
 novo snapshot coerente; ela não tenta reconstruir fatos operacionais. Após
@@ -493,7 +496,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `positions`, `position_movements` | posição de ações e seu extrato |
 | `option_expirations`, `option_contracts`, `option_positions`, `option_position_movements` | o mesmo par, para opções |
 | `transactions` | o que a aba Transações mostra |
-| `dividends` | proventos, por tipo de renda |
+| `dividends` | proventos, por tipo de renda; `origin` (`planilha` ou `cb`), `origin_id`, `gross_amount`, `withheld_amount` e `superseded_at` (revisões `20261018_0031` e `20261018_0032`) |
 | `quotes`, `option_quotes` | última leitura global por ticker ou contrato; leituras atrasadas não substituem as mais recentes |
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
@@ -622,6 +625,62 @@ CB (hoje há um token só, e ele lê todas as contas) declarado em `compose.yaml
 com `CB_PATRIMONIO_TOKEN_FILE`; conferir que `cb-api` consta em `ALLOWED_HOSTS`
 do CB (o Wealthfolio já o usa); e o CB-1 em produção para o campo `settlement`.
 
+### Proventos do CB (a partir de 01/01/2026)
+
+O CB é o dono de todo movimento de dinheiro, inclusive o das contas de
+corretora; o CRV é dono dos papéis. Por isso, **de 01/01/2026 em diante** os
+proventos em reais das corretoras que o CB cobre (Genial e XP, configuráveis em
+`PROVENTOS_CB_CORRETORAS`; corte em `PROVENTOS_CB_CORTE`, AAAA-MM-DD) não nascem
+na planilha: são lidos do CB e gravados em `dividends` com `origin = 'cb'`. Dólar
+(Nomad), Avenue e tudo anterior ao corte seguem pela planilha (`origin =
+'planilha'`) até haver extrato com o evento; as 40 linhas até 31/12/2025 ficam
+congeladas e aparecem como o subtotal "Até 31/12/2025 · saldo de corte".
+
+* **Leitura** (`app/patrimonio/cb_client.py`, `read_income_entries`): os
+  lançamentos que o CB-1 marcou com `income_kind`/`income_role` no contrato v4
+  (`instrument`, `income_kind` aluguel|jcp|dividendo, `income_role` credito|
+  irrf_aluguel|corretagem_aluguel|taxa_aluguel|estorno), só os realizados. A
+  categoria não é consultada.
+* **Valor** (`app/dividends/cb_income.py`, função pura): o provento é o **líquido
+  do caixa**. Dividendo e JCP não têm retenção: líquido = crédito. Aluguel:
+  líquido = crédito − IRRF do **mesmo ativo, conta e dia** − (corretagem + taxas −
+  estornos) da conta no dia, **rateados** entre os créditos de aluguel do dia na
+  proporção do valor (maior resto: a soma das partes é exata ao centavo). `amount`
+  guarda o líquido, `gross_amount` o crédito e `withheld_amount` o retido. Estorno
+  e relançamento do mesmo valor num dia sem aluguel têm efeito zero e são
+  ignorados. Retenção sem crédito de aluguel para recebê-la, líquido não positivo
+  e estornos maiores que as cobranças do dia vão para a fila de revisão.
+* **Fila de revisão**: crédito sem `instrument`, sem tipo, ou com ticker que o
+  CRV não cadastra (o comando **nunca cria ticker**) não é gravado. Aparece na
+  tela `/dividends/cb` (ensaio ao vivo, somente leitura) e na saída do comando,
+  com o que fazer.
+* **Importação**: `flask --app app:create_app importar-proventos-cb [--usuario U]
+  [--corte AAAA-MM-DD] [--aplicar]`. O padrão é o **ensaio**; `--aplicar` grava só
+  linhas `origin = 'cb'`, de forma idempotente (chave `origin_id`, o id do
+  lançamento de crédito, com índice único parcial por dono; uma linha cujo valor
+  mudou no CB é atualizada, e uma que sumiu do CB é só listada, nunca apagada).
+  A chave de importação da planilha (`import_key`) virou índice parcial
+  `WHERE origin = 'planilha'` na revisão `20261018_0032`, porque dois créditos
+  iguais do CB no mesmo dia são dois lançamentos.
+* **Substituição da planilha** (`app/dividends/substituicao.py`, pura, e
+  `cb_sync.py`): as linhas de planilha em reais, nas corretoras do CB, com
+  pagamento a partir do corte, seriam contadas em dobro. `flask ...
+  substituir-proventos-planilha-2026 [--aplicar] [--desfazer] [--sim]` pareia cada
+  crédito do CB com as linhas da planilha (mesma corretora, ativo e tipo; data da
+  planilha de 0 a 5 dias antes; valor igual ao crédito em dividendo e JCP e a
+  57,5% do bruto em aluguel, tolerância de centavos; um crédito pode juntar até
+  quatro linhas). Só as pareadas são marcadas (`superseded_at`); linha sem par fica
+  ativa e listada como **divergência**. Nada é apagado e `--desfazer` reverte.
+  Roda depois de `importar-proventos-cb --aplicar` e, em produção, só com backup
+  validado e autorização do mantenedor.
+* **Telas**: cada linha mostra a origem; a do CB é **somente leitura** (editar e
+  excluir respondem 403: a correção é no CB), a substituída não aparece nem se
+  edita; o valor mostra líquido, bruto e retenções; formulário e importação por
+  planilha recusam pagamento em reais das corretoras do CB a partir do corte,
+  apontando o CB. YOC, DY e cotas das linhas sem cotas (as do CB) são calculados
+  sobre as posições (`app/dividends/yields.py`) com a mesma definição da
+  importação da planilha, sem gravar.
+
 ### Esquema `leitura`: o contrato para quem lê o banco de fora
 
 Quem lê o PostgreSQL direto (hoje, o FinancasMCP, por um usuário `mcp_leitura`
@@ -634,7 +693,7 @@ nelas.
 | View | O que carrega |
 |---|---|
 | `leitura.posicao` | posições abertas de ações e opções juntas: preço que vale (última cotação ou fechamento anterior), valor de mercado e resultado em aberto com o sinal do lado (`SELL` é negativo) |
-| `leitura.operacao`, `leitura.provento` | operações com o resultado bruto gravado, e proventos por tipo, com os campos opcionais nulos quando não informados |
+| `leitura.operacao`, `leitura.provento` | operações com o resultado bruto gravado, e proventos por tipo, com os campos opcionais nulos quando não informados. Desde a revisão `20261018_0031` a view exclui as linhas de planilha **substituídas** pelo CB (senão o mesmo dinheiro apareceria duas vezes) e `valor` das linhas do CB é o líquido do caixa |
 | `leitura.cotacao`, `leitura.cotacao_historico`, `leitura.opcao`, `leitura.cotacao_opcao` | cotação atual e série diária, contratos de opção e suas cotações |
 | `leitura.movimento_posicao`, `leitura.movimento_opcao`, `leitura.posicao_historica` | extrato das posições e o histórico preservado das encerradas |
 | `leitura.ativo`, `leitura.carteira`, `leitura.corretora`, `leitura.carteira_ativo` | cadastros |
