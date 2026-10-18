@@ -156,6 +156,13 @@ def _atividade_v3_transacao(item: Transaction, titular: str) -> dict:
     }
 
 
+def _link_do_provento(item: Dividend) -> str:
+    """Linha do CB é somente leitura (não tem tela de edição): o link vai à lista."""
+    if item.from_cb:
+        return url_for("portfolio.dividends")
+    return url_for("portfolio.edit_dividend", dividend_id=item.id)
+
+
 def _atividade_v3_provento(item: Dividend, titular: str) -> dict:
     return {
         "id": _id_v3("atividade-provento", item.id),
@@ -171,7 +178,7 @@ def _atividade_v3_provento(item: Dividend, titular: str) -> dict:
         "instrumento": item.ticker,
         "instituicao": identidade(item.broker),
         "titular": titular,
-        "deep_link": url_for("portfolio.edit_dividend", dividend_id=item.id),
+        "deep_link": _link_do_provento(item),
     }
 
 
@@ -441,7 +448,7 @@ def _atividades_publicadas(contrato: str):
     )
     proventos = (
         select(Dividend)
-        .where(Dividend.owner_id == owner_id)
+        .where(Dividend.owner_id == owner_id, Dividend.superseded_at.is_(None))
         .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
     )
     if inicio:
@@ -807,7 +814,7 @@ def patrimonio_snapshot_v4():
 
     proventos = db.session.scalars(
         select(Dividend)
-        .where(Dividend.owner_id == owner_id)
+        .where(Dividend.owner_id == owner_id, Dividend.superseded_at.is_(None))
         .options(joinedload(Dividend.broker_ref), joinedload(Dividend.ticker_ref))
         .order_by(Dividend.payment_date, Dividend.id)
     ).unique().all()
@@ -816,6 +823,7 @@ def patrimonio_snapshot_v4():
     income = []
     for item in proventos:
         income_id = _id_v3("income", item.id)
+        from_cb = item.from_cb
         income.append(
             {
                 "id": income_id,
@@ -828,11 +836,18 @@ def patrimonio_snapshot_v4():
                 "amount": dinheiro(item.amount),
                 "role": "analytic_only",
                 "cash_accounting_role": "not_a_cash_entry",
-                "duplicate_risk": "may_also_be_recorded_in_controle_bancario",
+                # Linha do CB já existe lá como lançamento (o CRV a leu de lá);
+                # a de planilha pode ou não estar no CB. `origin` é opcional.
+                "duplicate_risk": (
+                    "already_recorded_as_controle_bancario_entry"
+                    if from_cb
+                    else "may_also_be_recorded_in_controle_bancario"
+                ),
                 "account": identidade(item.broker),
                 "account_name": item.broker,
                 "titular": titular,
-                "deep_link": url_for("portfolio.edit_dividend", dividend_id=item.id),
+                "deep_link": _link_do_provento(item),
+                **({"origin": item.origin} if from_cb else {}),
             }
         )
     simulated_equities = int(

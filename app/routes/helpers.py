@@ -529,7 +529,11 @@ def dividend_events(ticker_ids: Iterable[int]) -> list[DividendEvent]:
         return []
     statement = (
         select(Dividend.payment_date, Dividend.ticker_id, Dividend.amount, Dividend.kind)
-        .where(Dividend.owner_id == current_owner_id(), Dividend.ticker_id.in_(ids))
+        .where(
+            Dividend.owner_id == current_owner_id(),
+            Dividend.ticker_id.in_(ids),
+            Dividend.superseded_at.is_(None),
+        )
         .order_by(Dividend.payment_date)
     )
     return [

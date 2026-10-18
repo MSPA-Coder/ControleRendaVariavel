@@ -62,12 +62,17 @@ def build_dividend_report(
     average_cost_by_ticker: Mapping[int, Decimal],
     quotes_by_ticker: Mapping[int, Decimal],
     reference_date: date | None = None,
+    derived_quotas: Mapping[int, Decimal] | None = None,
 ) -> DividendReport:
     """Agrega proventos por ativo e por ano, cada um com seu drill-down.
 
     Espera ``dividends`` já ordenado do mais recente ao mais antigo (mesma
     consulta da lista bruta em ``routes.dividends``): é essa ordem que
     ``TickerDividendTotal.entries`` preserva, sem reordenar.
+
+    ``derived_quotas`` (por ``Dividend.id``) completa as cotas das linhas que
+    vieram sem elas, as do CB (ver ``app.dividends.yields``): sem isso o DY e o
+    YOC de 12 meses ignorariam o provento recebido do CB.
     """
     reference_date = reference_date or date.today()
     trailing_start = reference_date - timedelta(days=365)
@@ -86,8 +91,9 @@ def build_dividend_report(
         ticker_entries.setdefault(ticker_key, []).append(dividend)
         if dividend.payment_date >= trailing_start:
             amount_per_share = dividend.amount_per_share
-            if amount_per_share is None and dividend.quotas:
-                amount_per_share = dividend.amount / dividend.quotas
+            quotas = dividend.quotas or (derived_quotas or {}).get(dividend.id)
+            if amount_per_share is None and quotas:
+                amount_per_share = dividend.amount / quotas
             if amount_per_share is not None:
                 trailing_per_share[ticker_key] = (
                     trailing_per_share.get(ticker_key, Decimal("0")) + amount_per_share

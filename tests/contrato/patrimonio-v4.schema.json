@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/MSPA-Coder/manutencao/blob/main/docs/contratos/patrimonio-v4.schema.json",
   "title": "Contrato patrimonio/v4",
-  "description": "O que o Controle Bancario (CB) e o Controle de Renda Variavel (CRV) publicam em /patrimonio/v4/{metadata,snapshot,changes} para o Wealthfolio. Copia canonica em manutencao/docs/contratos/; as copias nos repositorios dos publicadores e do consumidor sao identicas. Para mudar o contrato, mude esta e copie para todos na mesma mudanca.\n\nO que o schema exige: os campos que os publicadores emitem hoje, com o tipo e o formato de hoje (valor monetario e quantidade como texto decimal, data e instante ISO 8601, moeda ISO 4217, ids prefixados pela fonte). Remover ou renomear um campo, ou trocar o tipo dele, reprova a suite de quem fez a mudanca. O que o schema permite: propriedades a mais. Acrescimo opcional nao muda a versao do contrato (assim entraram `purpose`, `group`, `effective_status` e, em 18/10/2026, `instrument`, `income_kind`, `income_role` e `settlement` do lancamento), e quem nao o conhece o ignora. Para tornar um campo novo obrigatorio, acrescente-o a `required` aqui.\n\nUso: validar contra `#/$defs/<nome>` (cb_metadata, cb_snapshot, cb_changes, crv_metadata, crv_snapshot, crv_changes). Os formatos sao `pattern`, nao `format`: nenhum validador precisa de FormatChecker.",
+  "description": "O que o Controle Bancario (CB) e o Controle de Renda Variavel (CRV) publicam em /patrimonio/v4/{metadata,snapshot,changes} para o Wealthfolio. Copia canonica em manutencao/docs/contratos/; as copias nos repositorios dos publicadores e do consumidor sao identicas. Para mudar o contrato, mude esta e copie para todos na mesma mudanca.\n\nO que o schema exige: os campos que os publicadores emitem hoje, com o tipo e o formato de hoje (valor monetario e quantidade como texto decimal, data e instante ISO 8601, moeda ISO 4217, ids prefixados pela fonte). Remover ou renomear um campo, ou trocar o tipo dele, reprova a suite de quem fez a mudanca. O que o schema permite: propriedades a mais. Acrescimo opcional nao muda a versao do contrato (assim entraram `purpose`, `group`, `effective_status` e, em 18/10/2026, `instrument`, `income_kind`, `income_role` e `settlement` do lancamento e `origin` da renda do CRV), e quem nao o conhece o ignora. Para tornar um campo novo obrigatorio, acrescente-o a `required` aqui.\n\nUso: validar contra `#/$defs/<nome>` (cb_metadata, cb_snapshot, cb_changes, crv_metadata, crv_snapshot, crv_changes). Os formatos sao `pattern`, nao `format`: nenhum validador precisa de FormatChecker.",
   "type": "object",
   "$defs": {
     "decimal": {
@@ -410,7 +410,11 @@
         "account": { "$ref": "#/$defs/texto" },
         "account_name": { "$ref": "#/$defs/texto" },
         "titular": { "$ref": "#/$defs/texto" },
-        "deep_link": { "type": "string", "pattern": "^/" }
+        "deep_link": { "type": "string", "pattern": "^/" },
+        "origin": {
+          "const": "cb",
+          "description": "Opcional (18/10/2026). Presente so na renda que o CRV leu do Controle Bancario (a partir do corte de 01/01/2026): `amount` e o liquido que entrou no caixa e a linha ja existe como lancamento do CB (`duplicate_risk` = already_recorded_as_controle_bancario_entry). Ausente, a renda vem da planilha e pode ou nao estar no CB."
+        }
       }
     },
     "crv_preco_atual": {

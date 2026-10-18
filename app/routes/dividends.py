@@ -1,26 +1,38 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 from sqlalchemy.orm import contains_eager
+from werkzeug.exceptions import HTTPException
 
 from app import db
 from app.core.currency_filter import ALL
 from app.core.validation import parse_finite_decimal
+from app.dividends.cb_sync import (
+    cb_brokers,
+    comes_from_cb,
+    cutoff_date,
+    plan_cb_import,
+    refusal_message,
+)
 from app.dividends.importer import (
     MAX_WORKBOOK_BYTES,
     DividendImportRow,
     DividendWorkbookError,
     read_dividend_workbook,
 )
+from app.dividends.yields import DerivedYield, derive_yields
+from app.executions.conferencia import cb_config_from_app
 from app.models import Broker, Dividend, IncomeKind, Quote, Ticker
+from app.patrimonio.cb_client import CbUnavailableError, read_income_entries
 from app.performance.dividends import build_dividend_report
+from app.positions.holdings_history import QuantityTimeline, closing_price_on
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
@@ -31,6 +43,8 @@ from app.routes.helpers import (
     open_real_average_cost_by_ticker,
     owned_or_404,
     parse_positive_id,
+    position_movement_events,
+    price_series_by_ticker,
     selected_currency_filter,
 )
 
@@ -59,7 +73,8 @@ def _parse_form() -> DividendInput:
     except (KeyError, ValueError, ArithmeticError) as exc:
         raise ValueError("Há um valor ausente ou inválido no formulário.") from exc
     ticker = db.session.get(Ticker, ticker_id)
-    if db.session.get(Broker, broker_id) is None or ticker is None:
+    broker = db.session.get(Broker, broker_id)
+    if broker is None or ticker is None:
         raise ValueError("Selecione uma corretora e um ticker cadastrados.")
     if ticker.is_benchmark:
         raise ValueError("Esse ticker está marcado como referência de comparação.")
@@ -67,6 +82,8 @@ def _parse_form() -> DividendInput:
         raise ValueError("O valor do provento deve ser positivo.")
     if payment_date > date.today():
         raise ValueError("A data de pagamento de um provento recebido não pode estar no futuro.")
+    if comes_from_cb(currency=ticker.currency, broker_name=broker.name, payment_date=payment_date):
+        raise ValueError(refusal_message(broker.name))
     try:
         com_date = date.fromisoformat(raw["com_date"]) if raw.get("com_date") else None
         yield_on_cost = (
@@ -132,6 +149,51 @@ def _toggle_url(param: str, current: set[Any], token: Any) -> str:
     return url_for("portfolio.dividends", **args)
 
 
+def _cutoff_subtotals(records: list[Dividend], cutoff: date) -> list[tuple[str, Decimal, int]]:
+    """Saldo de corte: o que foi recebido antes do corte, por moeda (moeda, total, linhas).
+
+    Até o corte os proventos são o histórico da planilha, congelado; daí em
+    diante vêm do CB. O subtotal separa as duas fases nos relatórios.
+    """
+    totals: dict[str, Decimal] = {}
+    counts: dict[str, int] = {}
+    for record in records:
+        if record.payment_date < cutoff:
+            totals[record.currency] = totals.get(record.currency, Decimal("0")) + record.amount
+            counts[record.currency] = counts.get(record.currency, 0) + 1
+    return [(currency, totals[currency], counts[currency]) for currency in sorted(totals)]
+
+
+def _derived_yields(records: list[Dividend], average_cost: dict[int, Decimal]) -> dict[int, DerivedYield]:
+    """YOC e DY das linhas sem cotas (as do CB), sobre as posições do dono."""
+    pending = [record for record in records if record.quotas is None]
+    if not pending:
+        return {}
+    ticker_ids = sorted({record.ticker_id for record in pending})
+    timelines: dict[str, QuantityTimeline] = {}
+
+    def quantity_at(broker_name: str, ticker_id: int, on: date) -> Decimal:
+        if broker_name not in timelines:
+            timelines[broker_name] = QuantityTimeline(
+                position_movement_events(
+                    None, broker_name, include_options=False, ticker_ids=ticker_ids
+                )
+            )
+        return timelines[broker_name].long_quantity_at(ticker_id, on)
+
+    try:
+        series = price_series_by_ticker(ticker_ids)
+    except HTTPException:
+        # Ticker sem direito de consulta de cotação: sem DY, mas a tela segue.
+        series = {ticker_id: [] for ticker_id in ticker_ids}
+
+    def price_on(ticker_id: int, on: date) -> Decimal | None:
+        found = closing_price_on(series.get(ticker_id, []), on)
+        return found[1] if found else None
+
+    return derive_yields(pending, quantity_at=quantity_at, average_cost=average_cost, price_on=price_on)
+
+
 def dividends_results_context() -> dict[str, object]:
     """Contexto da região de resultados de Proventos.
 
@@ -144,7 +206,7 @@ def dividends_results_context() -> dict[str, object]:
 
     statement = (
         select(Dividend)
-        .where(Dividend.owner_id == current_owner_id())
+        .where(Dividend.owner_id == current_owner_id(), Dividend.superseded_at.is_(None))
         .join(Dividend.broker_ref)
         .join(Dividend.ticker_ref)
         # Os joins já trazem corretora e ticker: sem isto, cada linha
@@ -184,13 +246,21 @@ def dividends_results_context() -> dict[str, object]:
         for ticker_id, quote in db.session.execute(select(Quote.ticker_id, Quote.last_price))
         if quote > 0
     }
+    average_cost = open_real_average_cost_by_ticker()
+    derived = _derived_yields(records, average_cost)
     report = build_dividend_report(
         records,
-        average_cost_by_ticker=open_real_average_cost_by_ticker(),
+        average_cost_by_ticker=average_cost,
         quotes_by_ticker=quotes_by_ticker,
+        derived_quotas={dividend_id: item.quotas for dividend_id, item in derived.items()},
     )
+    cutoff = cutoff_date()
     return {
         "selected_broker": broker or "",
+        "cutoff": cutoff,
+        "cutoff_last_day": cutoff - timedelta(days=1),
+        "cutoff_subtotals": _cutoff_subtotals(records, cutoff),
+        "derived": derived,
         "totals_by_currency": sorted(totals_by_currency.items()),
         "totals_by_kind_currency": totals_by_kind_currency,
         "income_kinds": list(IncomeKind),
@@ -226,6 +296,33 @@ def dividends() -> str:
         "dividends.html",
         brokers=broker_records(),
         **results,
+    )
+
+
+@bp.get("/dividends/cb")
+def dividends_cb() -> str:
+    """Ensaio ao vivo dos proventos do CB e a fila de revisão (só leitura).
+
+    Nada é gravado aqui: quem grava é o comando ``importar-proventos-cb
+    --aplicar``. A fila lista o que o CRV não consegue importar sozinho (crédito
+    sem ativo ou com ticker que o CRV não cadastra), sem criar ticker.
+    """
+    status, message, plan = "ok", "", None
+    try:
+        config = cb_config_from_app()
+        if config is None:
+            status = "nao_configurado"
+        else:
+            plan = plan_cb_import(current_owner_id(), read_income_entries(config))
+    except CbUnavailableError as exc:
+        status, message = "indisponivel", str(exc)
+    return render_template(
+        "dividends_cb.html",
+        status=status,
+        message=message,
+        plan=plan,
+        cutoff=cutoff_date(),
+        brokers=cb_brokers(),
     )
 
 
@@ -281,20 +378,24 @@ def _same_imported_values(dividend: Dividend, row: DividendImportRow) -> bool:
     )
 
 
+def _import_form() -> str:
+    return render_template("dividend_import.html", cutoff=cutoff_date(), cb_brokers=cb_brokers())
+
+
 @bp.route("/dividends/import", methods=["GET", "POST"])
 def import_dividends() -> ResponseReturnValue:
     if request.method == "GET":
-        return render_template("dividend_import.html")
+        return _import_form()
     uploaded = request.files.get("workbook")
     if uploaded is None or not uploaded.filename or not uploaded.filename.lower().endswith(".xlsx"):
         flash("Selecione uma planilha no formato XLSX.", "error")
-        return render_template("dividend_import.html"), 422
+        return _import_form(), 422
     content = uploaded.stream.read(MAX_WORKBOOK_BYTES + 1)
     try:
         workbook = read_dividend_workbook(content)
     except DividendWorkbookError as exc:
         flash(str(exc), "error")
-        return render_template("dividend_import.html"), 422
+        return _import_form(), 422
 
     owner_id = current_owner_id()
     tickers = {ticker.symbol.upper(): ticker for ticker in db.session.scalars(select(Ticker))}
@@ -317,6 +418,9 @@ def import_dividends() -> ResponseReturnValue:
             continue
         if ticker.is_benchmark:
             failures.append(f"Linha {row.source_row}: {row.ticker} é um ticker de referência.")
+            continue
+        if comes_from_cb(currency=ticker.currency, broker_name=broker.name, payment_date=row.payment_date):
+            failures.append(f"Linha {row.source_row}: {refusal_message(broker.name)}")
             continue
         key = _import_key(row, ticker_id=ticker.id, broker_id=broker.id)
         dividend = existing.get(key)
@@ -364,9 +468,23 @@ def import_dividends() -> ResponseReturnValue:
     return redirect(url_for("portfolio.dividends"))
 
 
+def _editable_dividend(dividend_id: int) -> Dividend:
+    """Provento do dono que a tela pode alterar: só linha de planilha e ativa.
+
+    Linha do CB é somente leitura (o dinheiro é do CB; a correção é lá) e linha
+    substituída só volta pelo comando de desfazer, então a tela não a enxerga.
+    """
+    dividend = owned_or_404(Dividend, dividend_id)
+    if dividend.superseded_at is not None:
+        abort(404)
+    if dividend.from_cb:
+        abort(403, description="Provento do Controle Bancário é somente leitura; corrija o lançamento no CB.")
+    return dividend
+
+
 @bp.get("/dividends/<int:dividend_id>/edit")
 def edit_dividend(dividend_id: int) -> str:
-    dividend = owned_or_404(Dividend, dividend_id)
+    dividend = _editable_dividend(dividend_id)
     return render_template(
         "dividend_form.html",
         dividend=dividend,
@@ -378,7 +496,7 @@ def edit_dividend(dividend_id: int) -> str:
 
 @bp.post("/dividends/<int:dividend_id>")
 def update_dividend(dividend_id: int) -> ResponseReturnValue:
-    dividend = owned_or_404(Dividend, dividend_id)
+    dividend = _editable_dividend(dividend_id)
     try:
         data = _parse_form()
     except ValueError as exc:
@@ -404,7 +522,7 @@ def update_dividend(dividend_id: int) -> ResponseReturnValue:
 
 @bp.post("/dividends/<int:dividend_id>/delete")
 def delete_dividend(dividend_id: int) -> ResponseReturnValue:
-    dividend = owned_or_404(Dividend, dividend_id)
+    dividend = _editable_dividend(dividend_id)
     db.session.delete(dividend)
     db.session.commit()
     flash("Renda excluída.", "success")

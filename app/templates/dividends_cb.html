@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Proventos do CB{% endblock %}
+{% block header_controls %}
+<a class="button" href="{{ url_for('portfolio.dividends') }}">Proventos</a>
+{% endblock %}
+{% block content %}
+{# Ensaio ao vivo da importação dos proventos do Controle Bancário e fila de revisão.
+   Somente leitura: nada é gravado aqui. Quem grava é o comando
+   `importar-proventos-cb --aplicar`, e nada da fila é gravado até o mantenedor
+   corrigir o lançamento no CB ou cadastrar o ticker no CRV. #}
+<h1>Proventos do Controle Bancário</h1>
+<p class="form-help">Em reais, nas corretoras {{ brokers|join(', ') }}, a partir de {{ cutoff|ushort }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. Esta tela só mostra o que o comando <code>importar-proventos-cb</code> faria; ela não grava.</p>
+{% if status == 'nao_configurado' %}
+<p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p>
+{% elif status == 'indisponivel' %}
+<p class="form-help" role="alert"><strong>CB indisponível:</strong> {{ message }}</p>
+{% else %}
+<section class="summary dividend-summary" aria-label="Totais do ensaio">
+  <article><span>Créditos válidos</span><strong data-sensitive-value="true">{{ plan.income.proventos|length }}</strong></article>
+  <article><span>Bruto · BRL</span><strong data-sensitive-value="true">{{ plan.income.gross_total|currency('BRL') }}</strong></article>
+  <article><span>Retenções · BRL</span><strong data-sensitive-value="true">{{ plan.income.withheld_total|currency('BRL') }}</strong></article>
+  <article><span>Líquido · BRL</span><strong class="positive" data-sensitive-value="true">{{ plan.income.net_total|currency('BRL') }}</strong></article>
+</section>
+<p class="form-help">{{ plan.create|length }} a criar · {{ plan.update|length }} a atualizar · {{ plan.unchanged }} já iguais · {{ plan.income.review|length }} na fila de revisão · {{ plan.absent_from_cb|length }} gravada(s) que o CB não tem mais.</p>
+{% for problem in plan.problems %}<p class="form-help" role="alert">{{ problem }}</p>{% endfor %}
+
+<section class="exposure" aria-label="Fila de revisão">
+  <div class="exposure-table">
+    <h2>Fila de revisão</h2>
+    {% if plan.income.review %}
+    <table>
+      <thead><tr><th>Data</th><th>Lançamento no CB</th><th>Ativo</th><th>Tipo</th><th>Valor</th><th>O que fazer</th></tr></thead>
+      <tbody>
+        {% for item in plan.income.review %}
+        <tr>
+          <td>{{ item.payment_date|ushort }}</td>
+          <td>{{ item.entry_id }}</td>
+          <td>{{ item.instrument or '-' }}</td>
+          <td>{{ item.kind|income_kind_label if item.kind else '-' }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.amount|currency('BRL') }}</td>
+          <td>{{ item.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Nada na fila de revisão.</p>
+    {% endif %}
+  </div>
+</section>
+
+{% if plan.create or plan.update %}
+<section class="exposure" aria-label="O que a importação gravaria">
+  <div class="exposure-table">
+    <h2>A gravar</h2>
+    <table>
+      <thead><tr><th></th><th>Pagamento</th><th>Corretora</th><th>Ativo</th><th>Tipo</th><th>Bruto</th><th>Retenções</th><th>Líquido</th></tr></thead>
+      <tbody>
+        {% for label, rows in (('criar', plan.create), ('atualizar', plan.update)) %}
+        {% for prepared in rows %}
+        {% set item = prepared.provento %}
+        <tr>
+          <td>{{ label }}</td>
+          <td>{{ item.payment_date|ushort }}</td>
+          <td>{{ item.broker }}</td>
+          <td>{{ item.ticker }}</td>
+          <td>{{ item.kind|income_kind_label }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.gross|currency('BRL') }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.withheld|currency('BRL') }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.net|currency('BRL') }}</td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
