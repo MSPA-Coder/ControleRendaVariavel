@@ -121,6 +121,15 @@ O `compose.yaml` ainda não declara esse segredo; acrescentá-lo é um passo de
 operação separado, junto de conferir que `cb-api` está em `ALLOWED_HOSTS` do CB.
 Sem isso a tela diz "CB não configurado" e nada mais é afetado.
 
+**Proventos do CB (a partir de 01/01/2026).** Usam o mesmo `CB_PATRIMONIO_URL` e
+o mesmo segredo, e só funcionam com o CB-1 em produção e preenchido (campos
+`instrument`, `income_kind` e `income_role`). Configuração opcional:
+`PROVENTOS_CB_CORTE` (padrão `2026-01-01`) e `PROVENTOS_CB_CORRETORAS` (padrão
+`Genial,XP`). A ordem de operação, cada passo com autorização do mantenedor e o
+primeiro com backup validado: `importar-proventos-cb` (ensaio, depois
+`--aplicar`) e, só então, `substituir-proventos-planilha-2026` (ensaio, depois
+`--aplicar`; `--desfazer` reverte). Nenhum dos dois roda sozinho no deploy.
+
 O Compose é a mesma fonte de verdade no local e no VPS: `db-provision` cria ou
 atualiza `investimentos_app` de forma idempotente antes do `migrate`, concede
 apenas DML e uso de sequências e recusa DDL. O papel administrativo

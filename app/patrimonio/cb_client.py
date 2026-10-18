@@ -11,7 +11,9 @@ configurado": a conferência é um recurso opcional e não pode derrubar o resto
 
 O contrato publica tudo em um snapshot (contas, categorias e lançamentos). Este
 cliente o lê inteiro e filtra: os lançamentos da categoria "Operações em
-Bolsa", em ordem de data de pregão.
+Bolsa", em ordem de data de pregão (``read_settlements``), e os lançamentos de
+renda que o CB marcou com ``income_kind``/``income_role`` (``read_income_entries``),
+que alimentam os proventos de 2026 em diante do CRV.
 
 TRANSIÇÃO (CB-1): o CB está acrescentando ao ``cash_entry`` o campo opcional
 ``settlement`` (``pregao_date`` e ``note``). Enquanto ele não está em produção, o
