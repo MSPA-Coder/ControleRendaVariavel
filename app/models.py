@@ -1215,6 +1215,11 @@ class Transaction(Base):
         return (self.closed_on - self.opened_on).days
 
 
+#: Origem de uma linha de ``dividends`` (ver ``Dividend``).
+DIVIDEND_ORIGIN_SHEET = "planilha"
+DIVIDEND_ORIGIN_CB = "cb"
+
+
 class Dividend(Base):
     """Renda recebida por um ativo: dividendo, JCP ou aluguel de ações.
 
@@ -1226,6 +1231,16 @@ class Dividend(Base):
 
     Não classifica o tipo fiscal nem retém imposto: é o valor efetivamente
     recebido, por ativo/corretora/data.
+
+    ``origin`` diz de onde a linha veio. ``planilha`` é o lançamento manual ou
+    importado do painel do myProfit. ``cb`` é a linha lida do Controle Bancário
+    (dono do dinheiro) a partir do corte de ``PROVENTOS_CB_CORTE``: só o comando
+    de importação a grava, é somente leitura nas telas, ``origin_id`` é o id do
+    lançamento de crédito no CB e ``amount`` é o líquido que entrou no caixa,
+    com ``gross_amount`` (o crédito) e ``withheld_amount`` (IRRF, corretagem e
+    taxas do aluguel, já líquidos de estornos) ao lado. ``superseded_at`` marca
+    a linha de planilha que o CB passou a cobrir: ela é mantida para auditoria e
+    reversão, e sai de todo total, relatório e publicação.
     """
 
     __tablename__ = "dividends"
@@ -1243,14 +1258,39 @@ class Dividend(Base):
         CheckConstraint("average_price IS NULL OR average_price >= 0", name="average_price_non_negative"),
         CheckConstraint("quoted_price IS NULL OR quoted_price >= 0", name="quoted_price_non_negative"),
         CheckConstraint("amount_per_share IS NULL OR amount_per_share >= 0", name="amount_per_share_non_negative"),
-        UniqueConstraint(
+        CheckConstraint("origin IN ('planilha', 'cb')", name="origin_valid"),
+        CheckConstraint("origin <> 'cb' OR origin_id IS NOT NULL", name="origin_id_required_for_cb"),
+        CheckConstraint("superseded_at IS NULL OR origin = 'planilha'", name="superseded_only_sheet"),
+        CheckConstraint("gross_amount IS NULL OR gross_amount > 0", name="gross_amount_positive"),
+        CheckConstraint("withheld_amount IS NULL OR withheld_amount >= 0", name="withheld_amount_non_negative"),
+        CheckConstraint(
+            "gross_amount NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="gross_amount_finite",
+        ),
+        CheckConstraint(
+            "withheld_amount NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="withheld_amount_finite",
+        ),
+        # A chave de importação da planilha vale só para a planilha: dois
+        # créditos do CB iguais no mesmo dia (mesmo ativo, tipo e valor) são
+        # dois lançamentos distintos e a chave deles é ``origin_id``.
+        Index(
+            "uq_dividends_import_key_planilha",
             "owner_id",
             "ticker_id",
             "broker_id",
             "kind",
             "payment_date",
             "amount",
-            name="import_key",
+            unique=True,
+            postgresql_where=text("origin = 'planilha'"),
+        ),
+        Index(
+            "uq_dividends_origem_cb",
+            "owner_id",
+            "origin_id",
+            unique=True,
+            postgresql_where=text("origin = 'cb'"),
         ),
     )
 
@@ -1278,10 +1318,21 @@ class Dividend(Base):
     amount_per_share: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
     notes: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    origin: Mapped[str] = mapped_column(
+        String(10), default=DIVIDEND_ORIGIN_SHEET, server_default=DIVIDEND_ORIGIN_SHEET
+    )
+    origin_id: Mapped[str | None] = mapped_column(String(120))
+    gross_amount: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    withheld_amount: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     broker_ref: Mapped[Broker] = relationship()
     ticker_ref: Mapped[Ticker] = relationship()
     owner_ref: Mapped[User] = relationship()
+
+    @property
+    def from_cb(self) -> bool:
+        return self.origin == DIVIDEND_ORIGIN_CB
 
     @property
     def broker(self) -> str:
