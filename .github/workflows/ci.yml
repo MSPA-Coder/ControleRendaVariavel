@@ -27,7 +27,9 @@ concurrency:
 jobs:
   quality:
     name: Qualidade
-    runs-on: ubuntu-24.04
+    # Produção é linux/arm64. Testar e publicar o mesmo artefato nativo,
+    # sem QEMU nem uma segunda imagem não exercitada no VPS.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     permissions:
       contents: read
@@ -118,6 +120,7 @@ jobs:
       - name: Construir a imagem servida
         run: |
           docker compose build --pull web
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' controle-renda-variavel:local)" = linux/arm64
           echo "DELIVERY_APP_ID=$(docker image inspect --format '{{.Id}}' controle-renda-variavel:local)" >> "$GITHUB_ENV"
 
       # O `pip-audit` acima cobre as dependencias Python. Esta varredura cobre o
@@ -142,6 +145,7 @@ jobs:
       - name: Construir a imagem PostgreSQL derivada atualizada
         run: |
           docker compose build --pull --no-cache db
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' mspa-postgres:17-alpine)" = linux/arm64
           echo "DELIVERY_POSTGRES_ID=$(docker image inspect --format '{{.Id}}' mspa-postgres:17-alpine)" >> "$GITHUB_ENV"
       - name: Smoke e readiness do mesmo artefato operacional
         run: |

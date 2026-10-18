@@ -5,6 +5,11 @@ O VPS executa a aplicação Flask e o PostgreSQL em Docker. O Nginx do host é o
 5301 e 5302 permanecem em localhost. O ProfitChart e o agente RTD ficam no
 Windows.
 
+O VPS é `linux/arm64`. O job `Qualidade` usa runner ARM64 nativo e confere a
+arquitetura das duas imagens antes de smoke, Chromium, Trivy e publicação.
+Não se publica uma variante reconstruída e não testada para produção; o
+desenvolvimento local AMD64 continua usando seu próprio build Docker.
+
 O código no servidor é um espelho do branch `main`. Mudanças nascem na máquina
 de desenvolvimento, seguem para o GitHub e são implantadas pelo script
 operacional. Não edite nem faça commit no VPS; `~/deploy.sh` recusa uma árvore
