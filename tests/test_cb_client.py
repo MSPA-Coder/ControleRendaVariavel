@@ -189,3 +189,35 @@ def test_url_que_nao_e_http_e_recusada():
 
 def test_o_token_nao_aparece_no_repr_da_configuracao():
     assert "segredo-do-consumidor" not in repr(CbConfig("http://cb.test", "segredo-do-consumidor"))
+
+
+@pytest.mark.parametrize(
+    ("url", "encaminha_https"),
+    [("http://cb-api:8000/patrimonio/v4/snapshot", True), ("https://cb.test/patrimonio/v4/snapshot", False)],
+)
+def test_salto_http_interno_declara_https_como_o_proxy_faria(monkeypatch, url, encaminha_https):
+    """O CB redireciona http para https e confia no cabeçalho do proxy; sem ele o
+    cliente interno da rede do Compose nunca chega ao conteúdo."""
+    from app.patrimonio import cb_client
+
+    visto = {}
+
+    class Resposta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, limite):
+            return b'{"items": []}'
+
+    def urlopen_falso(request, timeout):
+        visto.update({chave.lower(): valor for chave, valor in request.header_items()})
+        return Resposta()
+
+    monkeypatch.setattr(cb_client, "urlopen", urlopen_falso)
+
+    assert cb_client._fetch_json(url, "segredo") == {"items": []}
+    assert visto["authorization"] == "Bearer segredo"
+    assert ("x-forwarded-proto" in visto) is encaminha_https

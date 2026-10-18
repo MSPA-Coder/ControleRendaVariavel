@@ -141,9 +141,13 @@ def parse_config(base_url: str | None, token: str | None) -> CbConfig | None:
 
 
 def _fetch_json(url: str, token: str) -> Any:
-    request = Request(  # noqa: S310 - esquema validado em parse_config
-        url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}
-    )
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    if urlsplit(url).scheme == "http":
+        # O CB redireciona http para https (USE_HTTPS) e confia no cabeçalho do
+        # proxy. O salto interno pela rede do Compose não passa pelo Nginx, então
+        # declara aqui o que o proxy declararia, em vez de exigir TLS entre contêineres.
+        headers["X-Forwarded-Proto"] = "https"
+    request = Request(url, headers=headers)  # noqa: S310 - esquema validado em parse_config
     try:
         with urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
             body = response.read(MAX_RESPONSE_BYTES + 1)
