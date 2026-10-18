@@ -45,6 +45,9 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(expurgar_outbox)
     app.cli.add_command(importar_negocios_myprofit)
     app.cli.add_command(conferir_pregoes)
+    app.cli.add_command(importar_posicao_myprofit)
+    app.cli.add_command(conciliar_myprofit)
+    app.cli.add_command(reconhecer_conciliacao)
     app.cli.add_command(importar_proventos_cb)
     app.cli.add_command(substituir_proventos_planilha)
     app.cli.add_command(users_group)
@@ -380,6 +383,133 @@ def conferir_pregoes(
         f"{len(result.rows)} pregão(ões): {counts['confere']} confere, {counts['diferenca']} diferença, "
         f"{counts['so_cb']} só no CB, {counts['so_crv']} só no CRV (tolerância {result.tolerance})."
     )
+
+
+@click.command("importar-posicao-myprofit")
+@click.argument("arquivo", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--gravar", is_flag=True, help="Grava de fato. Sem esta opção o comando só faz o ensaio.")
+def importar_posicao_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -> None:
+    """Importa a 'Posição detalhada' do myProfit (XLSX ou TSV) para a conciliação.
+
+    O padrão é o ENSAIO. Com --gravar, a posição da data do relatório entra em
+    myprofit_positions (substitui a que já existia nessa data); posições,
+    transações e proventos do CRV não são tocados. O nome e o CPF do cabeçalho
+    são descartados e nunca aparecem na saída.
+    """
+    from app.executions.conciliacao import save_position_snapshot
+    from app.executions.myprofit import MAX_WORKBOOK_BYTES, ExecutionReportError
+    from app.executions.posicao_myprofit import read_position_report
+
+    owner_id = _owner_for_command(usuario)
+    if arquivo.stat().st_size > MAX_WORKBOOK_BYTES:
+        raise click.ClickException("O relatório excede o limite de 2 MB.")
+    try:
+        report = read_position_report(arquivo.read_bytes())
+    except ExecutionReportError as exc:
+        raise click.ClickException(str(exc)) from exc
+    in_scope = sum(1 for row in report.rows if row.in_scope)
+    click.echo(
+        f"Posição de {report.as_of:%d/%m/%Y}; sha256 {report.sha256[:12]}. "
+        f"{len(report.rows)} linha(s): {in_scope} da B3 (ações, opções, ETF), "
+        f"{len(report.rows) - in_scope} fora de escopo."
+    )
+    for problem in report.rejected_rows:
+        click.echo(f"PENDÊNCIA: {problem}", err=True)
+    if report.rejected_rows:
+        raise click.ClickException("O relatório tem linhas recusadas; nada foi gravado.")
+    if not gravar:
+        click.echo("Ensaio: nada foi gravado. Use --gravar para confirmar.")
+        return
+    removed, created = save_position_snapshot(owner_id, report)
+    db.session.commit()
+    click.echo(f"Gravada a posição de {report.as_of:%d/%m/%Y}: {created} linha(s), {removed} substituída(s).")
+
+
+def _holding_text(holding: object) -> str:
+    if holding is None:
+        return "-"
+    average = f" @ {holding.average:,.4f}" if holding.average is not None else ""
+    return f"{holding.quantity:,.4f}".rstrip("0").rstrip(".") + average
+
+
+@click.command("conciliar-myprofit")
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--inicio", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
+              help="Início das vendas (padrão: 1º de janeiro do ano corrente).")
+@click.option("--fim", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
+              help="Fim das vendas (padrão: hoje).")
+@click.option("--posicao", "posicao", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
+              help="Data da posição do myProfit (padrão: a mais recente gravada).")
+@click.option("--tudo", is_flag=True, help="Mostra também o que confere.")
+def conciliar_myprofit(
+    usuario: str | None,
+    inicio: datetime | None,
+    fim: datetime | None,
+    posicao: datetime | None,
+    tudo: bool,
+) -> None:
+    """Concilia o CRV com o myProfit: posições e vendas dos ativos da B3.
+
+    Somente leitura. Sai com código 1 quando há pendência, para a rotina mensal
+    saber se precisa agir. A diferença explicada vira 'reconhecida' com
+    reconhecer-conciliacao.
+    """
+    from app.executions.conciliacao import STATE_LABELS, build_conciliation
+
+    today = date.today()
+    result = build_conciliation(
+        _owner_for_command(usuario),
+        start=inicio.date() if inicio else date(today.year, 1, 1),
+        end=fim.date() if fim else today,
+        as_of=posicao.date() if posicao else None,
+    )
+    if result.as_of is None:
+        click.echo("Sem posição do myProfit gravada: só as vendas foram conciliadas.", err=True)
+    else:
+        click.echo(f"Posição do myProfit de {result.as_of:%d/%m/%Y}.")
+    click.echo(f"Vendas de {result.start:%d/%m/%Y} a {result.end:%d/%m/%Y}.")
+    for title, rows in (("Posições", result.positions), ("Vendas", result.sales)):
+        shown = [row for row in rows if tudo or row.state != "confere"]
+        click.echo(f"== {title}: {len(rows)} ativo(s), {sum(1 for r in rows if r.pending)} pendência(s)")
+        for row in shown:
+            click.echo(
+                f"  {row.asset:<12} {STATE_LABELS[row.state]:<17} "
+                f"myProfit {_holding_text(row.myprofit):>24}   CRV {_holding_text(row.crv):>24}"
+                + (f"   nota: {row.note}" if row.note else "")
+            )
+    pending = result.pending
+    click.echo(f"{len(pending)} pendência(s).")
+    if pending:
+        raise click.exceptions.Exit(1)
+
+
+@click.command("reconhecer-conciliacao")
+@click.argument("tipo", type=click.Choice(["posicao", "venda"]))
+@click.argument("ativo")
+@click.argument("nota", required=False)
+@click.option("--remover", is_flag=True, help="Remove o reconhecimento.")
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+def reconhecer_conciliacao(
+    tipo: str, ativo: str, nota: str | None, remover: bool, usuario: str | None
+) -> None:
+    """Registra por que uma diferença da conciliação é esperada (ou a remove)."""
+    from app.executions.conciliacao import remove_note, set_note
+
+    owner_id = _owner_for_command(usuario)
+    asset = ativo.strip().upper()
+    if remover:
+        click.echo("Removido." if remove_note(owner_id, tipo, asset) else "Não havia reconhecimento.")
+        db.session.commit()
+        return
+    text = " ".join((nota or "").split())
+    if not text:
+        raise click.ClickException("Explique a diferença na nota (entre aspas).")
+    if len(text) > 300:
+        raise click.ClickException("A nota excede 300 caracteres.")
+    set_note(owner_id, tipo, asset, text)
+    db.session.commit()
+    click.echo(f"Reconhecida a diferença de {tipo} em {asset}.")
 
 
 def _money(value: Decimal) -> str:

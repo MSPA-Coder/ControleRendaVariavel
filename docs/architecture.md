@@ -502,6 +502,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `position_ledger_archive` | extrato preservado de posição encerrada |
 | `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
 | `execution_imports`, `executions` | negócios importados do myProfit e os lotes que os trouxeram (revisão `20261018_0030`); não são posição nem transação |
+| `myprofit_positions`, `reconciliation_notes` | a "Posição detalhada" do myProfit por data e as diferenças da conciliação que o mantenedor explicou (revisão `20261018_0033`); só a conciliação mensal lê |
 
 A transação é delimitada no caso de uso que inicia a escrita — nunca em camada
 inferior, nunca aberta durante uma chamada externa. Invariantes concorrentes são
@@ -616,14 +617,33 @@ substituída por `CB_CORRESPONDENCIA_CONTAS` (JSON). A tela é
 período) e o comando é `flask --app app:create_app conferir-pregoes [--usuario U]
 [--corretora C] [--inicio AAAA-MM-DD] [--fim AAAA-MM-DD]`.
 
-Rede e token no VPS1 (pendência de operação, nada foi operado): o `web` do CRV
-já entra na rede interna `patrimonio-internal` (alias `crv-api`), a mesma em que
-o `web` do CB tem o alias `cb-api:8000`, então `CB_PATRIMONIO_URL=
-http://cb-api:8000/patrimonio/v4` é alcançável sem sair do host. Faltam: um
-segredo `.secrets/cb_patrimonio_token` com o `PATRIMONIO_INTEGRATION_TOKEN` do
-CB (hoje há um token só, e ele lê todas as contas) declarado em `compose.yaml`
-com `CB_PATRIMONIO_TOKEN_FILE`; conferir que `cb-api` consta em `ALLOWED_HOSTS`
-do CB (o Wealthfolio já o usa); e o CB-1 em produção para o campo `settlement`.
+Rede e token no VPS1 (em produção desde 18/10/2026): o `web` do CRV entra na rede
+interna `patrimonio-internal` e o `web` do CB responde nela como `cb-api:8000`,
+então `CB_PATRIMONIO_URL=http://cb-api:8000/patrimonio/v4` é alcançável sem sair do
+host. O token é uma cópia do `PATRIMONIO_INTEGRATION_TOKEN` do CB em
+`.secrets/cb_patrimonio_token` (`CB_PATRIMONIO_TOKEN_FILE`, só no `web`). O CB
+redireciona http para https (`USE_HTTPS`) e confia no cabeçalho do proxy; o salto
+interno não passa pelo Nginx, então o cliente declara `X-Forwarded-Proto: https`
+nas URLs `http`.
+
+### Conciliação mensal com o myProfit
+
+`docs/conciliacao-mensal.md` é o roteiro. O código fica em `app/executions/`:
+
+* `posicao_myprofit.py` lê a "Posição detalhada" (XLSX ou TSV; o TSV é o que o
+  navegador embutido extrai, e `load_sheets` em `myprofit.py` atende os dois
+  relatórios). Pura, com a mesma regra de privacidade do importador: a data final
+  do período é a data da posição, e o nome e o CPF nunca saem.
+* `conciliacao.py` compara, por ativo da B3 (ações, opções e ETF), a posição do
+  myProfit com as posições abertas do CRV (quantidade exata, custo médio com
+  tolerância de 0,1%) e a quantidade vendida nas execuções do período com a
+  quantidade fechada nas transações do CRV. Só leitura; `compare_positions`,
+  `compare_sales` e `apply_notes` são puras. `ReconciliationNote` guarda a
+  diferença explicada, por (tipo, ativo), que passa a "reconhecida".
+* Comandos: `importar-posicao-myprofit <arquivo> [--gravar]` (ensaio por padrão; a
+  posição da mesma data é substituída), `conciliar-myprofit [--inicio] [--fim]
+  [--posicao] [--tudo]` (sai com código 1 se houver pendência) e
+  `reconhecer-conciliacao posicao|venda ATIVO "nota" [--remover]`.
 
 ### Proventos do CB (a partir de 01/01/2026)
 
