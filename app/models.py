@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app import Base
+from app.core.domain import Side as Side
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 from app.core.regional import DEFAULT_REGIONAL_FORMAT
 from app.core.themes import DEFAULT_THEME
@@ -38,11 +39,6 @@ class Market(StrEnum):
     B3 = "B3"
     NYSE = "NYSE"
     NASDAQ = "NASDAQ"
-
-
-class Side(StrEnum):
-    BUY = "C"
-    SELL = "V"
 
 
 class OptionType(StrEnum):

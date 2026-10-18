@@ -60,7 +60,7 @@ relatório da implantação.
 
 ## Validação automatizada
 
-O comando oficial executa Ruff e toda a suíte pytest na imagem `quality`:
+O comando oficial executa Ruff, o piloto mypy e toda a suíte pytest na imagem `quality`:
 
 ```powershell
 docker compose --profile quality run --build --rm quality
@@ -69,6 +69,14 @@ docker compose --profile quality run --build --rm quality
 A imagem `quality` instala exatamente o que a imagem servida instala, mais as
 ferramentas de teste — o que se valida é o ambiente que roda, não um arquivo de
 requisitos.
+
+O mypy roda em modo estrito sobre os arquivos explícitos de `[tool.mypy]`:
+cálculos de posições, histórico de quantidades, validação, filtro de moeda e
+entradas dos novos comandos. Imports fora dessa fronteira não são analisados
+(`follow_imports=skip`): este piloto não afirma verificar o ORM nem todas as
+rotas. Não foram adicionados `Any` ou supressões para obter um check verde.
+Para executá-lo sozinho: `docker compose --profile quality run --build --rm quality mypy`.
+Amplie a lista por fronteira quando o código correspondente estiver pronto.
 
 **`--build` mantém o comando explícito.** O serviço `quality` não monta o código
 do host; Compose reconstrói sem cache a partir das tags base atuais antes de

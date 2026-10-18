@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from app.models import Side
+from app.core.domain import Side
 
 
 @dataclass(frozen=True, slots=True)
