@@ -4,6 +4,7 @@ import logging
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
+from time import perf_counter
 
 import click
 from flask import Flask, current_app
@@ -207,6 +208,7 @@ def import_position_history(estrito: bool) -> None:
     ensinaria a ignorar o alerta.
     """
 
+    started = perf_counter()
     targets = quote_update_targets()
     db.session.rollback()
     today = date.today()
@@ -232,6 +234,10 @@ def import_position_history(estrito: bool) -> None:
     click.echo(f"{len(imported)} daily quotes imported for {len(targets) - len(failures)} tickers.")
     if failures:
         click.echo("No Yahoo history for: " + ", ".join(failures), err=True)
+    logging.getLogger(__name__).info(
+        "quote_history_batch entrypoint=cli targets=%d failures=%d records=%d duration_ms=%.1f",
+        len(targets), len(failures), len(imported), (perf_counter() - started) * 1000,
+    )
     if estrito and current_failures:
         raise click.ClickException(
             "Ainda detidos ou de referência, sem série: " + ", ".join(current_failures)

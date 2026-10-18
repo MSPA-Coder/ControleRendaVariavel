@@ -227,6 +227,7 @@ residuais e `git diff --check`.
 - [Guia de engenharia](AGENTS.md)
 - [Arquitetura](docs/architecture.md)
 - [Desenvolvimento e validação](docs/development.md)
+- [Decisões da evolução incremental](docs/decisoes-evolucao.md)
 - [Contrato funcional de ações](docs/planilha-acoes.md)
 - [Contrato funcional de opções](docs/planilha-opcoes.md)
 - [Implantação no VPS](docs/deployment-vps.md)
