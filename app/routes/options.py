@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import date
-from decimal import Decimal
 from typing import Any
 
 from flask import (
@@ -18,13 +17,11 @@ from flask import (
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.accounts.authorization import requer_admin
-from app.core.currency_filter import ALL
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
-from app.core.submissions import claim_submission
 from app.core.validation import parse_finite_decimal
 from app.models import (
     Broker,
@@ -37,16 +34,20 @@ from app.models import (
     Ticker,
 )
 from app.options.closure import (
-    close_open_position,
     conflicting_position,
-    create_or_merge_position,
     delete_open_transaction_for_position,
     discard_simulation_history,
-    duplicate_entry,
     record_position_adjustment,
     sync_open_transaction_for_position,
 )
 from app.options.portfolio import build_option_portfolio
+from app.positions.commands import OptionPositionInput
+from app.positions.use_cases import (
+    ConfirmationRequiredError,
+    SubmissionConflictError,
+    register_option,
+)
+from app.positions.use_cases import close_option as close_open_position
 from app.routes.helpers import (
     brokers,
     current_owner_id,
@@ -68,56 +69,12 @@ from app.routes.helpers import (
 bp = Blueprint("options", __name__)
 
 
-@dataclass(frozen=True, slots=True)
-class OptionPositionInput:
-    broker_id: int
-    contract_id: int
-    quantity: Decimal
-    average_cost: Decimal
-    target_price: Decimal | None
-    side: Side
-    opened_on: date
-    portfolio_id: int
-
-
 def _positions(
     portfolio_id: int | None = None, broker: str | None = None
 ) -> list[OptionPosition]:
-    statement = (
-        select(OptionPosition)
-        .where(OptionPosition.owner_id == current_owner_id())
-        .join(OptionPosition.broker_ref)
-        .options(
-            joinedload(OptionPosition.broker_ref),
-            joinedload(OptionPosition.quote),
-            joinedload(OptionPosition.contract).joinedload(OptionContract.ticker_ref),
-            joinedload(OptionPosition.contract).joinedload(
-                OptionContract.underlying_ticker_ref
-            ),
-            joinedload(OptionPosition.contract)
-            .joinedload(OptionContract.expiration),
-            # `build_option_portfolio` lê `position.simulated` (via
-            # `portfolio_ref`) para cada posição — sem eager load aqui, cada
-            # leitura seria uma consulta própria.
-            joinedload(OptionPosition.portfolio_ref),
-            # O extrato entra em uma consulta única para as posições da
-            # página: a grade consulta o tamanho dele em toda linha, para
-            # decidir se mostra o `+` (mesmo padrão de
-            # ``routes.helpers.positions_query`` para ações).
-            selectinload(OptionPosition.movements),
-        )
-        .order_by(OptionPosition.opened_on, OptionPosition.id)
-    )
-    if portfolio_id is not None:
-        statement = statement.where(OptionPosition.portfolio_id == portfolio_id)
-    if broker:
-        statement = statement.where(Broker.name == broker)
-    selected_currency = selected_currency_filter()
-    if selected_currency != ALL:
-        statement = statement.join(OptionPosition.contract).join(OptionContract.ticker_ref).where(
-            Ticker.currency == selected_currency
-        )
-    return list(db.session.scalars(statement).unique())
+    from app.positions.queries import option_positions
+
+    return option_positions(current_owner_id(), portfolio_id, broker, currency=selected_currency_filter())
 
 
 def expanded_position_ids() -> set[int]:
@@ -273,24 +230,14 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
-    candidate = OptionPosition(owner_id=current_owner_id(), **asdict(data))
     try:
-        first_submission = claim_submission(
-            owner_id=current_owner_id(), command="option",
-            token=request.form.get("submit_token", ""), payload=asdict(data),
+        result = register_option(
+            data, owner_id=current_owner_id(), token=request.form.get("submit_token", ""),
+            confirm_duplicate=request.form.get("confirm_duplicate") == "1",
         )
-    except ValueError as exc:
-        db.session.rollback()
+    except SubmissionConflictError as exc:
         abort(409, description=str(exc))
-    if not first_submission:
-        db.session.rollback()
-        flash("Este aporte já foi registrado; o reenvio não alterou a posição.", "success")
-        return redirect(url_for("options.index"))
-    # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
-    # indistinguível de um aporte real. Só o usuário sabe qual dos dois é
-    # (mesmo mecanismo de ``routes.positions.create_position``, para ações).
-    if request.form.get("confirm_duplicate") != "1" and duplicate_entry(candidate) is not None:
-        db.session.rollback()
+    except ConfirmationRequiredError:
         return render_template(
             "option_form.html",
             position=request.form,
@@ -300,13 +247,7 @@ def create_position() -> ResponseReturnValue:
             portfolios=portfolio_records(),
             duplicate_warning=True,
         ), 409
-    try:
-        # Carteira Simulada não funde uma segunda entrada — mesma
-        # guarda de ``routes.positions.create_position``, para ações.
-        position, merged = create_or_merge_position(candidate)
-        grant_ticker_entitlement(user_id=position.owner_id, ticker_id=position.contract.ticker_id, held_on=position.opened_on)
     except ValueError as exc:
-        db.session.rollback()
         flash(str(exc), "error")
         return render_template(
             "option_form.html",
@@ -316,8 +257,11 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 409
-    db.session.commit()
-    if merged:
+    if result.replayed:
+        flash("Este aporte já foi registrado; o reenvio não alterou a posição.", "success")
+        return redirect(url_for("options.index"))
+    position = result.position
+    if result.merged:
         flash(
             f"Aporte unificado à posição já existente em "
             f"{position.contract.ticker_ref.symbol} · {position.broker}: quantidade "

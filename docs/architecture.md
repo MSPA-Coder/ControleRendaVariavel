@@ -1,5 +1,24 @@
 # Arquitetura
 
+## Comandos e consultas de posições
+
+`positions/use_cases.py` coordena os aportes e encerramentos de ações/opções:
+o dono entra explicitamente, e o commit/rollback inclui chave idempotente,
+posição, movimentos, transações e direito histórico ao ticker. As rotas só
+convertem formulário, confirmação e resultado em HTTP. Os módulos `closure`
+aplicam as mudanças sem commit parcial; a API antiga de encerramento delega
+ao caso de uso para preservar consumidores existentes.
+
+`positions/queries.py` contém as consultas de grade com dono, moeda e filtros
+explícitos. Os adaptadores em rotas convertem preferências e parâmetros HTTP;
+não existe um repository genérico sobre SQLAlchemy. O histórico de acesso ao
+ticker mora em `accounts/entitlements.py`, sem dependência das rotas.
+
+O compartilhamento entre instrumentos é pontual (transação, chave de envio e
+entradas/saídas tipadas). Abertura cronológica de ações, contratos de opções e
+replay continuam separados: suas diferenças são regras, não duplicação a
+eliminar por uma superclasse.
+
 ## Visão geral
 
 Aplicação Flask monolítica, renderizada no servidor, organizada em três

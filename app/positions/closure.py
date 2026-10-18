@@ -546,7 +546,7 @@ def discard_simulation_history(position: Position) -> None:
         position.movements.remove(movement)
 
 
-def close_open_position(
+def apply_position_closure(
     position_id: int,
     exit_price: Decimal,
     closed_on: date,
@@ -569,10 +569,9 @@ def close_open_position(
     muda: vender parte da posição realiza resultado, não altera o que foi pago
     pelo que restou.
 
-    A carteira Simulada não permite encerramento: a validação roda **depois**
-    do ``FOR UPDATE`` (para travar antes de decidir) e faz ``rollback`` antes
-    de propagar, liberando o lock sem deixar nada pela metade — mesmo
-    padrão de erro que ``plan_position_closure`` já usa aqui embaixo.
+    A carteira Simulada não permite encerramento: a validação roda depois
+    do ``FOR UPDATE``. Não faz commit/rollback: o caso de uso controla a
+    transação completa, inclusive falhas ao arquivar o histórico.
     """
 
     position = db.session.scalar(
@@ -583,21 +582,16 @@ def close_open_position(
     if position is None:
         return None
     if position.simulated:
-        db.session.rollback()
         raise ValueError(SIMULATED_CLOSE_REJECTED)
-    try:
-        split = plan_position_closure(
-            held_quantity=position.quantity,
-            average_cost=position.average_cost,
-            side=position.side.value,
-            opened_on=position.opened_on,
-            closed_on=closed_on,
-            exit_price=exit_price,
-            requested_quantity=quantity,
-        )
-    except ValueError:
-        db.session.rollback()
-        raise
+    split = plan_position_closure(
+        held_quantity=position.quantity,
+        average_cost=position.average_cost,
+        side=position.side.value,
+        opened_on=position.opened_on,
+        closed_on=closed_on,
+        exit_price=exit_price,
+        requested_quantity=quantity,
+    )
 
     if split.is_total:
         transaction = _close_entirely(position, exit_price, closed_on, split.result)
@@ -605,8 +599,17 @@ def close_open_position(
         transaction = _close_partially(
             position, split.closing_quantity, exit_price, closed_on, split.result
         )
-    db.session.commit()
     return transaction
+
+
+def close_open_position(
+    position_id: int, exit_price: Decimal, closed_on: date,
+    quantity: Decimal | None = None, *, owner_id: int,
+) -> Transaction | None:
+    """Compatibilidade da API existente; a transação pertence ao caso de uso."""
+    from app.positions.use_cases import close_stock
+
+    return close_stock(position_id, exit_price, closed_on, quantity, owner_id=owner_id)
 
 
 def _close_entirely(

@@ -6,17 +6,18 @@ from decimal import Decimal
 
 from flask import abort, current_app, request
 from flask_login import current_user  # type: ignore[import-untyped]
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 
 from app import db
+from app.accounts.entitlements import grant_ticker_entitlement as grant_ticker_entitlement
 from app.collector.settings import (
     DEFAULT_AGENT_CHECK_INTERVAL_SECONDS,
     DEFAULT_POLL_INTERVAL_SECONDS,
 )
 from app.core.currency import TaxaDeCambio
-from app.core.currency_filter import ALL, parse_currency_filter
+from app.core.currency_filter import parse_currency_filter
 from app.models import (
     AppSetting,
     Broker,
@@ -96,19 +97,6 @@ def owned_or_404_for_update(
     if record is None:
         abort(404)
     return record
-
-
-def grant_ticker_entitlement(*, user_id: int, ticker_id: int, held_on: date) -> None:
-    """Registra a primeira posse confirmada sem revogar histórico ao encerrar."""
-    statement = insert(UserTickerEntitlement).values(
-        user_id=user_id, ticker_id=ticker_id, first_held_on=held_on
-    )
-    db.session.execute(
-        statement.on_conflict_do_update(
-            index_elements=[UserTickerEntitlement.user_id, UserTickerEntitlement.ticker_id],
-            set_={"first_held_on": func.least(UserTickerEntitlement.first_held_on, statement.excluded.first_held_on)},
-        )
-    )
 
 
 def ticker_is_entitled(ticker_id: int) -> bool:
@@ -217,49 +205,12 @@ def positions_query(
     exclude_simulated: bool = False,
     currency: str | None = None,
 ) -> list[Position]:
-    order_columns = (
-        (Ticker.currency, Broker.name, Ticker.symbol, Position.opened_on)
-        if group_by_broker
-        else (Ticker.currency, Ticker.symbol, Broker.name, Position.opened_on)
+    from app.positions.queries import stock_positions
+
+    return stock_positions(
+        current_owner_id(), portfolio_id, broker, group_by_broker=group_by_broker,
+        exclude_simulated=exclude_simulated, currency=currency or selected_currency_filter(),
     )
-    statement = (
-        select(Position)
-        .where(Position.owner_id == current_owner_id())
-        .join(Position.broker_ref)
-        .join(Position.ticker_ref)
-        .options(
-            joinedload(Position.quote),
-            joinedload(Position.broker_ref),
-            joinedload(Position.ticker_ref),
-            # `build_portfolio` lê `position.simulated` (via `portfolio_ref`)
-            # para cada posição, para agrupar os totais por (moeda, simulada)
-            # — sem eager load aqui, cada leitura seria uma consulta própria.
-            joinedload(Position.portfolio_ref),
-            # O extrato entra em uma consulta única para as posições da página:
-            # a Carteira consulta o tamanho dele em toda linha, para decidir se
-            # mostra o `+`, e sem isso seria uma consulta por posição.
-            selectinload(Position.movements),
-        )
-        .order_by(*order_columns)
-    )
-    if portfolio_id is not None:
-        statement = statement.where(Position.portfolio_id == portfolio_id)
-    if portfolio_id is None or exclude_simulated:
-        # "Todas" quer dizer todas as **reais**: carteira simulada é insight,
-        # e misturá-la no conjunto padrão faria o número somado na tela se
-        # ler como patrimônio. Para vê-la, escolhe-se ela no filtro.
-        #
-        # `exclude_simulated` força a exclusão mesmo com uma carteira
-        # simulada escolhida na URL: é o que as páginas de Exposição
-        # (Análise) usam, onde ela nunca entra. O resultado
-        # fica vazio nesse caso, o que é seguro.
-        statement = statement.join(Position.portfolio_ref).where(Portfolio.simulated.is_(False))
-    if broker:
-        statement = statement.where(Broker.name == broker)
-    selected_currency = currency or selected_currency_filter()
-    if selected_currency != ALL:
-        statement = statement.where(Ticker.currency == selected_currency)
-    return list(db.session.scalars(statement).unique())
 
 
 def brokers() -> list[str]:
