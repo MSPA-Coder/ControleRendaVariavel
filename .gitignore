@@ -79,3 +79,4 @@ Thumbs.db
 # especificos desta maquina.
 .docker-local/
 tmp/
+.browser-results/

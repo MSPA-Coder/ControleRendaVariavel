@@ -103,6 +103,30 @@ imagem. Vulnerabilidade sem correção publicada sai por `--ignore-vuln ID` com 
 comentário dizendo por quê — cada exceção vira uma decisão explícita e datada,
 em vez de um vermelho permanente que se aprende a ignorar.
 
+### Piloto de navegador (dados descartáveis)
+
+Além do `quality`, o Chromium executa os fluxos financeiros em
+`compose.browser.yaml`: números e datas BR/EUA, confirmação/cancelamento,
+reenvio idempotente e encerramento parcial. Não substitui os testes de
+concorrência e autorização com PostgreSQL. Não publica portas nem monta
+segredos ou volumes operacionais. Contas e senha do bootstrap são sintéticas.
+
+```powershell
+New-Item -ItemType Directory -Force .browser-results
+docker compose -f compose.browser.yaml down
+docker compose -f compose.browser.yaml build --pull
+docker compose -f compose.browser.yaml up --no-build --abort-on-container-exit --exit-code-from browser-tests
+# Guarde o código de saída anterior; depois encerre somente essa pilha:
+docker compose -f compose.browser.yaml down
+```
+
+A CA local já descrita acima é a única entrada do host; `BROWSER_CA_FILE`
+permite indicar outra localização. Em Linux, dê escrita ao diretório
+`.browser-results` para o usuário do runner (`chmod 777` em CI descartável).
+Falhas salvam capturas apenas dos dados fictícios nesse diretório ignorado.
+Cada execução começa com banco vazio em tmpfs. A CI `Navegador` repete o
+mesmo comando sem instalar Node ou navegadores no host.
+
 ### Diante de um teste vermelho
 
 Decida primeiro de quem é o defeito, e diga isso em voz alta:
