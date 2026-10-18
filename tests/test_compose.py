@@ -78,3 +78,17 @@ def test_todo_servico_roda_sem_privilegios_extras() -> None:
         if not ok
     }
     assert not fora, f"serviços sem endurecimento: {fora}"
+
+
+def test_imagem_do_postgres_recebe_revisao_e_run_da_ci() -> None:
+    """O `deploy.sh` confere as labels de revisão e de run nas DUAS imagens
+    publicadas (app e PostgreSQL). Todo serviço que constrói o Dockerfile do
+    banco repassa os mesmos argumentos, porque eles compartilham a tag da imagem."""
+    construidos = {
+        nome: servico["build"]
+        for nome, servico in _servicos().items()
+        if str(servico.get("build", {}).get("dockerfile", "")).endswith("sandbox-postgres/Dockerfile")
+    }
+    assert construidos
+    for nome, build in construidos.items():
+        assert set(build["args"]) == {"ARTIFACT_REVISION", "ARTIFACT_RUN"}, nome
