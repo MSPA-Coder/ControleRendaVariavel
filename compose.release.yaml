@@ -1,0 +1,15 @@
+# Exclusivo de deploy.sh. As referências são resolvidas e conferidas antes
+# do fast-forward; nunca usar tags móveis ou reconstruir neste caminho.
+services:
+  web:
+    image: ${APP_IMAGE:?deploy.sh deve fornecer APP_IMAGE por digest}
+    pull_policy: never
+  migrate:
+    image: ${APP_IMAGE:?deploy.sh deve fornecer APP_IMAGE por digest}
+    pull_policy: never
+  db:
+    image: ${POSTGRES_IMAGE:?deploy.sh deve fornecer POSTGRES_IMAGE por digest}
+    pull_policy: never
+  db-provision:
+    image: ${POSTGRES_IMAGE:?deploy.sh deve fornecer POSTGRES_IMAGE por digest}
+    pull_policy: never

@@ -60,6 +60,11 @@ COPY app ./app
 RUN uv sync --locked --no-editable
 
 FROM base AS runtime
+ARG ARTIFACT_REVISION=local
+ARG ARTIFACT_RUN=local
+LABEL org.opencontainers.image.source="https://github.com/MSPA-Coder/ControleRendaVariavel" \
+      org.opencontainers.image.revision=$ARTIFACT_REVISION \
+      br.com.mspa.ci-run=$ARTIFACT_RUN
 ENV PATH="/opt/venv/bin:${PATH}"
 COPY --from=builder /opt/venv /opt/venv
 COPY app ./app

@@ -58,6 +58,9 @@ services:
       pull: true
       no_cache: true
       target: runtime
+      args:
+        ARTIFACT_REVISION: ${ARTIFACT_REVISION:-local}
+        ARTIFACT_RUN: ${ARTIFACT_RUN:-local}
       secrets:
         - local_ca
     restart: unless-stopped
@@ -139,6 +142,9 @@ services:
       pull: true
       no_cache: true
       target: runtime
+      args:
+        ARTIFACT_REVISION: ${ARTIFACT_REVISION:-local}
+        ARTIFACT_RUN: ${ARTIFACT_RUN:-local}
       secrets:
         - local_ca
     read_only: true

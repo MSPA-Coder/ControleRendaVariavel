@@ -12,6 +12,33 @@ suja e a deploy key é somente leitura.
 
 ## Primeira publicação
 
+Para atualizações por `~/deploy.sh renda`, instale primeiro o script
+correspondente de `_manutencao`. A CI de `main` constrói as imagens de
+aplicação e PostgreSQL, executa smoke, Chromium e Trivy sobre esses artefatos e
+publica os mesmos IDs, sem reconstruir. PRs não publicam. Os pacotes são
+`ghcr.io/mspa-coder/controlerendavariavel` e
+`ghcr.io/mspa-coder/controlerendavariavel-postgres`, com
+`run-<run_id>-<tentativa>`.
+
+O script exige o run completo `CI` bem-sucedido em `main` para o SHA exato,
+confere revisão/run da imagem e resolve as duas tags para digest antes de
+alterar o app. Usa `compose.release.yaml` com `--no-build --pull never`.
+Registry/run inacessível ou identidade incorreta aborta sem alterar produção;
+`--sem-ci` não dispensa essa identidade. O primeiro bootstrap abaixo continua
+manual; não o use para atualizar uma instalação existente.
+
+O GHCR cria pacotes privados por padrão. Antes da ativação, escolha a
+visibilidade de ambos: públicos permitem pull anônimo; privados exigem acesso
+de leitura no mecanismo de credenciais Docker do VPS, provisionado por canal
+seguro. Nunca registre tokens em arquivos do projeto ou logs. Sem acesso
+confirmado, não ative o deploy automático.
+
+A rodada semanal da CI publica um novo run mesmo no mesmo SHA. O refresh do
+VPS baixa essa imagem já testada; não reconstrói bases. O estado saudável em
+`~/.local/state/mspa-deploy/controle-renda-variavel.images` guarda os digests.
+Rollback restaura os IDs locais anteriores de web/migrate e
+PostgreSQL/provisionamento, sem pull/build. Migrações/dados não são revertidos.
+
 O repositório é clonado com a deploy key cadastrada no GitHub e o
 apelido `github-renda` configurado em `~/.ssh/config`:
 
