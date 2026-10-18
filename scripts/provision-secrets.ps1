@@ -195,6 +195,10 @@ $patrimonioIntegrationTokenPath = Join-Path $secretsDir "patrimonio_integration_
 Ensure-SecretFile -Path $patrimonioIntegrationTokenPath -Value (New-ControlToken)
 $patrimonioIntegrationTokenQualityPath = Join-Path $secretsDir "patrimonio_integration_token_quality"
 Ensure-SecretFile -Path $patrimonioIntegrationTokenQualityPath -Value (New-ControlToken)
+# Local: um valor aleatorio basta (sem CB_PATRIMONIO_URL o CRV nao chama o CB).
+# No VPS o arquivo e uma copia do PATRIMONIO_INTEGRATION_TOKEN do Controle Bancario.
+$cbPatrimonioTokenPath = Join-Path $secretsDir "cb_patrimonio_token"
+Ensure-SecretFile -Path $cbPatrimonioTokenPath -Value (New-ControlToken)
 Migrate-DotEnvSecretPaths
 
 Write-Output "Arquivos de segredo provisionados em .secrets. Nenhum valor foi exibido; revise permissões locais antes de iniciar a pilha."

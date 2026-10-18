@@ -110,16 +110,18 @@ autorizado. `PATRIMONIO_TITULAR` é somente o nome da pessoa no contrato externo
 não substitui esse vínculo. O publicador recusa dados fora de
 `PATRIMONIO_MAX_HISTORICO_DIAS` (dez anos por padrão).
 
-**Conferência por pregão contra o CB (opcional, ainda não ligada em produção).**
-Para a tela `/executions/reconciliation` e o comando `conferir-pregoes` lerem a
-liquidação do Controle Bancário, o `web` precisa de `CB_PATRIMONIO_URL`
-(`http://cb-api:8000/patrimonio/v4`, pela rede interna `patrimonio-internal` em
-que o CRV já entra com o alias `crv-api`) e do segredo
-`CB_PATRIMONIO_TOKEN_FILE`, uma cópia do `PATRIMONIO_INTEGRATION_TOKEN` do CB
-(o CB tem um token só, e ele lê todas as contas: trate-o como senha de banco).
-O `compose.yaml` ainda não declara esse segredo; acrescentá-lo é um passo de
-operação separado, junto de conferir que `cb-api` está em `ALLOWED_HOSTS` do CB.
-Sem isso a tela diz "CB não configurado" e nada mais é afetado.
+**Leitura do CB (conferência por pregão e proventos do CB).** Para a tela
+`/executions/reconciliation`, o comando `conferir-pregoes` e `importar-proventos-cb`
+lerem o Controle Bancário, o `web` precisa de `CB_PATRIMONIO_URL` no `.env` do
+VPS (`http://cb-api:8000/patrimonio/v4`, pela rede interna `patrimonio-internal`
+em que o CRV já entra com o alias `crv-api`) e do segredo
+`.secrets/cb_patrimonio_token`, declarado no `compose.yaml` como
+`CB_PATRIMONIO_TOKEN_FILE`. O arquivo é uma cópia do `PATRIMONIO_INTEGRATION_TOKEN`
+do CB (o CB tem um token só, e ele lê todas as contas: trate-o como senha de
+banco, nunca o imprima). **Crie o arquivo antes de subir a pilha**: sem ele o
+Docker cria um diretório no lugar e o `web` não sobe. O `cb-api` já está em
+`ALLOWED_HOSTS` do CB (conferido em 18/10/2026). Sem `CB_PATRIMONIO_URL` a tela
+diz "CB não configurado" e nada mais é afetado.
 
 **Proventos do CB (a partir de 01/01/2026).** Usam o mesmo `CB_PATRIMONIO_URL` e
 o mesmo segredo, e só funcionam com o CB-1 em produção e preenchido (campos

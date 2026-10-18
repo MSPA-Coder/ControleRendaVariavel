@@ -100,6 +100,11 @@ services:
       PATRIMONIO_TITULAR: ${PATRIMONIO_TITULAR:-}
       PATRIMONIO_OWNER_ID: ${PATRIMONIO_OWNER_ID:-}
       PATRIMONIO_MAX_HISTORICO_DIAS: ${PATRIMONIO_MAX_HISTORICO_DIAS:-3650}
+      # Leitura do Controle Bancario (conferencia por pregao e proventos do CB).
+      # Sem URL, o CRV diz "CB nao configurado" e nada mais muda. No VPS, a URL
+      # e http://cb-api:8000/patrimonio/v4 (rede patrimonio-internal).
+      CB_PATRIMONIO_URL: ${CB_PATRIMONIO_URL:-}
+      CB_PATRIMONIO_TOKEN_FILE: /run/secrets/cb_patrimonio_token
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
@@ -116,6 +121,7 @@ services:
       - collector_agent_read_token
       - collector_agent_write_token
       - patrimonio_integration_token
+      - cb_patrimonio_token
     ports:
       - "127.0.0.1:5301:5003"
     depends_on:
@@ -401,5 +407,7 @@ secrets:
     file: .secrets/collector_agent_write_token
   patrimonio_integration_token:
     file: .secrets/patrimonio_integration_token
+  cb_patrimonio_token:
+    file: .secrets/cb_patrimonio_token
   patrimonio_integration_token_quality:
     file: .secrets/patrimonio_integration_token_quality
