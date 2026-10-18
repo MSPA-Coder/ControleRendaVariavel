@@ -46,6 +46,20 @@ def test_tokens_patrimoniais_separados_no_runtime_e_no_quality() -> None:
     assert "patrimonio_integration_token_quality" in quality["secrets"]
 
 
+def test_leitura_do_cb_vem_de_segredo_de_arquivo_so_no_web() -> None:
+    """O token do CB (cópia do PATRIMONIO_INTEGRATION_TOKEN dele) é segredo de
+    arquivo e só o `web` o recebe; a URL é opcional e vazia por padrão."""
+    servicos = _servicos()
+    web = servicos["web"]
+
+    assert web["environment"]["CB_PATRIMONIO_TOKEN_FILE"] == "/run/secrets/cb_patrimonio_token"
+    assert "CB_PATRIMONIO_URL" in web["environment"]
+    assert "cb_patrimonio_token" in web["secrets"]
+    for nome, servico in servicos.items():
+        if nome != "web":
+            assert "cb_patrimonio_token" not in servico.get("secrets", []), nome
+
+
 def test_todo_servico_roda_sem_privilegios_extras() -> None:
     """Nenhum contêiner ganha escrita na raiz, capability ou escalada.
 

@@ -66,7 +66,8 @@ jobs:
           printf '%s\n' 'ci-placeholder-write-only-token' > .secrets/collector_agent_write_token
           openssl rand -hex 32 > .secrets/patrimonio_integration_token
           openssl rand -hex 32 > .secrets/patrimonio_integration_token_quality
-          chmod 0644 .secrets/patrimonio_integration_token .secrets/patrimonio_integration_token_quality
+          printf '%s\n' 'ci-placeholder-cb-token' > .secrets/cb_patrimonio_token
+          chmod 0644 .secrets/patrimonio_integration_token .secrets/patrimonio_integration_token_quality .secrets/cb_patrimonio_token
           # O `chmod` na senha do PostgreSQL não é descuido, e o `umask 077`
           # continua valendo para os outros dois arquivos.
           #
@@ -245,7 +246,8 @@ jobs:
           printf '%s\n' 'ci-placeholder-write-only-token' > .secrets/collector_agent_write_token
           openssl rand -hex 32 > .secrets/patrimonio_integration_token
           openssl rand -hex 32 > .secrets/patrimonio_integration_token_quality
-          chmod 0644 .secrets/patrimonio_integration_token .secrets/patrimonio_integration_token_quality
+          printf '%s\n' 'ci-placeholder-cb-token' > .secrets/cb_patrimonio_token
+          chmod 0644 .secrets/patrimonio_integration_token .secrets/patrimonio_integration_token_quality .secrets/cb_patrimonio_token
       - name: Validar contrato do PostgreSQL no Compose
         shell: bash
         run: |
