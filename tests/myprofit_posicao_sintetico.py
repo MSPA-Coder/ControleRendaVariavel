@@ -38,7 +38,7 @@ def posicao_xlsx(linhas: list[list[object]], *, ate: date = date(2026, 10, 31)) 
     workbook = Workbook()
     sheet = workbook.active
     sheet.append([f"Emitido por: {TITULAR_FICTICIO} - {CPF_FICTICIO}"])
-    sheet.append([f"Período: {ate.replace(day=1):%d/%m/%Y} até {ate:%d/%m/%Y}"])
+    sheet.append([f"Posição em: {ate:%d/%m/%Y}"])
     sheet.append(list(COLUNAS_POSICAO))
     for item in linhas:
         sheet.append(item)
@@ -50,7 +50,7 @@ def posicao_xlsx(linhas: list[list[object]], *, ate: date = date(2026, 10, 31)) 
 def posicao_tsv(linhas: list[list[object]], *, ate: date = date(2026, 10, 31)) -> bytes:
     """O mesmo relatório como o navegador o extrai: TSV, titular já anonimizado."""
     saida = ["Emitido por: TITULAR ANONIMIZADO - 000.000.000-00"]
-    saida.append(f"Período: {ate.replace(day=1):%d/%m/%Y} até {ate:%d/%m/%Y}")
+    saida.append(f"Posição em: {ate:%d/%m/%Y}")
     saida.append("\t".join(COLUNAS_POSICAO))
     for item in linhas:
         saida.append("\t".join("" if c in (None, " ") else str(c) for c in item))

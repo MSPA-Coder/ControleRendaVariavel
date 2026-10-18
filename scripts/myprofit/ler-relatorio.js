@@ -80,7 +80,7 @@ window.lerRelatorio = async function (relatorio, titulo, de, ate) {
 // TSV a partir das linhas: o cabeçalho anonimizado (nome e CPF viram um texto fixo).
 window.linhasEmTsv = function (linhas) {
   const saida = ['Emitido por: TITULAR ANONIMIZADO - 000.000.000-00'];
-  saida.push(linhas[1] && /^Per/.test(linhas[1][0]) ? linhas[1][0] : 'Período: ?');
+  saida.push(linhas[1][0]); // 'Período: ...' ou 'Posição em: ...': só a data, sem dado pessoal
   for (const l of linhas.slice(2)) saida.push(l.join('\t'));
   return saida.join('\n');
 };

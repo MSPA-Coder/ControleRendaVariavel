@@ -1,9 +1,10 @@
 """Leitura do relatório "Posição detalhada" do myProfit (XLSX ou TSV).
 
-Mesmo cuidado do ``myprofit.py``: as duas primeiras linhas identificam o titular
-(``Emitido por: <nome> - <CPF>`` e ``Período: dd/mm/aaaa até dd/mm/aaaa``); do
-período só se lê a data final, que é a data da posição, e o nome e o CPF
-**nunca** saem desta função. A terceira linha é o cabeçalho da tabela.
+Mesmo cuidado do ``myprofit.py``: a primeira linha identifica o titular
+(``Emitido por: <nome> - <CPF>``) e a segunda traz a data (``Posição em:
+dd/mm/aaaa``; um ``Período: dd/mm/aaaa até dd/mm/aaaa`` também é aceito, e vale a
+data final). O nome e o CPF **nunca** saem desta função. A terceira linha é o
+cabeçalho da tabela.
 
 O relatório não traz corretora: a posição vem somada por ativo, e é assim que a
 conciliação a compara com o CRV. Lotes do mesmo ativo (o Tesouro, por exemplo)
@@ -15,6 +16,7 @@ O módulo é puro: recebe bytes e devolve linhas validadas.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -33,6 +35,17 @@ from app.executions.myprofit import (
 )
 
 REQUIRED_COLUMNS = ("Ativo", "Qtd", "Preço medio", "Total investido", "Grupo")
+
+_AS_OF = re.compile(r"posi[cç][aã]o em:\s*(\d{2}/\d{2}/\d{4})", re.IGNORECASE)
+
+
+def _as_of_text(line: str) -> str | None:
+    """A data da posição que a segunda linha do relatório informa."""
+    as_of = _AS_OF.search(line)
+    if as_of:
+        return as_of.group(1)
+    period = _PERIOD.search(line)
+    return period.group(2) if period else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +104,7 @@ def read_position_report(content: bytes) -> PositionReport:
     """Lê a posição e devolve a data, as linhas válidas e as recusadas."""
     sheets = load_sheets(content)
     problem = (
-        "O relatório não começa com as linhas 'Emitido por' e 'Período'; "
+        "O relatório não começa com as linhas 'Emitido por' e 'Posição em'; "
         "use a 'Posição detalhada' do myProfit."
     )
     for sheet_rows in sheets:
@@ -99,8 +112,8 @@ def read_position_report(content: bytes) -> PositionReport:
         if len(preview) < 3:
             continue
         first_cell = _fold(preview[0][0] if preview[0] else None)
-        period = _PERIOD.search(str(preview[1][0] if preview[1] else ""))
-        if not first_cell.startswith("emitido por") or period is None:
+        as_of_text = _as_of_text(str(preview[1][0] if preview[1] else ""))
+        if not first_cell.startswith("emitido por") or as_of_text is None:
             continue
         headers = _header_map(preview[2])
         if headers is None:
@@ -109,9 +122,9 @@ def read_position_report(content: bytes) -> PositionReport:
             problem = "Faltam as colunas obrigatórias: " + ", ".join(missing) + "."
             continue
         try:
-            as_of = _as_date(period.group(2), field_name="a data da posição")
+            as_of = _as_date(as_of_text, field_name="a data da posição")
         except ValueError as exc:
-            raise ExecutionReportError("O período do relatório é inválido.") from exc
+            raise ExecutionReportError("A data da posição é inválida.") from exc
         rows: list[PositionRow] = []
         rejected: list[str] = []
         for source_row, values in enumerate(sheet_rows[3:], start=4):

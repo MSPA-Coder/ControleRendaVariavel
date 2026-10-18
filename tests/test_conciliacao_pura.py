@@ -64,6 +64,16 @@ def test_posicao_le_a_data_final_e_so_as_colunas_que_importam(formato):
     assert (acao.quantity, acao.average_price, acao.asset_group) == (D("100"), D("10.5"), "acao")
 
 
+def test_posicao_aceita_a_data_pela_linha_periodo_e_recusa_data_ilegivel():
+    tsv = posicao_tsv([linha_posicao("ABCD3", 1, "1")]).decode()
+    com_periodo = tsv.replace("Posição em: 31/10/2026", "Período: 01/10/2026 até 30/10/2026")
+    sem_data = tsv.replace("Posição em: 31/10/2026", "Posição em: ontem")
+
+    assert read_position_report(com_periodo.encode()).as_of == date(2026, 10, 30)
+    with pytest.raises(ExecutionReportError, match="Emitido por"):
+        read_position_report(sem_data.encode())
+
+
 def test_posicao_nunca_expoe_o_titular():
     relatorio = read_position_report(posicao_xlsx([linha_posicao("ABCD3", 1, "1")]))
 
