@@ -1501,6 +1501,64 @@ class Execution(Base):
     broker_ref: Mapped[Broker] = relationship()
 
 
+class MyprofitPosition(Base):
+    """Uma linha da "Posição detalhada" do myProfit numa data.
+
+    O relatório traz a posição somada por ativo (sem corretora) e é a verdade
+    da conciliação mensal contra as posições do CRV. Reimportar a mesma data
+    substitui as linhas dela; datas diferentes convivem, e a conciliação usa a
+    mais recente.
+    """
+
+    __tablename__ = "myprofit_positions"
+    __table_args__ = (
+        CheckConstraint("line_order >= 1", name="line_order_positive"),
+        CheckConstraint("quantity >= 0 AND average_price >= 0", name="amounts_non_negative"),
+        CheckConstraint("length(sha256) = 64", name="sha256_length"),
+        CheckConstraint(_not_finite("quantity"), name="quantity_finite"),
+        CheckConstraint(_not_finite("average_price"), name="average_price_finite"),
+        CheckConstraint(_not_finite("total_invested"), name="total_invested_finite"),
+        UniqueConstraint("owner_id", "as_of", "line_order", name="uq_myprofit_positions_owner_date_line"),
+        Index("ix_myprofit_positions_owner_as_of", "owner_id", "as_of"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    as_of: Mapped[date] = mapped_column(Date)
+    line_order: Mapped[int] = mapped_column(Integer)
+    asset: Mapped[str] = mapped_column(String(80))
+    group_label: Mapped[str] = mapped_column(String(40))
+    in_scope: Mapped[bool] = mapped_column(Boolean)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    average_price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    total_invested: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    sha256: Mapped[str] = mapped_column(String(64))
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReconciliationNote(Base):
+    """Diferença da conciliação mensal que o mantenedor reconheceu e explicou.
+
+    Vale por (tipo, ativo): a linha passa a aparecer como "reconhecida", com a
+    nota, e deixa de contar como pendência. Existe para o que nunca vai bater
+    por desenho (a opção vendida que virou ação por atribuição, por exemplo, tem
+    o prêmio no custo da ação).
+    """
+
+    __tablename__ = "reconciliation_notes"
+    __table_args__ = (
+        CheckConstraint("kind IN ('posicao', 'venda')", name="kind_valid"),
+        UniqueConstraint("owner_id", "kind", "asset", name="uq_reconciliation_notes_owner_kind_asset"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))
+    asset: Mapped[str] = mapped_column(String(80))
+    note: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class QuoteHistory(Base):
     """Série temporal de cotações por ativo, base dos relatórios de
     histórico e dos KPIs de risco (volatilidade, Sharpe, drawdown, VaR, Beta

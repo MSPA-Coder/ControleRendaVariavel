@@ -170,8 +170,14 @@ def test_arquivo_vazio_grande_ou_ilegivel_e_recusado():
         read_execution_report(b"")
     with pytest.raises(ExecutionReportError, match="2 MB"):
         read_execution_report(b"x" * (MAX_WORKBOOK_BYTES + 1))
+    # XLSX corrompido: não é lido. Texto sem o formato do relatório: é lido como TSV
+    # e recusado por não ter as linhas de cabeçalho do myProfit.
     with pytest.raises(ExecutionReportError, match="ler"):
-        read_execution_report(b"isto nao e um xlsx")
+        read_execution_report(b"PK\x03\x04 isto nao e um xlsx")
+    with pytest.raises(ExecutionReportError, match="Emitido por"):
+        read_execution_report(b"isto nao e um relatorio")
+    with pytest.raises(ExecutionReportError, match="UTF-8"):
+        read_execution_report(b"\xff\xfe\x00 isto nao e texto")
 
 
 @pytest.mark.parametrize(
