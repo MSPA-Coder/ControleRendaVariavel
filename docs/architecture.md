@@ -498,6 +498,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
 | `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
+| `execution_imports`, `executions` | negócios importados do myProfit e os lotes que os trouxeram (revisão `20261018_0030`); não são posição nem transação |
 
 A transação é delimitada no caso de uso que inicia a escrita — nunca em camada
 inferior, nunca aberta durante uma chamada externa. Invariantes concorrentes são
@@ -513,6 +514,113 @@ O schema evolui só por revisões em `migrations/versions/`. Banco vazio nasce d
 `alembic upgrade head`, nunca de `create_all()` ou `stamp`. Backup, retenção e
 restauração pertencem ao BackupRestore, projeto irmão, e não são replicados
 aqui.
+
+## Execuções do myProfit e conferência com o CB
+
+Decisão de fronteira (18/10/2026, corte em 01/01/2026): o Controle Bancário
+(CB) é dono de **todo movimento de dinheiro**, inclusive o das contas de
+corretora; o CRV é dono dos **papéis** (posição, preço médio, resultado por
+operação, opções, risco). A compra e a venda têm dois registros: a liquidação
+no CB e a operação aqui. As operações passarão a entrar no CRV pelo relatório
+**Histórico de investimentos** do myProfit (que lê a B3), em vez de digitadas.
+O cálculo de IR continua no myProfit; nada daqui o faz.
+
+Esta etapa só **registra** as execuções e **confere** cada pregão contra a
+liquidação do CB. Ela não altera posições, movimentos, transações nem
+proventos; aplicar as execuções às posições é uma etapa posterior, com ensaio e
+backup.
+
+### Tabelas
+
+| Tabela | O que guarda |
+|---|---|
+| `execution_imports` | um lote gravado: nome do arquivo, período, `sha256`, linhas lidas, criadas e alteradas, data. Só existe lote quando algo foi gravado |
+| `executions` | uma linha por negócio: corretora, data do pregão, documento (coluna `Número`, p. ex. `B3_GENIAL_27012026`), ativo, grupo, lado, quantidade (negativa na venda), preços e totais com e sem taxas, day trade, moeda, ordem da linha no documento, `content_hash` e `in_scope` |
+
+`total_with_fees` já vem com o sinal do caixa (crédito positivo, débito
+negativo) e é a verdade da conferência. `side` (Compra/Venda) e `cash_operation`
+(Crédito/Débito) ficam como o relatório os trouxe: os day trades de futuro têm
+os dois em sentidos aparentes opostos e não são "corrigidos". Todo valor é
+`numeric(24, 8)` com `CheckConstraint` contra `NaN`/`Infinity`; `owner_id` está em
+tudo e a chave estrangeira composta `(import_id, owner_id)` impede ligar uma
+execução ao lote de outro dono.
+
+`in_scope` marca o que a conferência e o uso futuro consideram: **ações, opções
+e ETF da B3**, sem o documento de aluguel (`B3_ALUGUEL_*`, tarifas de centavos).
+Índice futuro, Tesouro Direto e o exterior (Ações EUA, ETF USA) ficam gravados e
+marcados como fora de escopo.
+
+### Importador (`app/executions/myprofit.py`)
+
+Lê o XLSX com `openpyxl` (limite de 2 MB). As duas primeiras linhas são
+`Emitido por: <nome> - <CPF>` e `Período: dd/mm/aaaa até dd/mm/aaaa`: só as
+duas datas do período são lidas, e o nome e o CPF **nunca** vão para o
+resultado, para mensagem de erro, para log nem para o banco (o nome do arquivo
+gravado também perde qualquer sequência que pareça CPF). A terceira linha é o
+cabeçalho, com as 16 colunas exatas do relatório; faltando uma, o arquivo é
+recusado com o nome dela. A data de negociação vem como número serial do Excel
+(46028 = 06/01/2026). Grupo desconhecido, quantidade zero, valor não finito ou
+sinal impossível recusam a linha, e **uma linha recusada impede a gravação do
+arquivo inteiro**.
+
+**Idempotência.** O relatório não traz identificador por negócio, e há linhas
+legitimamente iguais no mesmo documento (quatro vendas de HODL11 com a mesma
+quantidade, por exemplo). A linha é identificada por **documento + ordem da
+linha no documento**, e o `content_hash` (SHA-256 dos campos do negócio) diz se
+ela mudou. A restrição única é `(owner_id, document, line_order)`, mais forte
+que a chave `(dono, documento, ordem, hash)` do desenho: o mesmo par com outro
+hash é uma linha **alterada**, não uma segunda linha. Reexecutar a importação
+não duplica nem perde linha; linhas gravadas que o arquivo não traz mais são
+apenas contadas, nunca apagadas. A instituição do relatório (GENIAL, XP, Avenue,
+Nomad) casa com a corretora do CRV por uma tabela configurável
+(`MYPROFIT_INSTITUICOES`, JSON no ambiente); instituição sem correspondência
+impede a gravação.
+
+### Entrada: ensaio por padrão
+
+`flask --app app:create_app importar-negocios-myprofit <arquivo> [--usuario U]
+[--gravar]` e a tela `/executions/import` (login, CSRF e dono da sessão). Os dois
+fazem primeiro o **ensaio** (novas, repetidas, alteradas, fora de escopo,
+pendências) e só gravam com `--gravar` ou com o botão "Gravar", que exige enviar
+de novo o mesmo arquivo (o `sha256` do ensaio precisa bater). A gravação é uma
+transação do caso de uso (`app/executions/service.py`); uma gravação concorrente
+das mesmas linhas é recusada pela restrição única.
+
+### Cliente do CB e conferência por pregão
+
+`app/patrimonio/cb_client.py` lê o `GET {CB_PATRIMONIO_URL}/snapshot` do contrato
+`patrimonio/v4` com o Bearer `CB_PATRIMONIO_TOKEN` (segredo de arquivo,
+`CB_PATRIMONIO_TOKEN_FILE`), somente leitura, e filtra os lançamentos da
+categoria "Operações em Bolsa". A liquidação de BM&F (`Bm&F` na descrição) fica
+fora, como os futuros. A data do pregão vem de `settlement.pregao_date`, campo
+opcional que o CB está acrescentando ao `cash_entry`; enquanto ele não está em
+produção, `pregao_da_descricao` a extrai de `Operações Bolsa D+2 Pr 27/01/2026
+Nc. 543216` (função pura, isolada e pronta para ser removida). Sem URL e token, a
+tela mostra **"CB não configurado"** e lista só as execuções do CRV.
+
+`app/executions/conferencia.py` compara, por **corretora, data do pregão e
+moeda**, a soma assinada da liquidação do CB (conta(s) da corretora) com a soma
+de `total_with_fees` das execuções em escopo. Estados: **confere** (diferença
+absoluta até a tolerância, `CONFERENCIA_TOLERANCIA`, padrão R$ 5,00),
+**diferença**, **só no CB** e **só no CRV**; sem CB disponível o estado é "sem
+comparação". A diferença (CRV − CB) é o **custo implícito** do pregão: o que a
+corretora e a liquidação levaram além das taxas da B3 que o myProfit já conta (o
+CRV não guarda custos). A correspondência corretora ↔ contas do CB é por
+instituição, em `DEFAULT_BROKER_INSTITUTIONS` (Genial = conta 8; XP = SCP XP
+Investimentos, conta 10; Nomad = 13; Avenue = 12 e 26; Revolut = 14) e pode ser
+substituída por `CB_CORRESPONDENCIA_CONTAS` (JSON). A tela é
+`/executions/reconciliation` (página ou fragmento HTMX, filtros de corretora e
+período) e o comando é `flask --app app:create_app conferir-pregoes [--usuario U]
+[--corretora C] [--inicio AAAA-MM-DD] [--fim AAAA-MM-DD]`.
+
+Rede e token no VPS1 (pendência de operação, nada foi operado): o `web` do CRV
+já entra na rede interna `patrimonio-internal` (alias `crv-api`), a mesma em que
+o `web` do CB tem o alias `cb-api:8000`, então `CB_PATRIMONIO_URL=
+http://cb-api:8000/patrimonio/v4` é alcançável sem sair do host. Faltam: um
+segredo `.secrets/cb_patrimonio_token` com o `PATRIMONIO_INTEGRATION_TOKEN` do
+CB (hoje há um token só, e ele lê todas as contas) declarado em `compose.yaml`
+com `CB_PATRIMONIO_TOKEN_FILE`; conferir que `cb-api` consta em `ALLOWED_HOSTS`
+do CB (o Wealthfolio já o usa); e o CB-1 em produção para o campo `settlement`.
 
 ### Esquema `leitura`: o contrato para quem lê o banco de fora
 

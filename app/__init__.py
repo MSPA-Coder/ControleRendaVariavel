@@ -253,6 +253,14 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         PATRIMONIO_TITULAR=os.getenv("PATRIMONIO_TITULAR", "").strip(),
         PATRIMONIO_OWNER_ID=os.getenv("PATRIMONIO_OWNER_ID", "").strip(),
         PATRIMONIO_MAX_HISTORICO_DIAS=int(os.getenv("PATRIMONIO_MAX_HISTORICO_DIAS", "3650")),
+        # Conferência por pregão contra o Controle Bancário (somente leitura).
+        # Sem URL e token a tela diz "CB não configurado". O token é o do
+        # consumidor do contrato v4 do CB, em segredo de arquivo.
+        CB_PATRIMONIO_URL=os.getenv("CB_PATRIMONIO_URL", "").strip(),
+        CB_PATRIMONIO_TOKEN=resolver_segredo("CB_PATRIMONIO_TOKEN") or "",
+        CB_CORRESPONDENCIA_CONTAS=os.getenv("CB_CORRESPONDENCIA_CONTAS", "").strip(),
+        CONFERENCIA_TOLERANCIA=os.getenv("CONFERENCIA_TOLERANCIA", "").strip(),
+        MYPROFIT_INSTITUICOES=os.getenv("MYPROFIT_INSTITUICOES", "").strip(),
         REMOTE_COLLECTOR_ENABLED=ler_flag("REMOTE_COLLECTOR_ENABLED", estrito=False),
         FORCE_HTTPS=force_https,
         TRUST_PROXY_HEADERS=ler_flag("TRUST_PROXY_HEADERS", estrito=False),
