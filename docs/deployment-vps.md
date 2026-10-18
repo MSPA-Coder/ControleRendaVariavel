@@ -110,6 +110,17 @@ autorizado. `PATRIMONIO_TITULAR` é somente o nome da pessoa no contrato externo
 não substitui esse vínculo. O publicador recusa dados fora de
 `PATRIMONIO_MAX_HISTORICO_DIAS` (dez anos por padrão).
 
+**Conferência por pregão contra o CB (opcional, ainda não ligada em produção).**
+Para a tela `/executions/reconciliation` e o comando `conferir-pregoes` lerem a
+liquidação do Controle Bancário, o `web` precisa de `CB_PATRIMONIO_URL`
+(`http://cb-api:8000/patrimonio/v4`, pela rede interna `patrimonio-internal` em
+que o CRV já entra com o alias `crv-api`) e do segredo
+`CB_PATRIMONIO_TOKEN_FILE`, uma cópia do `PATRIMONIO_INTEGRATION_TOKEN` do CB
+(o CB tem um token só, e ele lê todas as contas: trate-o como senha de banco).
+O `compose.yaml` ainda não declara esse segredo; acrescentá-lo é um passo de
+operação separado, junto de conferir que `cb-api` está em `ALLOWED_HOSTS` do CB.
+Sem isso a tela diz "CB não configurado" e nada mais é afetado.
+
 O Compose é a mesma fonte de verdade no local e no VPS: `db-provision` cria ou
 atualiza `investimentos_app` de forma idempotente antes do `migrate`, concede
 apenas DML e uso de sequências e recusa DDL. O papel administrativo

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Importar negócios do myProfit{% endblock %}
+{% block content %}
+<form class="position-form" method="post" enctype="multipart/form-data" action="{{ url_for('portfolio.import_executions') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>Importar negócios do myProfit</h1>
+  <p class="form-help">Selecione o relatório <strong>Histórico de investimentos</strong> do myProfit em XLSX (até 2 MB). O nome e o CPF do cabeçalho são descartados e nunca gravados. Esta importação não altera posições, transações nem proventos: ela só registra os negócios para a conferência com o CB.</p>
+  <p class="form-help">O padrão é o <strong>ensaio</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”.</p>
+  <label>Relatório XLSX<input required type="file" name="report" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+  {% if plan %}<input type="hidden" name="expected_sha256" value="{{ plan.report.sha256 }}">{% endif %}
+  <div class="form-actions">
+    <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Conferência</a>
+    <button class="button" type="submit" name="action" value="ensaio">Ensaiar</button>
+    {% if plan and plan.can_write %}
+    <button class="button button-primary" type="submit" name="action" value="gravar">Gravar {{ plan.new_rows|length }} nova(s) e {{ plan.changed|length }} alterada(s)</button>
+    {% endif %}
+  </div>
+</form>
+
+{% if plan %}
+<section class="exposure" aria-label="Resultado do ensaio">
+  <div class="exposure-table">
+    <h2>Ensaio: período {{ plan.report.period_start|ushort }} a {{ plan.report.period_end|ushort }}</h2>
+    <table>
+      <tbody>
+        <tr><th>Linhas lidas</th><td class="number">{{ plan.report.rows|length }}</td></tr>
+        <tr><th>Novas</th><td class="number">{{ plan.new_rows|length }}</td></tr>
+        <tr><th>Repetidas</th><td class="number">{{ plan.repeated }}</td></tr>
+        <tr><th>Alteradas</th><td class="number">{{ plan.changed|length }}</td></tr>
+        <tr><th>Fora de escopo (futuros, Tesouro, exterior, aluguel)</th><td class="number">{{ plan.out_of_scope }}</td></tr>
+        <tr><th>Gravadas antes e ausentes do arquivo (nada é apagado)</th><td class="number">{{ plan.absent_from_file }}</td></tr>
+      </tbody>
+    </table>
+    {% if plan.problems %}
+    <h3>Pendências que impedem a gravação</h3>
+    <ul>{% for problem in plan.problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if plan.new_rows or plan.changed %}
+    <h3>Linhas a gravar{% if plan.new_rows|length + plan.changed|length > preview_rows %} (primeiras {{ preview_rows }}){% endif %}</h3>
+    <table>
+      <thead><tr><th>Pregão</th><th>Instituição</th><th>Documento</th><th>Ativo</th><th>Lado</th><th>Quantidade</th><th>Total com taxas</th><th>Situação</th></tr></thead>
+      <tbody>
+        {% for row in plan.new_rows[:preview_rows] %}
+        <tr><td>{{ row.trade_date|ushort }}</td><td>{{ row.institution }}</td><td>{{ row.document }}</td><td>{{ row.asset }}</td><td>{{ row.side }}</td>
+            <td class="number" data-sensitive-value="true">{{ row.quantity|quantity(row.currency) }}</td>
+            <td class="number" data-sensitive-value="true">{{ row.total_with_fees|currency(row.currency) }}</td>
+            <td>Nova{% if not row.in_scope %} (fora de escopo){% endif %}</td></tr>
+        {% endfor %}
+        {% for record, row in plan.changed[:preview_rows] %}
+        <tr><td>{{ row.trade_date|ushort }}</td><td>{{ row.institution }}</td><td>{{ row.document }}</td><td>{{ row.asset }}</td><td>{{ row.side }}</td>
+            <td class="number" data-sensitive-value="true">{{ row.quantity|quantity(row.currency) }}</td>
+            <td class="number" data-sensitive-value="true">{{ row.total_with_fees|currency(row.currency) }}</td>
+            <td>Alterada (antes {{ record.total_with_fees|currency(record.currency) }})</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

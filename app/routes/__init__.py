@@ -20,6 +20,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes import (  # noqa: F401
         collector_agent,
         dividends,
+        executions,
         health,
         partials,
         patrimonio,

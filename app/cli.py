@@ -41,6 +41,8 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
     app.cli.add_command(expurgar_outbox)
+    app.cli.add_command(importar_negocios_myprofit)
+    app.cli.add_command(conferir_pregoes)
     app.cli.add_command(users_group)
 
 
@@ -259,6 +261,121 @@ def expurgar_outbox(dias: int) -> None:
     with db.session.begin():
         removidas = expurgar_outbox_v4(datetime.now(UTC), dias)
     click.echo(f"{removidas} linha(s) do outbox v4 com mais de {dias} dia(s) removida(s).")
+
+
+def _owner_for_command(username: str | None) -> int:
+    """Dono dos dados do comando: ``--usuario`` ou, na falta, ``PATRIMONIO_OWNER_ID``.
+
+    Comando de terminal não tem sessão; o dono precisa ser dito, e nunca é
+    "todos": toda consulta e gravação seguintes são filtradas por ele.
+    """
+    if username:
+        user = db.session.scalar(select(User).where(User.username == username.strip()))
+        if user is None:
+            raise click.ClickException(f"Usuário '{username}' não encontrado.")
+        return int(user.id)
+    configured = str(current_app.config.get("PATRIMONIO_OWNER_ID") or "").strip()
+    if configured.isdigit() and int(configured) > 0:
+        return int(configured)
+    raise click.ClickException("Informe --usuario (ou defina PATRIMONIO_OWNER_ID).")
+
+
+@click.command("importar-negocios-myprofit")
+@click.argument("arquivo", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--gravar", is_flag=True, help="Grava de fato. Sem esta opção o comando só faz o ensaio.")
+def importar_negocios_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -> None:
+    """Importa o relatório 'Histórico de investimentos' do myProfit (XLSX).
+
+    O padrão é o ENSAIO: conta linhas novas, repetidas e alteradas e não grava
+    nada. Com --gravar, grava só em executions/execution_imports; posições,
+    transações e proventos não são tocados. O nome e o CPF do cabeçalho são
+    descartados e nunca aparecem na saída.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.executions.myprofit import (
+        MAX_WORKBOOK_BYTES,
+        ExecutionReportError,
+        read_execution_report,
+    )
+    from app.executions.service import InstitutionMapError, apply_import, plan_import
+
+    owner_id = _owner_for_command(usuario)
+    if arquivo.stat().st_size > MAX_WORKBOOK_BYTES:
+        raise click.ClickException("O relatório excede o limite de 2 MB.")
+    try:
+        report = read_execution_report(arquivo.read_bytes())
+        plan = plan_import(owner_id, report)
+    except (ExecutionReportError, InstitutionMapError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(
+        f"Período {report.period_start:%d/%m/%Y} a {report.period_end:%d/%m/%Y}; sha256 {report.sha256[:12]}."
+    )
+    click.echo(
+        f"{len(report.rows)} linha(s) lida(s): {len(plan.new_rows)} nova(s), {plan.repeated} repetida(s), "
+        f"{len(plan.changed)} alterada(s); {plan.out_of_scope} fora de escopo; "
+        f"{plan.absent_from_file} gravada(s) antes e ausente(s) do arquivo."
+    )
+    for problem in plan.problems:
+        click.echo(f"PENDÊNCIA: {problem}", err=True)
+    if plan.problems:
+        raise click.ClickException("O ensaio tem pendências; nada foi gravado.")
+    if not gravar:
+        click.echo("Ensaio: nada foi gravado. Use --gravar para confirmar.")
+        return
+    if not plan.can_write:
+        click.echo("Nada a gravar: todas as linhas já estão importadas.")
+        return
+    try:
+        batch = apply_import(owner_id, plan, file_name=arquivo.name)
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
+    click.echo(
+        f"Gravado o lote {batch.id}: {batch.rows_created} nova(s), {batch.rows_updated} alterada(s). "
+        "Posições não foram alteradas."
+    )
+
+
+@click.command("conferir-pregoes")
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--corretora", default=None, help="Só esta corretora (nome no CRV).")
+@click.option("--inicio", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+@click.option("--fim", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+def conferir_pregoes(
+    usuario: str | None, corretora: str | None, inicio: datetime | None, fim: datetime | None
+) -> None:
+    """Confere cada pregão: liquidação do CB contra as execuções do myProfit.
+
+    Somente leitura. Estados: confere, diferença, só no CB, só no CRV. A
+    diferença (CRV - CB) é o custo implícito do pregão.
+    """
+    from app.executions.conferencia import STATE_LABELS, build_reconciliation
+
+    result = build_reconciliation(
+        _owner_for_command(usuario),
+        broker=corretora,
+        start=inicio.date() if inicio else None,
+        end=fim.date() if fim else None,
+    )
+    if result.cb_status != "ok":
+        click.echo(f"{result.cb_message or 'CB indisponível.'} (só as execuções do CRV)", err=True)
+    for row in result.rows:
+        cb = f"{row.cb_amount:,.2f}" if row.cb_amount is not None else "-"
+        crv = f"{row.crv_amount:,.2f}" if row.crv_amount is not None else "-"
+        cost = f"{row.implicit_cost:,.2f}" if row.implicit_cost is not None else "-"
+        click.echo(
+            f"{row.pregao:%d/%m/%Y}  {row.broker:<10} {row.currency}  {STATE_LABELS[row.state]:<15} "
+            f"CB {cb:>14}  CRV {crv:>14}  custo {cost:>10}"
+        )
+    counts = result.counts
+    click.echo(
+        f"{len(result.rows)} pregão(ões): {counts['confere']} confere, {counts['diferenca']} diferença, "
+        f"{counts['so_cb']} só no CB, {counts['so_crv']} só no CRV (tolerância {result.tolerance})."
+    )
 
 
 @click.group("users")

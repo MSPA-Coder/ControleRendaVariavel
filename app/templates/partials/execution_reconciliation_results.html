@@ -1,0 +1,43 @@
+{# Conferência por pregão: liquidação do CB contra as execuções do myProfit.
+   Somente leitura. A diferença (CRV - CB) é o custo implícito do pregão. #}
+<div id="execution-reconciliation">
+{% if result.cb_status == 'nao_configurado' %}
+<p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code> para comparar com a liquidação do Controle Bancário. Abaixo, só o que o CRV importou.</p>
+{% elif result.cb_status == 'indisponivel' %}
+<p class="form-help" role="alert"><strong>CB indisponível:</strong> {{ result.cb_message }} Abaixo, só o que o CRV importou.</p>
+{% endif %}
+{% if result.rows %}
+<section class="exposure" aria-label="Conferência por pregão">
+  <div class="exposure-table">
+    <h2>Pregões</h2>
+    <p class="form-help">Tolerância: {{ result.tolerance|currency('BRL') }}. Confere: {{ result.counts['confere'] }} · Diferença: {{ result.counts['diferenca'] }} · Só no CB: {{ result.counts['so_cb'] }} · Só no CRV: {{ result.counts['so_crv'] }}{% if result.executions_out_of_scope %} · {{ result.executions_out_of_scope }} execução(ões) fora de escopo não comparadas{% endif %}.</p>
+    <table>
+      <thead>
+        <tr><th>Pregão</th><th>Corretora</th><th>Estado</th><th>CB (liquidação)</th><th>CRV (execuções)</th><th>Custo implícito (CRV − CB)</th><th>Documentos</th></tr>
+      </thead>
+      <tbody>
+        {% for row in result.rows %}
+        <tr>
+          <td>{{ row.pregao|ushort }}</td>
+          <td>{{ row.broker }}</td>
+          <td>{{ row.state_label }}</td>
+          <td class="number" data-sensitive-value="true">{{ row.cb_amount|currency(row.currency) if row.cb_amount is not none else '-' }}</td>
+          <td class="number" data-sensitive-value="true">{{ row.crv_amount|currency(row.currency) if row.crv_amount is not none else '-' }}</td>
+          <td class="number" data-sensitive-value="true">{{ row.implicit_cost|currency(row.currency) if row.implicit_cost is not none else '-' }}</td>
+          <td>{{ row.documents|join(', ') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<p class="empty">Nenhuma execução ou liquidação para este filtro.</p>
+{% endif %}
+{% if result.futures_settlements %}
+<p class="form-help">{{ result.futures_settlements }} lançamento(s) de BM&amp;F (futuros) no CB ficaram fora da conferência: o CRV não trata futuros.</p>
+{% endif %}
+{% if result.without_pregao %}
+<p class="form-help">{{ result.without_pregao|length }} lançamento(s) de “Operações em Bolsa” no CB sem data de pregão identificável ficaram fora da conferência.</p>
+{% endif %}
+</div>

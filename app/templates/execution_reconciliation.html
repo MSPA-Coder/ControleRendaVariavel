@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Conferência de pregões{% endblock %}
+{% block header_controls %}
+<form class="filters header-controls" method="get"
+      hx-get="{{ url_for('portfolio.execution_reconciliation') }}"
+      hx-trigger="change"
+      hx-target="#execution-reconciliation"
+      hx-swap="outerHTML"
+      hx-replace-url="true">
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+        <option value="{{ broker.name }}" {{ 'selected' if broker.name == selected_broker }}>{{ broker.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>De<input type="date" name="start" value="{{ start }}"></label>
+  <label>Até<input type="date" name="end" value="{{ end }}"></label>
+  <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Limpar</a>
+</form>
+<a class="button button-primary" href="{{ url_for('portfolio.import_executions') }}">Importar negócios</a>
+{% endblock %}
+{% block content %}
+{% include "partials/execution_reconciliation_results.html" %}
+{% endblock %}

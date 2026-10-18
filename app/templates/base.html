@@ -55,7 +55,7 @@
         </div>
 
         <div class="mega-wrap" data-group="carteira">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.index', 'options.index', 'portfolio.transactions', 'portfolio.dividends'] }}" type="button" data-nav-group="carteira" aria-controls="mega-carteira" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.index', 'options.index', 'portfolio.transactions', 'portfolio.dividends', 'portfolio.execution_reconciliation', 'portfolio.import_executions'] }}" type="button" data-nav-group="carteira" aria-controls="mega-carteira" aria-expanded="false">
             Carteira <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-carteira" data-mega="carteira">
@@ -79,6 +79,11 @@
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M17 6.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.7 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/></svg></span>
                 <span class="t">Proventos</span>
                 <span class="d">Dividendos e JCP recebidos.</span>
+              </a>
+              <a class="mega-card {{ 'is-current' if request.endpoint in ['portfolio.execution_reconciliation', 'portfolio.import_executions'] }}" href="{{ url_for('portfolio.execution_reconciliation') }}">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4 10-10M4 20h16"/></svg></span>
+                <span class="t">Conferência</span>
+                <span class="d">Negócios do myProfit contra a liquidação do CB.</span>
               </a>
             </div>
           </div>
