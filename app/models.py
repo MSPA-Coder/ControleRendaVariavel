@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app import Base
+from app.core.domain import Side as Side
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 from app.core.regional import DEFAULT_REGIONAL_FORMAT
 from app.core.themes import DEFAULT_THEME
@@ -38,11 +39,6 @@ class Market(StrEnum):
     B3 = "B3"
     NYSE = "NYSE"
     NASDAQ = "NASDAQ"
-
-
-class Side(StrEnum):
-    BUY = "C"
-    SELL = "V"
 
 
 class OptionType(StrEnum):
@@ -1336,6 +1332,20 @@ class UserPreference(Base):
     """Campo legado; o prazo de alerta vigente é global em ``AppSetting``."""
     user_ref: Mapped[User] = relationship()
     benchmark_ticker_ref: Mapped[Ticker | None] = relationship()
+
+
+class PositionSubmission(Base):
+    """Uma intenção de aporte por dono/instrumento; não guarda dados do formulário."""
+
+    __tablename__ = "position_submissions"
+    __table_args__ = (
+        CheckConstraint("command IN ('stock', 'option')", name="position_submission_command"),
+    )
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    command: Mapped[str] = mapped_column(String(12), primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class QuoteHistory(Base):

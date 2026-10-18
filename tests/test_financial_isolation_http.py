@@ -199,7 +199,7 @@ def test_operator_cannot_mutate_global_catalogue_or_prices(review_case):
 def test_create_edit_delete_preserves_quote_entitlement_without_adopting_posted_owner(review_case):
     app, data = review_case
     client, token = client_for(app, data['ids'][0])
-    form = {'csrf_token': token, 'owner_id': data['user_ids'][2], 'broker_id': data['broker'],
+    form = {'csrf_token': token, 'submit_token': uuid4().hex, 'owner_id': data['user_ids'][2], 'broker_id': data['broker'],
                 'ticker_id': data['ticker_ids'][0], 'portfolio_id': data['portfolio_ids'][0],
                 'quantity': '4', 'average_cost': '10', 'side': 'C', 'opened_on': date.today().isoformat(),
                 'target_multiplier': '1.5'}
@@ -259,7 +259,7 @@ def test_option_history_remains_visible_without_granting_underlying_access(revie
     app, data = review_case
     client, token = client_for(app, data['ids'][0])
     response = client.post('/options/positions', data={
-        'csrf_token': token, 'owner_id': data['user_ids'][2], 'broker_id': data['broker'],
+        'csrf_token': token, 'submit_token': uuid4().hex, 'owner_id': data['user_ids'][2], 'broker_id': data['broker'],
         'contract_id': data['contract'], 'portfolio_id': data['portfolio_ids'][0],
         'quantity': '2', 'average_cost': '1', 'target_price': '', 'side': 'C',
         'opened_on': date.today().isoformat(),

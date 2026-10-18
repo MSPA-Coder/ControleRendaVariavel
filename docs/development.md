@@ -58,7 +58,7 @@ relatório da implantação.
 
 ## Validação automatizada
 
-O comando oficial executa Ruff e toda a suíte pytest na imagem `quality`:
+O comando oficial executa Ruff, o piloto mypy e toda a suíte pytest na imagem `quality`:
 
 ```powershell
 docker compose --profile quality run --build --rm quality
@@ -67,6 +67,14 @@ docker compose --profile quality run --build --rm quality
 A imagem `quality` instala exatamente o que a imagem servida instala, mais as
 ferramentas de teste — o que se valida é o ambiente que roda, não um arquivo de
 requisitos.
+
+O mypy roda em modo estrito sobre os arquivos explícitos de `[tool.mypy]`:
+cálculos de posições, histórico de quantidades, validação, filtro de moeda e
+entradas dos novos comandos. Imports fora dessa fronteira não são analisados
+(`follow_imports=skip`): este piloto não afirma verificar o ORM nem todas as
+rotas. Não foram adicionados `Any` ou supressões para obter um check verde.
+Para executá-lo sozinho: `docker compose --profile quality run --build --rm quality mypy`.
+Amplie a lista por fronteira quando o código correspondente estiver pronto.
 
 **`--build` mantém o comando explícito.** O serviço `quality` não monta o código
 do host; Compose reconstrói sem cache a partir das tags base atuais antes de
@@ -100,6 +108,30 @@ Não afrouxe um controle para contornar achado: atualize a dependência ou a
 imagem. Vulnerabilidade sem correção publicada sai por `--ignore-vuln ID` com um
 comentário dizendo por quê — cada exceção vira uma decisão explícita e datada,
 em vez de um vermelho permanente que se aprende a ignorar.
+
+### Piloto de navegador (dados descartáveis)
+
+Além do `quality`, o Chromium executa os fluxos financeiros em
+`compose.browser.yaml`: números e datas BR/EUA, confirmação/cancelamento,
+reenvio idempotente e encerramento parcial. Não substitui os testes de
+concorrência e autorização com PostgreSQL. Não publica portas nem monta
+segredos ou volumes operacionais. Contas e senha do bootstrap são sintéticas.
+
+```powershell
+New-Item -ItemType Directory -Force .browser-results
+docker compose -f compose.browser.yaml down
+docker compose -f compose.browser.yaml build --pull
+docker compose -f compose.browser.yaml up --no-build --abort-on-container-exit --exit-code-from browser-tests
+# Guarde o código de saída anterior; depois encerre somente essa pilha:
+docker compose -f compose.browser.yaml down
+```
+
+A CA local já descrita acima é a única entrada do host; `BROWSER_CA_FILE`
+permite indicar outra localização. Em Linux, dê escrita ao diretório
+`.browser-results` para o usuário do runner (`chmod 777` em CI descartável).
+Falhas salvam capturas apenas dos dados fictícios nesse diretório ignorado.
+Cada execução começa com banco vazio em tmpfs. A CI `Navegador` repete o
+mesmo comando sem instalar Node ou navegadores no host.
 
 ### Diante de um teste vermelho
 

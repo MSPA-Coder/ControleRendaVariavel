@@ -4,7 +4,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from enum import StrEnum
 from zoneinfo import ZoneInfo
+
+
+class Side(StrEnum):
+    BUY = "C"
+    SELL = "V"
 
 MARKET_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 """Fuso de referência do mercado. Define o "dia" de um snapshot de cotação

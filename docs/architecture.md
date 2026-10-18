@@ -1,5 +1,24 @@
 # Arquitetura
 
+## Comandos e consultas de posições
+
+`positions/use_cases.py` coordena os aportes e encerramentos de ações/opções:
+o dono entra explicitamente, e o commit/rollback inclui chave idempotente,
+posição, movimentos, transações e direito histórico ao ticker. As rotas só
+convertem formulário, confirmação e resultado em HTTP. Os módulos `closure`
+aplicam as mudanças sem commit parcial; a API antiga de encerramento delega
+ao caso de uso para preservar consumidores existentes.
+
+`positions/queries.py` contém as consultas de grade com dono, moeda e filtros
+explícitos. Os adaptadores em rotas convertem preferências e parâmetros HTTP;
+não existe um repository genérico sobre SQLAlchemy. O histórico de acesso ao
+ticker mora em `accounts/entitlements.py`, sem dependência das rotas.
+
+O compartilhamento entre instrumentos é pontual (transação, chave de envio e
+entradas/saídas tipadas). Abertura cronológica de ações, contratos de opções e
+replay continuam separados: suas diferenças são regras, não duplicação a
+eliminar por uma superclasse.
+
 ## Visão geral
 
 Aplicação Flask monolítica, renderizada no servidor, organizada em três
@@ -605,6 +624,19 @@ Detalhes de operação, publicação e verificação estão em
 [`docs/deployment-vps.md`](deployment-vps.md).
 
 ## Critérios para evolução
+
+### Envios de aporte
+
+Os formulários de nova posição (ações e opções) identificam cada intenção por
+`submit_token`. A chave `(dono, instrumento, token)` e o hash da entrada ficam
+em `position_submissions`, na mesma transação do movimento e da posição. Um
+reenvio com a mesma entrada não grava novamente; reutilizar a chave com outros
+valores é conflito. Outra intenção recebe outra chave, mesmo com valores iguais.
+Confirmações e falhas fazem rollback, portanto não consomem a chave. Envios sem
+chave válida são recusados; formulários abertos antes da implantação precisam
+ser reabertos. As chaves não expiram automaticamente, para não permitir replay
+tardio. A tabela guarda só o hash, não uma cópia do formulário.
+
 
 - regra financeira deve ser testável sem requisição HTTP e sem banco;
 - a transação abrange o caso de uso completo que altera dados;

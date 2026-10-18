@@ -1,0 +1,71 @@
+name: crv-browser-tests
+services:
+  browser-db:
+    image: mspa-postgres:17-alpine
+    build:
+      context: .
+      dockerfile: docker/sandbox-postgres/Dockerfile
+    user: postgres
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      POSTGRES_DB: browser_tests
+      POSTGRES_USER: browser
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs:
+      - /tmp:mode=1777
+      - /var/run/postgresql:mode=1777
+      - /var/lib/postgresql/data:uid=70,gid=70,mode=0700,size=512m
+    healthcheck:
+      test: [CMD, pg_isready, -U, browser, -d, browser_tests]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  browser-web:
+    image: ${BROWSER_APP_IMAGE:-crv-browser-app:local}
+    build:
+      context: .
+      target: runtime
+      secrets: [local_ca]
+    command: [python, /browser_server.py]
+    volumes:
+      - ./tests/browser_server.py:/browser_server.py:ro
+    environment:
+      BROWSER_TEST_SERVER: "1"
+      PYTHONPATH: /app
+      TZ: America/Sao_Paulo
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    depends_on:
+      browser-db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5003/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  browser-tests:
+    image: crv-browser-runner:local
+    build:
+      context: .
+      dockerfile: Dockerfile.browser
+      secrets: [local_ca]
+    environment:
+      BASE_URL: http://browser-web:5003
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    shm_size: 512m
+    tmpfs: [/tmp]
+    volumes:
+      - ./.browser-results:/results
+    depends_on:
+      browser-web:
+        condition: service_healthy
+secrets:
+  local_ca:
+    file: ${BROWSER_CA_FILE:-.certs/local-root-ca.crt}

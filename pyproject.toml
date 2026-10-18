@@ -40,6 +40,7 @@ dependencies = [
 # `pip-audit`: auditoria de CVE das dependências instaladas. Piso na minor
 # atual, teto na próxima major — política de faixa do mantenedor.
 dev = [
+  "mypy>=2.4,<3",
   "ruff>=0.12.5,<1",
   "pytest>=8.3.5,<10",
   "pip-audit>=2.10,<3",
@@ -57,6 +58,15 @@ rtd = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.mypy]
+python_version = "3.15"
+files = ["app/core/domain.py", "app/core/validation.py", "app/core/currency_filter.py", "app/positions/commands.py", "app/positions/holdings_history.py"]
+strict = true
+follow_imports = "skip"
+cache_dir = "/tmp/mypy-cache"
+# Só a fronteira pura selecionada é verificada; Flask/ORM não viram Any no
+# código para esconder erros. Amplie os arquivos à medida que forem tipados.
 
 # `sharedauth` é referência direta a um repositório Git (não um índice PyPI) --
 # Hatchling recusa isso por padrão, exige este opt-in explícito.

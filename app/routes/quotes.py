@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
+from time import perf_counter
 
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
@@ -235,6 +237,7 @@ def create_quote_history_entry() -> ResponseReturnValue:
 @bp.post("/quotes/import")
 @requer_admin
 def import_quote_history() -> ResponseReturnValue:
+    started = perf_counter()
     raw = {key: value.strip() for key, value in request.form.items()}
     try:
         start_date = date.fromisoformat(raw["start_date"])
@@ -270,6 +273,10 @@ def import_quote_history() -> ResponseReturnValue:
         flash(f"No Yahoo Finance history for: {', '.join(failures)}.", "error")
     if not imported and not failures:
         flash("No registered tickers to update.", "error")
+    logging.getLogger(__name__).info(
+        "quote_history_batch entrypoint=web_period targets=%d failures=%d records=%d duration_ms=%.1f",
+        len(targets), len(failures), len(imported), (perf_counter() - started) * 1000,
+    )
     return _quote_management_response(None)
 
 
@@ -279,6 +286,7 @@ def import_position_quote_history() -> ResponseReturnValue:
     """Refresh history for every ticker the portfolio ever held, over the
     period it was held, plus every comparison benchmark."""
 
+    started = perf_counter()
     targets = quote_update_targets()
     db.session.rollback()
 
@@ -303,6 +311,10 @@ def import_position_quote_history() -> ResponseReturnValue:
     )
     if failures:
         flash("No Yahoo Finance history for: " + ", ".join(failures), "error")
+    logging.getLogger(__name__).info(
+        "quote_history_batch entrypoint=web_positions targets=%d failures=%d records=%d duration_ms=%.1f",
+        len(targets), len(failures), len(imported), (perf_counter() - started) * 1000,
+    )
     return _quote_management_response(None)
 
 

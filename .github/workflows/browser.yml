@@ -1,0 +1,32 @@
+name: Navegador
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  critical:
+    name: Fluxos críticos no Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Preparar apenas entradas sintéticas
+        run: |
+          mkdir -p .certs .browser-results
+          touch .certs/local-root-ca.crt
+          chmod 777 .browser-results
+      - name: Validar e construir
+        run: |
+          docker compose -f compose.browser.yaml config --quiet
+          docker compose -f compose.browser.yaml build --pull
+      - name: Executar navegador e PostgreSQL descartável
+        run: docker compose -f compose.browser.yaml up --no-build --abort-on-container-exit --exit-code-from browser-tests
+      - name: Limpar somente a pilha de navegador
+        if: always()
+        run: docker compose -f compose.browser.yaml down --remove-orphans

@@ -203,6 +203,9 @@ def _load_user(identificador: str) -> User | None:
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
+    from app.core.submissions import new_submission_token
+
+    app.jinja_env.globals["new_submission_token"] = new_submission_token
     app.url_map.converters["int"] = BoundedIntegerConverter
     # `estrito=False` preserva o comportamento deste app: valor irreconhecível
     # cai no padrão em vez de impedir a subida. `FORCE_HTTPS` e

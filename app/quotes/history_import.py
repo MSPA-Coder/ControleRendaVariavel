@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
+from time import perf_counter
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -11,6 +13,8 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models import Market
+
+logger = logging.getLogger(__name__)
 
 
 class QuoteHistoryImportError(RuntimeError):
@@ -97,6 +101,49 @@ def fetch_yahoo_daily_quotes(
     *,
     timeout_seconds: float = 10,
     now: datetime | None = None,
+) -> list[DailyQuote]:
+    """Obtain history and measure the provider without logging financial data.
+
+    No retry, cache or breaker is introduced. Timeout semantics and returned
+    quotes remain unchanged; these observations support a later budget decision.
+    """
+    started = perf_counter()
+    outcome = "error"
+    records = 0
+    try:
+        quotes = _fetch_yahoo_daily_quotes(
+            target, start_date, end_date, timeout_seconds=timeout_seconds, now=now,
+        )
+        records = len(quotes)
+        outcome = "ok" if quotes else "empty"
+        return quotes
+    except QuoteHistoryImportError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, HTTPError):
+            outcome = "rate_limited" if cause.code == 429 else "http_error"
+        elif isinstance(cause, TimeoutError) or (
+            isinstance(cause, URLError) and isinstance(cause.reason, TimeoutError)
+        ):
+            outcome = "timeout"
+        elif isinstance(cause, URLError):
+            outcome = "connection_error"
+        else:
+            outcome = "invalid_data"
+        raise
+    finally:
+        logger.info(
+            "quote_history provider=yahoo outcome=%s duration_ms=%.1f records=%d",
+            outcome, (perf_counter() - started) * 1000, records,
+        )
+
+
+def _fetch_yahoo_daily_quotes(
+    target: TickerImportTarget,
+    start_date: date,
+    end_date: date,
+    *,
+    timeout_seconds: float,
+    now: datetime | None,
 ) -> list[DailyQuote]:
     """Fetch closing prices without holding a database transaction open.
 

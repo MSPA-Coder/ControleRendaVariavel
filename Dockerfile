@@ -29,8 +29,8 @@ RUN apt-get update \
 #
 # POR QUE `uv` E NAO `pip install .`: o `pip` resolvia as faixas do
 # `pyproject.toml` no instante do build, entao dois builds do MESMO commit
-# podiam produzir imagens diferentes -- e o `deploy.sh` reconstroi no VPS, de
-# modo que a imagem servida nunca foi exatamente a que a CI testou. O
+# podiam produzir imagens diferentes. O deploy agora recebe a imagem testada
+# por digest; o lock também mantém a coerência entre quality e runtime. O
 # `uv.lock` fixa versao e hash SHA-256 de cada dependencia.
 #
 # O FLAG E `--locked`, E A DIFERENCA IMPORTA. `--frozen` apenas usa o lock sem
@@ -60,6 +60,11 @@ COPY app ./app
 RUN uv sync --locked --no-editable
 
 FROM base AS runtime
+ARG ARTIFACT_REVISION=local
+ARG ARTIFACT_RUN=local
+LABEL org.opencontainers.image.source="https://github.com/MSPA-Coder/ControleRendaVariavel" \
+      org.opencontainers.image.revision=$ARTIFACT_REVISION \
+      br.com.mspa.ci-run=$ARTIFACT_RUN
 ENV PATH="/opt/venv/bin:${PATH}"
 COPY --from=builder /opt/venv /opt/venv
 COPY app ./app
@@ -115,4 +120,4 @@ RUN uv sync --locked --no-editable --extra dev
 USER app
 ENV RUFF_CACHE_DIR=/tmp/ruff-cache \
     PYTEST_ADDOPTS="-o cache_dir=/tmp/pytest-cache"
-CMD ["sh", "-c", "ruff check . && pytest"]
+CMD ["sh", "-c", "ruff check . && mypy && pytest"]

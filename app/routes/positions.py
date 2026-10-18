@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import calendar
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import date
 from decimal import Decimal
 from math import log10
 from typing import Any
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
@@ -34,17 +34,14 @@ from app.positions.average_cost_line import (
     degraus_da_posicao,
 )
 from app.positions.closure import (
-    close_open_position,
     conflicting_position,
-    create_or_merge_position,
     delete_open_transaction_for_position,
     discard_simulation_history,
-    duplicate_entry,
-    prior_opening,
     record_position_adjustment,
     replay_movements,
     sync_open_transaction_for_position,
 )
+from app.positions.commands import PositionInput
 from app.positions.portfolio import (
     PortfolioView,
     build_portfolio,
@@ -52,6 +49,12 @@ from app.positions.portfolio import (
     effective_position_quote,
     position_movement_results,
 )
+from app.positions.use_cases import (
+    ConfirmationRequiredError,
+    SubmissionConflictError,
+    register_stock,
+)
+from app.positions.use_cases import close_stock as close_open_position
 from app.routes import bp
 from app.routes.helpers import (
     agent_check_interval_seconds,
@@ -230,18 +233,6 @@ def _grafico_de_fechamentos(
         "minimo": str(min(valores)),
         "maximo": str(max(valores)),
     }
-
-
-@dataclass(frozen=True, slots=True)
-class PositionInput:
-    broker_id: int
-    ticker_id: int
-    quantity: Decimal
-    average_cost: Decimal
-    side: Side
-    opened_on: date
-    target_multiplier: Decimal
-    portfolio_id: int
 
 
 def _parse_form() -> PositionInput:
@@ -504,43 +495,27 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
-    candidate = Position(owner_id=current_owner_id(), **asdict(data))
-    earlier = prior_opening(candidate)
-    if earlier is not None and request.form.get("confirm_prior_opening") != "1":
-        return render_template(
-            "position_form.html",
-            position=request.form,
-            brokers=broker_records(),
-            tickers=investable_ticker_records(),
-            sides=Side,
-            portfolios=portfolio_records(),
-            prior_opening_warning=True,
-            prior_opening_date=earlier.opened_on,
-        ), 409
-    # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
-    # indistinguível de um aporte real. Só o usuário sabe qual dos dois é.
-    if request.form.get("confirm_duplicate") != "1" and duplicate_entry(candidate) is not None:
-        return render_template(
-            "position_form.html",
-            position=request.form,
-            brokers=broker_records(),
-            tickers=investable_ticker_records(),
-            sides=Side,
-            portfolios=portfolio_records(),
-            duplicate_warning=True,
-        ), 409
     try:
-        # Carteira Simulada não funde uma segunda entrada: rejeita em
-        # vez de tratar como aporte. `duplicate_entry` acima não pega esse
-        # caso porque uma posição simulada nunca tem movimento algum no
-        # extrato, então nunca é vista como "idêntica ao anterior".
-        position, merged = create_or_merge_position(
-            candidate,
+        result = register_stock(
+            data, owner_id=current_owner_id(), token=request.form.get("submit_token", ""),
+            confirm_duplicate=request.form.get("confirm_duplicate") == "1",
             confirm_prior_opening=request.form.get("confirm_prior_opening") == "1",
         )
-        grant_ticker_entitlement(user_id=position.owner_id, ticker_id=position.ticker_id, held_on=position.opened_on)
+    except SubmissionConflictError as exc:
+        abort(409, description=str(exc))
+    except ConfirmationRequiredError as exc:
+        return render_template(
+            "position_form.html",
+            position=request.form,
+            brokers=broker_records(),
+            tickers=investable_ticker_records(),
+            sides=Side,
+            portfolios=portfolio_records(),
+            prior_opening_warning=exc.prior_opening_date is not None,
+            prior_opening_date=exc.prior_opening_date,
+            duplicate_warning=exc.prior_opening_date is None,
+        ), 409
     except ValueError as exc:
-        db.session.rollback()
         flash(str(exc), "error")
         return render_template(
             "position_form.html",
@@ -550,9 +525,12 @@ def create_position() -> ResponseReturnValue:
             sides=Side,
             portfolios=portfolio_records(),
         ), 409
-    db.session.commit()
-    if merged:
-        if earlier is not None:
+    if result.replayed:
+        flash("Este aporte já foi registrado; o reenvio não alterou a posição.", "success")
+        return redirect(url_for("portfolio.index"))
+    position = result.position
+    if result.merged:
+        if result.prior_opening_date is not None:
             flash(
                 f"Lançamento anterior confirmado para {position.ticker} · {position.broker}: "
                 "ele passou a ser a abertura e o extrato foi recalculado em ordem cronológica.",

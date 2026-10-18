@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/playwright:v1.64.0-noble
+WORKDIR /tests
+COPY tests/browser/package*.json ./
+RUN --mount=type=secret,id=local_ca,required=false \
+    NODE_EXTRA_CA_CERTS=/run/secrets/local_ca npm ci --ignore-scripts --no-audit --no-fund
+COPY tests/browser/ ./
+USER pwuser
+ENV HOME=/tmp
+CMD ["node", "--test", "--test-concurrency=1", "critical.test.mjs"]
