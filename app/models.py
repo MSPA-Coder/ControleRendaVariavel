@@ -1338,6 +1338,20 @@ class UserPreference(Base):
     benchmark_ticker_ref: Mapped[Ticker | None] = relationship()
 
 
+class PositionSubmission(Base):
+    """Uma intenção de aporte por dono/instrumento; não guarda dados do formulário."""
+
+    __tablename__ = "position_submissions"
+    __table_args__ = (
+        CheckConstraint("command IN ('stock', 'option')", name="position_submission_command"),
+    )
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    command: Mapped[str] = mapped_column(String(12), primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class QuoteHistory(Base):
     """Série temporal de cotações por ativo, base dos relatórios de
     histórico e dos KPIs de risco (volatilidade, Sharpe, drawdown, VaR, Beta

@@ -7,6 +7,7 @@ from typing import Any
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     redirect,
@@ -23,6 +24,7 @@ from app import db
 from app.accounts.authorization import requer_admin
 from app.core.currency_filter import ALL
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
+from app.core.submissions import claim_submission
 from app.core.validation import parse_finite_decimal
 from app.models import (
     Broker,
@@ -272,10 +274,23 @@ def create_position() -> ResponseReturnValue:
             portfolios=portfolio_records(),
         ), 422
     candidate = OptionPosition(owner_id=current_owner_id(), **asdict(data))
+    try:
+        first_submission = claim_submission(
+            owner_id=current_owner_id(), command="option",
+            token=request.form.get("submit_token", ""), payload=asdict(data),
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        abort(409, description=str(exc))
+    if not first_submission:
+        db.session.rollback()
+        flash("Este aporte já foi registrado; o reenvio não alterou a posição.", "success")
+        return redirect(url_for("options.index"))
     # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
     # indistinguível de um aporte real. Só o usuário sabe qual dos dois é
     # (mesmo mecanismo de ``routes.positions.create_position``, para ações).
     if request.form.get("confirm_duplicate") != "1" and duplicate_entry(candidate) is not None:
+        db.session.rollback()
         return render_template(
             "option_form.html",
             position=request.form,

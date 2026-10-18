@@ -8,13 +8,14 @@ from decimal import Decimal
 from math import log10
 from typing import Any
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
 
 from app import db
 from app.core import regional
 from app.core.currency import converter_totais
+from app.core.submissions import claim_submission
 from app.core.validation import parse_finite_decimal
 from app.models import (
     Broker,
@@ -505,8 +506,21 @@ def create_position() -> ResponseReturnValue:
             portfolios=portfolio_records(),
         ), 422
     candidate = Position(owner_id=current_owner_id(), **asdict(data))
+    try:
+        first_submission = claim_submission(
+            owner_id=current_owner_id(), command="stock",
+            token=request.form.get("submit_token", ""), payload=asdict(data),
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        abort(409, description=str(exc))
+    if not first_submission:
+        db.session.rollback()
+        flash("Este aporte já foi registrado; o reenvio não alterou a posição.", "success")
+        return redirect(url_for("portfolio.index"))
     earlier = prior_opening(candidate)
     if earlier is not None and request.form.get("confirm_prior_opening") != "1":
+        db.session.rollback()
         return render_template(
             "position_form.html",
             position=request.form,
@@ -520,6 +534,7 @@ def create_position() -> ResponseReturnValue:
     # Dois cliques em Salvar chegam como dois cadastros iguais, e o segundo é
     # indistinguível de um aporte real. Só o usuário sabe qual dos dois é.
     if request.form.get("confirm_duplicate") != "1" and duplicate_entry(candidate) is not None:
+        db.session.rollback()
         return render_template(
             "position_form.html",
             position=request.form,

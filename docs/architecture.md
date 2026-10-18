@@ -606,6 +606,19 @@ Detalhes de operação, publicação e verificação estão em
 
 ## Critérios para evolução
 
+### Envios de aporte
+
+Os formulários de nova posição (ações e opções) identificam cada intenção por
+`submit_token`. A chave `(dono, instrumento, token)` e o hash da entrada ficam
+em `position_submissions`, na mesma transação do movimento e da posição. Um
+reenvio com a mesma entrada não grava novamente; reutilizar a chave com outros
+valores é conflito. Outra intenção recebe outra chave, mesmo com valores iguais.
+Confirmações e falhas fazem rollback, portanto não consomem a chave. Envios sem
+chave válida são recusados; formulários abertos antes da implantação precisam
+ser reabertos. As chaves não expiram automaticamente, para não permitir replay
+tardio. A tabela guarda só o hash, não uma cópia do formulário.
+
+
 - regra financeira deve ser testável sem requisição HTTP e sem banco;
 - a transação abrange o caso de uso completo que altera dados;
 - mudança persistente cria nova revisão Alembic, aditiva e imutável depois de

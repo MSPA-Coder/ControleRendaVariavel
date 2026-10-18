@@ -9,6 +9,7 @@
          no submit, se pergunta ou deixa passar. #}
       {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ movement_count|default(0) }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if not editing %}<input type="hidden" name="submit_token" value="{{ request.form.get('submit_token') or new_submission_token() }}">{% endif %}
   <h1>{{ "Editar" if editing else "Nova" }} posição</h1>
   {% if duplicate_warning %}
   <p class="form-warning" role="alert">

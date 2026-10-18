@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -99,7 +100,7 @@ def test_tela_exige_confirmacao_para_aporte_anterior_e_reconstroi_o_extrato(revi
     app, data = review_case
     client, token = client_for(app, data["ids"][0])
     form = {
-        "csrf_token": token,
+        "csrf_token": token, "submit_token": uuid4().hex,
         "broker_id": data["broker"],
         "ticker_id": data["ticker_ids"][0],
         "portfolio_id": data["portfolio_ids"][0],
@@ -111,7 +112,7 @@ def test_tela_exige_confirmacao_para_aporte_anterior_e_reconstroi_o_extrato(revi
     }
     assert client.post("/positions", data=form).status_code == 302
 
-    anterior = {**form, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-01"}
+    anterior = {**form, "submit_token": uuid4().hex, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-01"}
     aviso = client.post("/positions", data=anterior)
 
     assert aviso.status_code == 409
@@ -131,7 +132,7 @@ def test_editar_aumento_para_data_anterior_exige_confirmacao_e_reclassifica(revi
     app, data = review_case
     client, token = client_for(app, data["ids"][0])
     form = {
-        "csrf_token": token,
+        "csrf_token": token, "submit_token": uuid4().hex,
         "broker_id": data["broker"],
         "ticker_id": data["ticker_ids"][0],
         "portfolio_id": data["portfolio_ids"][0],
@@ -143,7 +144,7 @@ def test_editar_aumento_para_data_anterior_exige_confirmacao_e_reclassifica(revi
     }
     assert client.post("/positions", data=form).status_code == 302
     assert client.post(
-        "/positions", data={**form, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-11"}
+        "/positions", data={**form, "submit_token": uuid4().hex, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-11"}
     ).status_code == 302
     with app.app_context():
         position = db.session.query(Position).filter_by(
@@ -179,7 +180,7 @@ def test_excluir_abertura_promove_primeiro_aumento_e_recalcula(review_case):
     app, data = review_case
     client, token = client_for(app, data["ids"][0])
     form = {
-        "csrf_token": token,
+        "csrf_token": token, "submit_token": uuid4().hex,
         "broker_id": data["broker"],
         "ticker_id": data["ticker_ids"][0],
         "portfolio_id": data["portfolio_ids"][0],
@@ -191,7 +192,7 @@ def test_excluir_abertura_promove_primeiro_aumento_e_recalcula(review_case):
     }
     assert client.post("/positions", data=form).status_code == 302
     assert client.post(
-        "/positions", data={**form, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-11"}
+        "/positions", data={**form, "submit_token": uuid4().hex, "quantity": "50", "average_cost": "20", "opened_on": "2026-06-11"}
     ).status_code == 302
     with app.app_context():
         position = db.session.query(Position).filter_by(
@@ -220,12 +221,12 @@ def test_tela_recusa_edicao_que_colide_com_422(review_case):
     app, data = review_case
     client, token = client_for(app, data["ids"][0])
     form = {
-        "csrf_token": token, "broker_id": data["broker"], "ticker_id": data["ticker_ids"][0],
+        "csrf_token": token, "submit_token": uuid4().hex, "broker_id": data["broker"], "ticker_id": data["ticker_ids"][0],
         "portfolio_id": data["portfolio_ids"][0], "quantity": "4", "average_cost": "10", "side": "C",
         "opened_on": date.today().isoformat(), "target_multiplier": "1.5",
     }
     assert client.post("/positions", data=form).status_code == 302
-    assert client.post("/positions", data={**form, "ticker_id": data["ticker_ids"][2]}).status_code == 302
+    assert client.post("/positions", data={**form, "submit_token": uuid4().hex, "ticker_id": data["ticker_ids"][2]}).status_code == 302
     with app.app_context():
         movida = db.session.query(Position).filter_by(
             owner_id=data["user_ids"][0], ticker_id=data["ticker_ids"][2]
