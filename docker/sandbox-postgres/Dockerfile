@@ -1,4 +1,9 @@
 FROM postgres:17-alpine
+ARG ARTIFACT_REVISION=local
+ARG ARTIFACT_RUN=local
+LABEL org.opencontainers.image.source="https://github.com/MSPA-Coder/ControleRendaVariavel" \
+      org.opencontainers.image.revision="${ARTIFACT_REVISION}" \
+      br.com.mspa.ci-run="${ARTIFACT_RUN}"
 
 # The upstream gosu binary currently fails the HIGH/CRITICAL image gate.
 # Alpine's su-exec provides the same final-user exec behavior with a smaller
