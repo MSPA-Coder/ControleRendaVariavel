@@ -46,13 +46,13 @@ def needs_derivation(dividend: Dividend) -> bool:
 def derive_yields(
     dividends: Iterable[Dividend],
     *,
-    quantity_at: Callable[[str, int, date], Decimal],
+    quantity_at: Callable[[int, int, date], Decimal],
     average_cost: Mapping[int, Decimal],
     price_on: Callable[[int, date], Decimal | None],
 ) -> dict[int, DerivedYield]:
     """YOC e DY por ``Dividend.id`` para as linhas sem cotas.
 
-    ``quantity_at(corretora, ticker_id, data)`` devolve a quantidade comprada;
+    ``quantity_at(corretora_id, ticker_id, data)`` devolve a quantidade comprada;
     ``price_on(ticker_id, data)`` devolve a cotacao do ultimo fechamento valido
     ate a data, ou ``None``.
     """
@@ -60,7 +60,7 @@ def derive_yields(
     for dividend in dividends:
         if not needs_derivation(dividend):
             continue
-        quotas = quantity_at(dividend.broker, dividend.ticker_id, dividend.payment_date)
+        quotas = quantity_at(dividend.broker_id, dividend.ticker_id, dividend.payment_date)
         if quotas <= 0:
             continue
         cost = average_cost.get(dividend.ticker_id)

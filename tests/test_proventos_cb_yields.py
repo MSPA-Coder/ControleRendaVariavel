@@ -28,7 +28,7 @@ def test_yoc_e_dy_usam_as_cotas_do_dia_o_custo_medio_e_a_cotacao_da_data():
 
     resultado = derive_yields(
         [linha],
-        quantity_at=lambda corretora, ticker_id, quando: D("1300") if (corretora, ticker_id, quando) == ("Genial", 7, dia) else D("0"),
+        quantity_at=lambda corretora, ticker_id, quando: D("1300") if (corretora, ticker_id, quando) == (1, 7, dia) else D("0"),
         average_cost={7: D("20.00")},
         price_on=lambda ticker_id, quando: D("25.00"),
     )

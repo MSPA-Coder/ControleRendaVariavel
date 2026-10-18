@@ -31,6 +31,7 @@ from app.dividends.yields import DerivedYield, derive_yields
 from app.executions.conferencia import cb_config_from_app
 from app.models import Broker, Dividend, IncomeKind, Quote, Ticker
 from app.patrimonio.cb_client import CbUnavailableError, read_income_entries
+from app.patrimonio.queries import position_timeline
 from app.performance.dividends import build_dividend_report
 from app.positions.holdings_history import QuantityTimeline, closing_price_on
 from app.routes import bp
@@ -43,7 +44,6 @@ from app.routes.helpers import (
     open_real_average_cost_by_ticker,
     owned_or_404,
     parse_positive_id,
-    position_movement_events,
     price_series_by_ticker,
     selected_currency_filter,
 )
@@ -170,16 +170,15 @@ def _derived_yields(records: list[Dividend], average_cost: dict[int, Decimal]) -
     if not pending:
         return {}
     ticker_ids = sorted({record.ticker_id for record in pending})
-    timelines: dict[str, QuantityTimeline] = {}
+    # Uma só leitura das posições do dono (e do arquivo das encerradas), repartida
+    # por corretora em memória: o número de consultas não cresce com as linhas.
+    events = position_timeline(current_owner_id(), include_options=False, ticker_ids=ticker_ids)
+    timelines: dict[int, QuantityTimeline] = {}
 
-    def quantity_at(broker_name: str, ticker_id: int, on: date) -> Decimal:
-        if broker_name not in timelines:
-            timelines[broker_name] = QuantityTimeline(
-                position_movement_events(
-                    None, broker_name, include_options=False, ticker_ids=ticker_ids
-                )
-            )
-        return timelines[broker_name].long_quantity_at(ticker_id, on)
+    def quantity_at(broker_id: int, ticker_id: int, on: date) -> Decimal:
+        if broker_id not in timelines:
+            timelines[broker_id] = QuantityTimeline([event for event in events if event.broker_id == broker_id])
+        return timelines[broker_id].long_quantity_at(ticker_id, on)
 
     try:
         series = price_series_by_ticker(ticker_ids)

@@ -61,6 +61,10 @@ class HoldingEvent:
     ticker: ``Position`` e ``OptionPosition`` têm sequências de ``id``
     independentes, então uma ação e uma opção podem compartilhar o mesmo
     inteiro e o mesmo ticker."""
+    broker_id: int | None = None
+    """Corretora da posição, quando a leitura a traz (``position_timeline``).
+    Quem separa a linha do tempo por corretora filtra por aqui, em memória,
+    em vez de repetir a consulta para cada corretora."""
 
 
 @dataclass(frozen=True, slots=True)
