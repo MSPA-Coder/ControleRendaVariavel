@@ -47,9 +47,13 @@ O script gera `.secrets/secret_key`, `.secrets/postgres_password`, uma senha
 sintética para a suíte e tokens separados de leitura e escrita do coletor, sem
 exibir os valores. Se uma instalação antiga ainda tiver `SECRET_KEY` ou
 `POSTGRES_PASSWORD` no `.env`, eles são aceitos apenas para preencher arquivos
-que ainda não existam; depois rode `.scripts\provision-secrets.ps1 -MigrateDotEnv`
+que ainda não existam; depois rode `.\scripts\provision-secrets.ps1 -MigrateDotEnv`
 para trocar os valores por referências aos arquivos. `.env`, `.secrets/`,
 `.certs/` e `.docker-local/` são locais e ignorados pelo Git.
+
+A CA em `.certs/local-root-ca.crt` só é necessária quando o host intercepta
+HTTPS (por exemplo, por antivírus ou proxy); em uma conexão sem inspeção TLS,
+não é preciso criar esse arquivo. Veja [Desenvolvimento e validação](docs/development.md).
 
 Suba a pilha, crie o administrador e acesse a aplicação:
 
