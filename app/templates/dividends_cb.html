@@ -9,7 +9,7 @@
    `importar-proventos-cb --aplicar`, e nada da fila é gravado até o mantenedor
    corrigir o lançamento no CB ou cadastrar o ticker no CRV. #}
 <h1>Proventos do Controle Bancário</h1>
-<p class="form-help">Em reais, nas corretoras {{ brokers|join(', ') }}, a partir de {{ cutoff|ushort }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. Esta tela só mostra o que o comando <code>importar-proventos-cb</code> faria; ela não grava.</p>
+<p class="form-help">Em reais, nas corretoras {{ brokers|join(', ') }}, a partir de {{ cutoff|udate }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. Esta tela só mostra o que o comando <code>importar-proventos-cb</code> faria; ela não grava.</p>
 {% if status == 'nao_configurado' %}
 <p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p>
 {% elif status == 'indisponivel' %}

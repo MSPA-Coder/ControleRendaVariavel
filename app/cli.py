@@ -500,7 +500,12 @@ def substituir_proventos_planilha(
     são marcadas, nada é apagado e --desfazer reverte. Exige backup validado do
     banco e autorização do mantenedor antes de --aplicar em produção.
     """
-    from app.dividends.cb_sync import apply_substitution, plan_substitution, superseded_rows, undo_substitution
+    from app.dividends.cb_sync import (
+        apply_substitution,
+        plan_substitution,
+        superseded_rows,
+        undo_substitution,
+    )
 
     owner_id = _owner_for_command(usuario)
     cutoff = corte.date() if corte else None

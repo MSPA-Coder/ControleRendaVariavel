@@ -146,8 +146,8 @@
       {% if cutoff_subtotals %}
       <tfoot>
         {% for currency, total, count in cutoff_subtotals %}
-        <tr title="{{ count }} provento(s) pagos antes de {{ cutoff|ushort }}, congelados; a partir dessa data o CB é a fonte (reais) e a planilha segue valendo para dólar e Avenue.">
-          <td>Até {{ cutoff_last_day|ushort }} · saldo de corte{{ ' · ' + currency if currency != 'BRL' }}</td>
+        <tr title="{{ count }} provento(s) pagos antes de {{ cutoff|udate }}, congelados; a partir dessa data o CB é a fonte (reais) e a planilha segue valendo para dólar e Avenue.">
+          <td>Até {{ cutoff_last_day|udate }} · saldo de corte{{ ' · ' + currency if currency != 'BRL' }}</td>
           <td class="number" data-sensitive-value="true">{{ total|currency(currency) }}</td>
         </tr>
         {% endfor %}
@@ -178,7 +178,7 @@
     <article><span>Total recebido · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
   {% endfor %}
   {% for currency, total, count in cutoff_subtotals %}
-    <article><span>Até {{ cutoff_last_day|ushort }} · {{ currency }}</span><strong data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
+    <article><span>Até {{ cutoff_last_day|udate }} · {{ currency }}</span><strong data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
   {% endfor %}
 </section>
 {% endif %}
