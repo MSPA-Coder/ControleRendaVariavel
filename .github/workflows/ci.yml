@@ -82,6 +82,8 @@ jobs:
           chmod 0644 .secrets/postgres_app_password
           chmod 0644 .secrets/postgres_password_quality
           chmod 0644 .secrets/postgres_app_password_quality
+      - name: Validar os workflows de entrega e navegador
+        run: docker compose -f .github/docker-compose.yml run --rm --no-deps workflow-lint
       - name: Validar Compose
         run: docker compose --profile quality config --quiet
       - name: Construir quality sem cache
