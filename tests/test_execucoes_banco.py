@@ -367,6 +367,9 @@ def test_fluxo_http_ensaio_nao_grava_e_gravar_exige_o_mesmo_arquivo(usuario_http
     assert repetido.status_code == 200
     assert _contar(app, usuario_id) == 2
 
+    tela = client.get("/executions/reconciliation").get_data(as_text=True)
+    assert "B3_GENIAL_27012026" in tela and "Sem comparação" in tela
+
 
 def test_gravar_pelo_http_exige_csrf_e_login(usuario_http):
     app, (usuario_id, _, _, sessao_id) = usuario_http
@@ -433,6 +436,7 @@ def test_comando_recusa_arquivo_com_pendencia_e_dono_ausente(usuario_http, tmp_p
     arquivo.write_bytes(relatorio_xlsx([linha(DIA, "X", "ABCD3", -1, "10.00", instituicao="DESCONHECIDA")]))
     runner = app.test_cli_runner()
 
+    monkeypatch.setitem(app.config, "PATRIMONIO_OWNER_ID", "")
     with app.app_context():
         sem_dono = runner.invoke(args=["importar-negocios-myprofit", str(arquivo)])
         monkeypatch.setitem(app.config, "PATRIMONIO_OWNER_ID", str(usuario_id))
