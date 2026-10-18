@@ -1348,6 +1348,108 @@ class PositionSubmission(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+def _not_finite(column: str) -> str:
+    return f"{column} NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)"
+
+
+class ExecutionImport(Base):
+    """Um lote gravado do relatório "Histórico de investimentos" do myProfit.
+
+    Guarda só o que identifica o arquivo (nome, período, ``sha256``) e quanto
+    ele mudou. O cabeçalho do relatório traz o nome e o CPF do titular; o
+    importador os descarta antes de qualquer gravação.
+    """
+
+    __tablename__ = "execution_imports"
+    __table_args__ = (
+        CheckConstraint("period_end >= period_start", name="period_valid"),
+        CheckConstraint(
+            "row_count >= 0 AND rows_created >= 0 AND rows_updated >= 0", name="counts_non_negative"
+        ),
+        CheckConstraint("length(sha256) = 64", name="sha256_length"),
+        UniqueConstraint("id", "owner_id", name="uq_execution_imports_id_owner"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    file_name: Mapped[str | None] = mapped_column(String(120))
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    sha256: Mapped[str] = mapped_column(String(64))
+    row_count: Mapped[int] = mapped_column(Integer)
+    rows_created: Mapped[int] = mapped_column(Integer)
+    rows_updated: Mapped[int] = mapped_column(Integer)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Execution(Base):
+    """Um negócio lido do myProfit (que lê a B3). Não é posição nem transação.
+
+    ``total_with_fees`` já vem com o sinal do caixa (crédito positivo, débito
+    negativo) e é a verdade da conferência contra o Controle Bancário; ``side``
+    e ``cash_operation`` guardam, como vieram, o Tipo e a Operação do relatório
+    (nos day trades de futuro os dois podem parecer opostos). ``in_scope``
+    marca o que a conferência e o uso futuro consideram: ações, opções e ETF
+    da B3, sem a taxa de aluguel.
+
+    O relatório não traz identificador por negócio: a linha é identificada por
+    documento + ordem no documento, e ``content_hash`` detecta a linha que mudou.
+    """
+
+    __tablename__ = "executions"
+    __table_args__ = (
+        CheckConstraint("line_order >= 1", name="line_order_positive"),
+        CheckConstraint("length(content_hash) = 64", name="content_hash_length"),
+        CheckConstraint("side IN ('C', 'V')", name="side_valid"),
+        CheckConstraint("cash_operation IN ('C', 'D')", name="cash_operation_valid"),
+        CheckConstraint(
+            "asset_group IN ('acao', 'opcao', 'etf', 'indice_futuro', 'tesouro_direto', 'acao_eua', 'etf_usa')",
+            name="asset_group_valid",
+        ),
+        CheckConstraint("currency ~ '^[A-Z]{3}$'", name="currency_valid"),
+        CheckConstraint("quantity <> 0", name="quantity_non_zero"),
+        CheckConstraint("price_without_fees >= 0 AND price_with_fees >= 0", name="prices_non_negative"),
+        CheckConstraint("fees_total >= 0", name="fees_non_negative"),
+        CheckConstraint(_not_finite("quantity"), name="quantity_finite"),
+        CheckConstraint(_not_finite("price_without_fees"), name="price_without_fees_finite"),
+        CheckConstraint(_not_finite("price_with_fees"), name="price_with_fees_finite"),
+        CheckConstraint(_not_finite("fees_total"), name="fees_total_finite"),
+        CheckConstraint(_not_finite("total_without_fees"), name="total_without_fees_finite"),
+        CheckConstraint(_not_finite("total_with_fees"), name="total_with_fees_finite"),
+        UniqueConstraint("owner_id", "document", "line_order", name="uq_executions_owner_document_line"),
+        ForeignKeyConstraint(["import_id", "owner_id"], ["execution_imports.id", "execution_imports.owner_id"],
+                             name="fk_executions_import_owner", ondelete="RESTRICT"),
+        Index("ix_executions_owner_broker_date", "owner_id", "broker_id", "trade_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    import_id: Mapped[int] = mapped_column(Integer, index=True)
+    broker_id: Mapped[int] = mapped_column(ForeignKey("brokers.id", ondelete="RESTRICT"))
+    institution: Mapped[str] = mapped_column(String(40))
+    trade_date: Mapped[date] = mapped_column(Date)
+    document: Mapped[str] = mapped_column(String(80))
+    document_type: Mapped[str | None] = mapped_column(String(40))
+    line_order: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    asset: Mapped[str] = mapped_column(String(80))
+    asset_group: Mapped[str] = mapped_column(String(20))
+    side: Mapped[str] = mapped_column(String(1))
+    cash_operation: Mapped[str] = mapped_column(String(1))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    price_without_fees: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    price_with_fees: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    fees_total: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    total_without_fees: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    total_with_fees: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    day_trade: Mapped[bool] = mapped_column(Boolean)
+    currency: Mapped[str] = mapped_column(String(3))
+    in_scope: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    broker_ref: Mapped[Broker] = relationship()
+
+
 class QuoteHistory(Base):
     """Série temporal de cotações por ativo, base dos relatórios de
     histórico e dos KPIs de risco (volatilidade, Sharpe, drawdown, VaR, Beta
