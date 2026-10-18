@@ -2,6 +2,8 @@ name: controle-renda-variavel
 
 services:
   db:
+    labels:
+      mspa.backup.postgres: "true"
     image: mspa-postgres:17-alpine
     build:
       context: .

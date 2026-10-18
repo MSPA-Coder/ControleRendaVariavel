@@ -39,6 +39,9 @@ VPS baixa essa imagem já testada; não reconstrói bases. O estado saudável em
 Rollback restaura os IDs locais anteriores de web/migrate e
 PostgreSQL/provisionamento, sem pull/build. Migrações/dados não são revertidos.
 
+O serviço `db` declara `mspa.backup.postgres=true`, contrato de descoberta
+do backup central mesmo quando a imagem é identificada por digest.
+
 O repositório é clonado com a deploy key cadastrada no GitHub e o
 apelido `github-renda` configurado em `~/.ssh/config`:
 
