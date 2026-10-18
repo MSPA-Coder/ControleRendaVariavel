@@ -82,6 +82,9 @@ jobs:
           chmod 0644 .secrets/postgres_app_password
           chmod 0644 .secrets/postgres_password_quality
           chmod 0644 .secrets/postgres_app_password_quality
+          # Constantes sintéticas do smoke: o usuário não-root do web também
+          # precisa ler esses secrets de arquivo preservados pelo Compose.
+          chmod 0644 .secrets/secret_key .secrets/collector_agent_read_token .secrets/collector_agent_write_token
       - name: Validar os workflows de entrega e navegador
         run: docker compose -f .github/docker-compose.yml run --rm --no-deps workflow-lint
       - name: Validar Compose
