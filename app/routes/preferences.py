@@ -16,7 +16,7 @@ from app.core.regional import (
 from app.core.themes import THEME_DESCRIPTIONS, get_theme_options_dict, parse_theme
 from app.routes import bp
 from app.routes.helpers import (
-    entitled_tickers,
+    beta_reference_candidates,
     parse_positive_id,
     ticker_is_entitled,
     user_preferences,
@@ -28,7 +28,7 @@ def _render_preferences(values: object, status: int = 200) -> ResponseReturnValu
         "preferences.html",
         values=values,
         theme_options=get_theme_options_dict(),
-        tickers=entitled_tickers(include_inactive=True),
+        tickers=beta_reference_candidates(include_inactive=True),
         theme_descriptions=THEME_DESCRIPTIONS,
         regional_options=[
             (value, label, REGIONAL_FORMAT_EXAMPLES[value])
@@ -47,7 +47,7 @@ def preferences() -> ResponseReturnValue:
             pricing = parse_pricing_settings(request.form)
             benchmark_id = parse_positive_id(request.form.get("benchmark_ticker_id"), allow_all=True)
             if benchmark_id is not None and not ticker_is_entitled(benchmark_id):
-                raise ValueError("Selecione uma referência do seu histórico de investimentos.")
+                raise ValueError("Selecione uma referência cadastrada ou um ativo do seu histórico.")
         except ValueError as exc:
             flash(str(exc), "error")
             return _render_preferences(request.form, 422)

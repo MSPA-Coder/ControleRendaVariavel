@@ -29,7 +29,7 @@ from app.core.pricing_settings import parse_pricing_settings
 from app.models import AppSetting, Ticker
 from app.routes import bp
 from app.routes.helpers import (
-    entitled_tickers,
+    beta_reference_candidates,
     parse_positive_id,
     ticker_is_entitled,
     user_preferences,
@@ -130,9 +130,7 @@ def _render_settings(settings: AppSetting, *, status: int = 200) -> ResponseRetu
                 for value in settings.collector_schedule_weekdays.split(",")
                 if value.isdigit()
             },
-            # Uma consulta só: filtrar `ticker_records()` com `ticker_is_entitled`
-            # custava uma ida ao banco por ticker cadastrado.
-            tickers=entitled_tickers(),
+            tickers=beta_reference_candidates(),
             collector_enabled=not settings.collector_paused,
             remote_collector_enabled=current_app.config["REMOTE_COLLECTOR_ENABLED"],
         ),
@@ -163,7 +161,7 @@ def settings() -> ResponseReturnValue:
             ):
                 raise ValueError("Selecione um ticker cadastrado como referência para o Beta.")
             if benchmark_ticker_id is not None and not ticker_is_entitled(benchmark_ticker_id):
-                raise ValueError("Selecione uma referência que pertença ao seu histórico de investimentos.")
+                raise ValueError("Selecione uma referência cadastrada ou um ativo do seu histórico.")
             raw_stale_alert = request.form.get("stale_alert_seconds", "").strip()
             if raw_stale_alert:
                 try:
