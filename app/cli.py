@@ -44,6 +44,8 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(import_position_history)
     app.cli.add_command(expurgar_outbox)
     app.cli.add_command(importar_negocios_myprofit)
+    app.cli.add_command(aplicar_execucoes)
+    app.cli.add_command(marcar_execucoes_aplicadas)
     app.cli.add_command(conferir_pregoes)
     app.cli.add_command(importar_posicao_myprofit)
     app.cli.add_command(conciliar_myprofit)
@@ -343,8 +345,73 @@ def importar_negocios_myprofit(arquivo: Path, usuario: str | None, gravar: bool)
         raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
     click.echo(
         f"Gravado o lote {batch.id}: {batch.rows_created} nova(s), {batch.rows_updated} alterada(s). "
-        "Posições não foram alteradas."
+        "Posições não foram alteradas; use aplicar-execucoes."
     )
+
+
+@click.command("aplicar-execucoes")
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--ate", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
+              help="Só as execuções até esta data (padrão: todas as pendentes).")
+@click.option("--gravar", is_flag=True, help="Grava de fato. Sem esta opção o comando só faz o ensaio.")
+def aplicar_execucoes(usuario: str | None, ate: datetime | None, gravar: bool) -> None:
+    """Leva às posições as execuções do myProfit ainda pendentes.
+
+    O padrão é o ENSAIO: aplica de verdade numa transação e a desfaz no fim. Com
+    --gravar, abre, reforça ou fecha as posições e marca cada execução. O que
+    exige decisão (exercício, opção sem contrato, venda sem posição) fica
+    pendente, e o comando sai com código 1.
+    """
+    from app.executions.aplicacao import ALREADY_ENTERED, APPLIED, apply_executions
+
+    try:
+        report = apply_executions(_owner_for_command(usuario), until=ate.date() if ate else None)
+        if gravar:
+            db.session.commit()
+        else:
+            db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        raise
+    if not report.outcomes:
+        click.echo("Nenhuma execução pendente.")
+        return
+    labels = {APPLIED: "APLICADA", ALREADY_ENTERED: "JÁ LANÇADA"}
+    for outcome in report.outcomes:
+        click.echo(f"  {labels.get(outcome.state, 'PENDENTE'):<10} {outcome.trade.label}: {outcome.detail}")
+    click.echo(
+        f"{len(report.of(APPLIED))} aplicada(s), {len(report.of(ALREADY_ENTERED))} já lançada(s), "
+        f"{len(report.pending)} pendente(s)."
+    )
+    click.echo("Gravado." if gravar else "Ensaio: nada foi gravado. Use --gravar para confirmar.")
+    if report.pending:
+        raise click.exceptions.Exit(1)
+
+
+@click.command("marcar-execucoes-aplicadas")
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--ate", type=click.DateTime(formats=["%Y-%m-%d"]), required=True,
+              help="Marca as execuções pendentes até esta data.")
+@click.option("--ativo", default=None, help="Só as deste ativo (ex.: o exercício resolvido à mão).")
+@click.option("--nota", required=True, help="Por que já estão refletidas nas posições.")
+@click.option("--gravar", is_flag=True, help="Grava de fato. Sem esta opção o comando só faz o ensaio.")
+def marcar_execucoes_aplicadas(
+    usuario: str | None, ate: datetime, ativo: str | None, nota: str, gravar: bool
+) -> None:
+    """Marca execuções como linha de base, sem mexer nas posições.
+
+    Para a adoção (o que a conciliação já conferiu) e para o negócio que o
+    mantenedor resolveu à mão. O padrão é o ENSAIO.
+    """
+    from app.executions.aplicacao import mark_baseline
+
+    count = mark_baseline(_owner_for_command(usuario), until=ate.date(), note=nota.strip(), asset=ativo)
+    if gravar:
+        db.session.commit()
+        click.echo(f"{count} execução(ões) marcada(s) como linha de base.")
+    else:
+        db.session.rollback()
+        click.echo(f"Ensaio: {count} execução(ões) seriam marcadas. Use --gravar para confirmar.")
 
 
 @click.command("conferir-pregoes")
@@ -381,7 +448,8 @@ def conferir_pregoes(
     counts = result.counts
     click.echo(
         f"{len(result.rows)} pregão(ões): {counts['confere']} confere, {counts['diferenca']} diferença, "
-        f"{counts['so_cb']} só no CB, {counts['so_crv']} só no CRV (tolerância {result.tolerance})."
+        f"{counts['so_cb']} só no CB, {counts['so_crv']} só no CRV, "
+        f"{counts['aguardando_extrato']} aguardando extrato (tolerância {result.tolerance})."
     )
 
 
@@ -547,14 +615,24 @@ def _load_cb_income() -> CbIncome:
     help="Data inicial (padrão: PROVENTOS_CB_CORTE).",
 )
 @click.option("--aplicar", is_flag=True, help="Grava de fato. Sem esta opção o comando só faz o ensaio.")
-def importar_proventos_cb(usuario: str | None, corte: datetime | None, aplicar: bool) -> None:
+@click.option(
+    "--rotina",
+    is_flag=True,
+    help="Execução diária do VPS: grava como --aplicar e sai com código 1 se sobrar algo a revisar.",
+)
+def importar_proventos_cb(usuario: str | None, corte: datetime | None, aplicar: bool, rotina: bool) -> None:
     """Importa os proventos das corretoras em reais a partir do Controle Bancário.
 
     O padrão é o ENSAIO: mostra o que criaria e atualizaria, os totais e a fila
     de revisão (crédito sem ativo ou com ticker que o CRV não cadastra), e não
     grava nada. Com --aplicar grava só linhas origin='cb', de forma idempotente.
     Linhas de planilha não são tocadas (a substituição é outro comando).
+
+    --rotina é o que o VPS roda todo dia (``cotacoes-diarias.sh`` do
+    manutencao): grava o que é válido e sai com código 1 quando a fila de revisão
+    ou um crédito sumido do CB pedem atenção, para o alerta da unidade avisar.
     """
+    aplicar = aplicar or rotina
     from sqlalchemy.exc import IntegrityError
 
     from app.dividends.cb_sync import apply_cb_import, plan_cb_import
@@ -606,14 +684,19 @@ def importar_proventos_cb(usuario: str | None, corte: datetime | None, aplicar: 
         return
     if not plan.can_write:
         click.echo("Nada a gravar: as linhas do CB já estão no CRV.")
-        return
-    try:
-        created, updated = apply_cb_import(owner_id, plan)
-        db.session.commit()
-    except IntegrityError as exc:
-        db.session.rollback()
-        raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
-    click.echo(f"Gravado: {created} criada(s), {updated} atualizada(s). Linhas de planilha não foram alteradas.")
+    else:
+        try:
+            created, updated = apply_cb_import(owner_id, plan)
+            db.session.commit()
+        except IntegrityError as exc:
+            db.session.rollback()
+            raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
+        click.echo(f"Gravado: {created} criada(s), {updated} atualizada(s). Linhas de planilha não foram alteradas.")
+    if rotina and (result.review or plan.absent_from_cb):
+        raise click.ClickException(
+            f"{len(result.review)} crédito(s) na fila de revisão e {len(plan.absent_from_cb)} gravado(s) "
+            "que o CB não tem mais: veja a tela de proventos do CB no CRV."
+        )
 
 
 @click.command("substituir-proventos-planilha-2026")

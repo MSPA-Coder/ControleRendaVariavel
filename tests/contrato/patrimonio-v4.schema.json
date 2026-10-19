@@ -104,7 +104,11 @@
         "initial_balance_date": { "$ref": "#/$defs/data" },
         "balance": { "$ref": "#/$defs/decimal_ou_nulo", "description": "Nulo quando a conta ainda nao existe na data da foto: nunca zero inventado." },
         "balance_as_of": { "$ref": "#/$defs/data_ou_nula" },
-        "deep_link": { "type": "string", "pattern": "^/" }
+        "deep_link": { "type": "string", "pattern": "^/" },
+        "statement_covered_until": {
+          "$ref": "#/$defs/data",
+          "description": "Opcional (19/10/2026). Ultimo dia que o extrato importado cobre: o maior entre a ultima linha, a data do saldo informado pelo arquivo e o fim de periodo declarado. Ausente quando a conta nunca teve extrato."
+        }
       }
     },
     "cb_categoria": {
