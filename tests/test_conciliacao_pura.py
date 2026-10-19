@@ -16,13 +16,16 @@ from app.executions.conciliacao import (
     ONLY_MYPROFIT,
     QUANTITY,
     Holding,
+    MovementRow,
     apply_notes,
     combine,
     compare_positions,
     compare_sales,
+    state_on,
 )
 from app.executions.myprofit import ExecutionReportError, read_execution_report
 from app.executions.posicao_myprofit import read_position_report
+from app.models import PositionMovementKind
 from tests.myprofit_posicao_sintetico import linha_posicao, posicao_tsv, posicao_xlsx
 from tests.myprofit_sintetico import (
     CPF_FICTICIO,
@@ -131,6 +134,30 @@ def test_importador_de_execucoes_tambem_le_o_tsv_do_navegador():
     assert [(r.trade_date, r.asset, r.quantity, r.total_with_fees) for r in lido.rows] == [
         (date(2026, 1, 27), "ABCD3", D("-100"), D("1000"))
     ]
+
+
+def _m(dia: int, tipo: str, delta: str, custo: str, ident: int = 0) -> MovementRow:
+    return MovementRow(date(2026, 10, dia) if dia > 0 else date(2026, 3, 2), ident or dia, PositionMovementKind[tipo], D(delta), D(custo))
+
+
+@pytest.mark.parametrize(
+    ("movimentos", "esperado"),
+    [
+        ([], (False, _h("120", "11"))),
+        ([_m(0, "OPEN", "100", "10")], (False, _h("120", "11"))),
+        # compra depois da data: tira a quantidade e volta ao custo da data
+        ([_m(0, "OPEN", "100", "10"), _m(8, "INCREASE", "20", "11")], (True, _h("100", "10"))),
+        # venda depois da data: devolve a quantidade, o custo médio não muda
+        ([_m(0, "OPEN", "140", "11"), _m(12, "DECREASE", "-20", "11")], (True, _h("140", "11"))),
+        # aberta depois da data: não existia nela
+        ([_m(8, "OPEN", "120", "11")], (True, None)),
+        # ajuste é correção de cadastro e não volta no tempo
+        ([_m(0, "OPEN", "110", "11"), _m(15, "ADJUSTMENT", "10", "11")], (False, _h("120", "11"))),
+    ],
+    ids=["sem-movimento", "nada-depois", "compra-depois", "venda-depois", "aberta-depois", "ajuste"],
+)
+def test_estado_da_posicao_na_data(movimentos, esperado):
+    assert state_on(_h("120", "11"), movimentos, date(2026, 9, 30)) == esperado
 
 
 def test_combine_soma_lotes_e_pondera_o_custo_medio():

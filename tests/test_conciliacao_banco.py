@@ -3,7 +3,7 @@ simulada, ativos de fora da B3 e reconhecimentos."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -18,6 +18,7 @@ from app.executions.conciliacao import (
     ONLY_MYPROFIT,
     QUANTITY,
     build_conciliation,
+    crv_holdings,
     myprofit_holdings,
     remove_note,
     save_position_snapshot,
@@ -35,6 +36,8 @@ from app.models import (
     OptionType,
     Portfolio,
     Position,
+    PositionMovement,
+    PositionMovementKind,
     ReconciliationNote,
     Side,
     Ticker,
@@ -273,6 +276,96 @@ def test_opcao_fechada_entra_pelo_codigo_da_opcao(sessao, cenario):
     resultado = build_conciliation(c["dono"].id, start=INICIO, end=FIM)
 
     assert _estados(resultado.sales) == {opcao.symbol: MATCH}
+
+
+def _movimento(c, posicao, tipo, delta, dia, quantidade_final, custo_final, *, transacao=None):
+    return PositionMovement(
+        owner_id=c["dono"].id, position_id=posicao.id, kind=tipo, quantity_delta=D(delta),
+        price=D(custo_final), occurred_on=dia, resulting_quantity=D(quantidade_final),
+        resulting_average_cost=D(custo_final),
+        result=D("0") if tipo == PositionMovementKind.DECREASE else None,
+        transaction_id=transacao.id if transacao is not None else None,
+    )
+
+
+def test_posicao_do_crv_e_a_da_data_do_myprofit_e_nao_a_de_hoje(sessao, cenario):
+    """O caso de 19/10/2026: o que foi vendido depois da data não é "só no myProfit".
+
+    ACAOA: vendida inteira depois da data (só resta a transação fechada).
+    ACAOB: comprada a mais e vendida em parte depois da data (posição viva).
+    Uma terceira, aberta depois da data, não existia nela.
+    """
+    c = cenario
+    a, b = c["t"]["ACAOA"], c["t"]["ACAOB"]
+    nova = Ticker(
+        symbol=f"NOVA{c['sufixo']}", trading_name="nova", market=Market.B3, rtd_market_code="B", currency="BRL"
+    )
+    sessao.add(nova)
+    sessao.flush()
+    data = date(2026, 9, 30)
+    vendida_depois = _fechada(c, a, c["real"], "300", date(2026, 10, 5))
+    viva = _posicao(c, b, c["real"], "120", "11.00")
+    aberta_depois = _posicao(c, nova, c["real"], "10", "5.00")
+    aberta_depois.opened_on = date(2026, 10, 10)
+    sessao.add_all([vendida_depois, viva, aberta_depois])
+    sessao.flush()
+    parcial = _fechada(c, b, c["real"], "30", date(2026, 10, 12))
+    parcial.source_position_id = viva.id
+    sessao.add(parcial)
+    sessao.flush()
+    sessao.add_all(
+        [
+            _movimento(c, viva, PositionMovementKind.OPEN, "100", date(2026, 3, 2), "100", "10.00"),
+            _movimento(c, viva, PositionMovementKind.INCREASE, "50", date(2026, 10, 8), "150", "11.00"),
+            _movimento(c, viva, PositionMovementKind.DECREASE, "-30", date(2026, 10, 12), "120", "11.00", transacao=parcial),
+        ]
+    )
+    sessao.flush()
+    _snapshot(c, sessao, [linha_posicao(a.symbol, 300, "10"), linha_posicao(b.symbol, 100, "10")], ate=data)
+
+    resultado = build_conciliation(c["dono"].id, start=INICIO, end=FIM)
+
+    assert resultado.as_of == data
+    assert _estados(resultado.positions) == {a.symbol: MATCH, b.symbol: MATCH}
+    na_data = crv_holdings(c["dono"].id, data)
+    assert (na_data[b.symbol].quantity, na_data[b.symbol].average) == (D("100"), D("10.00"))
+    hoje = crv_holdings(c["dono"].id)
+    assert set(hoje) == {b.symbol, nova.symbol} and hoje[b.symbol].quantity == D("120")
+
+
+def test_ajuste_de_cadastro_depois_da_data_vale_para_tras(sessao, cenario):
+    c = cenario
+    a = c["t"]["ACAOA"]
+    posicao = _posicao(c, a, c["real"], "100", "10.00")
+    sessao.add(posicao)
+    sessao.flush()
+    sessao.add_all(
+        [
+            _movimento(c, posicao, PositionMovementKind.OPEN, "90", date(2026, 3, 2), "90", "10.00"),
+            _movimento(c, posicao, PositionMovementKind.ADJUSTMENT, "10", date(2026, 10, 15), "100", "10.00"),
+        ]
+    )
+    sessao.flush()
+    _snapshot(c, sessao, [linha_posicao(a.symbol, 100, "10")], ate=date(2026, 9, 30))
+
+    assert _estados(build_conciliation(c["dono"].id, start=INICIO, end=FIM).positions) == {a.symbol: MATCH}
+
+
+def test_comando_recusa_posicao_com_data_futura(cenario, app_com_banco, tmp_path, monkeypatch):
+    """Pedida com data futura, o myProfit devolve a posição de hoje com aquele rótulo."""
+    monkeypatch.setitem(app_com_banco.config, "PATRIMONIO_OWNER_ID", str(cenario["dono"].id))
+    futura = tmp_path / "posicao-futura.tsv"
+    futura.write_bytes(posicao_tsv([linha_posicao("AAA3", 1, "1")], ate=date.today() + timedelta(days=12)))
+    passada = tmp_path / "posicao-passada.tsv"
+    passada.write_bytes(posicao_tsv([linha_posicao("AAA3", 1, "1")], ate=date.today() - timedelta(days=1)))
+    runner = app_com_banco.test_cli_runner()
+
+    with app_com_banco.app_context():
+        recusada = runner.invoke(args=["importar-posicao-myprofit", str(futura)])
+        aceita = runner.invoke(args=["importar-posicao-myprofit", str(passada)])
+
+    assert recusada.exit_code != 0 and "data futura" in recusada.output
+    assert aceita.exit_code == 0 and "Ensaio" in aceita.output
 
 
 def test_reconhecimento_tira_a_pendencia_e_pode_ser_removido(sessao, cenario):
