@@ -98,7 +98,7 @@ def test_preferences_require_login_and_csrf(preference_accounts):
         assert db.session.get(UserPreference, ids[0]) is None
 
 
-def test_benchmark_requires_own_historical_entitlement(preference_accounts):
+def test_benchmark_requires_own_historical_entitlement_unless_it_is_global(preference_accounts):
     app, client, csrf, ids, _ = preference_accounts
     with app.app_context():
         ticker = Ticker(symbol=f"P{uuid4().hex[:16]}", trading_name="Referência de teste",
@@ -116,20 +116,20 @@ def test_benchmark_requires_own_historical_entitlement(preference_accounts):
         with app.app_context():
             preference = db.session.get(UserPreference, ids[0])
             assert preference is None or preference.benchmark_ticker_id is None
-            if preference is None:
-                preference = UserPreference(user_id=ids[0])
-                db.session.add(preference)
-            preference.benchmark_ticker_id = ticker_id
+            # Referências não são ativos detidos. Torná-las globais não deve
+            # inventar uma posse apenas para permitir o Beta.
+            db.session.get(Ticker, ticker_id).is_benchmark = True
             db.session.commit()
-        risk = client.get("/risk")
-        assert risk.status_code == 200
-        assert ticker_symbol not in risk.get_data(as_text=True)
-        with app.app_context():
-            db.session.add(UserTickerEntitlement(user_id=ids[0], ticker_id=ticker_id, first_held_on=date(2026, 1, 1)))
-            db.session.commit()
-        assert client.post("/preferences", data=form).status_code == 302
+        response = client.post("/preferences", data=form)
+        assert response.status_code == 302
         with app.app_context():
             assert db.session.get(UserPreference, ids[0]).benchmark_ticker_id == ticker_id
+        page = client.get("/preferences").get_data(as_text=True)
+        assert ticker_symbol in page
+        # A referência global também percorre os dois consumidores da série
+        # sem conceder acesso aos ativos privados da outra conta.
+        assert client.get("/quotes", query_string={"benchmark_ticker_id": ticker_id}).status_code == 200
+        assert client.get("/risk").status_code == 200
     finally:
         with app.app_context():
             db.session.execute(delete(UserTickerEntitlement).where(UserTickerEntitlement.ticker_id == ticker_id))

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from flask import abort, current_app, request
 from flask_login import current_user  # type: ignore[import-untyped]
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import joinedload
 
@@ -100,11 +100,23 @@ def owned_or_404_for_update(
 
 
 def ticker_is_entitled(ticker_id: int) -> bool:
-    return db.session.scalar(
-        select(UserTickerEntitlement.ticker_id).where(
+    """Autoriza ativo do histórico privado ou referência global.
+
+    Uma referência de mercado não representa posição de ninguém. Exigir uma
+    ``UserTickerEntitlement`` para ela fazia os índices cadastrados ficarem
+    invisíveis justamente onde são necessários: Beta e comparações. Os demais
+    ativos continuam exigindo o vínculo histórico do usuário.
+    """
+    entitlement = (
+        select(UserTickerEntitlement.ticker_id)
+        .where(
             UserTickerEntitlement.user_id == current_owner_id(),
-            UserTickerEntitlement.ticker_id == ticker_id,
+            UserTickerEntitlement.ticker_id == Ticker.id,
         )
+        .exists()
+    )
+    return db.session.scalar(
+        select(Ticker.id).where(Ticker.id == ticker_id, or_(Ticker.is_benchmark.is_(True), entitlement))
     ) is not None
 
 
@@ -115,6 +127,22 @@ def entitled_tickers(*, include_inactive: bool = False) -> list[Ticker]:
         .where(UserTickerEntitlement.user_id == current_owner_id())
         .order_by(Ticker.symbol)
     )
+    if not include_inactive:
+        statement = statement.where(Ticker.is_active.is_(True))
+    return list(db.session.scalars(statement))
+
+
+def beta_reference_candidates(*, include_inactive: bool = False) -> list[Ticker]:
+    """Ativos do próprio histórico e referências globais para escolher o Beta."""
+    entitlement = (
+        select(UserTickerEntitlement.ticker_id)
+        .where(
+            UserTickerEntitlement.user_id == current_owner_id(),
+            UserTickerEntitlement.ticker_id == Ticker.id,
+        )
+        .exists()
+    )
+    statement = select(Ticker).where(or_(Ticker.is_benchmark.is_(True), entitlement)).order_by(Ticker.symbol)
     if not include_inactive:
         statement = statement.where(Ticker.is_active.is_(True))
     return list(db.session.scalars(statement))
@@ -315,12 +343,7 @@ def benchmark_candidates(exclude_ticker_id: int | None = None) -> list[Ticker]:
     em ordem alfabética, oferecidos nos comparadores de evolução dos
     gráficos de Cotações e Performance. ``exclude_ticker_id`` evita
     oferecer comparar um ticker consigo mesmo."""
-    statement = (
-        select(Ticker)
-        .join(UserTickerEntitlement)
-        .where(UserTickerEntitlement.user_id == current_owner_id(), Ticker.is_benchmark.is_(True), Ticker.is_active.is_(True))
-        .order_by(Ticker.symbol)
-    )
+    statement = select(Ticker).where(Ticker.is_benchmark.is_(True), Ticker.is_active.is_(True)).order_by(Ticker.symbol)
     return [
         ticker for ticker in db.session.scalars(statement) if ticker.id != exclude_ticker_id
     ]
@@ -371,15 +394,20 @@ def price_series_by_ticker(ticker_ids: Iterable[int]) -> dict[int, list[tuple[da
     series: dict[int, list[tuple[date, Decimal]]] = {ticker_id: [] for ticker_id in ids}
     if not ids:
         return series
-    entitled = set(
+    entitlement = (
+        select(UserTickerEntitlement.ticker_id)
+        .where(
+            UserTickerEntitlement.user_id == current_owner_id(),
+            UserTickerEntitlement.ticker_id == Ticker.id,
+        )
+        .exists()
+    )
+    allowed = set(
         db.session.scalars(
-            select(UserTickerEntitlement.ticker_id).where(
-                UserTickerEntitlement.user_id == current_owner_id(),
-                UserTickerEntitlement.ticker_id.in_(ids),
-            )
+            select(Ticker.id).where(Ticker.id.in_(ids), or_(Ticker.is_benchmark.is_(True), entitlement))
         )
     )
-    if entitled != set(ids):
+    if allowed != set(ids):
         abort(404)
     rows = db.session.execute(
         select(QuoteHistory.ticker_id, QuoteHistory.recorded_date, QuoteHistory.price)
