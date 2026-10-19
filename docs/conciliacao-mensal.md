@@ -73,8 +73,16 @@ executa.
 `conciliar-myprofit` tem duas seções.
 
 **Posições** compara quantidade e custo médio da posição do myProfit (somada por
-ativo) com as posições abertas do CRV (somadas por ativo, sem a carteira
-Simulada). O custo médio tolera 0,1%: o myProfit guarda quatro casas, o CRV oito.
+ativo) com as posições do CRV **na mesma data** (somadas por ativo, sem a carteira
+Simulada): o que foi comprado ou vendido depois dela é desfeito pelos movimentos e
+pelas transações fechadas, e o ajuste de cadastro vale para trás. O custo médio
+tolera 0,1%: o myProfit guarda quatro casas, o CRV oito.
+
+Comparar com a posição de hoje fazia o papel vendido depois da data aparecer como
+"só no myProfit", e a correção ingênua (registrar a posição) o reabria: foi o que
+aconteceu com AUREL110 e VAMOA50 em 19/10/2026. Pelo mesmo motivo,
+`importar-posicao-myprofit` recusa posição com data futura: pedida assim, o
+myProfit devolve a de hoje com o rótulo da data pedida.
 
 **Vendas** compara a quantidade vendida nas execuções do período com a quantidade
 fechada nas transações do CRV no mesmo período. É ela que acusa o ciclo inteiro
@@ -117,9 +125,9 @@ A opção que o relatório não descreve (strike e vencimento) se infere do cód
 
 ## Limites conhecidos
 
-- A posição do myProfit é a da data do relatório; lançamentos do CRV feitos depois
-  dela aparecem como diferença. Emita a posição no último dia do mês e concilie
-  logo em seguida.
+- A posição do CRV numa data passada depende das datas dos movimentos: uma
+  posição antiga sem movimentos (lançada antes de eles existirem) vale como está
+  hoje desde a abertura.
 - O myProfit não traz corretora na posição; a comparação é por ativo, e uma
   diferença de corretora (mesmo ativo, quantidade trocada entre duas) não aparece.
 - Compra sem venda correspondente de ativo que já saiu da carteira por outro

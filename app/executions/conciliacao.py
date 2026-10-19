@@ -4,8 +4,8 @@ Só leitura sobre as posições e as transações. Duas comparações, ambas por
 da B3 (ações, opções e ETF; futuros, Tesouro e exterior ficam de fora):
 
 * **posição**: quantidade e custo médio da "Posição detalhada" mais recente
-  contra as posições abertas do CRV, somadas por ativo (o relatório não traz
-  corretora) e sem a carteira Simulada;
+  contra as posições do CRV **na mesma data** (``crv_holdings``), somadas por
+  ativo (o relatório não traz corretora) e sem a carteira Simulada;
 * **venda**: soma das quantidades vendidas nas execuções do período contra a
   soma das quantidades fechadas nas transações do CRV no mesmo período. É o que
   acusa o ciclo inteiro que ficou de fora (compra e venda dentro do período, sem
@@ -37,8 +37,11 @@ from app.models import (
     MyprofitPosition,
     OptionContract,
     OptionPosition,
+    OptionPositionMovement,
     Portfolio,
     Position,
+    PositionMovement,
+    PositionMovementKind,
     ReconciliationNote,
     Ticker,
     Transaction,
@@ -212,18 +215,68 @@ def myprofit_holdings(owner_id: int, as_of: date | None = None) -> tuple[date | 
     return as_of, {asset: combined for asset, rows in lots.items() if (combined := combine(rows))}
 
 
-def crv_holdings(owner_id: int) -> dict[str, Holding]:
-    """Posições abertas do CRV por ativo (ações e opções), sem a carteira Simulada."""
+#: Movimentos que são negócio com data; o ajuste é correção de cadastro e vale
+#: para trás (corrigir hoje um lote digitado errado não muda a data dele).
+_TRADE_KINDS = frozenset({PositionMovementKind.OPEN, PositionMovementKind.INCREASE, PositionMovementKind.DECREASE})
+
+
+@dataclass(frozen=True, slots=True)
+class MovementRow:
+    occurred_on: date
+    id: int
+    kind: PositionMovementKind
+    quantity_delta: Decimal
+    resulting_average_cost: Decimal
+
+
+def state_on(current: Holding, movements: Iterable[MovementRow], as_of: date) -> tuple[bool, Holding | None]:
+    """Estado de uma posição viva ao fim de ``as_of``: ``(mudou_depois, estado)``.
+
+    A quantidade é a de hoje menos os negócios posteriores à data. O custo médio
+    só muda com compra (venda sai pelo custo médio): havendo compra depois da
+    data, vale o custo do último movimento até ela. Sem negócio depois da data,
+    ``(False, current)``.
+    """
+    ordered = sorted(movements, key=lambda item: (item.occurred_on, item.id))
+    later = [item for item in ordered if item.occurred_on > as_of and item.kind in _TRADE_KINDS]
+    if not later:
+        return False, current
+    quantity = current.quantity - sum((item.quantity_delta for item in later), Decimal(0))
+    if quantity <= 0:
+        return True, None
+    average = current.average
+    if any(item.kind != PositionMovementKind.DECREASE for item in later):
+        before = [item for item in ordered if item.occurred_on <= as_of]
+        average = before[-1].resulting_average_cost if before else None
+    return True, Holding(quantity, average)
+
+
+def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]:
+    """Posições do CRV por ativo (ações e opções), sem a carteira Simulada.
+
+    Sem ``as_of``, as abertas hoje. Com ``as_of``, as que existiam ao fim daquele
+    dia, para comparar com a posição do myProfit **da mesma data**:
+
+    * posição viva sem negócio depois da data e aberta até ela: vale como está;
+    * posição viva com negócio depois da data (compra ou venda parcial): volta ao
+      estado da data (``state_on``);
+    * lote fechado depois da data e aberto até ela (``transactions``): volta a
+      contar, salvo se a posição de origem ainda existe e já foi recontada pelo
+      movimento (é a venda parcial do item anterior).
+
+    Comparar a posição de hoje com o myProfit de uma data passada acusa como
+    "só no myProfit" o que foi vendido depois, e a correção ingênua reabre o
+    papel vendido.
+    """
     lots: dict[str, list[Holding]] = defaultdict(list)
-    for symbol, quantity, average in db.session.execute(
-        select(Ticker.symbol, Position.quantity, Position.average_cost)
+    stock_rows = db.session.execute(
+        select(Position.id, Ticker.symbol, Position.quantity, Position.average_cost, Position.opened_on)
         .join(Ticker, Ticker.id == Position.ticker_id)
         .join(Portfolio, Portfolio.id == Position.portfolio_id)
         .where(Position.owner_id == owner_id, Portfolio.simulated.is_(False), Position.side == Side.BUY, Ticker.market == Market.B3)
-    ):
-        lots[symbol].append(Holding(quantity, average))
-    for symbol, quantity, average in db.session.execute(
-        select(Ticker.symbol, OptionPosition.quantity, OptionPosition.average_cost)
+    ).all()
+    option_rows = db.session.execute(
+        select(OptionPosition.id, Ticker.symbol, OptionPosition.quantity, OptionPosition.average_cost, OptionPosition.opened_on)
         .join(OptionContract, OptionContract.id == OptionPosition.contract_id)
         .join(Ticker, Ticker.id == OptionContract.ticker_id)
         .join(Portfolio, Portfolio.id == OptionPosition.portfolio_id)
@@ -233,8 +286,65 @@ def crv_holdings(owner_id: int) -> dict[str, Holding]:
             OptionPosition.side == Side.BUY,
             Ticker.market == Market.B3,
         )
+    ).all()
+    if as_of is None:
+        for _, symbol, quantity, average, _ in (*stock_rows, *option_rows):
+            lots[symbol].append(Holding(quantity, average))
+        return {asset: combined for asset, rows in lots.items() if (combined := combine(rows))}
+
+    #: (é opção?, id da posição) das posições vivas recontadas pelo movimento.
+    rolled_back: set[tuple[bool, int]] = set()
+    for is_option, rows, movement in (
+        (False, stock_rows, PositionMovement),
+        (True, option_rows, OptionPositionMovement),
     ):
-        lots[symbol].append(Holding(quantity, average))
+        owner_column = movement.option_position_id if is_option else movement.position_id
+        history: dict[int, list[MovementRow]] = defaultdict(list)
+        if rows:
+            for position_id, occurred_on, movement_id, kind, delta, average in db.session.execute(
+                select(
+                    owner_column, movement.occurred_on, movement.id, movement.kind,
+                    movement.quantity_delta, movement.resulting_average_cost,
+                ).where(owner_column.in_([row[0] for row in rows]))
+            ):
+                history[position_id].append(MovementRow(occurred_on, movement_id, kind, delta, average))
+        for position_id, symbol, quantity, average, opened_on in rows:
+            changed, state = state_on(Holding(quantity, average), history.get(position_id, ()), as_of)
+            if changed:
+                rolled_back.add((is_option, position_id))
+            elif opened_on > as_of:
+                continue
+            if state is not None:
+                lots[symbol].append(state)
+
+    closed_base = (
+        Transaction.owner_id == owner_id,
+        Transaction.status == TransactionStatus.CLOSED,
+        Transaction.side == Side.BUY,
+        Transaction.opened_on <= as_of,
+        Transaction.closed_on > as_of,
+        Portfolio.simulated.is_(False),
+        Ticker.market == Market.B3,
+    )
+    for is_option, statement in (
+        (
+            False,
+            select(Ticker.symbol, Transaction.quantity, Transaction.average_cost, Transaction.source_position_id)
+            .join(Ticker, Ticker.id == Transaction.ticker_id),
+        ),
+        (
+            True,
+            select(Ticker.symbol, Transaction.quantity, Transaction.average_cost, Transaction.source_position_id)
+            .join(OptionContract, OptionContract.id == Transaction.option_contract_id)
+            .join(Ticker, Ticker.id == OptionContract.ticker_id),
+        ),
+    ):
+        for symbol, quantity, average, source_id in db.session.execute(
+            statement.join(Portfolio, Portfolio.id == Transaction.portfolio_id).where(*closed_base)
+        ):
+            if source_id is not None and (is_option, source_id) in rolled_back:
+                continue
+            lots[symbol].append(Holding(quantity, average))
     return {asset: combined for asset, rows in lots.items() if (combined := combine(rows))}
 
 
@@ -301,7 +411,7 @@ def build_conciliation(
     owner_id: int, *, start: date, end: date, as_of: date | None = None
 ) -> Conciliation:
     snapshot_date, theirs = myprofit_holdings(owner_id, as_of)
-    positions = compare_positions(theirs, crv_holdings(owner_id)) if snapshot_date else []
+    positions = compare_positions(theirs, crv_holdings(owner_id, snapshot_date)) if snapshot_date else []
     sales = compare_sales(
         execution_sales(owner_id, start, end), crv_closed_quantities(owner_id, start, end)
     )

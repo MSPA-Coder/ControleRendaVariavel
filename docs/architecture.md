@@ -635,7 +635,8 @@ nas URLs `http`.
   relatórios). Pura, com a mesma regra de privacidade do importador: a data final
   do período é a data da posição, e o nome e o CPF nunca saem.
 * `conciliacao.py` compara, por ativo da B3 (ações, opções e ETF), a posição do
-  myProfit com as posições abertas do CRV (quantidade exata, custo médio com
+  myProfit com as posições do CRV na mesma data (`crv_holdings(as_of)`, que desfaz
+  pelos movimentos e pelas transações fechadas o que veio depois; quantidade exata, custo médio com
   tolerância de 0,1%) e a quantidade vendida nas execuções do período com a
   quantidade fechada nas transações do CRV. Só leitura; `compare_positions`,
   `compare_sales` e `apply_notes` são puras. `ReconciliationNote` guarda a

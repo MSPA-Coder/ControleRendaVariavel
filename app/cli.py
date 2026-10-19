@@ -418,6 +418,14 @@ def importar_posicao_myprofit(arquivo: Path, usuario: str | None, gravar: bool) 
         click.echo(f"PENDÊNCIA: {problem}", err=True)
     if report.rejected_rows:
         raise click.ClickException("O relatório tem linhas recusadas; nada foi gravado.")
+    if report.as_of > date.today():
+        # Pedida com data futura, o myProfit devolve a posição de hoje com o
+        # rótulo da data pedida: gravá-la faria a conciliação comparar o CRV
+        # daquela data com uma posição que não é dela.
+        raise click.ClickException(
+            f"A posição diz {report.as_of:%d/%m/%Y}, data futura; o myProfit devolve a de hoje "
+            "com esse rótulo. Emita o relatório até o último dia do mês fechado."
+        )
     if not gravar:
         click.echo("Ensaio: nada foi gravado. Use --gravar para confirmar.")
         return
