@@ -8,11 +8,13 @@ from decimal import Decimal
 import pytest
 
 from app.executions.conferencia import (
+    AWAITING_STATEMENT,
     DIFFERENCE,
     MATCH,
     NO_CB,
     ONLY_CB,
     ONLY_CRV,
+    STATE_LABELS,
     Movement,
     compare,
     tolerance_from_config,
@@ -131,3 +133,22 @@ def test_tolerancia_configuravel_com_padrao_de_cinco_reais(bruto, esperado):
 def test_tolerancia_invalida_e_recusada(bruto):
     with pytest.raises(ValueError, match="CONFERENCIA_TOLERANCIA"):
         tolerance_from_config({"CONFERENCIA_TOLERANCIA": bruto})
+
+
+def test_so_no_crv_vira_aguardando_extrato_quando_a_liquidacao_passa_do_extrato_importado():
+    crv = [
+        Movement("Genial", date(2026, 9, 10), "BRL", D("100"), "B3_GENIAL_10092026"),
+        Movement("Genial", date(2026, 9, 26), "BRL", D("100"), "B3_GENIAL_26092026"),
+        Movement("Genial", date(2026, 10, 5), "BRL", D("100"), "B3_GENIAL_05102026"),
+        Movement("XP", date(2026, 10, 5), "BRL", D("100"), "B3_XP_05102026"),
+    ]
+
+    linhas = compare([], crv, coverage={("Genial", "BRL"): date(2026, 9, 29)})
+
+    assert [(linha.broker, linha.pregao.day, linha.state) for linha in linhas] == [
+        ("Genial", 10, ONLY_CRV),  # a liquidação já devia estar no extrato: falta mesmo
+        ("Genial", 26, AWAITING_STATEMENT),  # liquida em 29 ou 30/09, na borda do extrato
+        ("Genial", 5, AWAITING_STATEMENT),
+        ("XP", 5, ONLY_CRV),  # sem cobertura publicada, nada muda
+    ]
+    assert AWAITING_STATEMENT in STATE_LABELS

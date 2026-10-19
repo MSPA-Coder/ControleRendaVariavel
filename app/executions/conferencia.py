@@ -20,7 +20,7 @@ import json
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import current_app
@@ -58,6 +58,14 @@ DIFFERENCE = "diferenca"
 ONLY_CB = "so_cb"
 ONLY_CRV = "so_crv"
 NO_CB = "sem_cb"
+#: Só no CRV, mas o extrato da corretora no CB ainda não chega à liquidação: falta
+#: importar o extrato, não falta dinheiro.
+AWAITING_STATEMENT = "aguardando_extrato"
+
+#: A liquidação sai em D+1 ou D+2 úteis; cinco dias corridos cobrem o fim de
+#: semana e um feriado. Pregão cuja liquidação esperada passa do último dia do
+#: extrato importado aguarda o extrato.
+SETTLEMENT_MARGIN = timedelta(days=5)
 
 STATE_LABELS = {
     MATCH: "Confere",
@@ -65,6 +73,7 @@ STATE_LABELS = {
     ONLY_CB: "Só no CB",
     ONLY_CRV: "Só no CRV",
     NO_CB: "Sem comparação",
+    AWAITING_STATEMENT: "Aguardando extrato",
 }
 
 
@@ -113,11 +122,16 @@ def compare(
     *,
     tolerance: Decimal = DEFAULT_TOLERANCE,
     cb_available: bool = True,
+    coverage: Mapping[tuple[str, str], date] | None = None,
 ) -> list[ReconciliationRow]:
     """Classifica cada (corretora, pregão, moeda) em confere, diferença, só no
     CB ou só no CRV, em ordem de data. ``cb_available=False`` marca tudo como
     sem comparação em vez de chamar de "só no CRV" o que o CB nem foi perguntado.
+    ``coverage`` ((corretora, moeda) -> último dia do extrato importado) troca
+    "só no CRV" por "aguardando extrato" quando a liquidação esperada do pregão
+    passa desse dia.
     """
+    coverage = coverage or {}
     cb_sums, _ = _totals(cb)
     crv_sums, crv_documents = _totals(crv)
     rows: list[ReconciliationRow] = []
@@ -127,7 +141,8 @@ def compare(
         if not cb_available:
             state = NO_CB
         elif cb_amount is None:
-            state = ONLY_CRV
+            covered = coverage.get((key[0], key[2]))
+            state = AWAITING_STATEMENT if covered is not None and key[1] + SETTLEMENT_MARGIN > covered else ONLY_CRV
         elif crv_amount is None:
             state = ONLY_CB
         else:
@@ -271,6 +286,12 @@ def build_reconciliation(
     for broker_name, institutions in broker_institutions().items():
         for institution in institutions:
             institution_to_broker[institution] = broker_name
+    coverage: dict[tuple[str, str], date] = {}
+    for (institution, currency), covered in settlements.coverage.items():
+        broker_name = institution_to_broker.get(institution)
+        if broker_name is not None:
+            key = (broker_name, currency)
+            coverage[key] = max(covered, coverage.get(key, covered))
     cb: list[Movement] = []
     for item in settlements.items:
         broker_name = institution_to_broker.get(item.institution)
@@ -281,7 +302,7 @@ def build_reconciliation(
             continue
         cb.append(Movement(broker_name, pregao, item.currency, item.amount))
     return Reconciliation(
-        rows=compare(cb, crv, tolerance=tolerance),
+        rows=compare(cb, crv, tolerance=tolerance, coverage=coverage),
         tolerance=tolerance,
         cb_status="ok",
         without_pregao=settlements.without_pregao,

@@ -85,6 +85,10 @@ class CbSettlements:
     #: Liquidação e ajuste de BM&F (futuros): mesma categoria no CB, mas o CRV
     #: não trata futuros, então ficam fora da conferência, contados.
     futures: list[CbSettlement] = field(default_factory=list)
+    #: (instituição, moeda) -> último dia que o extrato importado cobre, pelo
+    #: ``statement_covered_until`` opcional das contas (CB desde 19/10/2026).
+    #: Instituição sem o campo não aparece.
+    coverage: dict[tuple[str, str], date] = field(default_factory=dict)
 
 
 _PREGAO_NA_DESCRICAO = re.compile(r"\bPr\s+(\d{2})/(\d{2})/(\d{4})\b")
@@ -247,7 +251,28 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
         items=[item for item in stocks if item.pregao_date is not None],
         without_pregao=[item for item in stocks if item.pregao_date is None],
         futures=futures,
+        coverage=statement_coverage(accounts),
     )
+
+
+def statement_coverage(accounts: dict[str, dict[str, Any]]) -> dict[tuple[str, str], date]:
+    """Último dia coberto pelo extrato, por (instituição, moeda); o maior entre as contas."""
+    coverage: dict[tuple[str, str], date] = {}
+    for account in accounts.values():
+        raw = account.get("statement_covered_until")
+        if not raw:
+            continue
+        try:
+            covered = date.fromisoformat(str(raw))
+        except ValueError:
+            continue
+        key = (
+            str(account.get("institution") or institution_identity(account.get("institution_name"))),
+            str(account.get("currency") or ""),
+        )
+        if key not in coverage or covered > coverage[key]:
+            coverage[key] = covered
+    return coverage
 
 
 @dataclass(frozen=True, slots=True)

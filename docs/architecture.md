@@ -626,7 +626,11 @@ moeda**, a soma assinada da liquidação do CB (conta(s) da corretora) com a som
 de `total_with_fees` das execuções em escopo. Estados: **confere** (diferença
 absoluta até a tolerância, `CONFERENCIA_TOLERANCIA`, padrão R$ 5,00),
 **diferença**, **só no CB** e **só no CRV**; sem CB disponível o estado é "sem
-comparação". A diferença (CRV − CB) é o **custo implícito** do pregão: o que a
+comparação". "Só no CRV" vira **aguardando extrato** quando a conta da corretora
+no CB publica `statement_covered_until` (o último dia que o extrato importado
+cobre, acréscimo opcional do v4 desde 19/10/2026) e a liquidação esperada do
+pregão (até cinco dias corridos depois dele, `SETTLEMENT_MARGIN`) passa desse dia:
+falta importar o extrato, não falta dinheiro. A diferença (CRV − CB) é o **custo implícito** do pregão: o que a
 corretora e a liquidação levaram além das taxas da B3 que o myProfit já conta (o
 CRV não guarda custos). A correspondência corretora ↔ contas do CB é por
 instituição, em `DEFAULT_BROKER_INSTITUTIONS` (Genial = conta 8; XP = SCP XP
@@ -697,13 +701,16 @@ congeladas e aparecem como o subtotal "Até 31/12/2025 · saldo de corte".
   tela `/dividends/cb` (ensaio ao vivo, somente leitura) e na saída do comando,
   com o que fazer.
 * **Importação**: `flask --app app:create_app importar-proventos-cb [--usuario U]
-  [--corte AAAA-MM-DD] [--aplicar]`. O padrão é o **ensaio**; `--aplicar` grava só
+  [--corte AAAA-MM-DD] [--aplicar | --rotina]`. O padrão é o **ensaio**; `--aplicar` grava só
   linhas `origin = 'cb'`, de forma idempotente (chave `origin_id`, o id do
   lançamento de crédito, com índice único parcial por dono; uma linha cujo valor
   mudou no CB é atualizada, e uma que sumiu do CB é só listada, nunca apagada).
   A chave de importação da planilha (`import_key`) virou índice parcial
   `WHERE origin = 'planilha'` na revisão `20261018_0032`, porque dois créditos
-  iguais do CB no mesmo dia são dois lançamentos.
+  iguais do CB no mesmo dia são dois lançamentos. `--rotina` é a execução
+  diária do VPS (o `cotacoes-diarias.sh` do manutencao, de terça a sábado): grava
+  como `--aplicar` e sai com código 1 quando sobra crédito na fila de revisão ou
+  linha que sumiu do CB, para o alerta da unidade avisar.
 * **Substituição da planilha** (`app/dividends/substituicao.py`, pura, e
   `cb_sync.py`): as linhas de planilha em reais, nas corretoras do CB, com
   pagamento a partir do corte, seriam contadas em dobro. `flask ...

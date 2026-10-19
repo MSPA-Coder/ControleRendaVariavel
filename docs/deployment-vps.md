@@ -131,6 +131,9 @@ o mesmo segredo, e só funcionam com o CB-1 em produção e preenchido (campos
 primeiro com backup validado: `importar-proventos-cb` (ensaio, depois
 `--aplicar`) e, só então, `substituir-proventos-planilha-2026` (ensaio, depois
 `--aplicar`; `--desfazer` reverte). Nenhum dos dois roda sozinho no deploy.
+Depois da adoção, a importação é diária: o `cotacoes-diarias.sh` do manutencao
+roda `importar-proventos-cb --rotina` no `web`, de terça a sábado às 06:40, e a
+falha (fila de revisão, CB indisponível) dispara o alerta da unidade.
 
 O Compose é a mesma fonte de verdade no local e no VPS: `db-provision` cria ou
 atualiza `investimentos_app` de forma idempotente antes do `migrate`, concede

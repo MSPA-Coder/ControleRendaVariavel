@@ -10,7 +10,7 @@
 {% if result.rows %}
 {% if result.cb_status == 'ok' %}
 <section class="summary" aria-label="Situação da conferência">
-  {% for state, label in [('confere', 'Conferem'), ('diferenca', 'Com diferença'), ('so_cb', 'Somente no CB'), ('so_crv', 'Somente no CRV')] %}
+  {% for state, label in [('confere', 'Conferem'), ('diferenca', 'Com diferença'), ('so_cb', 'Somente no CB'), ('so_crv', 'Somente no CRV'), ('aguardando_extrato', 'Aguardando extrato')] %}
   <article class="{{ 'workspace-highlight' if state == 'diferenca' }}"><span>{{ label }}</span><strong>{{ result.counts[state] }}</strong><small>Pregões · corretora e moeda</small></article>
   {% endfor %}
 </section>
@@ -18,7 +18,7 @@
 <p class="workspace-note">{{ result.rows|length }} pregão(ões) sem comparação. O estado da liquidação permanece desconhecido.</p>
 {% endif %}
 <p class="workspace-note">Tolerância da comparação: <span data-sensitive-value="true">{{ result.tolerance|currency('BRL') }}</span>. Custo implícito = execuções do CRV − liquidação do CB.</p>
-{% for state in ['diferenca', 'so_cb', 'so_crv', 'sem_cb', 'confere'] %}
+{% for state in ['diferenca', 'so_cb', 'so_crv', 'aguardando_extrato', 'sem_cb', 'confere'] %}
 {% set rows = result.rows|selectattr('state', 'equalto', state)|list %}
 {% if rows %}
 <section class="workspace-reconciliation-group" aria-label="{{ rows[0].state_label }}">
@@ -30,7 +30,7 @@
       <dl class="trade-data-grid">{{ trades.metric('CB · liquidação', row.cb_amount|currency(row.currency) if row.cb_amount is not none else '—') }}{{ trades.metric('CRV · execuções', row.crv_amount|currency(row.currency) if row.crv_amount is not none else '—') }}</dl>
       <div class="workspace-cost"><span class="trade-label">Custo implícito · CRV − CB</span><strong data-sensitive-value="true">{{ row.implicit_cost|currency(row.currency) if row.implicit_cost is not none else '—' }}</strong></div>
       <details class="workspace-disclosure"><summary>Contexto e documentos</summary>
-        <p class="workspace-note">{% if row.state == 'sem_cb' %}A integração não forneceu os dados da liquidação. Não é possível concluir se este pregão confere.{% elif row.state == 'so_cb' %}Há liquidação no CB e nenhum negócio em escopo no CRV para esta corretora, data e moeda.{% elif row.state == 'so_crv' %}Há negócios no CRV e nenhuma liquidação no CB para esta corretora, data e moeda.{% elif row.state == 'diferenca' %}Os valores diferem além da tolerância. Consulte os documentos e a liquidação para entender o custo implícito.{% else %}A diferença está dentro da tolerância da conferência.{% endif %}</p>
+        <p class="workspace-note">{% if row.state == 'sem_cb' %}A integração não forneceu os dados da liquidação. Não é possível concluir se este pregão confere.{% elif row.state == 'so_cb' %}Há liquidação no CB e nenhum negócio em escopo no CRV para esta corretora, data e moeda.{% elif row.state == 'so_crv' %}Há negócios no CRV e nenhuma liquidação no CB para esta corretora, data e moeda.{% elif row.state == 'aguardando_extrato' %}O extrato desta corretora importado no CB ainda não chega à data da liquidação. Importe o extrato do período no CB.{% elif row.state == 'diferenca' %}Os valores diferem além da tolerância. Consulte os documentos e a liquidação para entender o custo implícito.{% else %}A diferença está dentro da tolerância da conferência.{% endif %}</p>
         <h4 class="trade-label">Documentos do CRV</h4><p class="workspace-note">{{ row.documents|join(', ') or 'Nenhum documento do CRV para este pregão.' }}</p>
       </details>
     </article>

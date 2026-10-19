@@ -21,7 +21,9 @@ executa.
 
 1. **Extratos do CB.** Importe no Controle Bancário os extratos do mês das contas
    da Genial e da XP. Sem eles, o `conferir-pregoes` mostra os últimos pregões
-   como "só no CRV".
+   como "aguardando extrato" (o CB publica até que dia cada extrato foi
+   importado). Os proventos do CB entram no CRV sozinhos, na manhã seguinte à
+   importação (`importar-proventos-cb --rotina`, no VPS, de terça a sábado).
 2. **Emitir os relatórios** (aba `https://myprofitweb.com/App/...` já logada):
    carregue `scripts/myprofit/ler-relatorio.js` no console e rode, com as datas do
    mês (a posição usa o último dia):

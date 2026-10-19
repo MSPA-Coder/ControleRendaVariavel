@@ -221,3 +221,17 @@ def test_salto_http_interno_declara_https_como_o_proxy_faria(monkeypatch, url, e
     assert cb_client._fetch_json(url, "segredo") == {"items": []}
     assert visto["authorization"] == "Bearer segredo"
     assert ("x-forwarded-proto" in visto) is encaminha_https
+
+
+def test_cobertura_do_extrato_vem_da_conta_e_vale_a_maior_por_instituicao_e_moeda():
+    genial = _conta(CONTA_GENIAL, "Genial")
+    genial["payload"]["statement_covered_until"] = "2026-09-29"
+    outra = _conta("cb:account:99", "Genial")
+    outra["payload"]["statement_covered_until"] = "2026-10-02"
+    sem_extrato = _conta("cb:account:98", "Avenue")
+
+    resultado = read_settlements(
+        CbConfig("http://cb.test/patrimonio/v4", "t"), fetcher=_snapshot(genial, outra, sem_extrato)
+    )
+
+    assert resultado.coverage == {("genial", "BRL"): date(2026, 10, 2)}

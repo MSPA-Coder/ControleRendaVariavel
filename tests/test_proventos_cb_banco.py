@@ -324,3 +324,24 @@ def test_sem_as_linhas_do_cb_no_crv_nada_e_substituido(sessao, cenario):
     plano = plan_substitution(cenario["usuario"].id)
 
     assert plano.to_supersede == [] and [linha.id for linha in plano.divergences] == [_linha.id]
+
+
+@pytest.mark.parametrize(
+    ("entradas", "codigo", "trecho"),
+    [
+        ([lancamento(30, "credito", "12.34", date(2026, 2, 3))], 1, "fila de revisão"),
+        ([], 0, "Nada a gravar"),
+    ],
+    ids=["credito-sem-ativo-alerta", "nada-novo-sucesso"],
+)
+def test_rotina_diaria_grava_o_valido_e_sai_com_erro_quando_ha_o_que_revisar(
+    sessao, cenario, app_com_banco, monkeypatch, entradas, codigo, trecho
+):
+    """O VPS roda --rotina todo dia; o código 1 é o que aciona o alerta da unidade."""
+    monkeypatch.setitem(app_com_banco.config, "PATRIMONIO_OWNER_ID", str(cenario["usuario"].id))
+    monkeypatch.setattr("app.cli._load_cb_income", lambda: _renda(*entradas))
+
+    resultado = app_com_banco.test_cli_runner().invoke(args=["importar-proventos-cb", "--rotina"])
+
+    assert resultado.exit_code == codigo, resultado.output
+    assert trecho in resultado.output
