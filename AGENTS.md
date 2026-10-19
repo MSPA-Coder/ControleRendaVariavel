@@ -76,7 +76,9 @@ comum aos repositórios; leia antes de escrever ou remover um teste. Diante de
 vermelho, decida de quem é o defeito antes de mexer: teste que mede texto
 literal reprova mudança legítima, e nesse caso quem se corrige é a asserção.
 Nunca escreva código para o teste passar. Os testes marcados com
-`sentinela_front` leem JS ou CSS porque nenhum teste executa o navegador.
+`sentinela_front` são verificações textuais temporárias; os fluxos críticos
+de navegador usam `compose.browser.yaml`, com banco descartável e fontes
+externas controladas, conforme `docs/TESTES.md`.
 
 PostgreSQL é o único backend dos testes com persistência; SQLite não o
 substitui. A suíte tem duas camadas (ver o docstring de `tests/conftest.py`): a

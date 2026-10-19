@@ -80,6 +80,12 @@ As gregas usam Black-Scholes europeu, com a taxa livre de risco anual
 configurada em Configurações (`app_settings.risk_free_rate_annual`). A
 classificação de moneziness ("ITM", "ATM", "OTM") segue o tipo do contrato.
 
+A inversão do prêmio para volatilidade implícita usa o limite europeu com
+strike descontado: `max(S − K exp(−rT), 0)` para call e
+`max(K exp(−rT) − S, 0)` para put, sem dividendos. Um prêmio europeu válido
+pode ficar abaixo do valor de exercício imediato. A suíte confere um preço
+publicado pelo QuantLib, paridade call/put e gregas por diferenças finitas.
+
 ## Vencimentos
 
 O calendário de vencimentos guarda código anual de call, código anual de put
