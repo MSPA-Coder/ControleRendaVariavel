@@ -2,9 +2,10 @@
 
 O myProfit lê a B3 e é a fonte dos negócios e da posição dos ativos da bolsa
 (ações, opções e ETF). O CRV guarda a carteira, o preço médio e o resultado por
-operação. Uma vez por mês, cada lado é conferido contra o outro, e o que não
-bate vira tarefa. Nada é gravado nas posições automaticamente: a conciliação
-**mostra** a diferença; corrigir é decisão de quem mantém.
+operação. Uma vez por mês, os negócios do myProfit são levados às posições do
+CRV (`aplicar-execucoes`) e cada lado é conferido contra o outro; o que não bate
+vira tarefa. A conciliação só **mostra** a diferença; corrigir o que o comando
+não resolve sozinho é decisão de quem mantém.
 
 O que **não** entra: futuros, Tesouro Direto, renda fixa e contas no exterior
 (Avenue, Nomad, Revolut). O IR continua no myProfit; o CRV não o calcula.
@@ -54,9 +55,40 @@ executa.
    ```
 
    Reimportar é seguro: negócios repetidos são reconhecidos (documento, ordem da
-   linha e `content_hash`) e a posição da mesma data é substituída. Apague os TSV
-   de `/tmp` no fim.
-5. **Conferir.**
+   linha e `content_hash`) e a posição da mesma data é substituída. Linha já
+   aplicada às posições que mudou no myProfit é recusada. Apague os TSV de `/tmp`
+   no fim.
+5. **Aplicar às posições.**
+
+   ```bash
+   flask --app app:create_app aplicar-execucoes            # ensaio
+   flask --app app:create_app aplicar-execucoes --gravar
+   ```
+
+   Cada negócio pendente (execuções do mesmo pregão, corretora, ativo e lado,
+   somadas, a preço médio **sem taxas**) abre, reforça ou fecha a posição pelos
+   mesmos serviços da tela. Negócio que o CRV já tem, digitado à mão no dia, só é
+   marcado (`ja_lancada`). O ensaio aplica de verdade numa transação desfeita: o
+   que ele mostra é o que a gravação faz. O comando sai com código 1 quando sobra
+   pendência:
+
+   | Pendência | O que fazer |
+   |---|---|
+   | ativo não cadastrado | cadastrar o ticker e rodar de novo |
+   | opção sem contrato | cadastrar strike e vencimento (o relatório não traz) e rodar de novo |
+   | exercício (`...E`) | lançar à mão o papel recebido ou entregue, com o custo líquido do prêmio, e marcar |
+   | venda sem posição comprada | lançamento de opção ou venda a descoberto: decidir e marcar |
+   | carteira ambígua | aplicar à mão e marcar |
+
+   Marcar é registrar que a execução já está refletida, sem mexer em posição:
+
+   ```bash
+   flask --app app:create_app marcar-execucoes-aplicadas --ate 2026-03-20 --ativo RAIZO600E --nota "exercício lançado à mão" --gravar
+   ```
+
+   A adoção, em 19/10/2026, marcou como linha de base todas as execuções até
+   aquela data, já conferidas pela conciliação de 30/09.
+6. **Conferir.**
 
    ```bash
    flask --app app:create_app conferir-pregoes --inicio 2026-10-01 --fim 2026-10-31
@@ -93,8 +125,9 @@ para a comparação de posição enxergar).
 |---|---|---|
 | Confere | os dois lados batem | nada |
 | Quantidade | o mesmo ativo, quantidades diferentes | achar o lançamento que falta ou sobra (compra, venda, atribuição) e corrigir no CRV |
-| Custo médio | quantidade igual, custo diferente | conferir o preço dos lotes; o CRV usa preço sem taxas, o myProfit usa com taxas, e isso só explica diferença pequena |
-| Só no myProfit | o CRV não tem o ativo | registrar a posição |
+| Custo médio | quantidade igual, custo diferente que as taxas não explicam | conferir o preço dos lotes |
+| Taxas | o custo só difere pelas taxas de compra (o myProfit as soma ao preço, o CRV não), e as execuções o provam | nada |
+| Só no myProfit | o CRV não tem o ativo na data | ver as execuções **depois** da data (venda posterior não é falta) e, se faltar mesmo, aplicar |
 | Só no CRV | o myProfit não tem | normalmente é ativo que o myProfit ainda não integrou (a integração tem atraso); confirmar |
 | Só nas execuções | houve venda e o CRV não tem a operação | reconstruir o ciclo com os relatórios do myProfit |
 | Reconhecida | diferença explicada e anotada | nada |
@@ -114,8 +147,10 @@ duas vezes.
 
 ## Corrigir o que falta
 
-Registre pelo caso de uso da própria tela (`register_stock`, `close_stock`,
-`register_option`, `close_option`), com o preço **sem taxas**. Antes de gravar
+O caminho normal é `aplicar-execucoes`. O que ele deixa pendente se registra
+pelo caso de uso da própria tela (`register_stock`, `close_stock`,
+`register_option`, `close_option`), com o preço **sem taxas**, e a execução é
+marcada com `marcar-execucoes-aplicadas`. Antes de gravar
 dado real: backup validado pelo BackupRestore. Para ativo que o CRV nunca teve,
 reconstrua o ciclo inteiro (abertura, parciais e fechamento) a partir do
 "Histórico de investimentos" do ano da compra, e confira o resultado contra o
@@ -134,3 +169,6 @@ A opção que o relatório não descreve (strike e vencimento) se infere do cód
   caminho (exercício, vencimento sem valor) não gera execução de venda: aparece
   como diferença de posição ou fica fora, e se anota.
 - A integração do myProfit com a Avenue tem atraso; por isso o exterior está fora.
+- "Taxas" só aparece quando as execuções reproduzem a quantidade do CRV: lote
+  comprado antes das execuções importadas (2025 e antes) continua precisando de
+  nota.

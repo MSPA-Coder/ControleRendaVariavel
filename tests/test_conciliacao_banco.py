@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.executions.conciliacao import (
     ACKNOWLEDGED,
+    FEES,
     MATCH,
     ONLY_CRV,
     ONLY_EXECUTIONS,
@@ -349,6 +350,20 @@ def test_ajuste_de_cadastro_depois_da_data_vale_para_tras(sessao, cenario):
     _snapshot(c, sessao, [linha_posicao(a.symbol, 100, "10")], ate=date(2026, 9, 30))
 
     assert _estados(build_conciliation(c["dono"].id, start=INICIO, end=FIM).positions) == {a.symbol: MATCH}
+
+
+def test_custo_medio_explicado_pelas_taxas_das_execucoes(sessao, cenario):
+    c = cenario
+    a = c["t"]["ACAOA"]
+    sessao.add(_posicao(c, a, c["real"], "300", "1.0000"))
+    sessao.flush()
+    _vendas(c, sessao, [linha(date(2026, 3, 2), "B3_GENIAL_02032026", a.symbol, 300, "-300.00", taxas="1.38")])
+    _snapshot(c, sessao, [linha_posicao(a.symbol, 300, "1.0046")])
+
+    resultado = build_conciliation(c["dono"].id, start=INICIO, end=FIM)
+
+    assert _estados(resultado.positions) == {a.symbol: FEES}
+    assert resultado.pending == []
 
 
 def test_comando_recusa_posicao_com_data_futura(cenario, app_com_banco, tmp_path, monkeypatch):

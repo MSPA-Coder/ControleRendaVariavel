@@ -10,17 +10,21 @@ import pytest
 from app.executions.conciliacao import (
     ACKNOWLEDGED,
     AVERAGE,
+    FEES,
     MATCH,
     ONLY_CRV,
     ONLY_EXECUTIONS,
     ONLY_MYPROFIT,
     QUANTITY,
+    FeeLot,
     Holding,
     MovementRow,
     apply_notes,
     combine,
     compare_positions,
     compare_sales,
+    explain_by_fees,
+    fees_in_lot,
     state_on,
 )
 from app.executions.myprofit import ExecutionReportError, read_execution_report
@@ -225,3 +229,42 @@ def test_nota_de_um_tipo_nao_vale_para_o_outro():
     (final,) = apply_notes(achados, {("venda", "ABCD3"): "outra coisa"})
 
     assert final.state == ONLY_MYPROFIT
+
+
+def _lote(dia: int, qtd: str, taxas: str = "0") -> FeeLot:
+    return FeeLot(date(2026, 11, dia), ("DOC", dia), D(qtd), D(taxas))
+
+
+def test_taxas_do_lote_seguem_o_custo_medio():
+    # Compra 100 (taxa 1,00), compra 300 (taxa 3,00), vende 200: o saldo de 200
+    # carrega metade das taxas; zerar e recomprar recomeça a conta.
+    assert fees_in_lot([_lote(1, "100", "1"), _lote(2, "300", "3"), _lote(3, "-200", "2")]) == (D("200"), D("2"))
+    assert fees_in_lot([_lote(1, "100", "1"), _lote(2, "-100", "1"), _lote(3, "50", "0.4")]) == (D("50"), D("0.4"))
+    assert fees_in_lot([]) == (D("0"), D("0"))
+
+
+def test_custo_medio_que_so_difere_pelas_taxas_nao_e_pendencia():
+    achados = compare_positions({"OPCA20": _h("300", "1.0046")}, {"OPCA20": _h("300", "1.0000")})
+    assert achados[0].state == AVERAGE
+
+    (explicado,) = explain_by_fees(achados, {"OPCA20": [_lote(1, "300", "1.38")]})
+
+    assert explicado.state == FEES and not explicado.pending
+    assert "0.0046" in explicado.note
+
+
+@pytest.mark.parametrize(
+    "lotes",
+    [
+        [_lote(1, "200", "1.38")],  # o histórico não reproduz a quantidade do CRV
+        [_lote(1, "300", "9.00")],  # as taxas não explicam a diferença
+        [],
+    ],
+    ids=["historico-incompleto", "taxa-nao-explica", "sem-execucoes"],
+)
+def test_taxas_nao_explicam_o_que_nao_fecha(lotes):
+    achados = compare_positions({"OPCA20": _h("300", "1.0046")}, {"OPCA20": _h("300", "1.0000")})
+
+    (final,) = explain_by_fees(achados, {"OPCA20": lotes})
+
+    assert final.state == AVERAGE and final.pending

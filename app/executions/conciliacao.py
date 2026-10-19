@@ -12,7 +12,9 @@ da B3 (ações, opções e ETF; futuros, Tesouro e exterior ficam de fora):
   posição aberta para a comparação de posição enxergar).
 
 A diferença que o mantenedor explicou fica registrada em ``ReconciliationNote``
-e passa a aparecer como "reconhecida", sem contar como pendência.
+e passa a aparecer como "reconhecida", sem contar como pendência. O custo médio
+que só difere pelas taxas de compra (o myProfit as soma ao preço, o CRV não) é
+explicado pelas próprias execuções e aparece como "taxas", sem nota manual.
 
 ``compare_positions`` e ``compare_sales`` são puras; ``build_conciliation`` é a
 ligação com o banco.
@@ -61,6 +63,9 @@ ONLY_MYPROFIT = "so_myprofit"
 ONLY_CRV = "so_crv"
 ONLY_EXECUTIONS = "so_execucoes"
 ACKNOWLEDGED = "reconhecida"
+#: Custo médio que só difere pelas taxas: o myProfit as soma ao preço, o CRV
+#: não (convenção da planilha). Explicado pelas execuções, não é pendência.
+FEES = "taxas"
 
 STATE_LABELS = {
     MATCH: "Confere",
@@ -70,6 +75,7 @@ STATE_LABELS = {
     ONLY_CRV: "Só no CRV",
     ONLY_EXECUTIONS: "Só nas execuções",
     ACKNOWLEDGED: "Reconhecida",
+    FEES: "Taxas",
 }
 
 KIND_POSITION = "posicao"
@@ -95,7 +101,7 @@ class Finding:
 
     @property
     def pending(self) -> bool:
-        return self.state not in {MATCH, ACKNOWLEDGED}
+        return self.state not in {MATCH, ACKNOWLEDGED, FEES}
 
 
 def combine(lots: Iterable[Holding]) -> Holding | None:
@@ -161,6 +167,60 @@ def compare_sales(executions: Mapping[str, Decimal], closed: Mapping[str, Decima
             )
         )
     return findings
+
+
+@dataclass(frozen=True, slots=True)
+class FeeLot:
+    """Uma execução do ativo, para reconstituir as taxas do lote em carteira."""
+
+    trade_date: date
+    order: tuple[str, int]
+    quantity: Decimal  # com sinal: compra positiva, venda negativa
+    fees: Decimal
+
+
+def fees_in_lot(lots: Iterable[FeeLot]) -> tuple[Decimal, Decimal]:
+    """Quantidade em carteira e taxas de compra embutidas nela, pelas execuções.
+
+    Custo médio: a compra soma quantidade e taxa; a venda tira a quantidade e a
+    taxa na proporção (as taxas por unidade do saldo não mudam); zerar a
+    posição zera as taxas. Devolve ``(quantidade, taxas)``.
+    """
+    quantity = Decimal(0)
+    fees = Decimal(0)
+    for lot in sorted(lots, key=lambda item: (item.trade_date, item.order)):
+        if lot.quantity > 0:
+            quantity += lot.quantity
+            fees += lot.fees
+        elif quantity > 0:
+            remaining = max(quantity + lot.quantity, Decimal(0))
+            fees = fees * remaining / quantity
+            quantity = remaining
+    return quantity, fees
+
+
+def explain_by_fees(findings: list[Finding], lots_by_asset: Mapping[str, list[FeeLot]]) -> list[Finding]:
+    """Custo médio diferente que as taxas das execuções explicam vira ``taxas``.
+
+    Só quando o histórico de execuções reproduz a quantidade do CRV (senão faltam
+    compras e a explicação seria chute) e o custo do CRV mais as taxas por
+    unidade bate com o do myProfit, na mesma tolerância.
+    """
+    result = []
+    for finding in findings:
+        theirs, ours = finding.myprofit, finding.crv
+        lots = lots_by_asset.get(finding.asset)
+        if finding.state == AVERAGE and theirs and ours and ours.average is not None and lots:
+            quantity, fees = fees_in_lot(lots)
+            if quantity == ours.quantity and quantity > 0:
+                per_unit = fees / quantity
+                if _same_average(theirs.average, ours.average + per_unit):
+                    finding = Finding(
+                        finding.kind, finding.asset, FEES, theirs, ours,
+                        f"taxas de compra de {per_unit:.4f} por unidade (o CRV guarda o preço sem taxas)",
+                    )
+        result.append(finding)
+    return result
 
 
 def apply_notes(findings: list[Finding], notes: Mapping[tuple[str, str], str]) -> list[Finding]:
@@ -398,6 +458,22 @@ def crv_closed_quantities(owner_id: int, start: date, end: date) -> dict[str, De
     return dict(totals)
 
 
+def execution_lots(owner_id: int, as_of: date) -> dict[str, list[FeeLot]]:
+    """Execuções em escopo até a data, por ativo, para ``explain_by_fees``."""
+    lots: dict[str, list[FeeLot]] = defaultdict(list)
+    for execution in db.session.scalars(
+        select(Execution).where(
+            Execution.owner_id == owner_id,
+            Execution.in_scope.is_(True),
+            Execution.trade_date <= as_of,
+        )
+    ):
+        lots[execution.asset].append(
+            FeeLot(execution.trade_date, (execution.document, execution.line_order), execution.quantity, execution.fees_total)
+        )
+    return dict(lots)
+
+
 def notes_of(owner_id: int) -> dict[tuple[str, str], str]:
     return {
         (note.kind, note.asset): note.note
@@ -411,7 +487,14 @@ def build_conciliation(
     owner_id: int, *, start: date, end: date, as_of: date | None = None
 ) -> Conciliation:
     snapshot_date, theirs = myprofit_holdings(owner_id, as_of)
-    positions = compare_positions(theirs, crv_holdings(owner_id, snapshot_date)) if snapshot_date else []
+    positions = (
+        explain_by_fees(
+            compare_positions(theirs, crv_holdings(owner_id, snapshot_date)),
+            execution_lots(owner_id, snapshot_date),
+        )
+        if snapshot_date
+        else []
+    )
     sales = compare_sales(
         execution_sales(owner_id, start, end), crv_closed_quantities(owner_id, start, end)
     )

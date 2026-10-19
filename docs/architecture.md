@@ -529,17 +529,17 @@ no CB e a operação aqui. As operações passarão a entrar no CRV pelo relató
 **Histórico de investimentos** do myProfit (que lê a B3), em vez de digitadas.
 O cálculo de IR continua no myProfit; nada daqui o faz.
 
-Esta etapa só **registra** as execuções e **confere** cada pregão contra a
-liquidação do CB. Ela não altera posições, movimentos, transações nem
-proventos; aplicar as execuções às posições é uma etapa posterior, com ensaio e
-backup.
+A importação só **registra** as execuções e a conferência confere cada pregão
+contra a liquidação do CB; nenhuma das duas altera posições, movimentos,
+transações nem proventos. Levar as execuções às posições é o
+`aplicar-execucoes` (ver "Execuções aplicadas às posições", abaixo).
 
 ### Tabelas
 
 | Tabela | O que guarda |
 |---|---|
 | `execution_imports` | um lote gravado: nome do arquivo, período, `sha256`, linhas lidas, criadas e alteradas, data. Só existe lote quando algo foi gravado |
-| `executions` | uma linha por negócio: corretora, data do pregão, documento (coluna `Número`, p. ex. `B3_GENIAL_27012026`), ativo, grupo, lado, quantidade (negativa na venda), preços e totais com e sem taxas, day trade, moeda, ordem da linha no documento, `content_hash` e `in_scope` |
+| `executions` | uma linha por negócio: corretora, data do pregão, documento (coluna `Número`, p. ex. `B3_GENIAL_27012026`), ativo, grupo, lado, quantidade (negativa na venda), preços e totais com e sem taxas, day trade, moeda, ordem da linha no documento, `content_hash` e `in_scope`; e, desde a revisão `20261019_0034`, se e como já está refletida nas posições (`applied_at`, `application` = `aplicada`, `ja_lancada` ou `linha_de_base`, `application_note`) |
 
 `total_with_fees` já vem com o sinal do caixa (crédito positivo, débito
 negativo) e é a verdade da conferência. `side` (Compra/Venda) e `cash_operation`
@@ -590,6 +590,25 @@ de novo o mesmo arquivo (o `sha256` do ensaio precisa bater). A gravação é um
 transação do caso de uso (`app/executions/service.py`); uma gravação concorrente
 das mesmas linhas é recusada pela restrição única.
 
+### Execuções aplicadas às posições
+
+`app/executions/aplicacao.py` leva às posições as execuções em escopo ainda
+pendentes (`applied_at` nulo). Execuções do mesmo pregão, corretora, ativo e lado
+viram um negócio (`group_trades`), a preço médio ponderado **sem taxas**; a
+compra abre ou reforça a posição (`create_or_merge_position`, na carteira da
+posição existente ou na única carteira real da moeda) e a venda reduz ou fecha
+(`apply_position_closure`). Antes de aplicar, `_already_entered` procura o negócio
+digitado à mão (compra: movimento ou lote aberto no dia com a mesma quantidade;
+venda: lotes fechados no dia somando a quantidade) e só marca a execução. Ficam
+pendentes, sem gravar nada, o ativo sem cadastro, a opção sem contrato, o
+exercício (`...E`), a venda sem posição comprada que a cubra e a carteira
+ambígua. Cada negócio roda num ponto de salvamento; `apply_executions` não faz
+commit, e o comando `aplicar-execucoes [--ate] [--gravar]` grava ou desfaz (o
+ensaio é a execução real desfeita) e sai com código 1 se sobrar pendência.
+`marcar-execucoes-aplicadas --ate D [--ativo A] --nota N [--gravar]` registra a
+linha de base, sem mexer em posição. Linha já aplicada que muda no myProfit é
+recusada na reimportação.
+
 ### Cliente do CB e conferência por pregão
 
 `app/patrimonio/cb_client.py` lê o `GET {CB_PATRIMONIO_URL}/snapshot` do contrato
@@ -639,8 +658,10 @@ nas URLs `http`.
   pelos movimentos e pelas transações fechadas o que veio depois; quantidade exata, custo médio com
   tolerância de 0,1%) e a quantidade vendida nas execuções do período com a
   quantidade fechada nas transações do CRV. Só leitura; `compare_positions`,
-  `compare_sales` e `apply_notes` são puras. `ReconciliationNote` guarda a
-  diferença explicada, por (tipo, ativo), que passa a "reconhecida".
+  `compare_sales`, `explain_by_fees` e `apply_notes` são puras. O custo médio que
+  só difere pelas taxas de compra que as execuções reproduzem (`fees_in_lot`)
+  vira "taxas", sem pendência. `ReconciliationNote` guarda a diferença explicada,
+  por (tipo, ativo), que passa a "reconhecida".
 * Comandos: `importar-posicao-myprofit <arquivo> [--gravar]` (ensaio por padrão; a
   posição da mesma data é substituída), `conciliar-myprofit [--inicio] [--fim]
   [--posicao] [--tudo]` (sai com código 1 se houver pendência) e
