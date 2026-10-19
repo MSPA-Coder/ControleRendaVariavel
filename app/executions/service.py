@@ -5,7 +5,8 @@ alteradas e o que impede a gravação. A gravação (``apply_import``) segue o p
 e **não faz commit**: a transação é de quem chama (rota ou comando).
 
 Esta importação não toca posições, movimentos, transações nem proventos; ela só
-alimenta a tabela ``executions``.
+alimenta a tabela ``executions``. Levar as execuções às posições é do
+``app.executions.aplicacao``.
 """
 
 from __future__ import annotations
@@ -129,6 +130,13 @@ def plan_import(owner_id: int, report: ExecutionReport) -> ImportPlan:
             plan.new_rows.append(row)
         elif record.content_hash == row.content_hash:
             plan.repeated += 1
+        elif record.applied_at is not None:
+            # A posição já reflete a versão antiga da linha: trocá-la em silêncio
+            # deixaria posição e execução discordando sem ninguém saber.
+            plan.problems.append(
+                f"A linha {row.line_order} de {row.document} ({row.asset}) mudou no myProfit, mas já está "
+                "refletida nas posições; ajuste a posição e a execução à mão antes de reimportar."
+            )
         else:
             plan.changed.append((record, row))
     plan.absent_from_file = len(existing.keys() - seen)

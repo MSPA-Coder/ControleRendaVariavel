@@ -1471,6 +1471,17 @@ class Execution(Base):
         ForeignKeyConstraint(["import_id", "owner_id"], ["execution_imports.id", "execution_imports.owner_id"],
                              name="fk_executions_import_owner", ondelete="RESTRICT"),
         Index("ix_executions_owner_broker_date", "owner_id", "broker_id", "trade_date"),
+        CheckConstraint(
+            "application IS NULL OR application IN ('aplicada', 'ja_lancada', 'linha_de_base')",
+            name="application_valid",
+        ),
+        CheckConstraint("(application IS NULL) = (applied_at IS NULL)", name="application_with_date"),
+        Index(
+            "ix_executions_pendentes",
+            "owner_id",
+            "trade_date",
+            postgresql_where=text("in_scope AND applied_at IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1497,6 +1508,12 @@ class Execution(Base):
     currency: Mapped[str] = mapped_column(String(3))
     in_scope: Mapped[bool] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    #: Quando a execução passou a estar refletida nas posições (nulo: pendente)
+    #: e como (``aplicada``, ``ja_lancada`` ou ``linha_de_base``); ver
+    #: ``app.executions.aplicacao``.
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    application: Mapped[str | None] = mapped_column(String(20))
+    application_note: Mapped[str | None] = mapped_column(String(300))
 
     broker_ref: Mapped[Broker] = relationship()
 
