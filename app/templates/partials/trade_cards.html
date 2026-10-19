@@ -1,0 +1,79 @@
+{% macro metric(label, value, sign='') -%}
+<div><dt>{{ label }}</dt><dd class="{{ sign }}" data-sensitive-value="true">{{ value }}</dd></div>
+{%- endmacro %}
+
+{% macro quote_state(item) -%}
+  <span class="trade-quote-state{{ ' trade-quote-warning' if item.quote_status != 'online' }}">
+    {{ {'online': 'Cotação disponível', 'stale': 'Cotação desatualizada', 'missing': 'Sem cotação', 'error': 'Falha na cotação'}.get(item.quote_status, 'Cotação indisponível') }}
+    {% if item.instrument_status %}<span title="{{ item.instrument_status|instrument_status_description }}">· {{ item.instrument_status|instrument_status_label }}</span>{% endif %}
+  </span>
+{%- endmacro %}
+
+{% macro card(item, is_option=false) -%}
+{% set p = item.position %}
+{% set m = item.metrics %}
+{% set currency = p.currency %}
+{% set ticker = p.contract.ticker_ref.symbol if is_option else p.ticker %}
+{% set detail_url = url_for('options.position_detail' if is_option else 'portfolio.position_detail', position_id=p.id, portfolio_id=selected_portfolio_id, broker=selected_broker, currency=global_currency, result_mode=selected_result_mode|default('acao'), group_by_broker='1' if group_by_broker|default(false) else '0') %}
+{% set result = m.result if is_option and m else item.selected_result if not is_option else none %}
+{% set return_pct = m.return_pct if is_option and m else item.selected_return_pct if not is_option else none %}
+<article class="trade-card{{ ' trade-card-simulated' if p.simulated }}" aria-label="Posição {{ ticker }} · {{ p.broker }} · {{ p.portfolio_ref.name }}">
+  <header class="trade-card-heading">
+    <span class="trade-avatar" aria-hidden="true">{{ (p.contract.underlying_ticker_ref.symbol if is_option else ticker)[:2] }}</span>
+    <div class="trade-identity">
+      <h2><a href="{{ detail_url }}">{{ ticker }}</a></h2>
+      <p>{{ p.broker }} · {{ p.portfolio_ref.name }}</p>
+    </div>
+    <span class="trade-badge">{{ 'Compra' if p.side.value == 'C' else 'Venda' }}{{ ' · ' ~ p.contract.option_type.value|upper if is_option }}</span>
+  </header>
+  {% if p.simulated %}<p class="trade-simulation">Carteira simulada · sem movimentos ou encerramento</p>{% endif %}
+  <div class="trade-quote">
+    <div>
+      <span class="trade-label">{{ 'Prêmio atual' if is_option else 'Cotação atual' }} · {{ currency }}</span>
+      <strong data-sensitive-value="true">{{ m.current_price|currency(currency, trim=true) if m else '—' }}</strong>
+      {% if m %}<span class="trade-day {{ m.daily_variation|sign_class }}" data-sensitive-value="true">{{ m.daily_variation|percent(2) }} <small>no dia · posição</small></span>{% endif %}
+    </div>
+    {% if is_option %}
+    <div class="trade-contract-context"><span class="trade-label">Ativo-objeto</span><b>{{ p.contract.underlying_ticker_ref.symbol }}</b>{% if item.greeks %}<span class="trade-moneyness">{{ item.greeks.moneyness }}</span>{% endif %}</div>
+    {% else %}<span class="trade-direction" aria-hidden="true">{{ '↗' if result is not none and result >= 0 else '↘' if result is not none else '—' }}</span>{% endif %}
+  </div>
+  <dl class="trade-card-metrics">
+    {{ metric('Quantidade', p.quantity|quantity(currency)) }}
+    {{ metric('Prêmio de entrada' if is_option else 'Custo médio', p.average_cost|currency(currency, trim=true)) }}
+    {% if is_option %}{{ metric('Strike', p.contract.strike|currency(currency, trim=true)) }}{% else %}{{ metric('Peso atual', item.current_weight|percent(2)) }}{% endif %}
+  </dl>
+  <div class="trade-result">
+    <span class="trade-label">Resultado · {{ 'bruto' if is_option else selected_result_label }}</span>
+    <strong class="{{ result|sign_class }}" data-sensitive-value="true">{{ result|currency(currency) }}</strong>
+    <span class="{{ return_pct|sign_class }}" data-sensitive-value="true">{{ return_pct|percent(2) }}</span>
+  </div>
+  <footer class="trade-card-footer">
+    {{ quote_state(item) }}
+    <a href="{{ detail_url }}">Explorar trade <span aria-hidden="true">↗</span></a>
+  </footer>
+  {% if p.movements|length > 1 and not p.simulated %}
+  <div class="trade-movement-toggle">
+    <button type="button" class="row-toggle trade-expand" hx-get="{{ expand_urls[p.id] }}"
+            hx-target="{{ '#options-results' if is_option else '#portfolio-results' }}" hx-swap="outerHTML"
+            aria-expanded="{{ 'true' if p.id in expanded_positions else 'false' }}">
+      {{ '−' if p.id in expanded_positions else '+' }} Movimentos ({{ p.movements|length }})
+    </button>
+  </div>
+  {% endif %}
+</article>
+{%- endmacro %}
+
+{% macro movements(item, is_option=false) -%}
+{% set p = item.position %}
+{% if p.id in expanded_positions and p.movements|length > 1 and not p.simulated %}
+<section class="trade-expanded-history" aria-label="Movimentos de {{ p.contract.ticker_ref.symbol if is_option else p.ticker }}">
+  <h3>Movimentos · {{ p.contract.ticker_ref.symbol if is_option else p.ticker }}</h3>
+  <div class="table-wrap">
+    {% with position=p, movements=p.movements, movement_actions=not is_option %}
+      {% if not is_option %}{% set movement_results = movement_results_by_position[p.id] %}{% endif %}
+      {% include "partials/position_movements.html" %}
+    {% endwith %}
+  </div>
+</section>
+{% endif %}
+{%- endmacro %}

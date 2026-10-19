@@ -1,0 +1,58 @@
+<section class="summary portfolio-summary portfolio-summary-actions{{ ' portfolio-summary-actions-split' if portfolio.currency_totals }}" aria-label="Resumo da carteira">
+  <article class="currency-card" aria-label="Valor bruto das ações cotadas em moeda base">
+    <h3 class="currency-card-title">Ações cotadas · posição bruta em {{ moeda_base }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Valor de mercado bruto</span>
+        {% if conversao.possivel %}
+          <strong data-sensitive-value="true">{{ conversao.total|currency(moeda_base, 0) }}</strong>
+          {% if conversao.taxa %}<small>USD/BRL de {{ conversao.taxa.data|udate }}</small>{% endif %}
+        {% else %}
+          <strong>-</strong><small>{{ conversao.motivo }}</small>
+        {% endif %}
+        <small>Não inclui caixa, opções nem ações sem cotação.</small>
+      </article>
+    </div>
+  </article>
+  {% if portfolio.currency_totals %}
+  <div class="portfolio-currency-cards">
+  {% for total in portfolio.currency_totals %}
+  {# O simbolo acompanha o rotulo de cada valor, nao o numero: como prefixo
+     ele consumia a largura do card e quebrava o numero em duas linhas. #}
+  {% set symbol = total.currency|currency_symbol %}
+  {# O titulo e o nome da propria carteira: os totais sao agrupados por
+     (carteira, moeda), entao cada card e o bolso de uma carteira. O simbolo
+     em cada rotulo continua dizendo a moeda, e por isso o titulo nao a
+     repete. Carteira simulada nao tem titulo diferente -- tem o seu nome,
+     como as outras; o que a marca e o tracejado, porque ela pode se chamar
+     qualquer coisa e ainda assim nao ser patrimonio. #}
+  <article class="currency-card{{ ' currency-card-simulated' if total.simulated }}"
+            aria-label="{{ total.portfolio_name }}, totais em {{ total.currency }}{{ ' (simulada)' if total.simulated }}">
+    <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Valor de entrada bruto <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong data-sensitive-value="true">{{ total.cost_total|number(0) }}</strong>
+      </article>
+      <article>
+        <span>Posição bruta cotada <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong data-sensitive-value="true">{{ total.current_total|number(0) }}</strong>
+      </article>
+      <article>
+        <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="{{ total.result_total|sign_class }}" data-sensitive-value="true">{{ total.result_total|number(0) }}</strong>
+      </article>
+      <article>
+        <span>Retorno acumulado</span>
+        <strong class="{{ total.return_pct|sign_class }}" data-sensitive-value="true">{{ total.return_pct|percent(2) }}</strong>
+      </article>
+      <article title="Índice Herfindahl-Hirschman: quanto menor, mais diversificada a carteira nesta moeda.">
+        <span>Concentração (HHI)</span>
+        <strong data-sensitive-value="true">{{ total.hhi|number(3) }}</strong>
+      </article>
+    </div>
+  </article>
+  {% endfor %}
+  </div>
+  {% endif %}
+</section>

@@ -49,6 +49,7 @@ from app.positions.portfolio import (
     effective_position_quote,
     position_movement_results,
 )
+from app.positions.queries import stock_positions
 from app.positions.use_cases import (
     ConfirmationRequiredError,
     SubmissionConflictError,
@@ -428,10 +429,10 @@ def position_detail(position_id: int) -> str:
     """A leitura analítica de uma posição que pertence ao usuário logado."""
     position = owned_or_404(Position, position_id)
     portfolio = build_portfolio(
-        [position],
+        stock_positions(current_owner_id(), portfolio_id=position.portfolio_id),
         stale_after_seconds=quote_stale_after_seconds(),
     )
-    (item,) = portfolio.positions
+    item = next(view for view in portfolio.positions if view.position.id == position.id)
     degraus = degraus_da_posicao(position)
     periodo = request.args.get("periodo", PERIODO_PADRAO_DO_GRAFICO)
     if periodo not in dict(PERIODOS_DO_GRAFICO):

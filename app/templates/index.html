@@ -1,63 +1,11 @@
 {% extends "base.html" %}
-{#- `hx-replace-url`, e nao `hx-push-url`, em todos os formularios de filtro
-    desta aplicacao.
-
-    O gatilho e `change`: cada mexida num select dispara uma requisicao. Com
-    `push`, cada uma dessas mexidas virava uma entrada no historico, e o botao
-    "voltar" passava a desfazer filtro por filtro em vez de sair da tela --
-    ajustar tres filtros exigia tres cliques em "voltar" para chegar onde se
-    estava antes.
-
-    `replace` troca a entrada atual: a URL continua refletindo o filtro (F5,
-    favorito e link continuam funcionando), e o historico volta a ter uma
-    entrada por tela.
-
-    O estado de "linha aberta" (`expanded`, `expanded_tickers`,
-    `expanded_years`) NAO passa por aqui e nunca chegou a barra de enderecos:
-    os botoes de `+` sao `hx-get` fora deste formulario, e `hx-push-url` do
-    htmx e resolvido por ancestral. -#}
-{% block header_controls %}
-<form class="filters header-controls" method="get"
-      hx-get="{{ url_for('portfolio.index') }}"
-      hx-trigger="change"
-      hx-target="#portfolio-results"
-      hx-swap="outerHTML"
-      hx-replace-url="true">
-  <label>Carteira
-    <select name="portfolio_id">
-      <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>
-      {% for portfolio in portfolios %}
-        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio_id == portfolio.id|string }}>{{ portfolio.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Corretora
-    <select name="broker">
-      <option value="">Todas</option>
-      {% for broker in brokers %}
-        <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Resultado
-    <select name="result_mode">
-      {% for value, label in result_modes %}
-        <option value="{{ value }}" {{ 'selected' if selected_result_mode == value }}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <a class="button" href="{{ url_for('portfolio.index') }}">Limpar</a>
-  <label class="group-toggle" title="Mostrar o nome da corretora uma única vez por grupo, em vez de repeti-lo em cada linha">
-    <input type="checkbox" name="group_by_broker" value="1" {{ 'checked' if group_by_broker }}>
-    <span class="group-toggle-track" aria-hidden="true"></span>
-    <span>Agrupar por corretora</span>
-  </label>
-</form>
-  {# O liga/desliga do coletor vive em Configuracoes > Coletor de cotacoes:
-     e uma configuracao do sistema, nao um filtro da carteira. #}
-  <a class="button button-primary" href="{{ url_for('portfolio.new_position') }}">Nova posição</a>
-{% endblock %}
+{% block title %}Ações · Controle de Renda Variável{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='trades.css') }}">{% endblock %}
 {% block content %}
-{% include "partials/portfolio_results.html" %}
-
+<div class="trade-page">
+  {% set is_option = false %}
+  {% include "partials/trade_heading.html" %}
+  {% include "partials/trade_filters.html" %}
+  {% include "partials/portfolio_results.html" %}
+</div>
 {% endblock %}

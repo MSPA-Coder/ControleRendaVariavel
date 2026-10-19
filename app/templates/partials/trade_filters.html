@@ -1,0 +1,33 @@
+<form class="trade-toolbar" method="get"
+      hx-get="{{ url_for('options.index' if is_option else 'portfolio.index') }}"
+      hx-trigger="change" hx-target="{{ '#options-results' if is_option else '#portfolio-results' }}"
+      hx-swap="outerHTML" hx-replace-url="true">
+  <label>Carteira
+    <select name="portfolio_id">
+      <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>
+      {% for portfolio in portfolios %}
+      <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio_id == portfolio.id|string }}>{{ portfolio.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Corretora
+    <select name="broker">
+      <option value="">Todas</option>
+      {% for broker in brokers %}
+      <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if not is_option %}
+  <label>Resultado
+    <select name="result_mode">
+      {% for value, label in result_modes %}
+      <option value="{{ value }}" {{ 'selected' if selected_result_mode == value }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="trade-group-toggle"><input type="checkbox" name="group_by_broker" value="1" {{ 'checked' if group_by_broker }}> Agrupar por corretora</label>
+  {% endif %}
+  <button class="button" type="submit">Aplicar</button>
+  <a class="trade-clear" href="{{ url_for('options.index' if is_option else 'portfolio.index') }}">Limpar filtros</a>
+</form>

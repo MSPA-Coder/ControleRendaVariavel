@@ -1,0 +1,19 @@
+{% extends "trade_detail_base.html" %}
+{% set is_option = true %}
+{% block title %}{{ position.contract.ticker_ref.symbol }} · Opções · Controle de Renda Variável{% endblock %}
+{% block overview_metrics %}
+{{ trades.metric('Ativo-objeto', position.contract.underlying_ticker_ref.symbol) }}{{ trades.metric('Strike', position.contract.strike|currency(currency, trim=true)) }}{{ trades.metric('Exercício', position.contract.expiration.exercise_date|udate) }}
+{% endblock %}
+{% block overview %}
+{% if m %}<dl class="trade-data-grid">{{ trades.metric('Dias corridos restantes', m.remaining_days|number(0)) }}{{ trades.metric('Dias úteis restantes', m.business_days|number(0)) }}{{ trades.metric('Moneyness', item.greeks.moneyness if item.greeks else 'Indisponível') }}</dl>{% endif %}
+<p class="trade-context-note">O calendário e os dados do contrato permanecem disponíveis mesmo sem cotação. Os valores são calculados com a quantidade cadastrada, sem aplicar fator de contrato.</p>
+{% endblock %}
+{% block risk %}
+{% set g = item.greeks %}
+<dl class="trade-data-grid">{{ trades.metric('Preço do ativo-objeto', position.quote.underlying_price|currency(currency, trim=true) if position.quote else '—') }}{{ trades.metric('Breakeven', m.breakeven|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Notional', m.notional|currency(currency) if m else '—') }}{{ trades.metric('Folga de strike', m.strike_cushion|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Folga de strike (%)', m.strike_cushion_pct|percent(2) if m else '—') }}{{ trades.metric('Folga de breakeven', m.breakeven_cushion|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Folga de breakeven (%)', m.breakeven_cushion_pct|percent(2) if m else '—') }}</dl>
+<h2>Sensibilidade do contrato</h2><dl class="trade-data-grid">{{ trades.metric('Delta · Δ', g.delta|number(3, trim=true) if g else '—') }}{{ trades.metric('Gamma · Γ', g.gamma|number(4, trim=true) if g else '—') }}{{ trades.metric('Theta por dia', g.theta_daily|currency(currency, trim=true) if g else '—') }}{{ trades.metric('Vega', g.vega|currency(currency, trim=true) if g else '—') }}{{ trades.metric('Volatilidade implícita', g.implied_volatility|percent(2) if g else '—') }}{{ trades.metric('Moneyness', g.moneyness if g else '—') }}</dl>
+{% if not g or g.delta is none %}<p class="form-help">O prêmio não permitiu calcular as gregas. Os valores indisponíveis não são estimados.</p>{% endif %}
+{% endblock %}
+{% block all_data %}
+<h2>Contrato e prazo</h2><dl class="trade-data-grid trade-data-complete">{{ trades.metric('Tipo de opção', position.contract.option_type.value|upper) }}{{ trades.metric('Ativo-objeto', position.contract.underlying_ticker_ref.symbol) }}{{ trades.metric('Strike', position.contract.strike|currency(currency, trim=true)) }}{{ trades.metric('Exercício', position.contract.expiration.exercise_date|udate) }}{{ trades.metric('Target', position.target_price|currency(currency, trim=true)) }}{{ trades.metric('Variação total', m.total_variation|percent(2) if m else '—') }}{{ trades.metric('Prazo decorrido', m.elapsed_days|number(0) if m else '—') }}{{ trades.metric('Percentual decorrido', m.elapsed_pct|percent(2) if m else '—') }}{{ trades.metric('Prazo restante', m.remaining_days|number(0) if m else '—') }}{{ trades.metric('Dias úteis', m.business_days|number(0) if m else '—') }}</dl>
+{% endblock %}

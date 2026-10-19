@@ -1,0 +1,28 @@
+<section class="catalog-card expiration-summary">
+  <h2>Totais por vencimento</h2>
+  <div class="table-wrap">
+    <table class="catalog-table">
+      <thead><tr><th>Vencimento</th><th>Notional prov.</th><th>Notional</th><th>Desmontar</th><th>Resultado</th></tr></thead>
+      <tbody>
+      {% for total in portfolio.expirations %}
+        <tr>
+          <td>{{ total.expiration_date|ushort }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.provisional_notional|currency('BRL', 0) }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.notional|currency('BRL', 0) }}</td>
+          <td class="number" data-sensitive-value="true">{{ total.unwind|currency('BRL', 0) }}</td>
+          <td class="number {{ total.result|sign_class }}" data-sensitive-value="true">{{ total.result|currency('BRL', 0) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">Sem totais disponíveis.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if portfolio.expirations %}
+  <div id="expiration-chart" class="chart-box"
+       data-expirations="{{ portfolio.expirations|map(attribute='expiration_date')|map('string')|list|tojson }}"
+       data-notional="{{ portfolio.expirations|map(attribute='notional')|map('string')|list|tojson }}"
+       data-unwind="{{ portfolio.expirations|map(attribute='unwind')|map('string')|list|tojson }}"
+       aria-label="Gráfico de exposição por vencimento"></div>
+  {% endif %}
+</section>

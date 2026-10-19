@@ -46,8 +46,9 @@ async function save(page) {
 
 async function editFor(page, ticker) {
   const href = await page.getByRole('link', { name: ticker, exact: true }).getAttribute('href');
-  assert.match(href, /^\/positions\/\d+$/);
-  await page.goto(`${base}${href}/edit`);
+  const path = new URL(href, base).pathname;
+  assert.match(path, /^\/positions\/\d+$/);
+  await page.goto(`${base}${path}/edit`);
 }
 
 for (const region of ['br', 'us']) {
@@ -97,5 +98,25 @@ test('cancelar e confirmar encerramento parcial mantém o saldo correto', { time
     await editFor(page, 'FLOW3');
     assert.equal(Number(await page.locator('[name="quantity"]').inputValue()), 15);
     assert.equal(Number(await page.locator('[name="average_cost"]').inputValue()), 10);
+  });
+});
+
+test('modo discreto preserva filtro HTMX e mascara o detalhe do trade', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    await page.getByLabel('Agrupar por corretora', { exact: true }).check();
+    await page.waitForURL(url => url.searchParams.get('group_by_broker') === '1');
+    await page.getByRole('button', { name: 'Abrir filtros globais', exact: true }).click();
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && response.url().includes('/privacy')),
+      page.locator('[data-privacy-submit]').click(),
+    ]);
+    await page.waitForLoadState('networkidle');
+    assert.equal(new URL(page.url()).searchParams.get('group_by_broker'), '1');
+    await page.getByRole('link', { name: 'PETR4', exact: true }).click();
+    await page.getByRole('heading', { name: 'PETR4', exact: true }).waitFor();
+    assert.doesNotMatch(await page.locator('main').innerText(), /R\$\s*36,42/);
+    await page.getByRole('link', { name: '← Voltar às posições de ações', exact: true }).click();
+    assert.equal(new URL(page.url()).searchParams.get('group_by_broker'), '1');
+    assert.equal(await page.getByLabel('Agrupar por corretora', { exact: true }).isChecked(), true);
   });
 });

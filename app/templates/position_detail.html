@@ -1,76 +1,16 @@
-{% extends "base.html" %}
-
-{% block title %}{{ position.ticker }} — Controle de Renda Variável{% endblock %}
-
-{% block header_controls %}
-<a class="button" href="{{ url_for('portfolio.index') }}">Voltar à carteira</a>
-<a class="button button-primary" href="{{ url_for('portfolio.edit_position', position_id=position.id) }}">Editar posição</a>
+{% extends "trade_detail_base.html" %}
+{% set is_option = false %}
+{% block title %}{{ position.ticker }} · Ações · Controle de Renda Variável{% endblock %}
+{% block overview_metrics %}
+{{ trades.metric('Tempo em carteira', m.days|number(0) ~ ' dias' if m else '—') }}{{ trades.metric('Peso nesta carteira', item.current_weight|percent(2)) }}{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}
 {% endblock %}
-
-{% block content %}
-{% set m = item.metrics %}
-<section class="position-detail-heading">
-  <div><p class="eyebrow">{{ position.broker }} · {{ position.portfolio_ref.name }}</p><h1>{{ position.ticker }}</h1></div>
-  <p class="status status-{{ item.quote_status }}">{{ item.quote_status }}</p>
-</section>
-
-{% if m %}
-<section class="summary position-metrics" aria-label="Métricas da posição">
-  <article class="currency-card sa-cartao"><h3>Quantidade</h3><p class="sa-metrica" data-sensitive-value="true">{{ position.quantity|quantity(position.currency) }}</p></article>
-  <article class="currency-card sa-cartao"><h3>Preço atual</h3><p class="sa-metrica" data-sensitive-value="true">{{ m.current_price|currency(position.currency, trim=true) }}</p></article>
-  <article class="currency-card sa-cartao"><h3>Resultado</h3><p class="sa-metrica {{ m.result|sign_class }}" data-sensitive-value="true">{{ m.result|currency(position.currency, 0) }}</p></article>
-  <article class="currency-card sa-cartao"><h3>Retorno</h3><p class="sa-metrica {{ m.return_pct|sign_class }}" data-sensitive-value="true">{{ m.return_pct|percent(2) }}</p></article>
-  <article class="currency-card sa-cartao"><h3>Stop gain</h3><p class="sa-metrica" data-sensitive-value="true">{{ m.stop_gain|currency(position.currency, trim=true) }}</p></article>
-  <article class="currency-card sa-cartao"><h3>Breakeven</h3><p class="sa-metrica {{ m.breakeven|sign_class }}" data-sensitive-value="true">{{ m.breakeven|percent(2) }}</p></article>
-</section>
-{% else %}
-<p class="flash flash-warning">A posição ainda não tem uma cotação utilizável para calcular as métricas.</p>
-{% endif %}
-
-<section class="position-detail-section">
-  <h2>Fechamentos históricos</h2>
-  <nav class="quote-chart-periods" aria-label="Período do gráfico">
-    {% for chave, rotulo in periodos %}
-    <a class="button{{ ' button-primary' if chave == periodo }}" href="{{ url_for('portfolio.position_detail', position_id=position.id, periodo=chave) }}"{{ ' aria-current="true"'|safe if chave == periodo }}>{{ rotulo }}</a>
-    {% endfor %}
-  </nav>
-  {% if grafico %}
-  <figure class="quote-chart">
-    <svg viewBox="0 0 {{ grafico.largura }} {{ grafico.altura }}" role="img" aria-label="Variação dos fechamentos de {{ position.ticker }} em escala logarítmica">
-      {% for marca in grafico.eixo_y %}
-      <line class="quote-chart-grid" x1="{{ grafico.esquerda }}" x2="{{ grafico.direita }}" y1="{{ marca.y }}" y2="{{ marca.y }}"></line>
-      <text class="quote-chart-axis quote-chart-axis-y" x="{{ grafico.esquerda|int - 6 }}" y="{{ marca.y }}">{{ marca.valor|currency(position.currency) }}</text>
-      {% endfor %}
-      {% for marca in grafico.eixo_x %}
-      <text class="quote-chart-axis quote-chart-axis-x" x="{{ marca.x }}" y="{{ grafico.base|int + 18 }}">{{ marca.rotulo }}</text>
-      {% endfor %}
-      <polyline class="quote-chart-line" points="{{ grafico.pontos }}"></polyline>
-      {% for aporte in grafico.aportes %}
-      <polyline class="quote-chart-entry quote-chart-entry-{{ aporte.cor }}" points="{{ aporte.pontos }}"><title>{{ aporte.rotulo }}</title></polyline>
-      {% endfor %}
-      {% if grafico.pontos_custo %}
-      <polyline class="quote-chart-cost" points="{{ grafico.pontos_custo }}"><title>Custo médio da posição</title></polyline>
-      {% endif %}
-    </svg>
-    <figcaption>
-      Escala logarítmica. De {{ grafico.minimo|currency(position.currency, trim=true) }} a {{ grafico.maximo|currency(position.currency, trim=true) }} em {{ fechamentos|length }} fechamentos desde {{ fechamentos[0].recorded_date|udate }}.
-      <ul class="quote-chart-legend">
-        <li><svg class="quote-chart-swatch" viewBox="0 0 28 8" aria-hidden="true"><line class="quote-chart-cost" x1="0" y1="4" x2="28" y2="4"></line></svg>Custo médio, hoje <span data-sensitive-value="true">{{ position.average_cost|currency(position.currency, trim=true) }}</span></li>
-        {% for aporte in grafico.aportes %}
-        <li><svg class="quote-chart-swatch" viewBox="0 0 28 8" aria-hidden="true"><line class="quote-chart-entry quote-chart-entry-{{ aporte.cor }}" x1="0" y1="4" x2="28" y2="4"></line></svg>{{ aporte.rotulo }} a <span data-sensitive-value="true">{{ aporte.preco|currency(position.currency, trim=true) }}</span></li>
-        {% endfor %}
-      </ul>
-    </figcaption>
-  </figure>
-  {% else %}
-  <p class="empty">Não há fechamentos suficientes neste período para desenhar o gráfico.</p>
-  {% endif %}
-</section>
-
-<section class="position-detail-section">
-  <h2>Movimentos</h2>
-  {% with movements = position.movements %}
-    {% include "partials/position_movements.html" %}
-  {% endwith %}
-</section>
+{% block overview %}
+{% include "partials/stock_history_chart.html" %}
+{% endblock %}
+{% block risk %}
+<dl class="trade-data-grid">{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Distância até o alvo', m.distance_to_target|percent(2) if m else '—') }}{{ trades.metric('Breakeven', m.breakeven|percent(2) if m else '—') }}{{ trades.metric('Peso pelo valor atual', item.current_weight|percent(2)) }}{{ trades.metric('Peso pelo custo', item.cost_weight|percent(2)) }}</dl>
+<p class="trade-context-note">Os pesos desta página usam as posições da carteira {{ position.portfolio_ref.name }} na mesma moeda ({{ currency }}). A lista principal acompanha os filtros escolhidos.</p>
+{% endblock %}
+{% block all_data %}
+<h2>Metas e alocação</h2><dl class="trade-data-grid trade-data-complete">{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Distância até o alvo', m.distance_to_target|percent(2) if m else '—') }}{{ trades.metric('Breakeven', m.breakeven|percent(2) if m else '—') }}{{ trades.metric('Peso pelo valor atual', item.current_weight|percent(2)) }}{{ trades.metric('Peso pelo custo', item.cost_weight|percent(2)) }}{{ trades.metric('Dias em carteira', m.days|number(0) if m else '—') }}</dl>
 {% endblock %}

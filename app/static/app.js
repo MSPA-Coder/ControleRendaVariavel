@@ -124,6 +124,9 @@ htmx.config.includeIndicatorStyles = false;
           event.preventDefault();
           return;
         }
+        // Os filtros HTMX trocam a URL sem renderizar novamente este form.
+        const next = privacyForm.querySelector('input[name="next"]');
+        if (next) next.value = window.location.pathname + window.location.search;
         privacyForm.dataset.submitting = "1";
         privacySubmit.disabled = true;
       });

@@ -1,0 +1,10 @@
+# Extensão de compose.browser.yaml para avaliação humana com dados fictícios.
+# Não combina com compose.yaml nem acessa o banco operacional.
+name: crv-interface-preview
+services:
+  browser-web:
+    image: crv-interface-preview:local
+    ports:
+      - "127.0.0.1:5382:5003"
+  browser-tests:
+    image: crv-interface-browser-runner:local

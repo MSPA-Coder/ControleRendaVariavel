@@ -198,10 +198,27 @@ def index() -> str:
         "selected_broker": broker or "",
         "portfolios": portfolio_records(),
         "brokers": brokers(),
+        "today": date.today(),
     }
     if is_htmx_request():
         return render_template("partials/options_results.html", **context)
     return render_template("options.html", **context)
+
+
+@bp.get("/options/positions/<int:position_id>")
+def position_detail(position_id: int) -> str:
+    """Leitura do contrato e da posição, restrita ao próprio dono."""
+    position = owned_or_404(OptionPosition, position_id)
+    preferences = user_preferences()
+    portfolio = build_option_portfolio(
+        [position],
+        stale_after_seconds=current_app.config["RTD_STALE_AFTER_SECONDS"],
+        risk_free_rate_annual=(
+            preferences.risk_free_rate_annual if preferences else DEFAULT_RISK_FREE_RATE_ANNUAL
+        ),
+    )
+    (item,) = portfolio.positions
+    return render_template("option_detail.html", position=position, item=item)
 
 
 @bp.get("/options/new")
