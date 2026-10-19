@@ -111,6 +111,8 @@ docker compose exec web flask --app app:create_app users deactivate USUARIO
 docker compose exec web flask --app app:create_app import-position-history
 docker compose exec web flask --app app:create_app importar-negocios-myprofit /caminho/historico.xlsx --usuario USUARIO
 docker compose exec web flask --app app:create_app conferir-pregoes --usuario USUARIO
+docker compose exec web flask --app app:create_app importar-posicao-myprofit /caminho/posicao.tsv --usuario USUARIO
+docker compose exec web flask --app app:create_app conciliar-myprofit --usuario USUARIO
 ```
 
 ## Cotações RTD no Windows

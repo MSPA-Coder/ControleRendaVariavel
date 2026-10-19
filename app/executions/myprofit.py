@@ -288,27 +288,50 @@ def safe_file_name(name: str | None) -> str | None:
     return base[:120] or None
 
 
+def load_sheets(content: bytes) -> list[list[tuple[Any, ...]]]:
+    """Linhas de cada planilha do relatório, de um XLSX ou de um TSV.
+
+    O TSV é o texto que o navegador embutido extrai do relatório (o Excel que o
+    site oferece não sai da página): células separadas por tabulação, primeira
+    linha ``Emitido por: ...`` já sem o titular. Célula vazia vira ``None``,
+    como no Excel; números e datas chegam como texto e passam pelas mesmas
+    conversões das células do XLSX.
+    """
+    if not content:
+        raise ExecutionReportError("Selecione o relatório em formato XLSX ou TSV.")
+    if len(content) > MAX_WORKBOOK_BYTES:
+        raise ExecutionReportError("O relatório excede o limite de 2 MB.")
+    if not content.startswith(b"PK"):
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ExecutionReportError("Não foi possível ler o relatório TSV (use UTF-8).") from exc
+        lines = [
+            tuple(cell if cell.strip() else None for cell in line.split("	"))
+            for line in text.splitlines()
+        ]
+        return [lines]
+    try:
+        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+        return [list(worksheet.iter_rows(values_only=True)) for worksheet in workbook.worksheets]
+    except (InvalidFileException, zipfile.BadZipFile, OSError, ValueError, KeyError) as exc:
+        raise ExecutionReportError("Não foi possível ler o relatório XLSX.") from exc
+
+
 def read_execution_report(content: bytes) -> ExecutionReport:
     """Lê o relatório e devolve período, linhas válidas e linhas recusadas.
 
     Falha com ``ExecutionReportError`` se o arquivo for vazio, grande demais,
     ilegível ou não tiver o cabeçalho e as colunas do relatório.
     """
-    if not content:
-        raise ExecutionReportError("Selecione o relatório em formato XLSX.")
-    if len(content) > MAX_WORKBOOK_BYTES:
-        raise ExecutionReportError("O relatório excede o limite de 2 MB.")
-    try:
-        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
-    except (InvalidFileException, zipfile.BadZipFile, OSError, ValueError, KeyError) as exc:
-        raise ExecutionReportError("Não foi possível ler o relatório XLSX.") from exc
+    sheets = load_sheets(content)
 
     last_problem = (
         "O relatório não começa com as linhas 'Emitido por' e 'Período'; "
         "use o 'Histórico de investimentos' do myProfit."
     )
-    for worksheet in workbook.worksheets:
-        preview = list(worksheet.iter_rows(min_row=1, max_row=3, values_only=True))
+    for sheet_rows in sheets:
+        preview = sheet_rows[:3]
         if len(preview) < 3:
             continue
         # A primeira linha só é conferida, nunca lida adiante: tem nome e CPF.
@@ -337,9 +360,7 @@ def read_execution_report(content: bytes) -> ExecutionReport:
         rows: list[ExecutionRow] = []
         rejected: list[str] = []
         orders: dict[str, int] = {}
-        for source_row, values in enumerate(
-            worksheet.iter_rows(min_row=4, values_only=True), start=4
-        ):
+        for source_row, values in enumerate(sheet_rows[3:], start=4):
             if not any(value is not None and str(value).strip() for value in values):
                 continue
             document = " ".join(str(values[headers["Número"]] if headers["Número"] < len(values) else "").split())

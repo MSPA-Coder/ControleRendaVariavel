@@ -28,7 +28,8 @@ Antes de mudar código, leia este arquivo, `README.md`, `pyproject.toml`,
   deliberadamente não cobre, e validação proporcional;
 - `docs/planilha-acoes.md` para ações, performance, risco e RTD;
 - `docs/planilha-opcoes.md` para opções;
-- `docs/deployment-vps.md` para operação no VPS.
+- `docs/deployment-vps.md` para operação no VPS;
+- `docs/conciliacao-mensal.md` para a rotina mensal de conciliação com o myProfit.
 
 Em conflito, prevalecem: solicitação explícita atual do mantenedor; este
 arquivo; contratos funcionais em `docs/`; testes e contratos públicos; código
