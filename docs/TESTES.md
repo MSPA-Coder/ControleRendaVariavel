@@ -1,9 +1,10 @@
 # Diretrizes de teste
 
-Texto comum a todos os repositórios. A cópia canônica fica em
-`manutencao/docs/TESTES.md`; as demais são idênticas. Para mudar uma regra,
-mude a canônica e copie para todos na mesma rodada. O que é particular de um
-projeto (camadas, marcadores, comandos) fica no `AGENTS.md` dele.
+Texto-base mantido em `manutencao/docs/TESTES.md`. Os repositórios que carregam
+uma cópia devem mantê-la alinhada a esta versão; nem todo repositório tem uma
+cópia. Para mudar uma regra, atualize o texto-base e as cópias existentes na
+mesma rodada. O que é particular de um projeto (camadas, marcadores, comandos)
+fica no `AGENTS.md` dele.
 
 Base: os quatro pilares de Khorikov (*Unit Testing Principles, Practices, and
 Patterns*), o *Test Desiderata* de Kent Beck, testar comportamento e não
@@ -59,20 +60,24 @@ contexto em vez do HTML. Não se testa classe CSS, cor, fonte, ordem de coluna
 ou rótulo de botão. Texto só quando **é** a regra (aviso legal, mensagem que
 orienta a pessoa numa recusa). Aparência se verifica olhando a tela.
 
-## T6. Front-end crítico: sentinela declarada
+## T6. Front-end crítico: comportamento no navegador
 
-Nenhum projeto executa o navegador nos testes. Para os poucos comportamentos
-de JS ou CSS em que a falha custa dinheiro ou privacidade (confirmação que
-falha fechada, resposta HTMX antiga que não sobrescreve a nova, modo discreto),
-o teste pode conferir o trecho que define o mecanismo, desde que:
+Use o navegador para os comportamentos de JS em que a falha custa dinheiro ou
+privacidade: confirmação que falha fechada, envio repetido, resposta HTMX antiga
+que não sobrescreve a nova e modo discreto. Exercite a ação e confira a resposta
+e o estado persistido. Posição, classe CSS e rótulo de botão não são resultados
+de negócio. Os projetos que têm `compose.browser.yaml` já oferecem esse runner
+com banco descartável e fontes externas controladas.
+
+Quando o mecanismo ainda não puder ser executado no navegador, uma sentinela
+textual temporária pode conferir o trecho que o define, desde que:
 
 - seja marcado com `@pytest.mark.sentinela_front`;
 - tenha no docstring o risco que protege;
 - confira o mínimo que define o mecanismo, não cada linha dele.
 
-Todo o resto que é cosmético sai. Se as sentinelas passarem de meia dúzia num
-projeto, o próximo passo é teste em navegador (Playwright) para esses fluxos,
-não mais literais.
+Todo o resto que é cosmético sai. Migre a sentinela quando o teste de navegador
+provar que detecta o mesmo defeito; não acumule os dois por rotina.
 
 ## T7. Banco real quando a regra vive no banco
 
@@ -115,8 +120,14 @@ Configuração de teste entra por fixture ou injeção (o `config` da factory,
 
 Cobertura densa onde o erro custa dinheiro, dado ou acesso: saldo, fatura,
 fechamento, posição, autorização, senha, backup. Smoke onde o erro é visível e
-barato: telas de leitura, páginas institucionais. Percentual de cobertura não
-é meta; mede o que foi executado, não o que foi verificado.
+barato: telas de leitura, páginas institucionais.
+
+Meça linhas e decisões e use as lacunas para escolher cenários relevantes.
+Quando houver uma meta, como cobertura acima de 85%, informe também o escopo,
+os módulos não executados e as camadas medidas. Não diminua o denominador,
+adicione exclusões de código de produto ou escreva asserções vazias para
+atingi-la. Execução não prova verificação: confira por mutação representativa
+que as asserções novas detectam o erro que pretendem proteger.
 
 ## T12. O que a documentação pode impor
 

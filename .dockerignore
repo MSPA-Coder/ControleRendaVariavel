@@ -21,3 +21,9 @@ backups/
 instance/
 logs/
 .browser-results
+
+# Evidências e configuração privada de ferramentas locais.
+.coverage.*
+CodexTemp
+.claude
+.agents
