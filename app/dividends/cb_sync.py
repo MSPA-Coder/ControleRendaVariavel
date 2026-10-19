@@ -229,6 +229,8 @@ class SubstitutionPlan:
     eligible: int
     rows_by_id: dict[int, Dividend]
     already_superseded: int = 0
+    #: Creditos do CB que ja tem a linha de planilha substituida (reexecucao).
+    covered_cb: int = 0
 
     @property
     def to_supersede(self) -> list[Dividend]:
@@ -256,6 +258,7 @@ def plan_substitution(owner_id: int, *, cutoff: date | None = None) -> Substitut
     )
     sheet_rows: dict[int, Dividend] = {}
     cb_lines: list[CbLine] = []
+    superseded_lines: list[SheetLine] = []
     already = 0
     for row in db.session.scalars(statement):
         if row.broker.casefold() not in allowed:
@@ -268,18 +271,27 @@ def plan_substitution(owner_id: int, *, cutoff: date | None = None) -> Substitut
         elif row.origin == DIVIDEND_ORIGIN_SHEET:
             if row.superseded_at is not None:
                 already += 1
+                superseded_lines.append(
+                    SheetLine(row.id, row.broker, row.ticker, row.kind.value, row.payment_date, row.amount)
+                )
             else:
                 sheet_rows[row.id] = row
     lines = [
         SheetLine(row.id, row.broker, row.ticker, row.kind.value, row.payment_date, row.amount)
         for row in sheet_rows.values()
     ]
+    match = match_lines(lines, cb_lines)
+    # Na reexecucao as linhas ja foram marcadas e nao entram mais no pareamento:
+    # um credito que sobra mas tem par entre elas esta coberto, nao "sem linha".
+    covered_ids = {pair.cb.id for pair in match_lines(superseded_lines, match.unmatched_cb).pairs}
+    match.unmatched_cb = [credit for credit in match.unmatched_cb if credit.id not in covered_ids]
     return SubstitutionPlan(
-        match=match_lines(lines, cb_lines),
+        match=match,
         cutoff=cutoff,
         eligible=len(sheet_rows),
         rows_by_id=sheet_rows,
         already_superseded=already,
+        covered_cb=len(covered_ids),
     )
 
 

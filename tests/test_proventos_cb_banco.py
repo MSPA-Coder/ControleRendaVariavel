@@ -291,11 +291,17 @@ def test_substituicao_marca_so_a_planilha_pareada_em_reais_a_partir_do_corte(ses
 def test_substituir_duas_vezes_nao_marca_de_novo(sessao, cenario):
     _cenario_de_substituicao(sessao, cenario)
     dono = cenario["usuario"]
-    apply_substitution(dono.id, plan_substitution(dono.id))
+    primeiro = plan_substitution(dono.id)
+    pareados = {par.cb.id for par in primeiro.match.pairs}
+    apply_substitution(dono.id, primeiro)
 
     segundo = plan_substitution(dono.id)
 
     assert segundo.to_supersede == [] and segundo.already_superseded == 2
+    # Os créditos pareados na primeira vez estão cobertos pela linha já substituída:
+    # não podem reaparecer como "CB sem linha na planilha".
+    assert segundo.covered_cb == len(pareados) == 2
+    assert pareados.isdisjoint({credito.id for credito in segundo.match.unmatched_cb})
 
 
 def test_desfazer_devolve_as_linhas_a_planilha_ativa(sessao, cenario):
