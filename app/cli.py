@@ -658,7 +658,7 @@ def substituir_proventos_planilha(
     click.echo(
         f"Corte {plan.cutoff:%d/%m/%Y}. Planilha elegível: {plan.eligible} linha(s) "
         f"({plan.already_superseded} já substituída(s)). Créditos do CB já no CRV: "
-        f"{len(pairs) + len(plan.match.unmatched_cb)}."
+        f"{len(pairs) + len(plan.match.unmatched_cb) + plan.covered_cb}{f' ({plan.covered_cb} já cobertos por linha substituída)' if plan.covered_cb else ''}."
     )
     click.echo(f"Pareadas: {len(plan.match.matched_sheet_ids)} linha(s) em {len(pairs)} crédito(s) do CB.")
     for pair in pairs:
