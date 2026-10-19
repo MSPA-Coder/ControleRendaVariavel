@@ -60,8 +60,9 @@ def cenario(sessao, app_com_banco, monkeypatch):
     dolar = Portfolio(name=f"USD {sufixo}", owner_ref=dono, currency="USD")
     sessao.add_all([carteira, dolar])
 
+    # O código real de opção termina em dígito; com "E" no fim seria exercício.
     def ticker(nome):
-        return Ticker(symbol=f"{nome}{sufixo}", trading_name=nome, market=Market.B3, rtd_market_code="B", currency="BRL")
+        return Ticker(symbol=f"{nome}{sufixo}1", trading_name=nome, market=Market.B3, rtd_market_code="B", currency="BRL")
 
     acao, outra, opcao, sem_contrato = ticker("ACAO"), ticker("OUTRA"), ticker("OPC"), ticker("SEMC")
     sessao.add_all([acao, outra, opcao, sem_contrato])
