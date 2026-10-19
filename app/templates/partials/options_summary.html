@@ -1,0 +1,39 @@
+<section class="summary portfolio-summary" aria-label="Resumo de opções">
+{% for total in portfolio.totals %}
+  {% set symbol = total.currencies|map('currency_symbol')|join('/') %}
+  <article class="currency-card{{ ' currency-card-simulated' if total.simulated }}"
+            aria-label="{{ total.portfolio_name }}, totais em {{ total.currencies|join('/') }}{{ ' (simulada)' if total.simulated }}">
+    <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
+    <div class="currency-card-grid">
+      <article>
+        <span>Ganhos <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="positive" data-sensitive-value="true">{{ total.gain|number(0) }}</strong>
+      </article>
+      <article>
+        <span>Perdas <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="negative" data-sensitive-value="true">{{ total.loss|number(0) }}</strong>
+      </article>
+      <article>
+        <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="{{ total.result|sign_class }}" data-sensitive-value="true">{{ total.result|number(0) }}</strong>
+      </article>
+      <article title="Soma do decaimento diário esperado do prêmio das posições deste card, já considerando compra/venda.">
+        <span>Theta total/dia <small class="currency-symbol">{{ symbol }}</small></span>
+        <strong class="{{ total.total_theta_daily|sign_class }}" data-sensitive-value="true">{{ total.total_theta_daily|number(2, trim=true) if total.total_theta_daily is not none else '-' }}</strong>
+      </article>
+    </div>
+  </article>
+{% endfor %}
+{% if portfolio.moneyness_totals %}
+  <article class="currency-card" aria-label="Distribuição por moneyness">
+    <div class="currency-card-grid">
+      {% for total in portfolio.moneyness_totals %}
+      <article>
+        <span>{{ total.moneyness }} · {{ total.count }} posição(ões)</span>
+        <strong data-sensitive-value="true">{{ total.pct|percent }}</strong>
+      </article>
+      {% endfor %}
+    </div>
+  </article>
+{% endif %}
+</section>

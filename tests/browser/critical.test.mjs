@@ -4,18 +4,26 @@ import { chromium } from 'playwright';
 
 const base = process.env.BASE_URL ?? 'http://browser-web:5003';
 let browser;
+const sessions = new Map();
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
 async function logged(username, run) {
-  const context = await browser.newContext();
+  // Uma autenticação real por conta; consultas da mesma conta reutilizam a sessão.
+  // Evita que a suíte serial esgote o limite legítimo de login por IP.
+  const context = await browser.newContext(sessions.has(username) ? { storageState: sessions.get(username) } : {});
   const page = await context.newPage();
   page.setDefaultTimeout(12000);
   try {
-    await page.goto(`${base}/login`);
-    await page.getByLabel('Usuário').fill(username);
-    await page.getByLabel('Senha').fill('Synthetic-browser-only-2026!');
-    await Promise.all([page.waitForURL(`${base}/`), page.getByRole('button', { name: 'Entrar', exact: true }).click()]);
+    if (sessions.has(username)) {
+      await page.goto(`${base}/`);
+    } else {
+      await page.goto(`${base}/login`);
+      await page.getByLabel('Usuário').fill(username);
+      await page.getByLabel('Senha').fill('Synthetic-browser-only-2026!');
+      await Promise.all([page.waitForURL(`${base}/`), page.getByRole('button', { name: 'Entrar', exact: true }).click()]);
+      sessions.set(username, await context.storageState());
+    }
     await run(page);
   } catch (error) {
     await page.screenshot({ path: `/results/${username}-${Date.now()}.png`, fullPage: true });
@@ -46,9 +54,96 @@ async function save(page) {
 
 async function editFor(page, ticker) {
   const href = await page.getByRole('link', { name: ticker, exact: true }).getAttribute('href');
-  assert.match(href, /^\/positions\/\d+$/);
-  await page.goto(`${base}${href}/edit`);
+  const path = new URL(href, base).pathname;
+  assert.match(path, /^\/positions\/\d+$/);
+  await page.goto(`${base}${path}/edit`);
 }
+
+test('consultas preservam origem, detalhes, filtros e privacidade', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    await page.goto(`${base}/dividends`);
+    await page.getByRole('button', { name: 'Mostrar os proventos de PETR4', exact: true }).click();
+    const receipts = page.getByRole('region', { name: 'Recebimentos de PETR4', exact: true });
+    await receipts.waitFor();
+    assert.equal(await receipts.getByText('Controle Bancário · somente leitura', { exact: false }).count(), 2);
+    assert.equal(await receipts.getByRole('link', { name: 'Editar provento', exact: true }).count(), 0);
+    await receipts.locator('summary').first().click();
+    const values = receipts.locator('[data-sensitive-value="true"]');
+    assert.ok(await values.count() > 4);
+    await page.getByRole('button', { name: 'Abrir filtros globais' }).click();
+    await page.getByRole('button', { name: 'Ativar modo discreto', exact: false }).click();
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Mostrar os proventos de PETR4', exact: true }).click();
+    await page.getByRole('region', { name: 'Recebimentos de PETR4', exact: true }).waitFor();
+    await page.getByRole('region', { name: 'Recebimentos de PETR4', exact: true }).locator('summary').first().click();
+    const hidden = await page.getByRole('region', { name: 'Recebimentos de PETR4', exact: true })
+      .locator('[data-sensitive-value="true"]').evaluateAll(nodes => nodes.every(node =>
+        getComputedStyle(node).color === 'rgba(0, 0, 0, 0)' || getComputedStyle(node).filter.includes('blur') ||
+        getComputedStyle(node).fontSize === '0px'));
+    assert.ok(hidden, 'Valores detalhados de recebimentos também devem ser ocultados');
+    await page.getByRole('button', { name: 'Abrir filtros globais' }).click();
+    await page.getByRole('button', { name: 'Desativar modo discreto', exact: false }).click();
+    await page.waitForLoadState('networkidle');
+    await page.locator('select[name="broker"]').selectOption({ label: 'XP · demonstração' });
+    await page.getByRole('heading', { name: 'Nenhum provento neste filtro' }).waitFor();
+    assert.equal(new URL(page.url()).searchParams.get('broker'), 'XP · demonstração');
+    await page.goto(`${base}/transactions?status=closed`);
+    const transactionDetail = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: 'Detalhes · PETR4' }) });
+    await transactionDetail.locator('summary').click();
+    await transactionDetail.getByText('Operação histórica fictícia, independente das posições abertas da demonstração.', { exact: true }).waitFor();
+    assert.equal(await page.locator('a[href$="/close"]').count(), 0);
+    await page.goto(`${base}/executions/reconciliation`);
+    await page.getByRole('status').filter({ hasText: 'CB não configurado.' }).waitFor();
+    assert.equal(await page.getByRole('region', { name: 'Confere', exact: true }).count(), 0);
+    await page.locator('summary').filter({ hasText: 'Contexto e documentos' }).first().click();
+    await page.getByText('NOTA-DEMO-1', { exact: true }).waitFor();
+  });
+});
+
+test('análise, mercado e cadastros permitem consulta e aprofundamento', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    for (const path of ['/performance?period=all', '/risk', '/analysis/exposure-asset',
+      '/analysis/exposure-broker', '/analysis/exposure-market', '/quotes', '/data-status',
+      '/tables/portfolios', '/preferences', '/minha-senha']) {
+      const response = await page.goto(`${base}${path}`);
+      assert.equal(response.status(), 200, path);
+      assert.equal(await page.getByRole('heading', { level: 1 }).count(), 1, path);
+      if (path === '/quotes') {
+        await Promise.all([
+          page.waitForResponse(response => response.url().includes('/quotes?ticker_id=')),
+          page.locator('#quote-ticker').selectOption({ label: 'PETR4' }),
+        ]);
+      }
+      if (path.startsWith('/performance') || path === '/quotes' || path.startsWith('/analysis/')) {
+        await page.locator('canvas').first().waitFor();
+      }
+    }
+    assert.deepEqual(errors, []);
+  });
+});
+
+test('admin consulta configurações e usuários; operador continua sem acesso', { timeout: 45000 }, async () => {
+  const restricted = ['/settings', '/users', '/tables/brokers', '/tables/tickers',
+    '/tables/options/expirations', '/tables/options/contracts'];
+  await logged('browser-demo', async page => {
+    for (const path of restricted) {
+      const response = await page.request.get(`${base}${path}`);
+      assert.equal(response.status(), 403, path);
+    }
+  });
+  await logged('browser-admin', async page => {
+    for (const path of restricted) {
+      const response = await page.goto(`${base}${path}`);
+      assert.equal(response.status(), 200, path);
+      assert.equal(await page.getByRole('heading', { level: 1 }).count(), 1, path);
+    }
+    await page.goto(`${base}/tables/brokers`);
+    await page.locator('summary').filter({ hasText: 'Adicionar corretora' }).click();
+    await page.getByLabel('Nome', { exact: true }).waitFor();
+  });
+});
 
 for (const region of ['br', 'us']) {
   test(`decimal ${region} chega ao servidor com valor correto`, { timeout: 45000 }, async () => {
@@ -97,5 +192,25 @@ test('cancelar e confirmar encerramento parcial mantém o saldo correto', { time
     await editFor(page, 'FLOW3');
     assert.equal(Number(await page.locator('[name="quantity"]').inputValue()), 15);
     assert.equal(Number(await page.locator('[name="average_cost"]').inputValue()), 10);
+  });
+});
+
+test('modo discreto preserva filtro HTMX e mascara o detalhe do trade', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    await page.getByLabel('Agrupar por corretora', { exact: true }).check();
+    await page.waitForURL(url => url.searchParams.get('group_by_broker') === '1');
+    await page.getByRole('button', { name: 'Abrir filtros globais', exact: true }).click();
+    await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'POST' && response.url().includes('/privacy')),
+      page.locator('[data-privacy-submit]').click(),
+    ]);
+    await page.waitForLoadState('networkidle');
+    assert.equal(new URL(page.url()).searchParams.get('group_by_broker'), '1');
+    await page.getByRole('link', { name: 'PETR4', exact: true }).click();
+    await page.getByRole('heading', { name: 'PETR4', exact: true }).waitFor();
+    assert.doesNotMatch(await page.locator('main').innerText(), /R\$\s*36,42/);
+    await page.getByRole('link', { name: '← Voltar às posições de ações', exact: true }).click();
+    assert.equal(new URL(page.url()).searchParams.get('group_by_broker'), '1');
+    assert.equal(await page.getByLabel('Agrupar por corretora', { exact: true }).isChecked(), true);
   });
 });

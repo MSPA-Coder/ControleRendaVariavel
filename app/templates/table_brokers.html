@@ -1,9 +1,12 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Corretoras{% endblock %}
-{% block content %}
+{% block workspace_area %}Cadastros{% endblock %}
+{% block description %}Mantenha as instituições usadas nas operações. Cadastros com histórico são arquivados quando removidos.{% endblock %}
+{% block workspace_content %}
 <section class="catalog-card">
-  <h2>Corretoras</h2>
-  <form class="catalog-create broker-fields" method="post" action="{{ url_for('portfolio.create_broker') }}">
+  <h2>Registros cadastrados</h2>
+  <details class="workspace-create"><summary>Adicionar corretora</summary>
+<form class="catalog-create broker-fields" method="post" action="{{ url_for('portfolio.create_broker') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Nome<input required maxlength="40" name="name"></label>
     <label>Sigla<input required maxlength="40" name="acronym"></label>
@@ -11,6 +14,7 @@
             data-sa-confirmar="Adicionar esta corretora?"
             data-sa-titulo="Adicionar corretora" data-sa-severidade="warning">Adicionar</button>
   </form>
+</details>
   <div class="table-wrap">
     <table class="catalog-table">
       <thead><tr><th>Nome</th><th>Sigla</th><th>Estado</th><th>Ações</th></tr></thead>

@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Performance mensal · Controle de Renda Variável{% endblock %}
-{% block header_controls %}
-<form class="filters header-controls" method="get"
+{% block workspace_controls %}
+<form class="filters" method="get"
       hx-get="{{ url_for('portfolio.monthly_performance') }}"
       hx-trigger="change"
       hx-target="#performance-results"
@@ -51,7 +51,8 @@
   <a class="button" href="{{ url_for('portfolio.monthly_performance') }}">Limpar</a>
 </form>
 {% endblock %}
-{% block content %}
+{% block description %}Veja a evolução da exposição e o retorno de cada mês. Compare com uma referência e consulte os dados que explicam o gráfico.{% endblock %}
+{% block workspace_content %}
 {% include "partials/performance_results.html" %}
 {% endblock %}
 {% block scripts %}

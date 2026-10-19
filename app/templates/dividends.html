@@ -1,7 +1,8 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Proventos{% endblock %}
-{% block header_controls %}
-<form class="filters header-controls" method="get"
+{% block description %}Quanto cada ativo trouxe para a carteira. Consulte os recebimentos, a origem e os detalhes de cada evento.{% endblock %}
+{% block workspace_controls %}
+<form class="filters" method="get"
       hx-get="{{ url_for('portfolio.dividends') }}"
       hx-trigger="change"
       hx-target="#dividends-results"
@@ -17,12 +18,14 @@
   </label>
   <a class="button" href="{{ url_for('portfolio.dividends') }}">Limpar</a>
 </form>
+{% endblock %}
+{% block workspace_actions %}
 <div class="dividend-actions">
   <a class="button button-primary" href="{{ url_for('portfolio.new_dividend') }}">Novo provento</a>
-  <a class="button button-primary" href="{{ url_for('portfolio.import_dividends') }}">Importar proventos</a>
+  <a class="button" href="{{ url_for('portfolio.import_dividends') }}">Importar proventos</a>
   <a class="button" href="{{ url_for('portfolio.dividends_cb') }}">Proventos do CB</a>
 </div>
 {% endblock %}
-{% block content %}
+{% block workspace_content %}
 {% include "partials/dividends_results.html" %}
 {% endblock %}

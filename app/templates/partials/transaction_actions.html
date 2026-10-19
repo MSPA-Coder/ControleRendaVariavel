@@ -1,0 +1,30 @@
+{% if tx.status.value == 'open' %}
+            {% set close_endpoint = 'options.close_position_form' if tx.option_contract_id else 'portfolio.close_position_form' %}
+            <a href="{{ url_for(close_endpoint, position_id=tx.source_position_id) }}">encerrar</a>
+          {% elif tx.id in partial_close_ids %}
+            {# Encerramento parcial: os campos espelham um movimento da posição e
+               não se editam soltos. Desfazer devolve a quantidade e apaga a linha. #}
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
+                  data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-button" type="submit"
+                      data-sa-confirmar="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada."
+                      data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error"
+                      title="Desfaz esta transação e apaga o registro">desfazer</button>
+            </form>
+          {% elif tx.option_contract_id %}
+            {# Transação de opção fechada sem posição viva: registro histórico
+               independente. Continua excluível (link genérico abaixo cobre
+               isso), só não editável pelo formulário de ações. #}
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
+                  data-sa-titulo="Excluir transação" data-sa-severidade="error">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-button" type="submit"
+                      data-sa-confirmar="Excluir esta transação?"
+                      data-sa-titulo="Excluir transação" data-sa-severidade="error">excluir</button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>
+          {% endif %}

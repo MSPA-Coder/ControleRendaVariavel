@@ -1,7 +1,8 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Transações{% endblock %}
-{% block header_controls %}
-<form class="filters header-controls" method="get"
+{% block description %}Acompanhe operações abertas e resultados realizados. Expanda uma operação para consultar datas, carteira e observações.{% endblock %}
+{% block workspace_controls %}
+<form class="filters" method="get"
       hx-get="{{ url_for('portfolio.transactions') }}"
       hx-trigger="change"
       hx-target="#transactions-results"
@@ -33,8 +34,10 @@
   </label>
   <a class="button" href="{{ url_for('portfolio.transactions') }}">Limpar</a>
 </form>
+{% endblock %}
+{% block workspace_actions %}
 <a class="button button-primary" href="{{ url_for('portfolio.new_transaction') }}">Nova transação</a>
 {% endblock %}
-{% block content %}
+{% block workspace_content %}
 {% include "partials/transactions_results.html" %}
 {% endblock %}

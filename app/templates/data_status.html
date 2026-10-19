@@ -1,14 +1,19 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Status dos dados · Controle de Renda Variável{% endblock %}
-{% block content %}
-<section class="page-heading">
-  <h1>Status dos dados</h1>
-  <p>Leitura da qualidade que sustenta a carteira em {{ referencia|udate }}.</p>
+{% block description %}Qualidade das informações que sustentam a carteira em {{ referencia|udate }}.{% endblock %}
+{% block workspace_actions %}<a class="button" href="{{ url_for('portfolio.quote_history') }}">Consultar cotações</a>{% endblock %}
+{% block workspace_content %}
+<section class="summary" aria-label="Qualidade das cotações">
+  <article><span>Posições reais monitoradas</span><strong>{{ quality.positions }}</strong></article>
+  <article><span>Posições cotadas</span><strong>{{ quality.quoted }}</strong></article>
+  <article class="{{ 'workspace-highlight' if quality.missing }}"><span>Sem cotação</span><strong class="{{ 'negative' if quality.missing }}">{{ quality.missing }}</strong></article>
+  <article><span>Cotações desatualizadas</span><strong class="{{ 'negative' if quality.stale }}">{{ quality.stale }}</strong></article>
+  <article><span>Cotações com erro</span><strong class="{{ 'negative' if quality.errors }}">{{ quality.errors }}</strong></article>
 </section>
-<section class="summary portfolio-summary" aria-label="Qualidade das cotações">
-  <article class="currency-card"><h3 class="currency-card-title">Posições reais</h3><div class="currency-card-grid"><article><span>Monitoradas</span><strong>{{ quality.positions }}</strong></article><article><span>Cotadas</span><strong>{{ quality.quoted }}</strong></article></div></article>
-  <article class="currency-card"><h3 class="currency-card-title">Pendências</h3><div class="currency-card-grid"><article><span>Sem cotação</span><strong class="{{ 'negative' if quality.missing else '' }}">{{ quality.missing }}</strong></article><article><span>Desatualizadas</span><strong class="{{ 'negative' if quality.stale else '' }}">{{ quality.stale }}</strong></article><article><span>Com erro</span><strong class="{{ 'negative' if quality.errors else '' }}">{{ quality.errors }}</strong></article></div></article>
-  <article class="currency-card"><h3 class="currency-card-title">Câmbio para a carteira</h3><div class="currency-card-grid"><article>{% if conversao.possivel %}<span>Conversão em BRL disponível</span><strong class="positive">Íntegra</strong>{% if conversao.taxa %}<small>USD/BRL de {{ conversao.taxa.data|udate }}</small>{% endif %}{% else %}<span>Conversão em BRL indisponível</span><strong class="negative">Atenção</strong><small>{{ conversao.motivo }}</small>{% endif %}</article></div></article>
+<section class="workspace-data-health" aria-label="Câmbio para a carteira">
+  <h2>Conversão da carteira para reais</h2>
+  {% if conversao.possivel %}<p><span class="workspace-status">Disponível</span></p><p class="workspace-note">Conversão em BRL disponível.{% if conversao.taxa %} Câmbio USD/BRL de {{ conversao.taxa.data|udate }}.{% endif %}</p>
+  {% else %}<p><span class="workspace-status workspace-status-warning">Indisponível</span></p><p class="workspace-note">{{ conversao.motivo }}</p>{% endif %}
 </section>
-<p class="form-help">Sem posições não é erro. Uma pendência só aparece quando há uma posição real cujo dado necessário está ausente, atrasado ou em erro.</p>
+<p class="workspace-note">Sem posições não é erro. Uma pendência só aparece quando há uma posição real cujo dado necessário está ausente, atrasado ou em erro.</p>
 {% endblock %}

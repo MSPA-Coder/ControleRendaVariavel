@@ -1,60 +1,40 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Risco · Controle de Renda Variável{% endblock %}
-{% block content %}
-<p class="form-help">Para posições vendidas, o app não desconta o repasse de proventos ao doador nem encargos do aluguel. Os indicadores ficam incompletos e não substituem a apuração oficial integrada à B3 e à contabilidade.</p>
-{% if ticker_metrics %}
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th title="⚠ marca as linhas com menos de {{ min_observations }} observações, cujos indicadores ainda não são representativos.">Ticker</th>
-        <th>Observações</th>
-        <th>Retorno anualizado</th>
-        <th>Volatilidade anualizada</th>
-        <th>Sharpe</th>
-        <th>Sortino</th>
-        <th title="Percentil dos retornos diários (5º percentil = 95% de confiança).">VaR 95%</th>
-        <th>Máx. drawdown</th>
-        {# Um Beta sem a referencia contra a qual foi calculado nao e
-           interpretavel: 1,20 contra o IBOV e contra o dolar sao coisas
-           diferentes. O simbolo vem no cabecalho, que custa uma vez em vez
-           de uma por linha. #}
-        {% if benchmark_ticker %}
-        <th title="Beta calculado contra {{ benchmark_ticker.symbol }}. O ticker de referência é configurável em Configurações.">Beta<small class="th-note"> ({{ benchmark_ticker.symbol }})</small></th>
-        {% else %}
-        <th title="Sem ticker de referência configurado: defina um em Configurações para que o Beta seja calculado.">Beta<small class="th-note"> (sem referência)</small></th>
-        {% endif %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for metrics in ticker_metrics %}
-      <tr>
-        <td>{{ metrics.ticker }}{{ ' ⚠' if not metrics.has_enough_observations }}</td>
-        <td class="number" data-sensitive-value="true">{{ metrics.observations|number(0) }}</td>
-        <td class="number {{ metrics.annualized_return|sign_class }}" data-sensitive-value="true">{{ metrics.annualized_return|percent(2) if metrics.annualized_return is not none else '-' }}</td>
-        <td class="number" data-sensitive-value="true">{{ metrics.volatility_annualized|percent(2) if metrics.volatility_annualized is not none else '-' }}</td>
-        <td class="number" data-sensitive-value="true">{{ metrics.sharpe_ratio|number(2) if metrics.sharpe_ratio is not none else '-' }}</td>
-        <td class="number" data-sensitive-value="true">{{ metrics.sortino_ratio|number(2) if metrics.sortino_ratio is not none else '-' }}</td>
-        <td class="number {{ metrics.var_95|sign_class }}" data-sensitive-value="true">{{ metrics.var_95|percent(2) if metrics.var_95 is not none else '-' }}</td>
-        <td class="number negative" data-sensitive-value="true">{{ metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '-' }}</td>
-        <td class="number" data-sensitive-value="true">{{ metrics.beta_vs_benchmark|number(2) if metrics.beta_vs_benchmark is not none else '-' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<p class="form-help">Nenhuma posição real aberta com cotações históricas registradas ainda.</p>
-{% endif %}
-
+{% block description %}Observe a volatilidade, as quedas e a qualidade da amostra antes de aprofundar os indicadores de cada ativo.{% endblock %}
+{% block workspace_content %}
+{% import "partials/trade_cards.html" as trades with context %}
+<p class="trade-context-note">Para posições vendidas, o app não desconta o repasse de proventos ao doador nem encargos do aluguel. Os indicadores ficam incompletos e não substituem a apuração oficial integrada à B3 e à contabilidade.</p>
 {% if portfolio_drawdowns %}
-<section class="summary risk-summary" aria-label="Drawdown máximo por carteira">
+<section class="summary" aria-label="Drawdown máximo por carteira">
   {% for drawdown in portfolio_drawdowns %}
-    <article title="Aproximação: assume as posições atuais constantes ao longo de todo o histórico simulado.">
-      <span>Máx. drawdown da carteira · {{ drawdown.currency }}{{ ' ⚠' if not drawdown.has_enough_observations }}</span>
-      <strong class="negative" data-sensitive-value="true">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '-' }}</strong>
-    </article>
+  <article><span>Máx. drawdown da carteira · {{ drawdown.currency }}</span><strong class="negative" data-sensitive-value="true">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '—' }}</strong><small>Aproximação: posições atuais constantes no histórico simulado.{{ ' Amostra insuficiente.' if not drawdown.has_enough_observations }}</small></article>
   {% endfor %}
 </section>
+{% endif %}
+<div class="workspace-section-heading"><h2>Indicadores por ativo</h2><p>Referência do Beta: {{ benchmark_ticker.symbol if benchmark_ticker else 'não configurada' }} · mínimo de {{ min_observations }} observações para uma amostra representativa.</p></div>
+{% if ticker_metrics %}
+<section class="trade-card-grid" aria-label="Risco por ativo">
+  {% for metrics in ticker_metrics %}
+  <article class="trade-card workspace-risk-card">
+    <header><div><h3>{{ metrics.ticker }}</h3><p><span data-sensitive-value="true">{{ metrics.observations|number(0) }}</span> observações</p></div>{% if not metrics.has_enough_observations %}<span class="workspace-status workspace-status-warning">Amostra insuficiente</span>{% endif %}</header>
+    <div class="workspace-income-total"><span class="trade-label">Volatilidade anualizada</span><strong data-sensitive-value="true">{{ metrics.volatility_annualized|percent(2) if metrics.volatility_annualized is not none else '—' }}</strong></div>
+    <dl class="trade-card-metrics">
+      {{ trades.metric('Retorno anualizado', metrics.annualized_return|percent(2) if metrics.annualized_return is not none else '—', metrics.annualized_return|sign_class) }}
+      {{ trades.metric('Máx. drawdown', metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '—', 'negative') }}
+    </dl>
+    <details class="workspace-disclosure"><summary>Sharpe, Sortino, VaR e Beta</summary>
+      <dl class="trade-data-grid">
+        {{ trades.metric('Sharpe', metrics.sharpe_ratio|number(2) if metrics.sharpe_ratio is not none else '—') }}
+        {{ trades.metric('Sortino', metrics.sortino_ratio|number(2) if metrics.sortino_ratio is not none else '—') }}
+        <div><dt title="5º percentil dos retornos diários, com 95% de confiança">VaR 95%</dt><dd data-sensitive-value="true">{{ metrics.var_95|percent(2) if metrics.var_95 is not none else '—' }}</dd></div>
+        {{ trades.metric('Beta · ' ~ (benchmark_ticker.symbol if benchmark_ticker else 'sem referência'), metrics.beta_vs_benchmark|number(2) if metrics.beta_vs_benchmark is not none else '—') }}
+      </dl>
+      {% if not metrics.has_enough_observations %}<p class="workspace-note">Menos de {{ min_observations }} observações: estes indicadores ainda não são representativos.</p>{% endif %}
+    </details>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<div class="trade-empty"><h2>Histórico ainda insuficiente</h2><p>Nenhuma posição real aberta com cotações históricas registradas.</p><a class="button" href="{{ url_for('portfolio.quote_history') }}">Consultar cotações</a></div>
 {% endif %}
 {% endblock %}

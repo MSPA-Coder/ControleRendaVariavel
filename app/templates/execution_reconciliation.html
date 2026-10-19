@@ -1,7 +1,8 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Conferência de pregões{% endblock %}
-{% block header_controls %}
-<form class="filters header-controls" method="get"
+{% block description %}Compare os negócios com a liquidação por corretora e pregão. Examine diferenças e documentos sem sair do contexto.{% endblock %}
+{% block workspace_controls %}
+<form class="filters" method="get"
       hx-get="{{ url_for('portfolio.execution_reconciliation') }}"
       hx-trigger="change"
       hx-target="#execution-reconciliation"
@@ -19,8 +20,10 @@
   <label>Até<input type="date" name="end" value="{{ end }}"></label>
   <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Limpar</a>
 </form>
+{% endblock %}
+{% block workspace_actions %}
 <a class="button button-primary" href="{{ url_for('portfolio.import_executions') }}">Importar negócios</a>
 {% endblock %}
-{% block content %}
+{% block workspace_content %}
 {% include "partials/execution_reconciliation_results.html" %}
 {% endblock %}

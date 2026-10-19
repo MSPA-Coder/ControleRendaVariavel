@@ -1,14 +1,15 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Proventos do CB{% endblock %}
-{% block header_controls %}
+{% block workspace_actions %}
 <a class="button" href="{{ url_for('portfolio.dividends') }}">Proventos</a>
 {% endblock %}
-{% block content %}
+{% block description %}Confira a origem dos recebimentos e as pendências antes de qualquer importação.{% endblock %}
+{% block workspace_content %}
 {# Ensaio ao vivo da importação dos proventos do Controle Bancário e fila de revisão.
    Somente leitura: nada é gravado aqui. Quem grava é o comando
    `importar-proventos-cb --aplicar`, e nada da fila é gravado até o mantenedor
    corrigir o lançamento no CB ou cadastrar o ticker no CRV. #}
-<h1>Proventos do Controle Bancário</h1>
+
 <p class="form-help">Em reais, nas corretoras {{ brokers|join(', ') }}, a partir de {{ cutoff|udate }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. Esta tela só mostra o que o comando <code>importar-proventos-cb</code> faria; ela não grava.</p>
 {% if status == 'nao_configurado' %}
 <p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p>

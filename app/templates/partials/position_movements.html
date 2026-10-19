@@ -31,7 +31,7 @@
       <td class="number" data-sensitive-value="true">{{ movement.resulting_quantity|quantity(position.currency) }}</td>
       <td class="number" data-sensitive-value="true">{{ movement.resulting_average_cost|currency(position.currency, trim=true) }}</td>
       <td class="movement-actions">
-        {% if movement.kind.value != 'adjustment' %}
+        {% if movement_actions|default(true) and movement.kind.value != 'adjustment' %}
         <a class="movement-action" href="{{ url_for('portfolio.edit_position_movement', position_id=position.id, movement_id=movement.id) }}" aria-label="Editar lançamento de {{ movement.kind|movement_label }}" title="Editar lançamento">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16.5-.8 4.3 4.3-.8L19 8.5 15.5 5 4 16.5Z"/><path d="m13.8 6.7 3.5 3.5"/></svg>
         </a>

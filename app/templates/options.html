@@ -1,34 +1,13 @@
 {% extends "base.html" %}
-{% block header_controls %}
-<form class="filters header-controls" method="get"
-      hx-get="{{ url_for('options.index') }}"
-      hx-trigger="change"
-      hx-target="#options-results"
-      hx-swap="outerHTML"
-      hx-replace-url="true">
-  <label>Carteira
-    <select name="portfolio_id">
-      <option value="all" {{ 'selected' if selected_portfolio_id == 'all' }}>Todas</option>
-      {% for portfolio in portfolios %}
-        <option value="{{ portfolio.id }}" {{ 'selected' if selected_portfolio_id == portfolio.id|string }}>{{ portfolio.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Corretora
-    <select name="broker">
-      <option value="">Todas</option>
-      {% for broker in brokers %}
-        <option value="{{ broker }}" {{ 'selected' if selected_broker == broker }}>{{ broker }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <a class="button" href="{{ url_for('options.index') }}">Limpar</a>
-</form>
-<a class="button button-primary" href="{{ url_for('options.new_position') }}">Nova posição</a>
-{% endblock %}
 {% block title %}Opções · Controle de Renda Variável{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='trades.css') }}">{% endblock %}
 {% block content %}
-{% include "partials/options_results.html" %}
+<div class="trade-page">
+  {% set is_option = true %}
+  {% include "partials/trade_heading.html" %}
+  {% include "partials/trade_filters.html" %}
+  {% include "partials/options_results.html" %}
+</div>
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>

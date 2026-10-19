@@ -1,10 +1,11 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% set editing = edit_mode if edit_mode is defined else (transaction and transaction.id is defined) %}
 {% block title %}{{ "Editar" if editing else "Nova" }} transação{% endblock %}
-{% block content %}
+{% block workspace_title %}{{ "Editar" if editing else "Nova" }} transação{% endblock %}
+{% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_transaction', transaction_id=transaction_id if edit_mode is defined else transaction.id) if editing else url_for('portfolio.create_transaction') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h1>{{ "Editar" if editing else "Nova" }} transação</h1>
+
   {% set value = transaction %}
   <label>Corretora<select required name="broker_id">
     <option value="">Selecione</option>

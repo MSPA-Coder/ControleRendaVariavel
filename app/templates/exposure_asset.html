@@ -1,10 +1,11 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% import "partials/exposure.html" as exposure %}
 {% block title %}Alocação por Ativo · Controle de Renda Variável{% endblock %}
-{% block header_controls %}
+{% block workspace_controls %}
 {{ exposure.filters(brokers, portfolios, selected_portfolio_id, selected_broker, 'portfolio.exposure_asset') }}
 {% endblock %}
-{% block content %}
+{% block description %}Entenda como o capital está distribuído entre os ativos, com valores e contribuições na mesma moeda.{% endblock %}
+{% block workspace_content %}
 {% include "partials/exposure_results.html" %}
 {% endblock %}
 {% block scripts %}

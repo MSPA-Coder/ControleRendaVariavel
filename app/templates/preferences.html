@@ -1,6 +1,8 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Minhas preferências{% endblock %}
-{% block content %}
+{% block workspace_area %}Configurações{% endblock %}
+{% block description %}Personalize a apresentação e as referências de cálculo da sua conta.{% endblock %}
+{% block workspace_content %}
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <fieldset>

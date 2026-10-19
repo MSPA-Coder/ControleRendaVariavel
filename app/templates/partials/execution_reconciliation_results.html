@@ -1,43 +1,48 @@
-{# Conferência por pregão: liquidação do CB contra as execuções do myProfit.
-   Somente leitura. A diferença (CRV - CB) é o custo implícito do pregão. #}
+{# A comparação é somente leitura; indisponibilidade nunca significa conferência aprovada. #}
+{% import "partials/trade_cards.html" as trades with context %}
 <div id="execution-reconciliation">
 {% if result.cb_status == 'nao_configurado' %}
-<p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code> para comparar com a liquidação do Controle Bancário. Abaixo, só o que o CRV importou.</p>
+<p class="trade-context-note" role="status"><strong>CB não configurado.</strong> Os pregões abaixo mostram somente os negócios importados no CRV, sem comparação com a liquidação.</p>
+<details class="trade-secondary"><summary>Como habilitar a comparação</summary><p class="workspace-note">Configure a integração com o Controle Bancário: <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p></details>
 {% elif result.cb_status == 'indisponivel' %}
-<p class="form-help" role="alert"><strong>CB indisponível:</strong> {{ result.cb_message }} Abaixo, só o que o CRV importou.</p>
+<p class="trade-context-note" role="alert"><strong>CB indisponível:</strong> {{ result.cb_message }} Os pregões abaixo mostram somente o que o CRV importou, sem comparação.</p>
 {% endif %}
 {% if result.rows %}
-<section class="exposure" aria-label="Conferência por pregão">
-  <div class="exposure-table">
-    <h2>Pregões</h2>
-    <p class="form-help">Tolerância: {{ result.tolerance|currency('BRL') }}. Confere: {{ result.counts['confere'] }} · Diferença: {{ result.counts['diferenca'] }} · Só no CB: {{ result.counts['so_cb'] }} · Só no CRV: {{ result.counts['so_crv'] }}{% if result.executions_out_of_scope %} · {{ result.executions_out_of_scope }} execução(ões) fora de escopo não comparadas{% endif %}.</p>
-    <table>
-      <thead>
-        <tr><th>Pregão</th><th>Corretora</th><th>Estado</th><th>CB (liquidação)</th><th>CRV (execuções)</th><th>Custo implícito (CRV − CB)</th><th>Documentos</th></tr>
-      </thead>
-      <tbody>
-        {% for row in result.rows %}
-        <tr>
-          <td>{{ row.pregao|ushort }}</td>
-          <td>{{ row.broker }}</td>
-          <td>{{ row.state_label }}</td>
-          <td class="number" data-sensitive-value="true">{{ row.cb_amount|currency(row.currency) if row.cb_amount is not none else '-' }}</td>
-          <td class="number" data-sensitive-value="true">{{ row.crv_amount|currency(row.currency) if row.crv_amount is not none else '-' }}</td>
-          <td class="number" data-sensitive-value="true">{{ row.implicit_cost|currency(row.currency) if row.implicit_cost is not none else '-' }}</td>
-          <td>{{ row.documents|join(', ') }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+{% if result.cb_status == 'ok' %}
+<section class="summary" aria-label="Situação da conferência">
+  {% for state, label in [('confere', 'Conferem'), ('diferenca', 'Com diferença'), ('so_cb', 'Somente no CB'), ('so_crv', 'Somente no CRV')] %}
+  <article class="{{ 'workspace-highlight' if state == 'diferenca' }}"><span>{{ label }}</span><strong>{{ result.counts[state] }}</strong><small>Pregões · corretora e moeda</small></article>
+  {% endfor %}
 </section>
 {% else %}
-<p class="empty">Nenhuma execução ou liquidação para este filtro.</p>
+<p class="workspace-note">{{ result.rows|length }} pregão(ões) sem comparação. O estado da liquidação permanece desconhecido.</p>
 {% endif %}
-{% if result.futures_settlements %}
-<p class="form-help">{{ result.futures_settlements }} lançamento(s) de BM&amp;F (futuros) no CB ficaram fora da conferência: o CRV não trata futuros.</p>
+<p class="workspace-note">Tolerância da comparação: <span data-sensitive-value="true">{{ result.tolerance|currency('BRL') }}</span>. Custo implícito = execuções do CRV − liquidação do CB.</p>
+{% for state in ['diferenca', 'so_cb', 'so_crv', 'sem_cb', 'confere'] %}
+{% set rows = result.rows|selectattr('state', 'equalto', state)|list %}
+{% if rows %}
+<section class="workspace-reconciliation-group" aria-label="{{ rows[0].state_label }}">
+  <h2>{{ rows[0].state_label }} · {{ rows|length }}</h2>
+  <div class="trade-card-grid">
+    {% for row in rows %}
+    <article class="trade-card workspace-reconciliation-card">
+      <header><div><h3>{{ row.pregao|udate }}</h3><p>{{ row.broker }} · {{ row.currency }}</p></div><span class="workspace-status {{ 'workspace-status-warning' if row.state != 'confere' }}">{{ row.state_label }}</span></header>
+      <dl class="trade-data-grid">{{ trades.metric('CB · liquidação', row.cb_amount|currency(row.currency) if row.cb_amount is not none else '—') }}{{ trades.metric('CRV · execuções', row.crv_amount|currency(row.currency) if row.crv_amount is not none else '—') }}</dl>
+      <div class="workspace-cost"><span class="trade-label">Custo implícito · CRV − CB</span><strong data-sensitive-value="true">{{ row.implicit_cost|currency(row.currency) if row.implicit_cost is not none else '—' }}</strong></div>
+      <details class="workspace-disclosure"><summary>Contexto e documentos</summary>
+        <p class="workspace-note">{% if row.state == 'sem_cb' %}A integração não forneceu os dados da liquidação. Não é possível concluir se este pregão confere.{% elif row.state == 'so_cb' %}Há liquidação no CB e nenhum negócio em escopo no CRV para esta corretora, data e moeda.{% elif row.state == 'so_crv' %}Há negócios no CRV e nenhuma liquidação no CB para esta corretora, data e moeda.{% elif row.state == 'diferenca' %}Os valores diferem além da tolerância. Consulte os documentos e a liquidação para entender o custo implícito.{% else %}A diferença está dentro da tolerância da conferência.{% endif %}</p>
+        <h4 class="trade-label">Documentos do CRV</h4><p class="workspace-note">{{ row.documents|join(', ') or 'Nenhum documento do CRV para este pregão.' }}</p>
+      </details>
+    </article>
+    {% endfor %}
+  </div>
+</section>
 {% endif %}
-{% if result.without_pregao %}
-<p class="form-help">{{ result.without_pregao|length }} lançamento(s) de “Operações em Bolsa” no CB sem data de pregão identificável ficaram fora da conferência.</p>
+{% endfor %}
+{% else %}
+<div class="trade-empty"><span aria-hidden="true">✓</span><h2>Nenhum pregão neste filtro</h2><p>Importe os negócios para conferir a liquidação por corretora e data.</p><a class="button" href="{{ url_for('portfolio.import_executions') }}">Importar negócios</a></div>
 {% endif %}
+{% if result.executions_out_of_scope %}<p class="workspace-note">{{ result.executions_out_of_scope }} execução(ões) fora de escopo não comparadas.</p>{% endif %}
+{% if result.futures_settlements %}<p class="workspace-note">{{ result.futures_settlements }} lançamento(s) de BM&amp;F (futuros) no CB ficaram fora da conferência: o CRV não trata futuros.</p>{% endif %}
+{% if result.without_pregao %}<p class="workspace-note">{{ result.without_pregao|length }} lançamento(s) de “Operações em Bolsa” no CB sem data de pregão identificável ficaram fora da conferência.</p>{% endif %}
 </div>

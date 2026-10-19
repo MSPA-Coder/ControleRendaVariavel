@@ -5,7 +5,7 @@
 {% macro filters(brokers, portfolios, selected_portfolio_id, selected_broker, clear_endpoint) %}
 {# hx-get aponta para a propria pagina, nao para uma rota de fragmento: e
    isso que faz o historico do navegador receber a URL real da pagina. #}
-<form class="filters header-controls" method="get"
+<form class="filters" method="get"
       hx-get="{{ url_for(clear_endpoint) }}"
       hx-trigger="change"
       hx-target="#exposure-results"

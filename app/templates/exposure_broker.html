@@ -1,10 +1,11 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% import "partials/exposure.html" as exposure %}
 {% block title %}Exposição por Corretora · Controle de Renda Variável{% endblock %}
-{% block header_controls %}
+{% block workspace_controls %}
 {{ exposure.filters(brokers, portfolios, selected_portfolio_id, selected_broker, 'portfolio.exposure_broker') }}
 {% endblock %}
-{% block content %}
+{% block description %}Veja a distribuição entre corretoras e confira quais posições contribuem para cada exposição.{% endblock %}
+{% block workspace_content %}
 {% include "partials/exposure_results.html" %}
 {% endblock %}
 {% block scripts %}

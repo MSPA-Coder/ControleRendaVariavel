@@ -1,0 +1,19 @@
+{% set calc = derived.get(entry.id) %}
+<article class="workspace-event">
+  <div class="workspace-event-heading">
+    <div><h4>{{ entry.kind|income_kind_label }} · {{ entry.payment_date|udate }}</h4><p>{{ entry.broker }} · {{ 'Controle Bancário · somente leitura' if entry.from_cb else 'Planilha / lançamento manual' }}</p></div>
+    <div class="workspace-event-value"><span class="trade-label">Valor líquido</span><strong class="positive" data-sensitive-value="true">{{ entry.amount|currency(entry.currency) }}</strong></div>
+  </div>
+  <details class="workspace-disclosure"><summary>Detalhes do recebimento · {{ entry.payment_date|ushort }}</summary>
+    <dl class="trade-data-grid">
+      <div><dt>Data com</dt><dd>{{ entry.com_date|udate if entry.com_date else '—' }}</dd></div>
+      {{ trades.metric('Valor bruto', entry.gross_amount|currency(entry.currency) if entry.gross_amount is not none else '—') }}
+      {{ trades.metric('Retenções', entry.withheld_amount|currency(entry.currency) if entry.withheld_amount is not none else '—') }}
+      <div><dt>Evento/custo</dt><dd data-sensitive-value="true"{% if entry.yield_on_cost is none and calc %} title="Calculado sobre a posição na data do pagamento e o custo médio atual"{% endif %}>{{ entry.yield_on_cost|percent_points(2) if entry.yield_on_cost is not none else (calc.yield_on_cost|percent_points(2) if calc and calc.yield_on_cost is not none else '—') }}</dd></div>
+      <div><dt>DY do evento</dt><dd data-sensitive-value="true"{% if entry.dividend_yield is none and calc %} title="Calculado sobre a posição e a cotação na data do pagamento"{% endif %}>{{ entry.dividend_yield|percent_points(2) if entry.dividend_yield is not none else (calc.dividend_yield|percent_points(2) if calc and calc.dividend_yield is not none else '—') }}</dd></div>
+      <div><dt>Cotas</dt><dd data-sensitive-value="true"{% if entry.quotas is none and calc %} title="Quantidade comprada na corretora na data do pagamento"{% endif %}>{{ entry.quotas|number(8, trim=true) if entry.quotas is not none else (calc.quotas|number(8, trim=true) if calc else '—') }}</dd></div>
+    </dl>
+    {% if entry.notes %}<p class="workspace-notes" data-sensitive-value="true">{{ entry.notes }}</p>{% endif %}
+    {% if entry.from_cb %}<p class="workspace-note">Somente leitura. O líquido corresponde ao caixa do Controle Bancário; a origem deste lançamento é preservada.</p>{% else %}<a class="button" href="{{ url_for('portfolio.edit_dividend', dividend_id=entry.id) }}">Editar provento</a>{% endif %}
+  </details>
+</article>

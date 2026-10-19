@@ -1,5 +1,7 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Carteiras{% endblock %}
-{% block content %}
+{% block workspace_area %}Cadastros{% endblock %}
+{% block description %}Organize posições reais e simuladas e consulte os tickers associados a cada carteira.{% endblock %}
+{% block workspace_content %}
 {% include "partials/portfolios_results.html" %}
 {% endblock %}

@@ -1,0 +1,14 @@
+<header class="trade-heading">
+  <div>
+    <p class="trade-eyebrow">Carteira / {{ 'Opções' if is_option else 'Ações' }}</p>
+    <h1>{{ 'Cada contrato, no seu tempo.' if is_option else 'Sua carteira, em perspectiva.' }}</h1>
+    <p class="trade-description">{{ 'Acompanhe resultado, prazo e exposição. Abra o contrato para explorar os detalhes.' if is_option else 'O essencial de cada posição, com histórico, metas e indicadores ao seu alcance.' }}</p>
+  </div>
+  <div class="trade-heading-actions">
+    <nav class="trade-switch" aria-label="Tipo de posição">
+      <a href="{{ url_for('portfolio.index') }}"{{ ' aria-current="page"'|safe if not is_option }}>Ações</a>
+      <a href="{{ url_for('options.index') }}"{{ ' aria-current="page"'|safe if is_option }}>Opções</a>
+    </nav>
+    <a class="button button-primary" href="{{ url_for('options.new_position' if is_option else 'portfolio.new_position') }}">＋ Nova posição</a>
+  </div>
+</header>

@@ -1,0 +1,17 @@
+{% if performance_by_currency %}
+{% for summary in performance_by_currency %}
+<section class="summary" aria-label="Resultado de transações em {{ summary.currency }}">
+  <article class="workspace-highlight"><span>Resultado realizado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}" data-sensitive-value="true">{{ summary.result|currency(summary.currency) }}</strong><small>Somente operações encerradas, dentro dos filtros</small></article>
+  <article><span>Ganhos · {{ summary.currency }}</span><strong class="positive" data-sensitive-value="true">{{ summary.gain|currency(summary.currency) }}</strong></article>
+  <article><span>Perdas · {{ summary.currency }}</span><strong class="negative" data-sensitive-value="true">{{ summary.loss|currency(summary.currency) }}</strong></article>
+</section>
+<details class="trade-secondary"><summary>Indicadores das operações encerradas · {{ summary.currency }}</summary>
+  <dl class="trade-data-grid">
+    <div><dt title="Transações positivas sobre o total de encerradas">Win rate</dt><dd data-sensitive-value="true">{{ summary.win_rate|percent if summary.win_rate is not none else '—' }}</dd></div>
+    <div><dt title="Ganhos totais divididos pelas perdas totais em módulo">Profit factor</dt><dd data-sensitive-value="true">{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '—' }}</dd></div>
+    <div><dt title="Média dos ganhos dividida pela média das perdas em módulo">Payoff ratio</dt><dd data-sensitive-value="true">{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '—' }}</dd></div>
+    <div><dt>Tempo médio em posição</dt><dd data-sensitive-value="true">{{ summary.avg_days_held|number(1) ~ ' dias' if summary.avg_days_held is not none else '—' }}</dd></div>
+  </dl>
+</details>
+{% endfor %}
+{% endif %}

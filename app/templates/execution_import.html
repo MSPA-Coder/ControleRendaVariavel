@@ -1,9 +1,10 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Importar negócios do myProfit{% endblock %}
-{% block content %}
+{% block workspace_title %}Importar negócios do myProfit{% endblock %}
+{% block workspace_content %}
 <form class="position-form" method="post" enctype="multipart/form-data" action="{{ url_for('portfolio.import_executions') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h1>Importar negócios do myProfit</h1>
+
   <p class="form-help">Selecione o relatório <strong>Histórico de investimentos</strong> do myProfit em XLSX (até 2 MB). O nome e o CPF do cabeçalho são descartados e nunca gravados. Esta importação não altera posições, transações nem proventos: ela só registra os negócios para a conferência com o CB.</p>
   <p class="form-help">O padrão é o <strong>ensaio</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”.</p>
   <label>Relatório XLSX<input required type="file" name="report" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>

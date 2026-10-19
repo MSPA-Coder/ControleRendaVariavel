@@ -1,185 +1,50 @@
-{# Resultado de Proventos: relatório por ativo/ano e resumo por moeda e tipo.
-
-   Sem lista bruta separada: os dois drill-downs (`+` em "Por ativo" e em
-   "Por ano") já mostram cada lançamento individual, e editar continua
-   possível a partir de lá — uma terceira lista plana com tudo de novo só
-   duplicaria o que os cards já respondem.
-
-   Envolvido por um único wrapper para que a troca via HTMX (hx-swap
-   outerHTML) substitua os blocos juntos, mantendo-os sempre consistentes
-   com o mesmo filtro e com o mesmo estado de drill-down (ver
-   `expanded_tickers`/`expanded_years` abaixo).
-#}
+{# Filtros e expansões continuam trocando o mesmo fragmento HTMX. #}
+{% import "partials/trade_cards.html" as trades with context %}
 <div id="dividends-results">
-{% if report.by_ticker or report.by_year %}
-<section class="exposure dividend-report" aria-label="Relatório de proventos">
-  {% if report.by_ticker %}
-  {# Mais larga que "Por ano": ganhou uma coluna por tipo de renda (ver
-     dividend_report.TickerDividendTotal.amount_by_kind). #}
-  <div class="exposure-table">
-    <h2>Por ativo</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Ticker</th>
-          {% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}
-          <th>Recebido</th>
-          <th>DY 12m</th>
-          <th>YOC 12m</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% set ticker_columns = 4 + income_kinds|length %}
-        {% for total in report.by_ticker %}
-        {% set expanded = total.ticker_id in expanded_tickers %}
-        <tr>
-          <td>
-            <button type="button" class="row-toggle"
-                    hx-get="{{ ticker_toggle_urls[total.ticker_id] }}"
-                    hx-target="#dividends-results" hx-swap="outerHTML"
-                    aria-expanded="{{ 'true' if expanded else 'false' }}"
-                    title="{{ total.entries|length }} provento(s) recebido(s)"
-                    aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os proventos de {{ total.ticker }}">{{ '−' if expanded else '+' }}</button>
-            {{ total.ticker }}
-          </td>
-          {% for kind in income_kinds %}
-          {% set recebido = total.amount_by_kind.get(kind.value) %}
-          <td class="number" data-sensitive-value="true">{{ recebido|currency(total.currency) if recebido else '-' }}</td>
-          {% endfor %}
-          <td class="number" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</td>
-          <td class="number" data-sensitive-value="true">{{ total.dividend_yield_12m|percent(2) if total.dividend_yield_12m is not none else '-' }}</td>
-          <td class="number" data-sensitive-value="true">{{ total.yield_on_cost_current|percent(2) if total.yield_on_cost_current is not none else '-' }}</td>
-        </tr>
-        {% if expanded %}
-        <tr class="movement-detail">
-          <td colspan="{{ ticker_columns }}">
-            <table class="movements-table">
-              <thead>
-                <tr><th>Corretora</th><th>Origem</th><th>Pagamento</th><th>Data com</th><th>Tipo</th><th>Valor líquido</th><th>Bruto</th><th>Retenções</th><th>Evento/custo</th><th>DY</th><th>Cotas</th><th></th></tr>
-              </thead>
-              <tbody>
-                {% for entry in total.entries %}
-                {% set calc = derived.get(entry.id) %}
-                <tr>
-                  <td>{{ entry.broker }}</td>
-                  <td>{% if entry.from_cb %}<span title="Lido do Controle Bancário (somente leitura): o valor é o líquido que entrou no caixa.">CB</span>{% else %}<span title="Lançado à mão ou importado da planilha do myProfit.">Planilha</span>{% endif %}</td>
-                  <td>{{ entry.payment_date|ushort }}</td>
-                  <td>{{ entry.com_date|ushort if entry.com_date else '' }}</td>
-                  <td>{{ entry.kind|income_kind_label }}</td>
-                  <td class="number" data-sensitive-value="true">{{ entry.amount|currency(entry.currency) }}</td>
-                  <td class="number" data-sensitive-value="true">{{ entry.gross_amount|currency(entry.currency) if entry.gross_amount is not none else '' }}</td>
-                  <td class="number" data-sensitive-value="true">{{ entry.withheld_amount|currency(entry.currency) if entry.withheld_amount else '' }}</td>
-                  {# Sem cotas na linha (as do CB), YOC, DY e cotas são calculados sobre as posições; o title avisa. #}
-                  {% if entry.yield_on_cost is not none %}
-                  <td class="number" data-sensitive-value="true">{{ entry.yield_on_cost|percent_points(2) }}</td>
-                  {% elif calc and calc.yield_on_cost is not none %}
-                  <td class="number" data-sensitive-value="true" title="Calculado sobre a posição na data do pagamento e o custo médio atual">{{ calc.yield_on_cost|percent_points(2) }}</td>
-                  {% else %}<td></td>{% endif %}
-                  {% if entry.dividend_yield is not none %}
-                  <td class="number" data-sensitive-value="true">{{ entry.dividend_yield|percent_points(2) }}</td>
-                  {% elif calc and calc.dividend_yield is not none %}
-                  <td class="number" data-sensitive-value="true" title="Calculado sobre a posição e a cotação na data do pagamento">{{ calc.dividend_yield|percent_points(2) }}</td>
-                  {% else %}<td></td>{% endif %}
-                  {% if entry.quotas is not none %}
-                  <td class="number" data-sensitive-value="true">{{ entry.quotas|number(8, trim=true) }}</td>
-                  {% elif calc %}
-                  <td class="number" data-sensitive-value="true" title="Quantidade comprada na corretora na data do pagamento">{{ calc.quotas|number(8, trim=true) }}</td>
-                  {% else %}<td></td>{% endif %}
-                  <td>{% if entry.from_cb %}somente leitura{% else %}<a href="{{ url_for('portfolio.edit_dividend', dividend_id=entry.id) }}">editar</a>{% endif %}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-        {% endif %}
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-  {% if report.by_year %}
-  <div class="exposure-table">
-    <h2>Por ano</h2>
-    <table>
-      <thead><tr><th>Ano</th><th>Recebido</th></tr></thead>
-      <tbody>
-        {% for total in report.by_year %}
-        {% set token = total.year ~ '-' ~ total.currency %}
-        {% set expanded = token in expanded_years %}
-        <tr>
-          <td>
-            <button type="button" class="row-toggle"
-                    hx-get="{{ year_toggle_urls[token] }}"
-                    hx-target="#dividends-results" hx-swap="outerHTML"
-                    aria-expanded="{{ 'true' if expanded else 'false' }}"
-                    title="{{ total.months|length }} mês(es) com provento"
-                    aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os meses de {{ total.year }}">{{ '−' if expanded else '+' }}</button>
-            {{ total.year }}{{ ' · ' + total.currency if total.currency != 'BRL' }}
-          </td>
-          <td class="number" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</td>
-        </tr>
-        {% if expanded %}
-        <tr class="movement-detail">
-          <td colspan="2">
-            {# `movements-table-narrow`: só 2 colunas (Mês, Recebido) não
-               precisam do min-width de 42rem de `.movements-table` — nesse
-               card estreito (1fr, ver .dividend-report), esse mínimo
-               empurrava a tabela para fora da área visível e a coluna
-               Recebido ficava fora do card. #}
-            <table class="movements-table movements-table-narrow">
-              <thead><tr><th>Mês</th><th>Recebido</th></tr></thead>
-              <tbody>
-                {% for month in total.months %}
-                <tr>
-                  <td>{{ month.month.strftime('%m/%Y') }}</td>
-                  <td class="number" data-sensitive-value="true">{{ month.total_amount|currency(month.currency) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-        {% endif %}
-        {% endfor %}
-      </tbody>
-      {% if cutoff_subtotals %}
-      <tfoot>
-        {% for currency, total, count in cutoff_subtotals %}
-        <tr title="{{ count }} provento(s) pagos antes de {{ cutoff|udate }}, congelados; a partir dessa data o CB é a fonte (reais) e a planilha segue valendo para dólar e Avenue.">
-          <td>Até {{ cutoff_last_day|udate }} · saldo de corte{{ ' · ' + currency if currency != 'BRL' }}</td>
-          <td class="number" data-sensitive-value="true">{{ total|currency(currency) }}</td>
-        </tr>
-        {% endfor %}
-      </tfoot>
-      {% endif %}
-    </table>
-  </div>
-  {% endif %}
-</section>
-{% else %}
-<p class="form-help">Nenhum provento registrado.</p>
-{% endif %}
-
 {% if totals_by_currency %}
-{# No final: o total por tipo de renda, na mesma ordem de coluna do card
-   "Por ativo" acima, seguido do total geral por moeda — a soma das partes
-   por último, não antes delas (mesmo critério da coluna Recebido lá em
-   cima). Todos na mesma linha, qualquer que seja a quantidade de cartões —
-   `dividend-summary` resolve isso com `grid-auto-flow: column` no CSS, sem
-   inline style: a CSP do app (`app/__init__.py`) não libera
-   `'unsafe-inline'` em `style-src`, e um `style="..."` aqui seria
-   silenciosamente ignorado pelo navegador. #}
-<section class="summary dividend-summary" aria-label="Total de proventos por tipo e por moeda">
-  {% for kind, currency, total in totals_by_kind_currency %}
-    <article><span>{{ kind|income_kind_label }} · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
-  {% endfor %}
+<section class="summary" aria-label="Total de proventos por moeda">
   {% for currency, total in totals_by_currency %}
-    <article><span>Total recebido · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
+  <article class="workspace-highlight"><span>Total recebido · {{ currency }}</span><strong class="positive" data-sensitive-value="true">{{ total|currency(currency) }}</strong><small>Histórico de recebimentos, conforme os filtros</small></article>
   {% endfor %}
-  {% for currency, total, count in cutoff_subtotals %}
-    <article><span>Até {{ cutoff_last_day|udate }} · {{ currency }}</span><strong data-sensitive-value="true">{{ total|currency(currency) }}</strong></article>
+</section>
+<details class="trade-secondary"><summary>Composição por tipo de provento e saldo de corte</summary>
+  <dl class="trade-data-grid">
+    {% for kind, currency, total in totals_by_kind_currency %}{{ trades.metric((kind|income_kind_label) ~ ' · ' ~ currency, total|currency(currency)) }}{% endfor %}
+    {% for currency, total, count in cutoff_subtotals %}{{ trades.metric('Até ' ~ (cutoff_last_day|udate) ~ ' · ' ~ currency, total|currency(currency)) }}{% endfor %}
+  </dl>
+</details>
+{% endif %}
+{% if report.by_ticker %}
+<div class="workspace-section-heading"><h2>Recebimentos por ativo</h2><p>Do total recebido aos eventos individuais. DY e YOC consideram os últimos 12 meses.</p></div>
+<section class="trade-card-grid" aria-label="Proventos por ativo">
+  {% for total in report.by_ticker %}
+  {% set expanded = total.ticker_id in expanded_tickers %}
+  <article class="trade-card workspace-dividend-card">
+    <header><span class="trade-avatar" aria-hidden="true">{{ total.ticker[:2] }}</span><div><h3>{{ total.ticker }}</h3><p>{{ total.currency }} · {{ total.entries|length }} recebimento(s)</p></div></header>
+    <div class="workspace-income-total"><span class="trade-label">Total recebido</span><strong class="positive" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</strong></div>
+    <dl class="trade-card-metrics">{{ trades.metric('DY 12m', total.dividend_yield_12m|percent(2) if total.dividend_yield_12m is not none else '—') }}{{ trades.metric('YOC 12m', total.yield_on_cost_current|percent(2) if total.yield_on_cost_current is not none else '—') }}</dl>
+    <details class="workspace-disclosure"><summary>Composição por tipo</summary><dl class="trade-data-grid">
+      {% for kind in income_kinds %}{% set received = total.amount_by_kind.get(kind.value) %}{{ trades.metric(kind|income_kind_label, received|currency(total.currency) if received is not none else '—') }}{% endfor %}
+    </dl></details>
+    <button type="button" class="row-toggle"
+            hx-get="{{ ticker_toggle_urls[total.ticker_id] }}" hx-target="#dividends-results" hx-swap="outerHTML"
+            aria-controls="dividend-events-{{ total.ticker_id }}" aria-expanded="{{ 'true' if expanded else 'false' }}"
+            aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os proventos de {{ total.ticker }}">{{ '− Ocultar recebimentos' if expanded else '+ Ver recebimentos' }} →</button>
+  </article>
+  {% if expanded %}
+  <section id="dividend-events-{{ total.ticker_id }}" class="workspace-dividend-entries" aria-label="Recebimentos de {{ total.ticker }}">
+    <h3>{{ total.ticker }} · eventos recebidos</h3>
+    {% for entry in total.entries %}{% include "partials/dividend_event.html" %}{% endfor %}
+  </section>
+  {% endif %}
   {% endfor %}
+</section>
+{% elif not report.by_year %}
+<div class="trade-empty"><span aria-hidden="true">↗</span><h2>Nenhum provento neste filtro</h2><p>Os recebimentos serão organizados por ativo e por ano.</p><a class="button" href="{{ url_for('portfolio.new_dividend') }}">Registrar provento</a></div>
+{% endif %}
+{% if report.by_year %}
+<section class="workspace-year" aria-label="Proventos por ano">
+  <div class="table-wrap">{% include "partials/dividend_years.html" %}</div>
 </section>
 {% endif %}
 </div>

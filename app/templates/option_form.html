@@ -1,14 +1,15 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% set editing = edit_mode if edit_mode is defined else (position and position.id is defined) %}
 {% block title %}{{ "Editar" if editing else "Nova" }} opção{% endblock %}
-{% block content %}
+{% block workspace_title %}{{ "Editar" if editing else "Nova" }} posição de opção{% endblock %}
+{% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('options.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('options.create_position') }}"
       {# Mesma guarda de `position_form.html`, para opcoes -- trocar a
          carteira para a Simulada ao editar apaga o extrato inteiro. #}
       {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ movement_count|default(0) }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if not editing %}<input type="hidden" name="submit_token" value="{{ request.form.get('submit_token') or new_submission_token() }}">{% endif %}
-  <h1>{{ "Editar" if editing else "Nova" }} posição de opção</h1>
+
   {% if duplicate_warning %}
   <p class="form-warning" role="alert">
     <strong>Lançamento idêntico ao anterior.</strong>
