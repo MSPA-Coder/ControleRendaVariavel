@@ -1,6 +1,8 @@
 {# Regiao trocada pelo filtro em performance.html. Fica em parcial para que
    a pagina e a resposta HTMX saiam do mesmo template. #}
 <div id="performance-results">
+<p class="trade-context-note">O retorno mensal neutraliza aportes e retiradas e inclui proventos. Para posições vendidas, a performance não desconta repasses ao doador e encargos do aluguel; ela fica incompleta e não substitui a apuração oficial.</p>
+<details class="trade-secondary"><summary>Como interpretar a performance e a comparação</summary>
 <p class="form-help">
   Exposição líquida e retorno mensal a partir das cotações em
   <a href="{{ url_for('portfolio.quote_history') }}">Cotações</a>. O valor de
@@ -27,6 +29,7 @@
   da posição mais antiga em cada moeda.
   {% endif %}
 </p>
+</details>
 
 {% if reports %}
   <div class="monthly-performance-grid">
@@ -37,9 +40,15 @@
         <h2>{{ report.currency }}</h2>
       </header>
       {% if report.points %}
+      {% set latest = report.points[-1] %}
+      <section class="summary" aria-label="Último mês exibido em {{ report.currency }}">
+        <article class="workspace-highlight"><span>Exposição líquida · {{ latest.month.strftime('%m/%Y') }}</span><strong data-sensitive-value="true">{{ latest.ending_value|currency(report.currency) }}</strong><small>{{ report.currency }} · até os dados disponíveis</small></article>
+        <article><span>Retorno do mês exibido</span><strong class="{{ latest.return_pct|sign_class }}" data-sensitive-value="true">{{ latest.return_pct|percent(2) if latest.return_pct is not none else '—' }}</strong><small>Com aportes e retiradas neutralizados</small></article>
+        <article><span>Aporte líquido no mês exibido</span><strong data-sensitive-value="true">{{ latest.net_flow|currency(report.currency) }}</strong><small>Entrada ou retirada de capital</small></article>
+      </section>
       <div class="monthly-performance-chart-card">
         <div class="chart-card-header">
-          <strong>Gráfico</strong>
+          <strong>Evolução da exposição líquida · {{ report.currency }}</strong>
         </div>
         {% if chart_points %}
         <div class="monthly-performance-chart chart-box"
@@ -57,7 +66,7 @@
       </div>
 
       <details class="monthly-performance-data-card">
-        <summary>Dados</summary>
+        <summary>Detalhamento mensal · exposição, aportes, proventos e retorno</summary>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Mês</th><th>Exposição líquida</th><th>Aporte líquido</th>{% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}<th>Retorno mensal</th></tr></thead>

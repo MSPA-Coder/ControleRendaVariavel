@@ -1,9 +1,10 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Encerrar posição de opção{% endblock %}
-{% block content %}
+{% block workspace_title %}Encerrar {{ position.contract.ticker_ref.symbol }} · {{ position.broker }}{% endblock %}
+{% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('options.close_position', position_id=position.id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h1>Encerrar {{ position.contract.ticker_ref.symbol }} · {{ position.broker }}</h1>
+
   <p class="form-help">
     Isso registra o resultado realizado em <a href="{{ url_for('portfolio.transactions') }}">Transações</a>.
     Encerrando a quantidade inteira, a posição sai da grade de Opções; encerrando uma parte, o saldo

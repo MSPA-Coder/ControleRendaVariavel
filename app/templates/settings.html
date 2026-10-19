@@ -1,8 +1,10 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {# Import proprio: o de base.html nao alcanca os blocos filhos. #}
 {% import "partials/collector.html" as collector %}
 {% block title %}Configurações · Controle de Renda Variável{% endblock %}
-{% block content %}
+{% block workspace_title %}Coletor e cálculos{% endblock %}
+{% block description %}Administração do coletor, da agenda e dos parâmetros globais de cálculo.{% endblock %}
+{% block workspace_content %}
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <fieldset class="collector-settings-card collector-cycle-card">

@@ -1,9 +1,12 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Contratos de opções{% endblock %}
-{% block content %}
+{% block workspace_area %}Cadastros{% endblock %}
+{% block description %}Consulte o ativo-objeto, tipo, strike e vencimento de cada opção.{% endblock %}
+{% block workspace_content %}
 <section class="catalog-card">
-  <h2>Contratos de opções</h2>
-  <form class="catalog-create contract-fields" method="post" action="{{ url_for('options.create_contract') }}">
+  <h2>Registros cadastrados</h2>
+  <details class="workspace-create"><summary>Adicionar contrato</summary>
+<form class="catalog-create contract-fields" method="post" action="{{ url_for('options.create_contract') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Ticker da opção<select required name="ticker_id">
       <option value="">Selecione</option>
@@ -25,6 +28,7 @@
             data-sa-confirmar="Adicionar este contrato de opção?"
             data-sa-titulo="Adicionar contrato" data-sa-severidade="warning">Adicionar</button>
   </form>
+</details>
   <div class="table-wrap">
     <table class="catalog-table">
       <thead><tr><th>Opção</th><th>Ativo</th><th>Tipo</th><th>Vencimento</th><th>Strike</th><th>Ações</th></tr></thead>

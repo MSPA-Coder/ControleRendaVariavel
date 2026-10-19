@@ -87,7 +87,7 @@
          aria-label="Gráfico de linha com a série histórica de cotações de {{ selected_ticker.symbol }}{{ ' comparada à evolução de ' + selected_benchmark.symbol + ' desde a primeira data com cotação para os dois ativos' if selected_benchmark else ' em escala logarítmica' }}"></div>
     {% endif %}
     {% if history %}
-    <div class="quote-history-browser" aria-label="Cotações registradas">
+<details class="trade-secondary"><summary>Cotações registradas por mês</summary>    <div class="quote-history-browser" aria-label="Cotações registradas">
       {% for year, year_entries in history|reverse|groupby('recorded_date.year') %}
         <section class="quote-history-year">
           <h3>{{ year }}</h3>
@@ -108,7 +108,7 @@
           </div>
         </section>
       {% endfor %}
-    </div>
+    </div></details>
     {% else %}
     <p class="form-help">Ainda não há cotações históricas registradas para {{ selected_ticker.symbol }}.</p>
     {% endif %}

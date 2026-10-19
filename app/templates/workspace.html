@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='trades.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='workspace.css') }}">
+{% endblock %}
+{% block content %}
+<div class="trade-page workspace-page">
+  <header class="trade-heading">
+    <div>
+      <p class="trade-eyebrow">{% block workspace_area %}{{ crumb[0] or 'Carteira' }}{% endblock %} · Controle de Renda Variável</p>
+      <h1>{% block workspace_title %}{{ self.title().split(' · ')[0].split(' - ')[0] }}{% endblock %}</h1>
+      {% set description_html %}{% block description %}{% endblock %}{% endset %}
+      {% if description_html|trim %}<p class="trade-description">{{ description_html }}</p>{% endif %}
+    </div>
+    <div class="workspace-actions">{% block workspace_actions %}{% endblock %}</div>
+  </header>
+  {% set controls %}{% block workspace_controls %}{% endblock %}{% endset %}
+  {% if controls|trim %}<div class="workspace-toolbar">{{ controls }}</div>{% endif %}
+  {% block workspace_content %}{% endblock %}
+</div>
+{% endblock %}

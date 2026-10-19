@@ -1,0 +1,58 @@
+{% if report.by_year %}
+  <div class="exposure-table">
+    <h2>Por ano</h2>
+    <table>
+      <thead><tr><th>Ano</th><th>Recebido</th></tr></thead>
+      <tbody>
+        {% for total in report.by_year %}
+        {% set token = total.year ~ '-' ~ total.currency %}
+        {% set expanded = token in expanded_years %}
+        <tr>
+          <td>
+            <button type="button" class="row-toggle"
+                    hx-get="{{ year_toggle_urls[token] }}"
+                    hx-target="#dividends-results" hx-swap="outerHTML"
+                    aria-expanded="{{ 'true' if expanded else 'false' }}"
+                    title="{{ total.months|length }} mês(es) com provento"
+                    aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os meses de {{ total.year }}">{{ '−' if expanded else '+' }}</button>
+            {{ total.year }}{{ ' · ' + total.currency if total.currency != 'BRL' }}
+          </td>
+          <td class="number" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</td>
+        </tr>
+        {% if expanded %}
+        <tr class="movement-detail">
+          <td colspan="2">
+            {# `movements-table-narrow`: só 2 colunas (Mês, Recebido) não
+               precisam do min-width de 42rem de `.movements-table` — nesse
+               card estreito (1fr, ver .dividend-report), esse mínimo
+               empurrava a tabela para fora da área visível e a coluna
+               Recebido ficava fora do card. #}
+            <table class="movements-table movements-table-narrow">
+              <thead><tr><th>Mês</th><th>Recebido</th></tr></thead>
+              <tbody>
+                {% for month in total.months %}
+                <tr>
+                  <td>{{ month.month.strftime('%m/%Y') }}</td>
+                  <td class="number" data-sensitive-value="true">{{ month.total_amount|currency(month.currency) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+      {% if cutoff_subtotals %}
+      <tfoot>
+        {% for currency, total, count in cutoff_subtotals %}
+        <tr title="{{ count }} provento(s) pagos antes de {{ cutoff|udate }}, congelados; a partir dessa data o CB é a fonte (reais) e a planilha segue valendo para dólar e Avenue.">
+          <td>Até {{ cutoff_last_day|udate }} · saldo de corte{{ ' · ' + currency if currency != 'BRL' }}</td>
+          <td class="number" data-sensitive-value="true">{{ total|currency(currency) }}</td>
+        </tr>
+        {% endfor %}
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+  {% endif %}

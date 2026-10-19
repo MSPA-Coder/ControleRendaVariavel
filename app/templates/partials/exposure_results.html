@@ -3,7 +3,16 @@
    diferem apenas nos rotulos e em ter ou nao tabela de grupos, entao um
    unico fragmento atende as tres sem duplicar apresentacao. #}
 <div id="exposure-results">
+
+
+{% if allocation_charts %}
+{{ exposure.charts(allocation_charts, heading, subject, converted_chart) }}
+{% elif not group_rows and not missing_quote_rows %}
+{{ exposure.empty_state() }}
+{% endif %}
+
 {% if group_rows %}
+<details class="trade-secondary"><summary>Detalhamento por {{ group_heading|lower }}</summary>
 <div class="exposure-table">
   <table>
     <thead>
@@ -21,12 +30,7 @@
     </tbody>
   </table>
 </div>
-{% endif %}
-
-{% if allocation_charts %}
-{{ exposure.charts(allocation_charts, heading, subject, converted_chart) }}
-{% elif not group_rows and not missing_quote_rows %}
-{{ exposure.empty_state() }}
+</details>
 {% endif %}
 
 {% if missing_quote_rows %}

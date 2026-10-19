@@ -1,10 +1,11 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% import "partials/exposure.html" as exposure %}
 {% block title %}Exposição por Mercado · Controle de Renda Variável{% endblock %}
-{% block header_controls %}
+{% block workspace_controls %}
 {{ exposure.filters(brokers, portfolios, selected_portfolio_id, selected_broker, 'portfolio.exposure_market') }}
 {% endblock %}
-{% block content %}
+{% block description %}Compare a participação de cada mercado, com moedas identificadas e conversão quando disponível.{% endblock %}
+{% block workspace_content %}
 {% include "partials/exposure_results.html" %}
 {% endblock %}
 {% block scripts %}

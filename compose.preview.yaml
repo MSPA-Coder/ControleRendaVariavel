@@ -4,6 +4,8 @@ name: crv-interface-preview
 services:
   browser-web:
     image: crv-interface-preview:local
+    environment:
+      BROWSER_REUSE_SCENARIO: "1"
     ports:
       - "127.0.0.1:5382:5003"
   browser-tests:

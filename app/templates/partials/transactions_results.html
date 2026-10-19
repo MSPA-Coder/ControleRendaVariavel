@@ -1,114 +1,44 @@
-{# Resultado de Transações: tabela e resumo de performance.
-
-   Envolvido por um único wrapper para que a troca via HTMX (hx-swap
-   outerHTML) substitua tabela e resumo juntos, mantendo os dois sempre
-   consistentes com o mesmo filtro.
-#}
+{# O wrapper mantém lista e resumo consistentes a cada filtro HTMX. #}
+{% import "partials/trade_cards.html" as trades with context %}
 <div id="transactions-results">
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>Status</th><th>Corr.</th><th>Ticker</th><th>Tipo</th><th>Qtde</th><th>Custo médio</th>
-        <th>Saída</th><th>Resultado</th><th>Abertura</th><th>Encerramento</th>
-        <th>Dias</th><th>Carteira</th><th>Notas</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for tx in transactions %}
-      <tr class="{{ 'transaction-open' if tx.status.value == 'open' }}">
-        <td><span class="tag {{ 'tag-open' if tx.status.value == 'open' else 'tag-closed' }}">{{ 'Aberta' if tx.status.value == 'open' else 'Fechada' }}</span></td>
-        <td>{{ tx.broker }}</td>
-        <td>
-          {% if tx.status.value == 'open' or tx.id in partial_close_ids %}
-            {% set edit_endpoint = 'options.edit_position' if tx.option_contract_id else 'portfolio.edit_position' %}
-            <a href="{{ url_for(edit_endpoint, position_id=tx.source_position_id) }}">{{ tx.ticker }}</a>
-          {% elif tx.option_contract_id %}
-            {# Transação de opção sem posição viva: registro histórico
-               independente, não editável pelo formulário genérico de ações
-               (ver `_option_edit_guard` em app/routes/transactions.py). #}
-            <span>{{ tx.ticker }}</span>
-          {% else %}
-            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">{{ tx.ticker }}</a>
-          {% endif %}
-          {% if tx.option_contract_id %}
-            {% set c = tx.option_contract_ref %}
-            <br><small>{{ c.option_type.value|upper }} · <span data-sensitive-value="true">{{ c.strike|currency(tx.currency, trim=true) }}</span> · {{ c.expiration.exercise_date|ushort }}</small>
-          {% endif %}
-        </td>
-        <td>{{ tx.side.value }}</td>
-        <td class="number" data-sensitive-value="true">{{ tx.quantity|quantity(tx.currency) }}</td>
-        <td class="number" data-sensitive-value="true">{{ tx.average_cost|currency(tx.currency) }}</td>
-        <td class="number" data-sensitive-value="true">{{ tx.exit_price|currency(tx.currency) }}</td>
-        <td class="number {{ tx.result|sign_class }}" data-sensitive-value="true">{{ tx.result|currency(tx.currency) }}</td>
-        <td>{{ tx.opened_on|ushort }}</td>
-        <td>{{ tx.closed_on|ushort if tx.closed_on else '—' }}</td>
-        <td class="number" data-sensitive-value="true">{{ tx.days_held|number(0) if tx.days_held is not none else '—' }}</td>
-        <td>{{ tx.portfolio_ref.name }}</td>
-        <td>{{ tx.notes or '' }}</td>
-        <td>
-          {% if tx.status.value == 'open' %}
-            {% set close_endpoint = 'options.close_position_form' if tx.option_contract_id else 'portfolio.close_position_form' %}
-            <a href="{{ url_for(close_endpoint, position_id=tx.source_position_id) }}">encerrar</a>
-          {% elif tx.id in partial_close_ids %}
-            {# Encerramento parcial: os campos espelham um movimento da posição e
-               não se editam soltos. Desfazer devolve a quantidade e apaga a linha. #}
-            <form class="inline-form" method="post"
-                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
-                  data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="link-button" type="submit"
-                      data-sa-confirmar="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada."
-                      data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error"
-                      title="Desfaz esta transação e apaga o registro">desfazer</button>
-            </form>
-          {% elif tx.option_contract_id %}
-            {# Transação de opção fechada sem posição viva: registro histórico
-               independente. Continua excluível (link genérico abaixo cobre
-               isso), só não editável pelo formulário de ações. #}
-            <form class="inline-form" method="post"
-                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
-                  data-sa-titulo="Excluir transação" data-sa-severidade="error">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="link-button" type="submit"
-                      data-sa-confirmar="Excluir esta transação?"
-                      data-sa-titulo="Excluir transação" data-sa-severidade="error">excluir</button>
-            </form>
-          {% else %}
-            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>
-          {% endif %}
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="14" class="empty">Nenhuma transação registrada.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-{% if performance_by_currency %}
-<section class="summary transactions-summary" aria-label="Resumo de transações por moeda">
-  {% for summary in performance_by_currency %}
-    <article><span>Ganhos · {{ summary.currency }}</span><strong class="positive" data-sensitive-value="true">{{ summary.gain|currency(summary.currency) }}</strong></article>
-    <article><span>Perdas · {{ summary.currency }}</span><strong class="negative" data-sensitive-value="true">{{ summary.loss|currency(summary.currency) }}</strong></article>
-    <article><span>Resultado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}" data-sensitive-value="true">{{ summary.result|currency(summary.currency) }}</strong></article>
-  <article title="Participação de transações com resultado positivo no total, entre as já encerradas.">
-    <span>Win rate · {{ summary.currency }}</span>
-    <strong data-sensitive-value="true">{{ summary.win_rate|percent if summary.win_rate is not none else '-' }}</strong>
-  </article>
-  <article title="Ganhos totais divididos pelas perdas totais (em módulo), entre as transações encerradas na mesma moeda. Acima de 1 indica que os ganhos superam as perdas.">
-    <span>Profit factor · {{ summary.currency }}</span>
-    <strong data-sensitive-value="true">{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '-' }}</strong>
-  </article>
-  <article title="Média dos ganhos dividida pela média das perdas (em módulo), entre as transações encerradas na mesma moeda.">
-    <span>Payoff ratio · {{ summary.currency }}</span>
-    <strong data-sensitive-value="true">{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '-' }}</strong>
-  </article>
-  <article title="Média de dias entre abertura e encerramento das transações já encerradas na mesma moeda.">
-    <span>Tempo médio em posição · {{ summary.currency }}</span>
-    <strong data-sensitive-value="true">{{ summary.avg_days_held|number(1) if summary.avg_days_held is not none else '-' }} dias</strong>
-  </article>
-  {% endfor %}
-</section>
-{% endif %}
+  {% include "partials/transactions_summary.html" %}
+  <div class="trade-section-heading"><h2>Operações <span>{{ transactions|length }}</span></h2><p>Detalhes disponíveis em cada operação · valores por moeda</p></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Ativo e contexto</th><th>Situação</th><th>Quantidade</th><th>Entrada</th><th>Saída</th><th>Resultado realizado</th><th>Ação</th></tr></thead>
+      <tbody>
+      {% for tx in transactions %}
+        <tr class="workspace-record-row {{ 'transaction-open' if tx.status.value == 'open' }}">
+          <td><strong class="workspace-identity">{{ tx.ticker }}</strong><small>{{ tx.broker }} · {{ 'Compra' if tx.side.value == 'C' else 'Venda' }}<br>{{ tx.portfolio_ref.name }}</small>
+          {% if tx.option_contract_id %}{% set c = tx.option_contract_ref %}<small>{{ c.option_type.value|upper }} · <span data-sensitive-value="true">{{ c.strike|currency(tx.currency, trim=true) }}</span> · {{ c.expiration.exercise_date|ushort }}</small>{% endif %}</td>
+          <td><span class="tag {{ 'tag-open' if tx.status.value == 'open' else 'tag-closed' }}">{{ 'Aberta' if tx.status.value == 'open' else 'Fechada' }}</span></td>
+          <td class="number" data-sensitive-value="true">{{ tx.quantity|quantity(tx.currency) }}</td>
+          <td class="number" data-sensitive-value="true">{{ tx.average_cost|currency(tx.currency) }}</td>
+          <td class="number" data-sensitive-value="true">{{ tx.exit_price|currency(tx.currency) }}</td>
+          <td class="number {{ tx.result|sign_class if tx.status.value == 'closed' }}" data-sensitive-value="true">{{ tx.result|currency(tx.currency) if tx.status.value == 'closed' else '—' }}</td>
+          <td>{% include "partials/transaction_actions.html" %}</td>
+        </tr>
+        <tr class="workspace-detail-row"><td colspan="7">
+          <details class="workspace-disclosure"><summary>Detalhes · {{ tx.ticker }}</summary>
+            <dl class="trade-data-grid">
+              {{ trades.metric('Abertura', tx.opened_on|udate) }}
+              {{ trades.metric('Encerramento', tx.closed_on|udate if tx.closed_on else 'Em aberto') }}
+              {{ trades.metric('Dias em posição', tx.days_held|number(0) if tx.days_held is not none else '—') }}
+              {{ trades.metric('Carteira', tx.portfolio_ref.name) }}
+              {{ trades.metric('Corretora', tx.broker) }}
+              {{ trades.metric('Moeda', tx.currency) }}
+            </dl>
+            <h3 class="trade-label">Observações</h3><p class="workspace-notes" data-sensitive-value="true">{{ tx.notes or 'Nenhuma observação registrada.' }}</p>
+            {% if tx.status.value == 'open' or tx.id in partial_close_ids %}
+              <p><a href="{{ url_for('options.edit_position' if tx.option_contract_id else 'portfolio.edit_position', position_id=tx.source_position_id) }}">Editar posição de origem</a></p>
+            {% endif %}
+            {% if tx.id in partial_close_ids %}<p class="workspace-note">Encerramento parcial: os valores acompanham o movimento da posição. Desfazer devolve a quantidade à posição e exclui este registro.</p>{% endif %}
+          </details>
+        </td></tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">Nenhuma transação para os filtros selecionados.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>

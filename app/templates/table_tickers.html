@@ -1,9 +1,12 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Tickers{% endblock %}
-{% block content %}
+{% block workspace_area %}Cadastros{% endblock %}
+{% block description %}Mantenha ativos, moedas e referências de comparação usados pela carteira.{% endblock %}
+{% block workspace_content %}
 <section class="catalog-card">
-  <h2>Tickers</h2>
-  <form class="catalog-create ticker-fields" method="post" action="{{ url_for('portfolio.create_ticker') }}">
+  <h2>Registros cadastrados</h2>
+  <details class="workspace-create"><summary>Adicionar ticker</summary>
+<form class="catalog-create ticker-fields" method="post" action="{{ url_for('portfolio.create_ticker') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Ticker<input required maxlength="24" name="symbol"></label>
     <label>Nome de pregão<input required maxlength="80" name="trading_name"></label>
@@ -24,6 +27,7 @@
             data-sa-confirmar="Adicionar este ticker?"
             data-sa-titulo="Adicionar ticker" data-sa-severidade="warning">Adicionar</button>
   </form>
+</details>
   <p class="form-help">
     Um ticker de referência (ex.: BOVA11, IBOV, USDBRL=X) aparece nos
     comparadores de evolução de Cotações e Performance e tem sua cotação

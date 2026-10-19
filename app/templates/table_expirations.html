@@ -1,9 +1,12 @@
-{% extends "base.html" %}
+{% extends "workspace.html" %}
 {% block title %}Vencimentos{% endblock %}
-{% block content %}
+{% block workspace_area %}Cadastros{% endblock %}
+{% block description %}Organize os códigos de calls e puts e as datas de exercício dos contratos.{% endblock %}
+{% block workspace_content %}
 <section class="catalog-card">
-  <h2>Vencimentos de calls e puts</h2>
-  <form class="catalog-create expiration-fields" method="post" action="{{ url_for('options.create_expiration') }}">
+  <h2>Registros cadastrados</h2>
+  <details class="workspace-create"><summary>Adicionar vencimento</summary>
+<form class="catalog-create expiration-fields" method="post" action="{{ url_for('options.create_expiration') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Call<input required maxlength="5" name="call_code" placeholder="2027A"></label>
     <label>Put<input required maxlength="5" name="put_code" placeholder="2027M"></label>
@@ -12,6 +15,7 @@
             data-sa-confirmar="Adicionar este vencimento?"
             data-sa-titulo="Adicionar vencimento" data-sa-severidade="warning">Adicionar</button>
   </form>
+</details>
   <div class="table-wrap">
     <table class="catalog-table">
       <thead><tr><th>Call</th><th>Put</th><th>Exercício</th><th>Ações</th></tr></thead>
