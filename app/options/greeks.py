@@ -99,10 +99,11 @@ def implied_volatility(
     """
     if years <= 0 or spot <= 0 or strike <= 0 or market_price <= 0:
         return None
-    intrinsic = spot - strike if option_type == OptionType.CALL else strike - spot
-    intrinsic = max(intrinsic, 0.0)
-    if market_price < intrinsic - tolerance:
-        return None  # prêmio abaixo do valor intrínseco: não resolvível
+    discounted_strike = strike * math.exp(-rate * years)
+    lower_bound = (spot - discounted_strike if option_type == OptionType.CALL
+                   else discounted_strike - spot)
+    if market_price < max(lower_bound, 0.0) - tolerance:
+        return None  # prêmio abaixo do limite europeu de não arbitragem
     price_at_low = black_scholes_price(option_type, spot, strike, years, rate, low)
     if market_price <= price_at_low:
         return low

@@ -122,6 +122,9 @@ abertura e a abertura anterior passa a ser aumento antes do recálculo.
 
 Regras de um **encerramento parcial**:
 
+- a quantidade encerrada deve ser finita, positiva e não pode superar o saldo;
+  o preço de saída deve ser finito e não negativo. Preço zero é permitido,
+  tanto no encerramento parcial quanto no total;
 - o resultado realizado usa a mesma fórmula do encerramento total, aplicada
   à quantidade encerrada e ao custo médio vigente;
 - o custo médio do saldo não muda: vender parte realiza resultado, não altera

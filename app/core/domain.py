@@ -263,8 +263,10 @@ def plan_position_closure(
 
     if closed_on < opened_on:
         raise ValueError("A data de encerramento não pode ser anterior à data de abertura.")
+    if not exit_price.is_finite() or exit_price < ZERO:
+        raise ValueError("O preço de encerramento deve ser finito e não negativo.")
     closing_quantity = held_quantity if requested_quantity is None else requested_quantity
-    if closing_quantity <= ZERO or closing_quantity > held_quantity:
+    if not closing_quantity.is_finite() or closing_quantity <= ZERO or closing_quantity > held_quantity:
         raise ValueError(
             "A quantidade encerrada deve ser positiva e não pode superar a "
             "quantidade em carteira."
