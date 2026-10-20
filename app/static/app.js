@@ -87,6 +87,45 @@ htmx.config.includeIndicatorStyles = false;
   document.addEventListener("click", carryOriginToFormLink, true);
   document.addEventListener("auxclick", carryOriginToFormLink, true);
 
+  // Carteira e corretora acompanham a pessoa entre as telas que têm esses
+  // filtros (auditoria de 09/10, CD1), só na URL: cada tela mostra o seu
+  // seletor já posicionado, então o recorte nunca fica escondido. Vale o
+  // endereço de agora (os filtros HTMX o trocam sem renderizar os links de
+  // novo), por isso o ajuste acontece no clique.
+  const SHARED_FILTER_SCREENS = {
+    "/": ["portfolio_id", "broker"],
+    "/transactions": ["portfolio_id", "broker"],
+    "/options": ["portfolio_id", "broker"],
+    "/dividends": ["broker"],
+    "/performance": ["portfolio_id", "broker"],
+    "/analysis/exposure-asset": ["portfolio_id", "broker"],
+    "/analysis/exposure-broker": ["portfolio_id", "broker"],
+    "/analysis/exposure-market": ["portfolio_id", "broker"],
+  };
+  const DEFAULT_FILTER_VALUES = { portfolio_id: "all", broker: "" };
+  const carrySharedFilters = (event) => {
+    const here = SHARED_FILTER_SCREENS[window.location.pathname];
+    const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!here || !link) return;
+    const href = link.getAttribute("href");
+    if (!href || href.startsWith("#")) return;
+    const url = new URL(href, window.location.origin);
+    const there = SHARED_FILTER_SCREENS[url.pathname];
+    // Link para a própria tela é "Limpar": não devolve o filtro que ele tira.
+    if (url.origin !== window.location.origin || !there || url.pathname === window.location.pathname) return;
+    const current = new URLSearchParams(window.location.search);
+    let changed = false;
+    here.filter((key) => there.includes(key)).forEach((key) => {
+      const value = current.get(key);
+      if (value === null || value === DEFAULT_FILTER_VALUES[key] || url.searchParams.has(key)) return;
+      url.searchParams.set(key, value);
+      changed = true;
+    });
+    if (changed) link.setAttribute("href", `${url.pathname}${url.search}${url.hash}`);
+  };
+  document.addEventListener("click", carrySharedFilters, true);
+  document.addEventListener("auxclick", carrySharedFilters, true);
+
   // Filtros globais ficam no mesmo ponto onde antes havia o modo discreto.
   // A submissão é uma navegação GET/POST completa; o bloqueio local impede
   // duplos cliques e respostas de duas intenções consecutivas disputando a

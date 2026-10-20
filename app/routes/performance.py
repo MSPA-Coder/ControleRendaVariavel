@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import abort, render_template, request
+from flask import render_template, request
 from sqlalchemy import select
 
 from app import db
@@ -139,11 +139,11 @@ def monthly_performance() -> str:
     raw_benchmark_id = request.args.get("benchmark_ticker_id")
     if raw_benchmark_id:
         benchmark_id = parse_positive_id(raw_benchmark_id)
+        # Fora da lista (moeda trocada no filtro global, referência desativada)
+        # vale "Nenhum": 404 aqui travava a tela justamente ao trocar a moeda.
         selected_benchmark = next(
             (ticker for ticker in candidates if ticker.id == benchmark_id), None
         )
-        if selected_benchmark is None:
-            abort(404)
 
     # Uma consulta para todas as series da pagina -- carteira e benchmark --,
     # e nao uma a mais (permissao + serie) quando ha comparacao.

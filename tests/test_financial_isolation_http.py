@@ -165,10 +165,12 @@ def test_foreign_names_absent_from_lists_and_fragments(review_case):
 def test_foreign_quote_is_denied_in_full_pages_and_fragments(review_case):
     app, data = review_case
     client, _ = client_for(app, data['ids'][0])
-    for field in ('ticker_id', 'benchmark_ticker_id'):
-        for headers in ({}, {'HX-Request': 'true'}):
-            response = client.get('/quotes', query_string={field: data['ticker']}, headers=headers)
-            assert response.status_code == 404
+    for headers in ({}, {'HX-Request': 'true'}):
+        response = client.get('/quotes', query_string={'ticker_id': data['ticker']}, headers=headers)
+        assert response.status_code == 404
+        # Referência fora da lista vale "Nenhum" (nada do ativo alheio sai na página).
+        response = client.get('/quotes', query_string={'benchmark_ticker_id': data['ticker']}, headers=headers)
+        assert response.status_code == 200
 
 
 def test_malformed_filter_ids_fail_cleanly(review_case):

@@ -15,7 +15,7 @@ from flask import (
     url_for,
 )
 from flask.typing import ResponseReturnValue
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -108,7 +108,13 @@ def _brokers() -> list[Broker]:
     return list(db.session.scalars(select(Broker).order_by(Broker.name)))
 
 
-def _contracts() -> list[OptionContract]:
+def _contracts(*, somente_vigentes: bool = False, manter: int | None = None) -> list[OptionContract]:
+    """Contratos oferecidos no seletor do formulário.
+
+    ``somente_vigentes`` tira os já vencidos (a criação os recusa mesmo). Na
+    edição, ``manter`` conserva o contrato da própria posição, vencido ou não,
+    para ela continuar editável.
+    """
     statement = (
         select(OptionContract)
         .options(
@@ -119,6 +125,11 @@ def _contracts() -> list[OptionContract]:
         .order_by(OptionExpiration.exercise_date, OptionContract.id)
         .join(OptionContract.expiration)
     )
+    if somente_vigentes:
+        vigente = OptionExpiration.exercise_date >= date.today()
+        statement = statement.where(
+            or_(vigente, OptionContract.id == manter) if manter is not None else vigente
+        )
     return list(db.session.scalars(statement).unique())
 
 
@@ -227,7 +238,7 @@ def new_position() -> str:
         "option_form.html",
         position=None,
         brokers=_brokers(),
-        contracts=_contracts(),
+        contracts=_contracts(somente_vigentes=True),
         sides=Side,
         portfolios=portfolio_records(),
     )
@@ -243,7 +254,7 @@ def create_position() -> ResponseReturnValue:
             "option_form.html",
             position=request.form,
             brokers=_brokers(),
-            contracts=_contracts(),
+            contracts=_contracts(somente_vigentes=True),
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
@@ -259,7 +270,7 @@ def create_position() -> ResponseReturnValue:
             "option_form.html",
             position=request.form,
             brokers=_brokers(),
-            contracts=_contracts(),
+            contracts=_contracts(somente_vigentes=True),
             sides=Side,
             portfolios=portfolio_records(),
             duplicate_warning=True,
@@ -270,7 +281,7 @@ def create_position() -> ResponseReturnValue:
             "option_form.html",
             position=request.form,
             brokers=_brokers(),
-            contracts=_contracts(),
+            contracts=_contracts(somente_vigentes=True),
             sides=Side,
             portfolios=portfolio_records(),
         ), 409
@@ -299,7 +310,7 @@ def edit_position(position_id: int) -> str:
         position=position,
         movement_count=len(position.movements),
         brokers=_brokers(),
-        contracts=_contracts(),
+        contracts=_contracts(somente_vigentes=True, manter=position.contract_id),
         sides=Side,
         portfolios=portfolio_records(),
     )
@@ -320,7 +331,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
             position_id=position_id,
             movement_count=len(position.movements),
             brokers=_brokers(),
-            contracts=_contracts(),
+            contracts=_contracts(somente_vigentes=True, manter=previous_contract_id),
             sides=Side,
             portfolios=portfolio_records(),
         ), 422
@@ -340,7 +351,7 @@ def update_position(position_id: int) -> ResponseReturnValue:
             position_id=position_id,
             movement_count=len(position.movements),
             brokers=_brokers(),
-            contracts=_contracts(),
+            contracts=_contracts(somente_vigentes=True, manter=previous_contract_id),
             sides=Side,
             portfolios=portfolio_records(),
         ), 422

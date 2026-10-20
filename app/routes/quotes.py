@@ -105,11 +105,11 @@ def _quote_history_context(
         candidates = [ticker for ticker in candidates if ticker.currency == selected_currency]
     selected_benchmark: Ticker | None = None
     if benchmark_id is not None:
+        # Fora da lista (moeda trocada no filtro global, referência desativada)
+        # vale "Nenhum": 404 aqui travava a tela justamente ao trocar a moeda.
         selected_benchmark = next(
             (ticker for ticker in candidates if ticker.id == benchmark_id), None
         )
-        if selected_benchmark is None:
-            abort(404)
     benchmark_history = (
         ticker_price_series(selected_benchmark.id) if selected_benchmark else []
     )

@@ -647,10 +647,12 @@ def delete_position(position_id: int) -> ResponseReturnValue:
 
 def _owned_movement(position_id: int, movement_id: int, *, for_update: bool = False) -> tuple[Position, PositionMovement]:
     position = owned_or_404_for_update(Position, position_id) if for_update else owned_or_404(Position, position_id)
+    if position.simulated:
+        # A carteira Simulada não tem extrato de movimentos (docs/planilha-acoes.md):
+        # a guarda é do servidor, não só do botão que a grade esconde.
+        abort(403, description="A carteira Simulada não tem extrato de movimentos.")
     movement = db.session.get(PositionMovement, movement_id)
     if movement is None or movement.position_id != position.id or movement.owner_id != current_owner_id():
-        from flask import abort
-
         abort(404)
     return position, movement
 

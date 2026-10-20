@@ -57,7 +57,7 @@ def test_update_option_position_retorna_formulario_em_modo_edicao_apos_erro(monk
         lambda _template, **context: capturado.update(context) or context,
     )
     monkeypatch.setattr(options, "_brokers", lambda: [])
-    monkeypatch.setattr(options, "_contracts", lambda: [])
+    monkeypatch.setattr(options, "_contracts", lambda **_kwargs: [])
     monkeypatch.setattr(options, "portfolio_records", lambda: [])
 
     with app.test_request_context("/options/positions/42", method="POST", data={}):

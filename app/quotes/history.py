@@ -179,6 +179,11 @@ def upsert_quote_history(entries: Iterable[tuple[int, Decimal, date, datetime]])
     """
     latest: dict[tuple[int, date], tuple[Decimal, datetime]] = {}
     for ticker_id, price, recorded_date, recorded_at in entries:
+        # Preço zero é o RTD sem leitura (pré-abertura, ativo sem negócio), não
+        # cotação: gravá-lo apagava o fechamento verdadeiro do dia e derrubava
+        # os gráficos em escala logarítmica (zeros de 21/09 e 15-16/10/2026).
+        if price <= 0:
+            continue
         key = (ticker_id, recorded_date)
         current = latest.get(key)
         if current is None or recorded_at >= current[1]:

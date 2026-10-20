@@ -212,6 +212,21 @@ abas podem escolher moedas distintas, sem que uma resposta atrasada reverta a
 outra. O seletor e o modo discreto ficam no popover aberto pelo ícone de filtro
 do cabeçalho.
 
+**Os filtros sobrevivem às escritas.** Salvar, excluir ou encerrar é um POST cuja
+resposta é um redirect, e sem cuidado ele voltava para a lista sem query: a moeda
+caía para BRL e as posições em dólar sumiam. `app/core/volta.py` costura, num
+`after_request`, os filtros de origem no `Location` do redirect (moeda, carteira e
+corretora; na mesma tela, todos os da query, menos o estado de interface; nas
+tabelas cadastrais, só a moeda). A origem sai do campo `volta` que `app.js` põe em
+todo POST com o endereço atual, depois de `HX-Current-URL` e do `Referer`. Os
+formulários de página (novo, editar, encerrar) abrem com `?volta=` apontando para a
+lista de onde vieram, e é para ela que salvar e "Cancelar" retornam. Só a query é
+aproveitada; o destino é sempre o que a rota escolheu. Carteira e corretora também
+acompanham o menu entre as telas que os têm (Carteira, Transações, Opções,
+Proventos, Performance e Exposição), só na URL e no momento do clique. As tabelas
+cadastrais (corretoras, tickers, vencimentos e contratos) trocam só o próprio
+bloco por `hx-boost`, sem recarregar a página.
+
 Duas decisões de desenho, que o módulo documenta e os testes protegem:
 
 - **parâmetro desconhecido é preservado, não descartado.** Um filtro novo

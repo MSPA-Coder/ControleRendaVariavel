@@ -3,7 +3,7 @@
 {% block workspace_area %}Cadastros{% endblock %}
 {% block description %}Consulte o ativo-objeto, tipo, strike e vencimento de cada opção.{% endblock %}
 {% block workspace_content %}
-<section class="catalog-card">
+<section class="catalog-card" id="catalog-results" hx-boost="true" hx-target="#catalog-results" hx-select="[data-sa-avisos], #catalog-results" hx-swap="outerHTML show:none" hx-push-url="false">
   <h2>Registros cadastrados</h2>
   <details class="workspace-create"><summary>Adicionar contrato</summary>
 <form class="catalog-create contract-fields" method="post" action="{{ url_for('options.create_contract') }}">

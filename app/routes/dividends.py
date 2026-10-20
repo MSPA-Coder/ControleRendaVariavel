@@ -8,6 +8,7 @@ from typing import Any
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager
 from werkzeug.exceptions import HTTPException
 
@@ -60,6 +61,12 @@ class DividendInput:
     yield_on_cost: Decimal | None
     dividend_yield: Decimal | None
     quotas: Decimal | None
+
+
+_DUPLICATE_MESSAGE = (
+    "Já existe uma renda igual (mesmo ativo, corretora, tipo, data e valor). "
+    "Nada foi gravado de novo."
+)
 
 
 def _parse_form() -> DividendInput:
@@ -351,10 +358,25 @@ def create_dividend() -> ResponseReturnValue:
         ), 422
     dividend = Dividend(owner_id=current_owner_id(), **asdict(data))
     db.session.add(dividend)
-    grant_ticker_entitlement(
-        user_id=dividend.owner_id, ticker_id=dividend.ticker_id, held_on=dividend.payment_date
-    )
-    db.session.commit()
+    try:
+        # O autoflush da consulta do vínculo já grava a linha: o conflito pode
+        # estourar antes do commit, por isso tudo fica dentro do try.
+        grant_ticker_entitlement(
+            user_id=dividend.owner_id, ticker_id=dividend.ticker_id, held_on=dividend.payment_date
+        )
+        db.session.commit()
+    except IntegrityError:
+        # Segundo envio do mesmo formulário (clique duplo, F5): a chave única
+        # da planilha já tem essa linha. Não é erro do servidor.
+        db.session.rollback()
+        flash(_DUPLICATE_MESSAGE, "error")
+        return render_template(
+            "dividend_form.html",
+            dividend=request.form,
+            brokers=broker_records(),
+            tickers=investable_ticker_records(),
+            income_kinds=list(IncomeKind),
+        ), 409
     flash("Renda registrada.", "success")
     return redirect(url_for("portfolio.dividends"))
 
@@ -511,10 +533,23 @@ def update_dividend(dividend_id: int) -> ResponseReturnValue:
         ), 422
     for key, value in asdict(data).items():
         setattr(dividend, key, value)
-    grant_ticker_entitlement(
-        user_id=dividend.owner_id, ticker_id=dividend.ticker_id, held_on=dividend.payment_date
-    )
-    db.session.commit()
+    try:
+        grant_ticker_entitlement(
+            user_id=dividend.owner_id, ticker_id=dividend.ticker_id, held_on=dividend.payment_date
+        )
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash(_DUPLICATE_MESSAGE, "error")
+        return render_template(
+            "dividend_form.html",
+            dividend=request.form,
+            edit_mode=True,
+            dividend_id=dividend_id,
+            brokers=broker_records(),
+            tickers=investable_ticker_records(),
+            income_kinds=list(IncomeKind),
+        ), 409
     flash("Renda atualizada.", "success")
     return redirect(url_for("portfolio.dividends"))
 
