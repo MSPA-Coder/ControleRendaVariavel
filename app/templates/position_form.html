@@ -73,7 +73,7 @@
             formnovalidate data-sa-confirmar="Excluir esta posição?"
             data-sa-titulo="Excluir posição" data-sa-severidade="error">Excluir posição</button>
     {% endif %}
-    <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
+    <a class="button" href="{{ voltar_ou(url_for('portfolio.index')) }}">Cancelar</a>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Salvar as alterações desta posição?"
             data-sa-titulo="Salvar posição" data-sa-severidade="warning">

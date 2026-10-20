@@ -145,6 +145,9 @@ def _grafico_de_fechamentos(
     A escala inclui as duas, para nenhuma linha sair do quadro. Os eixos são
     marcas: cinco preços no Y e até seis datas espaçadas no X.
     """
+    # Fechamento zero é buraco da coleta (o banco aceita `price >= 0`), não
+    # preço: não existe em escala logarítmica e derrubava a tela da posição.
+    fechamentos = [f for f in fechamentos if f.price > 0]
     if len(fechamentos) < 2:
         return None
     largura, altura = 640, 220

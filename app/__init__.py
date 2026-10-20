@@ -560,6 +560,9 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             resposta.headers.setdefault("HX-Replace-Url", destino)
         return resposta
 
+    from app.core.volta import instalar_volta_com_filtros
+
+    instalar_volta_com_filtros(app)
     instalar_versao_de_estaticos(app)
 
     requer_login(

@@ -45,6 +45,48 @@ htmx.config.includeIndicatorStyles = false;
     }
   });
 
+  // Volta das escritas. Os filtros (moeda, carteira, corretora) vivem na URL, e
+  // uma escrita termina num redirect que o servidor monta sem saber de onde a
+  // pessoa veio. O endereço atual viaja no campo `volta` do POST e o servidor
+  // devolve os filtros no redirect (`app/core/volta.py`). Os formulários de
+  // página (novo, editar, encerrar) são abertos com `?volta=` apontando para a
+  // lista, e é essa lista que importa ao salvar ou cancelar.
+  const addressNow = () => window.location.pathname + window.location.search;
+  const FORM_PAGE_PATH = /\/(new|edit|close)(\/|$)/;
+  document.addEventListener(
+    "submit",
+    (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || (form.method || "").toLowerCase() !== "post") return;
+      if (new URL(form.action, window.location.href).origin !== window.location.origin) return;
+      let field = form.querySelector('input[name="volta"]');
+      if (!field) {
+        field = document.createElement("input");
+        field.type = "hidden";
+        field.name = "volta";
+        form.append(field);
+      }
+      field.value = addressNow();
+    },
+    true,
+  );
+  const carryOriginToFormLink = (event) => {
+    const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!link) return;
+    const href = link.getAttribute("href");
+    if (!href || href.startsWith("#")) return;
+    const url = new URL(href, window.location.origin);
+    if (url.origin !== window.location.origin || !FORM_PAGE_PATH.test(url.pathname)) return;
+    if (url.searchParams.has("volta")) return;
+    // Num formulário de página a origem de verdade é a lista que veio em `volta`.
+    const origin = new URL(window.location.href).searchParams.get("volta") || addressNow();
+    if (origin === "/" || origin === url.pathname) return;
+    url.searchParams.set("volta", origin);
+    link.setAttribute("href", `${url.pathname}${url.search}${url.hash}`);
+  };
+  document.addEventListener("click", carryOriginToFormLink, true);
+  document.addEventListener("auxclick", carryOriginToFormLink, true);
+
   // Filtros globais ficam no mesmo ponto onde antes havia o modo discreto.
   // A submissão é uma navegação GET/POST completa; o bloqueio local impede
   // duplos cliques e respostas de duas intenções consecutivas disputando a
@@ -106,6 +148,20 @@ htmx.config.includeIndicatorStyles = false;
         if (currencyValue) {
           currencyValue.value = selected.length === 2 ? "ALL" : selected[0].dataset.globalCurrencyOption;
         }
+        // Os filtros HTMX trocam a URL sem renderizar este form de novo: os
+        // campos ocultos da carga da página trariam corretora e carteira
+        // velhas. Refaz-os a partir do endereço de agora.
+        currencyForm.querySelectorAll('input[type="hidden"]').forEach((hidden) => {
+          if (hidden !== currencyValue) hidden.remove();
+        });
+        new URLSearchParams(window.location.search).forEach((value, key) => {
+          if (key === "currency") return;
+          const hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = key;
+          hidden.value = value;
+          currencyForm.append(hidden);
+        });
         // A native navigation cancels the previous page, but this guard also
         // covers repeated submits before unload begins.
         if (currencyForm.dataset.submitting === "1") {

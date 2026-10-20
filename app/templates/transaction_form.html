@@ -39,7 +39,7 @@
     custo médio, preço de saída e modo escolhidos — não é digitado diretamente.
   </p>
   <div class="form-actions">
-    <a class="button" href="{{ url_for('portfolio.transactions') }}">Cancelar</a>
+    <a class="button" href="{{ voltar_ou(url_for('portfolio.transactions')) }}">Cancelar</a>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Salvar esta transação?"
             data-sa-titulo="Salvar transação" data-sa-severidade="warning">Salvar</button>

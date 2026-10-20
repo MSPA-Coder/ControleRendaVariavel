@@ -9,7 +9,7 @@
   <p class="form-help">Proventos em reais das corretoras que o Controle Bancário cobre ({{ cb_brokers|join(', ') }}), com pagamento a partir de {{ cutoff|udate }}, não entram por planilha: vêm do CB. Dólar e as demais corretoras continuam por aqui.</p>
   <label>Planilha XLSX<input required type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
   <div class="form-actions">
-    <a class="button" href="{{ url_for('portfolio.dividends') }}">Cancelar</a>
+    <a class="button" href="{{ voltar_ou(url_for('portfolio.dividends')) }}">Cancelar</a>
     <button class="button button-primary" type="submit">Importar</button>
   </div>
 </form>

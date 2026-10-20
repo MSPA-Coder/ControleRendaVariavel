@@ -18,6 +18,6 @@
   <label>Quantidade<input required type="number" min="0.00000001" step="any" name="quantity" value="{{ values.quantity if values else movement.quantity_delta|abs }}" data-sensitive-input="true"></label>
   <label>{{ 'Preço de saída' if movement.kind.value == 'decrease' else 'Preço do lançamento' }}<input required type="number" min="0" step="any" name="price" value="{{ values.price if values else movement.price }}" data-sensitive-input="true"></label>
   <label>Data<input required type="date" name="occurred_on" value="{{ values.occurred_on.isoformat() if values else movement.occurred_on.isoformat() }}"></label>
-  <div class="form-actions"><a class="button" href="{{ url_for('portfolio.index', expanded=position.id) }}">Cancelar</a><button class="button button-primary" type="submit" data-sa-confirmar="Salvar este lançamento e recalcular a posição?" data-sa-titulo="Salvar lançamento" data-sa-severidade="warning">{{ "Confirmar mesmo assim" if prior_opening_warning else "Salvar" }}</button></div>
+  <div class="form-actions"><a class="button" href="{{ voltar_ou(url_for('portfolio.index', expanded=position.id)) }}">Cancelar</a><button class="button button-primary" type="submit" data-sa-confirmar="Salvar este lançamento e recalcular a posição?" data-sa-titulo="Salvar lançamento" data-sa-severidade="warning">{{ "Confirmar mesmo assim" if prior_opening_warning else "Salvar" }}</button></div>
 </form>
 {% endblock %}

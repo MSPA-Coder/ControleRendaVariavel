@@ -33,7 +33,7 @@
   <label>DY informado (%)<input type="number" min="0" step="any" name="dividend_yield" value="{{ value.dividend_yield if value and value.dividend_yield is not none else '' }}" data-sensitive-input="true"></label>
   <label>Cotas<input type="number" min="0" step="any" name="quotas" value="{{ value.quotas if value and value.quotas is not none else '' }}" data-sensitive-input="true"></label>
   <div class="form-actions">
-    <a class="button" href="{{ url_for('portfolio.dividends') }}">Cancelar</a>
+    <a class="button" href="{{ voltar_ou(url_for('portfolio.dividends')) }}">Cancelar</a>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Salvar esta renda?"
             data-sa-titulo="Salvar renda" data-sa-severidade="warning">Salvar</button>

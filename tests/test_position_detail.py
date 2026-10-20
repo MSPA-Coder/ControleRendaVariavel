@@ -143,3 +143,16 @@ def test_telas_de_encerramento_nao_abrem_uma_segunda_confirmacao() -> None:
     for nome in ("close_position_form.html", "close_option_form.html"):
         fonte = (raiz / nome).read_text(encoding="utf-8")
         assert "data-sa-confirmar" not in fonte, nome
+
+
+def test_fechamento_zero_e_buraco_de_coleta_e_nao_derruba_o_grafico() -> None:
+    """O banco aceita `price >= 0` e a coleta de 21/09/2026 gravou zeros; o
+    gráfico logarítmico os ignora em vez de levantar ValueError (HTTP 500)."""
+    com_zero = _grafico_de_fechamentos(
+        [_fechamento(1, "10"), _fechamento(2, "0"), _fechamento(3, "15")], [], []
+    )
+    sem_zero = _grafico_de_fechamentos([_fechamento(1, "10"), _fechamento(3, "15")], [], [])
+
+    assert com_zero is not None
+    assert com_zero == sem_zero
+    assert _grafico_de_fechamentos([_fechamento(1, "0"), _fechamento(2, "10")], [], []) is None

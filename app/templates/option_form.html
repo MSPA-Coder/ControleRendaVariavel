@@ -51,7 +51,7 @@
     {% for portfolio in portfolios %}<option value="{{ portfolio.id }}" data-simulated="{{ 'true' if portfolio.simulated else 'false' }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>{% endfor %}
   </select></label>
   <div class="form-actions">
-    <a class="button" href="{{ url_for('options.index') }}">Cancelar</a>
+    <a class="button" href="{{ voltar_ou(url_for('options.index')) }}">Cancelar</a>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Salvar as alterações desta posição de opção?"
             data-sa-titulo="Salvar posição" data-sa-severidade="warning">
