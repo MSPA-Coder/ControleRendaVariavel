@@ -19,11 +19,11 @@ Para atualizações por `~/deploy.sh renda`, instale primeiro o script
 correspondente de `_manutencao`. Ele monta as imagens no próprio VPS a partir
 do código do `main`, sem esperar a CI nem baixar nada do GHCR, aguarda os
 health checks e, se a nova versão falhar, volta sozinho para o código e a
-imagem anteriores. Migrações/dados não são revertidos. Na quarta-feira, o
-`reconstruir-bases.timer` reconstrói só a versão que já está no ar, para pegar
-correções de segurança das imagens-base, sem trazer commits novos. O primeiro
-bootstrap abaixo continua manual; não o use para atualizar uma instalação
-existente.
+imagem anteriores. Migrações/dados não são revertidos. Nada muda em
+produção sem o usuário mandar. As correções de segurança das imagens-base
+(Debian/Python) entram só quando ele pedir: testa localmente com as bases
+novas e depois roda `~/deploy.sh renda --refresh`. O primeiro bootstrap abaixo
+continua manual; não o use para atualizar uma instalação existente.
 
 O serviço `db` declara `mspa.backup.postgres=true`, contrato de descoberta
 do backup central.
