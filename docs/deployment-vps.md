@@ -5,9 +5,7 @@ O VPS executa a aplicação Flask e o PostgreSQL em Docker. O Nginx do host é o
 5301 e 5302 permanecem em localhost. O ProfitChart e o agente RTD ficam no
 Windows.
 
-O VPS é `linux/arm64`. O job `Qualidade` usa runner ARM64 nativo e confere a
-arquitetura das duas imagens antes de smoke, Chromium, Trivy e publicação.
-Não se publica uma variante reconstruída e não testada para produção; o
+O VPS é `linux/arm64`, e o deploy monta a imagem nele mesmo; o
 desenvolvimento local AMD64 continua usando seu próprio build Docker.
 
 O código no servidor é um espelho do branch `main`. Mudanças nascem na máquina
@@ -18,34 +16,17 @@ suja e a deploy key é somente leitura.
 ## Primeira publicação
 
 Para atualizações por `~/deploy.sh renda`, instale primeiro o script
-correspondente de `_manutencao`. A CI de `main` constrói as imagens de
-aplicação e PostgreSQL, executa smoke, Chromium e Trivy sobre esses artefatos e
-publica os mesmos IDs, sem reconstruir. PRs não publicam. Os pacotes são
-`ghcr.io/mspa-coder/controlerendavariavel` e
-`ghcr.io/mspa-coder/controlerendavariavel-postgres`, com
-`run-<run_id>-<tentativa>`.
-
-O script exige o run completo `CI` bem-sucedido em `main` para o SHA exato,
-confere revisão/run da imagem e resolve as duas tags para digest antes de
-alterar o app. Usa `compose.release.yaml` com `--no-build --pull never`.
-Registry/run inacessível ou identidade incorreta aborta sem alterar produção;
-`--sem-ci` não dispensa essa identidade. O primeiro bootstrap abaixo continua
-manual; não o use para atualizar uma instalação existente.
-
-O GHCR cria pacotes privados por padrão. Antes da ativação, escolha a
-visibilidade de ambos: públicos permitem pull anônimo; privados exigem acesso
-de leitura no mecanismo de credenciais Docker do VPS, provisionado por canal
-seguro. Nunca registre tokens em arquivos do projeto ou logs. Sem acesso
-confirmado, não ative o deploy automático.
-
-A rodada semanal da CI publica um novo run mesmo no mesmo SHA. O refresh do
-VPS baixa essa imagem já testada; não reconstrói bases. O estado saudável em
-`~/.local/state/mspa-deploy/controle-renda-variavel.images` guarda os digests.
-Rollback restaura os IDs locais anteriores de web/migrate e
-PostgreSQL/provisionamento, sem pull/build. Migrações/dados não são revertidos.
+correspondente de `_manutencao`. Ele monta as imagens no próprio VPS a partir
+do código do `main`, sem esperar a CI nem baixar nada do GHCR, aguarda os
+health checks e, se a nova versão falhar, volta sozinho para o código e a
+imagem anteriores. Migrações/dados não são revertidos. Na quarta-feira, o
+`reconstruir-bases.timer` reconstrói só a versão que já está no ar, para pegar
+correções de segurança das imagens-base, sem trazer commits novos. O primeiro
+bootstrap abaixo continua manual; não o use para atualizar uma instalação
+existente.
 
 O serviço `db` declara `mspa.backup.postgres=true`, contrato de descoberta
-do backup central mesmo quando a imagem é identificada por digest.
+do backup central.
 
 O repositório é clonado com a deploy key cadastrada no GitHub e o
 apelido `github-renda` configurado em `~/.ssh/config`:
@@ -164,26 +145,21 @@ memória dos workers não deve ser tratado como limite global.
 
 ### Publicação pelo GitHub
 
-`main` é protegido e o VPS o espelha. Portanto, antes de chamar o script do
-servidor, publique a mudança neste fluxo, a partir da máquina de
-desenvolvimento:
+O VPS espelha o `main`. Publique a mudança neste fluxo, a partir da máquina de
+desenvolvimento, sem PR e sem esperar nada:
 
 ```bash
-git switch -c codex/minha-mudanca
-# valide a mudança pelo portão quality
+docker compose --profile quality run --build --rm quality
 git add <arquivos>
 git commit -m "Descreve a mudança"
-git push -u origin codex/minha-mudanca
-gh pr create --base main --head codex/minha-mudanca
-gh pr checks <numero-do-pr> --watch
-gh pr merge <numero-do-pr> --squash --delete-branch
-git switch main
-git pull --ff-only origin main
+git push origin main
 ```
 
-O push direto para `main` é recusado. Não inicie a implantação se algum check
-obrigatório falhar: corrija a causa, valide novamente e atualize o mesmo PR.
-Somente o `main` remoto já mesclado é elegível ao `~/deploy.sh`.
+A verificação completa na máquina é a que vale. A CI do GitHub roda depois de
+cada push só como aviso e não bloqueia nada; se falhar, investigue. A regra do
+`main` continua impedindo apagá-lo ou reescrever o histórico: nada de push
+forçado nem de rebase do `main`. O Dependabot continua por PR, com os checks
+obrigatórios e auto-merge.
 
 As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
 roteiros continuam valendo para qualquer instalação que ainda esteja antes
@@ -256,16 +232,15 @@ dependência inesperada interrompe a transação integralmente.
 
 ### Fluxo operacional usual
 
-Use o script de implantação do VPS:
+Use o script de implantação do VPS, só quando o usuário mandar:
 
 ```bash
 ~/deploy.sh renda
 ```
 
-Ele confere a árvore, o commit elegível no GitHub, atualiza `main`, reconstrói a
-imagem, aguarda os health checks e valida o endereço público. `~/deploy.sh
---status` é apenas diagnóstico transversal, não uma etapa obrigatória do
-deploy. Se detectar alteração local, corrija a origem no ambiente de
+Ele confere a árvore, atualiza `main`, monta a imagem no servidor, aguarda os
+health checks e valida o endereço público. `~/deploy.sh --status` compara VPS
+× GitHub e não é etapa obrigatória do deploy. Se detectar alteração local, corrija a origem no ambiente de
 desenvolvimento e publique pelo fluxo normal.
 
 Os dados financeiros e as configurações persistem no volume

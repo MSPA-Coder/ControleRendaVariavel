@@ -203,6 +203,8 @@ docker compose --profile quality run --build --rm quality
 
 O `--build` mantém o comando explícito: o serviço não monta o código do host;
 Compose reconstrói sem cache a partir das tags base atuais antes dos testes.
+Rode-o completo antes de cada commit: é essa verificação que vale, e a CI
+depois do push é só aviso.
 
 Registre o que foi executado e omitido. Além do comando acima:
 
@@ -230,11 +232,19 @@ A produção roda atrás de Nginx com TLS em
 edite, faça commit ou merge no VPS. Consulte `docs/deployment-vps.md` antes de
 operá-lo.
 
-O branch `main` é protegido: toda mudança nasce em um branch (use o prefixo
-`codex/` quando não houver outro nome pedido), passa pelo `quality`, é enviada
-em pull request e só chega a `main` após todos os checks obrigatórios passarem.
-Não faça commit ou `git push origin main` direto; depois do merge, atualize o
-checkout local e só então execute o `~/deploy.sh` no VPS.
+Toda mudança passa pelo `quality` completo na máquina e vai por commit direto
+no `main` e `git push origin main`, sem PR e sem esperar nada. A regra do
+`main` continua impedindo apagá-lo ou reescrever o histórico: nada de push
+forçado nem de rebase do `main`. A CI do GitHub roda depois de cada push só
+como aviso e não bloqueia nada; se falhar, investigue. O Dependabot continua
+por PR, com os checks obrigatórios e auto-merge.
+
+O deploy (`~/deploy.sh renda`) só roda quando o usuário mandar. O servidor
+monta a imagem a partir do código do `main`, sem esperar nem baixar nada da
+CI, confere a saúde e volta sozinho para a versão anterior se falhar.
+`~/deploy.sh --status` compara VPS × GitHub. Na quarta-feira, o
+`reconstruir-bases.timer` reconstrói só a versão que já está no ar, para pegar
+correções de segurança das imagens-base, sem trazer commits novos.
 
 Ao atualizar dependências, alargue o teto compatível e preserve o piso mínimo
 já verificado. O Dependabot acompanha o `uv.lock` pelo ecossistema `uv`, com
