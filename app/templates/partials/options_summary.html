@@ -1,8 +1,8 @@
 <section class="summary portfolio-summary" aria-label="Resumo de opções">
 {% for total in portfolio.totals %}
   {% set symbol = total.currencies|map('currency_symbol')|join('/') %}
-  <article class="currency-card{{ ' currency-card-simulated' if total.simulated }}"
-            aria-label="{{ total.portfolio_name }}, totais em {{ total.currencies|join('/') }}{{ ' (simulada)' if total.simulated }}">
+  <article class="currency-card"
+            aria-label="{{ total.portfolio_name }}, totais em {{ total.currencies|join('/') }}">
     <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
     <div class="currency-card-grid">
       <article>

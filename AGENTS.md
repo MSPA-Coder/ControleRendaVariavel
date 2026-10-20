@@ -150,15 +150,12 @@ outra chamada externa. Proteja invariantes concorrentes no banco.
 - valores monetários e quantidades persistidos usam `Decimal`, nunca `float`;
 - quantidade e preço médio não são negativos; ticker é normalizado;
 - divisão por zero resulta em `None`/não aplicável; arredondamento é explícito;
-- totais derivam das posições e permanecem separados por moeda e por natureza
-  real ou simulada;
+- totais derivam das posições e permanecem separados por moeda;
 - proventos em reais das corretoras que o CB cobre (Genial e XP), pagos a partir
   de 01/01/2026, vêm do Controle Bancário (`origin = 'cb'`, somente leitura, valor
   líquido do caixa): planilha e formulário os recusam, e a linha de planilha que o
   CB passou a cobrir é marcada como substituída, nunca apagada (ver
   `docs/architecture.md`, "Proventos do CB");
-- carteira simulada não gera movimentos ou transações, não consolida posições
-  e não pode ser encerrada;
 - mudanças em cálculos devem ser conferidas contra os exemplos normativos dos
   contratos funcionais, com teste de domínio proporcional.
 

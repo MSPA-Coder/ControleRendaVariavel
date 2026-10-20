@@ -23,11 +23,9 @@
   {# O titulo e o nome da propria carteira: os totais sao agrupados por
      (carteira, moeda), entao cada card e o bolso de uma carteira. O simbolo
      em cada rotulo continua dizendo a moeda, e por isso o titulo nao a
-     repete. Carteira simulada nao tem titulo diferente -- tem o seu nome,
-     como as outras; o que a marca e o tracejado, porque ela pode se chamar
-     qualquer coisa e ainda assim nao ser patrimonio. #}
-  <article class="currency-card{{ ' currency-card-simulated' if total.simulated }}"
-            aria-label="{{ total.portfolio_name }}, totais em {{ total.currency }}{{ ' (simulada)' if total.simulated }}">
+     repete. #}
+  <article class="currency-card"
+            aria-label="{{ total.portfolio_name }}, totais em {{ total.currency }}">
     <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
     <div class="currency-card-grid">
       <article>

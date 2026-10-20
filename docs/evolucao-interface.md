@@ -34,8 +34,7 @@ identifica explicitamente o resultado bruto da ação; os pesos no detalhe têm
 como referência a carteira da posição na mesma moeda. Opções mantêm o lado e
 o tipo do contrato visíveis; o vencimento vem do cadastro mesmo sem cotação.
 
-Resumo e agrupamento não fundem posições. Carteiras simuladas permanecem
-identificadas, sem movimentos ou encerramento. Valores usam a formatação e
+Resumo e agrupamento não fundem posições. Valores usam a formatação e
 o modo discreto do sistema, e a aparência acompanha o tema escolhido.
 
 Esta entrega não muda fórmulas, schema, dados persistidos ou processos RTD.

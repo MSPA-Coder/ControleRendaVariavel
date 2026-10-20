@@ -146,7 +146,7 @@ def test_periodos_lidos_do_banco(sessao):
     é a parte que as simulações acima não exercitam."""
     dono = User(username="dono-cotacoes", password_hash="hash")
     corretora = Broker(name="Genial", acronym="GNL")
-    carteira = Portfolio(name="BRL", owner_ref=dono, currency="BRL", simulated=False)
+    carteira = Portfolio(name="BRL", owner_ref=dono, currency="BRL")
     cgc = Ticker(symbol="CGC", trading_name="CGC", market=Market.NASDAQ, rtd_market_code="N", currency="USD")
     hodl = Ticker(symbol="HODL11", trading_name="HODL11", market=Market.B3, rtd_market_code="B", currency="BRL")
     sessao.add_all([dono, corretora, carteira, cgc, hodl])

@@ -71,7 +71,7 @@ def acao_em_carteira(app_com_banco):
         db.session.add_all([usuario, corretora, ticker])
         db.session.flush()
         carteira = Portfolio(
-            owner_id=usuario.id, name=f"CLI-{sufixo}", currency="BRL", simulated=False
+            owner_id=usuario.id, name=f"CLI-{sufixo}", currency="BRL",
         )
         db.session.add(carteira)
         db.session.flush()
@@ -225,7 +225,7 @@ def acao_encerrada(app_com_banco):
         db.session.add_all([usuario, corretora, ticker])
         db.session.flush()
         carteira = Portfolio(
-            owner_id=usuario.id, name=f"CLI-ENC-{sufixo}", currency="BRL", simulated=False
+            owner_id=usuario.id, name=f"CLI-ENC-{sufixo}", currency="BRL",
         )
         db.session.add(carteira)
         db.session.flush()
@@ -350,7 +350,7 @@ def opcao_em_carteira(app_com_banco):
         db.session.add_all([usuario, corretora, opcao, objeto, vencimento])
         db.session.flush()
         carteira = Portfolio(
-            owner_id=usuario.id, name=f"CLI-OPC-{sufixo}", currency="BRL", simulated=False
+            owner_id=usuario.id, name=f"CLI-OPC-{sufixo}", currency="BRL",
         )
         contrato = OptionContract(
             ticker_id=opcao.id,

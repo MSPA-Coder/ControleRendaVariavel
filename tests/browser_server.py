@@ -44,9 +44,8 @@ def seed_interface_demo():
     )]
     db.session.add_all([user, *brokers])
     db.session.flush()
-    real = Portfolio(owner_id=user.id, name="Principal · dados fictícios", currency="BRL", simulated=False)
-    simulated = Portfolio(owner_id=user.id, name="Simulada · dados fictícios", currency="BRL", simulated=True)
-    db.session.add_all([real, simulated, UserPreference(user_id=user.id, regional_format="br", theme="institutional")])
+    real = Portfolio(owner_id=user.id, name="Principal · dados fictícios", currency="BRL")
+    db.session.add_all([real, UserPreference(user_id=user.id, regional_format="br", theme="institutional")])
     db.session.flush()
     rows = [
         ("PETR4", "Petrobras", "1000", "32.10", "36.42", 0),
@@ -84,9 +83,6 @@ def seed_interface_demo():
         portfolio_id=real.id, quantity=Decimal("100"), average_cost=Decimal("34"),
         side=Side.BUY, opened_on=today - timedelta(days=60), target_multiplier=Decimal("1.2"),
     ))
-    db.session.add(Position(owner_id=user.id, broker_id=brokers[0].id, ticker_id=tickers["VALE3"].id,
-                            portfolio_id=simulated.id, quantity=Decimal("100"), average_cost=Decimal("60"),
-                            side=Side.BUY, opened_on=today, target_multiplier=Decimal("1.2")))
     expirations = []
     for index, remaining in enumerate((4, 32, 60)):
         expiration = OptionExpiration(call_code=f"DM{index}C", put_code=f"DM{index}P",
@@ -181,7 +177,7 @@ def seed_browser_scenario():
         user.set_password("Synthetic-browser-only-2026!")
         db.session.add(user)
         db.session.flush()
-        portfolio = Portfolio(owner_id=user.id, name="Carteira browser", currency="BRL", simulated=False)
+        portfolio = Portfolio(owner_id=user.id, name="Carteira browser", currency="BRL")
         db.session.add_all([portfolio, UserPreference(user_id=user.id, regional_format="us" if region == "us" else "br")])
         db.session.flush()
         if region == "flow":

@@ -36,7 +36,6 @@ from app.positions.average_cost_line import (
 from app.positions.closure import (
     conflicting_position,
     delete_open_transaction_for_position,
-    discard_simulation_history,
     record_position_adjustment,
     replay_movements,
     sync_open_transaction_for_position,
@@ -82,7 +81,6 @@ from app.routes.helpers import (
     position_dividend_allocations,
     positions_query,
     quote_stale_after_seconds,
-    real_portfolio_records,
     selected_filters,
     usd_brl_rate_on,
 )
@@ -319,10 +317,8 @@ def portfolio_results_context() -> dict[str, object]:
     Compartilhado entre a pagina inteira e o fragmento atualizado por HTMX,
     para que os dois nunca divirjam.
     """
-    # Abre em "Todas", que desde a mudança do filtro quer dizer todas as
-    # carteiras **reais** — as simuladas só aparecem quando escolhidas. Foi o
-    # que dispensou o padrão fixo em BRL: ele escondia as posições em USD
-    # toda vez que a tela abria.
+    # Abre em "Todas" as carteiras, sem padrão fixo em BRL: ele escondia as
+    # posições em USD toda vez que a tela abria.
     portfolio_id, broker, selected_portfolio_id = selected_filters()
     group_by_broker = request.args.get("group_by_broker") == "1"
     selected_result_mode = request.args.get("result_mode", "acao")
@@ -588,7 +584,6 @@ def update_position(position_id: int) -> ResponseReturnValue:
         ), 422
     previous_quantity = position.quantity
     previous_average_cost = position.average_cost
-    was_simulated = position.simulated
     for key, value in asdict(data).items():
         setattr(position, key, value)
     # Duas posições com a mesma chave são a mesma exposição contada duas
@@ -613,21 +608,6 @@ def update_position(position_id: int) -> ResponseReturnValue:
             ticker_id=position.ticker_id,
             held_on=position.opened_on,
         )
-    # `position.simulated` lê `portfolio_ref.simulated`: um relacionamento
-    # já carregado (pelo `was_simulated` acima) fica em cache no objeto e
-    # não percebe sozinho que `portfolio_id` acabou de mudar — expirar
-    # força a releitura pela FK nova antes de qualquer decisão que dependa
-    # dela daqui pra baixo (aqui, em `record_position_adjustment` e em
-    # `sync_open_transaction_for_position`).
-    db.session.expire(position, ["portfolio_ref"])
-    # Troca de carteira entre a Simulada e uma real: ao entrar na
-    # Simulada, apaga a linha aberta e o extrato — as duas funções abaixo só
-    # sabem adicionar, nunca apagar. Ao sair da Simulada não há nada
-    # dedicado a fazer: o extrato está vazio e a linha aberta não existe, e é
-    # exatamente esse estado que as duas funções tratam como "posição sem
-    # histórico ainda" e preenchem sozinhas.
-    if position.simulated and not was_simulated:
-        discard_simulation_history(position)
     record_position_adjustment(position, previous_quantity, previous_average_cost)
     sync_open_transaction_for_position(position)
     db.session.commit()
@@ -647,10 +627,6 @@ def delete_position(position_id: int) -> ResponseReturnValue:
 
 def _owned_movement(position_id: int, movement_id: int, *, for_update: bool = False) -> tuple[Position, PositionMovement]:
     position = owned_or_404_for_update(Position, position_id) if for_update else owned_or_404(Position, position_id)
-    if position.simulated:
-        # A carteira Simulada não tem extrato de movimentos (docs/planilha-acoes.md):
-        # a guarda é do servidor, não só do botão que a grade esconde.
-        abort(403, description="A carteira Simulada não tem extrato de movimentos.")
     movement = db.session.get(PositionMovement, movement_id)
     if movement is None or movement.position_id != position.id or movement.owner_id != current_owner_id():
         abort(404)
@@ -775,15 +751,6 @@ def delete_position_movement(position_id: int, movement_id: int) -> ResponseRetu
 @bp.get("/positions/<int:position_id>/close")
 def close_position_form(position_id: int) -> ResponseReturnValue:
     position = owned_or_404(Position, position_id)
-    if position.simulated:
-        # O botão já não aparece na grade (apresentação); isso cobre quem
-        # chega direto pela URL. A guarda que realmente vale está no POST
-        # (`close_open_position`), que recusa mesmo sem passar por aqui.
-        flash(
-            "A carteira Simulada não permite encerramento. Exclua a posição para desfazê-la.",
-            "error",
-        )
-        return redirect(url_for("portfolio.index"))
     default_price = effective_position_quote(position)[0] if position.quote else position.average_cost
     return render_template(
         "close_position_form.html",
@@ -858,12 +825,8 @@ def _render_exposure(
     devolve so a regiao trocada pelo filtro.
     """
     portfolio_id, broker, selected_portfolio_id = selected_filters()
-    # Exposição continua excluindo a carteira Simulada incondicionalmente
-    # o filtro de Carteira aqui só oferece carteiras reais
-    # (ver `real_portfolio_records`), mas a exclusão fica explícita na
-    # consulta também, para o caso de uma URL manual apontar para a Simulada.
     portfolio = build_portfolio(
-        positions_query(portfolio_id, broker, exclude_simulated=True),
+        positions_query(portfolio_id, broker),
         stale_after_seconds=quote_stale_after_seconds(),
     )
     context = {
@@ -871,7 +834,7 @@ def _render_exposure(
         "brokers": brokers(),
         "selected_broker": broker or "",
         "selected_portfolio_id": selected_portfolio_id,
-        "portfolios": real_portfolio_records(),
+        "portfolios": portfolio_records(),
         "group_rows": [],
         "group_heading": "",
         "missing_quote_rows": missing_quote_rows(portfolio.positions),

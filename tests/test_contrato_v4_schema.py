@@ -68,9 +68,8 @@ def cenario(sessao):
     vendida = _ticker("PETR4")
     sem_cotacao = _ticker("SEMQ3")
     americana = _ticker("AAPL", Market.NASDAQ, "USD")
-    real = Portfolio(name="BRL", owner_ref=usuario, currency="BRL", simulated=False)
-    simulada = Portfolio(name="Simulada", owner_ref=usuario, currency="BRL", simulated=True)
-    sessao.add_all([usuario, corretora, comprada, vendida, sem_cotacao, americana, real, simulada])
+    real = Portfolio(name="BRL", owner_ref=usuario, currency="BRL")
+    sessao.add_all([usuario, corretora, comprada, vendida, sem_cotacao, americana, real])
     sessao.flush()
     agora = datetime.now(UTC)
     sessao.add_all(
@@ -92,7 +91,6 @@ def cenario(sessao):
         (vendida, Side.SELL, "100", "35.5", real),
         (sem_cotacao, Side.BUY, "10", "5.00", real),
         (americana, Side.BUY, "2.5", "180.1234", real),
-        (comprada, Side.BUY, "1000", "40.00", simulada),
     ):
         sessao.add(Position(
             broker_id=corretora.id, ticker_id=ticker.id, portfolio_id=carteira.id, owner_id=usuario.id,
@@ -133,7 +131,7 @@ def test_metadata_cumpre_o_contrato(publicando):
 
 def test_snapshot_cumpre_o_contrato_com_todos_os_recursos(snapshot):
     validar("crv_snapshot", snapshot)
-    assert len(snapshot["holdings"]) == 4  # a simulada fica de fora
+    assert len(snapshot["holdings"]) == 4
     assert snapshot["income"] and snapshot["prices"]["current"] and snapshot["prices"]["history"]
     assert snapshot["accounts"]
 

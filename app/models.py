@@ -293,8 +293,8 @@ class Ticker(Base):
 
 
 class Portfolio(Base):
-    """Uma carteira: BRL, USD ou Simulada, além de quaisquer outras que o
-    usuário cadastrar por ``app.routes.portfolios``.
+    """Uma carteira: BRL, USD ou qualquer outra que o usuário cadastrar por
+    ``app.routes.portfolios``.
 
     É dona da posição (``Position.portfolio_id`` / ``OptionPosition.portfolio_id``
     / ``Transaction.portfolio_id``, FK obrigatória): decide, sem ambiguidade,
@@ -303,11 +303,7 @@ class Portfolio(Base):
     cada carteira; nada impede um mesmo ticker de estar associado a mais de
     uma.
 
-    ``simulated=True`` marca a carteira Simulada (ou qualquer outra carteira
-    de teste que venha a existir): posições nela ficam fora de Risco,
-    Performance e exposição e não geram transação. ``currency`` é ``None``
-    para carteiras simuladas —
-    elas não representam dinheiro real e podem misturar tickers de moedas
+    ``currency`` é ``None`` na carteira que mistura tickers de moedas
     diferentes."""
 
     __tablename__ = "portfolios"
@@ -322,7 +318,6 @@ class Portfolio(Base):
     name: Mapped[str] = mapped_column(String(80))
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
-    simulated: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
@@ -445,15 +440,6 @@ class Position(Base):
     @property
     def currency(self) -> str:
         return self.ticker_ref.currency
-
-    @property
-    def simulated(self) -> bool:
-        """``True`` quando a posição está na carteira Simulada
-        (``portfolio_ref.simulated``). Usada pelas guardas de carteiras simuladas (sem
-        merge, sem extrato, sem encerramento) e pelo agrupamento dos totais
-        de ``app.positions.portfolio.build_portfolio`` por (moeda, simulada)."""
-        return self.portfolio_ref.simulated
-
 
 class Quote(Base):
     __tablename__ = "quotes"
@@ -906,12 +892,6 @@ class OptionPosition(Base):
         (``underlying_ticker_id``): é o contrato que tem preço e é negociado,
         não o subjacente."""
         return self.contract.ticker_ref.currency
-
-    @property
-    def simulated(self) -> bool:
-        """Mesma ideia de ``Position.simulated``, para posições de opção."""
-        return self.portfolio_ref.simulated
-
 
 class OptionQuote(Base):
     __tablename__ = "option_quotes"

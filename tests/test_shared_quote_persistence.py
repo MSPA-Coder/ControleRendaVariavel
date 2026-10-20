@@ -27,7 +27,7 @@ def test_shared_ticker_keeps_latest_market_and_each_side_quote(app_com_banco):
         ticker = Ticker(symbol=f"C{suffix}", trading_name="Shared", market=Market.B3, rtd_market_code="B", currency="BRL")
         db.session.add_all([*users, broker, ticker])
         db.session.flush()
-        portfolios = [Portfolio(owner_id=user.id, name=f"P-{suffix}-{i}", currency="BRL", simulated=False) for i, user in enumerate(users)]
+        portfolios = [Portfolio(owner_id=user.id, name=f"P-{suffix}-{i}", currency="BRL") for i, user in enumerate(users)]
         db.session.add_all(portfolios)
         db.session.flush()
         buy = Position(owner_id=users[0].id, broker_id=broker.id, ticker_id=ticker.id, portfolio_id=portfolios[0].id, quantity=1, average_cost=10, target_multiplier=1, side=Side.BUY, opened_on=date.today())

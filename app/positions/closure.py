@@ -27,7 +27,6 @@ from app.core.domain import (
     weighted_average_cost,
 )
 from app.models import (
-    Portfolio,
     Position,
     PositionMovement,
     PositionMovementKind,
@@ -35,35 +34,6 @@ from app.models import (
     TransactionStatus,
 )
 from app.positions.ledger import archive_closed_position, archive_closed_stock_movements
-
-
-def _is_simulated(portfolio_id: int) -> bool:
-    """Se a carteira ``portfolio_id`` é a Simulada.
-
-    Consulta direta em vez do relacionamento ``Position.portfolio_ref``:
-    o ``candidate`` de ``create_or_merge_position`` ainda não foi
-    adicionado à sessão no ponto em que isso precisa ser decidido, e um
-    relacionamento não carrega por lazy load em um objeto transiente. A
-    consulta é barata: ``Portfolio`` é uma tabela pequena e, nas rotas, o
-    id já costuma estar no mapa de identidade da sessão (validado em
-    ``_parse_form``/``_parse_position`` antes de chegar aqui).
-    """
-
-    portfolio = db.session.get(Portfolio, portfolio_id)
-    return portfolio is not None and portfolio.simulated
-
-
-SIMULATED_MERGE_REJECTED = (
-    "A carteira Simulada não permite reforçar uma posição existente — isso "
-    "seria um aumento, e a carteira Simulada só permite criar, editar e "
-    "excluir. Edite a posição já cadastrada em vez de lançar uma nova "
-    "entrada."
-)
-
-SIMULATED_CLOSE_REJECTED = (
-    "A carteira Simulada não permite encerramento total nem parcial. Para "
-    "desfazer a posição, exclua-a."
-)
 
 
 def create_open_transaction_for_position(position: Position) -> Transaction:
@@ -108,12 +78,8 @@ def sync_open_transaction_for_position(position: Position) -> None:
     """Mantém a linha aberta espelhada em dia após uma edição da posição.
     Cria a linha se, por algum motivo, ela ainda não existir.
 
-    Posição simulada não tem transação. Ao trocar uma posição simulada para uma
-    carteira real, o ramo "cria se não existir" abre a transação sem exigir um
-    caminho dedicado."""
+    """
 
-    if position.simulated:
-        return
     transaction = _open_transaction_for(position.id, position.owner_id)
     if transaction is None:
         create_open_transaction_for_position(position)
@@ -386,8 +352,6 @@ def prior_opening(candidate: Position) -> Position | None:
     repete a verificação sob lock antes de escrever.
     """
 
-    if _is_simulated(candidate.portfolio_id):
-        return None
     existing = db.session.scalar(_mergeable_statement(candidate))
     if existing is not None and candidate.opened_on < existing.opened_on:
         return existing
@@ -413,22 +377,17 @@ def create_or_merge_position(
     """
 
     existing = _mergeable_position(candidate)
-    if existing is not None and _is_simulated(candidate.portfolio_id):
-        # A carteira Simulada não tem "aumento": uma
-        # segunda entrada para a mesma exposição é recusada, nunca fundida.
-        raise ValueError(SIMULATED_MERGE_REJECTED)
     if existing is None:
         db.session.add(candidate)
         db.session.flush()
-        if not candidate.simulated:
-            record_movement(
-                candidate,
-                PositionMovementKind.OPEN,
-                quantity_delta=candidate.quantity,
-                price=candidate.average_cost,
-                occurred_on=candidate.opened_on,
-            )
-            create_open_transaction_for_position(candidate)
+        record_movement(
+            candidate,
+            PositionMovementKind.OPEN,
+            quantity_delta=candidate.quantity,
+            price=candidate.average_cost,
+            occurred_on=candidate.opened_on,
+        )
+        create_open_transaction_for_position(candidate)
         return candidate, False
 
     if candidate.opened_on < existing.opened_on:
@@ -485,15 +444,8 @@ def record_position_adjustment(
     falsificaria o passado: a diferença vira um movimento de ajuste, e o
     extrato continua explicando o estado atual.
 
-    Posição simulada não tem extrato: não faz nada. Cobre tanto a
-    edição comum de uma posição já simulada quanto a transição real ->
-    simulada — o extrato existente é descartado à parte, por
-    ``discard_simulation_history``, porque esta função só adiciona
-    movimentos, nunca apaga.
     """
 
-    if position.simulated:
-        return
     movements = position.movements
     opening = movements[0] if movements else None
     if opening is None:
@@ -526,26 +478,6 @@ def record_position_adjustment(
     )
 
 
-def discard_simulation_history(position: Position) -> None:
-    """Descarta o histórico quando uma posição entra na
-    carteira Simulada: apaga a linha ``status=OPEN`` que a espelhava em
-    Transações e descarta o extrato inteiro — a carteira Simulada não tem
-    nenhum dos dois.
-
-    Chamada pela rota **depois** de a posição já ter o novo
-    ``portfolio_id`` atribuído. A transição no sentido contrário (simulada
-    -> real) não precisa de uma função dedicada: ``record_position_adjustment``
-    recria a abertura do extrato (que está vazio) e
-    ``sync_open_transaction_for_position`` cria a linha aberta que faltava —
-    as duas já rodam depois de toda edição, e as guardas de ambas passam a
-    deixá-las agir assim que a carteira deixa de ser a Simulada.
-    """
-
-    delete_open_transaction_for_position(position.id, position.owner_id)
-    for movement in list(position.movements):
-        position.movements.remove(movement)
-
-
 def apply_position_closure(
     position_id: int,
     exit_price: Decimal,
@@ -569,9 +501,9 @@ def apply_position_closure(
     muda: vender parte da posição realiza resultado, não altera o que foi pago
     pelo que restou.
 
-    A carteira Simulada não permite encerramento: a validação roda depois
-    do ``FOR UPDATE``. Não faz commit/rollback: o caso de uso controla a
-    transação completa, inclusive falhas ao arquivar o histórico.
+    A validação roda depois do ``FOR UPDATE``. Não faz commit/rollback: o caso
+    de uso controla a transação completa, inclusive falhas ao arquivar o
+    histórico.
     """
 
     position = db.session.scalar(
@@ -581,8 +513,6 @@ def apply_position_closure(
     )
     if position is None:
         return None
-    if position.simulated:
-        raise ValueError(SIMULATED_CLOSE_REJECTED)
     split = plan_position_closure(
         held_quantity=position.quantity,
         average_cost=position.average_cost,

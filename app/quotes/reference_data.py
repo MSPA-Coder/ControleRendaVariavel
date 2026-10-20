@@ -26,16 +26,12 @@ class BrokerInput:
 class PortfolioCreateInput:
     name: str
     currency: str | None
-    simulated: bool
     description: str | None
 
 
 @dataclass(frozen=True, slots=True)
 class PortfolioUpdateInput:
-    """Igual a ``PortfolioCreateInput``, sem ``simulated``: a natureza
-    real/simulada de uma carteira é fixada na criação (ver
-    ``app.routes.tables.update_portfolio``) e não é lida do formulário de
-    edição — bloqueado no servidor, não só escondido na UI."""
+    """Os campos que o formulário de edição altera: os mesmos da criação."""
 
     name: str
     currency: str | None
@@ -99,9 +95,8 @@ def _parse_portfolio_description(form: Mapping[str, str]) -> str | None:
 def parse_portfolio_create(form: Mapping[str, str]) -> PortfolioCreateInput:
     name = _parse_portfolio_name(form)
     currency = _parse_portfolio_currency(form)
-    simulated = form.get("simulated", "").strip().lower() in {"1", "true", "on", "yes"}
     description = _parse_portfolio_description(form)
-    return PortfolioCreateInput(name, currency, simulated, description)
+    return PortfolioCreateInput(name, currency, description)
 
 
 def parse_portfolio_update(form: Mapping[str, str]) -> PortfolioUpdateInput:

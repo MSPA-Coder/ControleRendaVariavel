@@ -153,28 +153,12 @@ def portfolio_records(*, include_inactive: bool = False) -> list[Portfolio]:
 
     Usada pelos formulários de posição, opção e transação (campo
     "Carteira" — a carteira de destino é escolhida no formulário, não
-    derivada da moeda do ticker) e pelo filtro homônimo de Ações, Opções e
-    Transações, que oferece as simuladas como escolha explícita. O que não
-    as inclui é a opção "Todas" do filtro: ver ``positions_query``."""
+    derivada da moeda do ticker) e pelo filtro homônimo de Ações, Opções,
+    Transações, Performance e Exposição."""
     statement = select(Portfolio).where(Portfolio.owner_id == current_owner_id()).order_by(Portfolio.name)
     if not include_inactive:
         statement = statement.where(Portfolio.is_active.is_(True))
     return list(db.session.scalars(statement))
-
-
-def real_portfolio_records() -> list[Portfolio]:
-    """Carteiras não-simuladas, em ordem alfabética.
-
-    Opções do filtro de Carteira em Performance e Exposição (Análise), que
-    nunca oferecem a carteira Simulada, pois essas páginas a excluem
-    incondicionalmente."""
-    return list(
-        db.session.scalars(
-            select(Portfolio)
-            .where(Portfolio.owner_id == current_owner_id(), Portfolio.simulated.is_(False), Portfolio.is_active.is_(True))
-            .order_by(Portfolio.name)
-        )
-    )
 
 
 def selected_filters() -> tuple[int | None, str | None, str]:
@@ -183,9 +167,7 @@ def selected_filters() -> tuple[int | None, str | None, str]:
 
     Ponto único de entrada do filtro: ``positions_query`` (Carteira/Ações e
     as páginas de Exposição) e a página de Transações partem todos daqui.
-    Performance usa o mesmo valor bruto, mas adiciona por conta própria a
-    exclusão incondicional da carteira Simulada — ver
-    ``real_portfolio_records``.
+    Performance usa o mesmo valor bruto.
 
     Sem parâmetro `portfolio_id`, ou com um valor que não corresponde ao id
     de nenhuma carteira, o filtro é "Todas" (``None``, sem filtro).
@@ -230,14 +212,13 @@ def positions_query(
     broker: str | None = None,
     *,
     group_by_broker: bool = True,
-    exclude_simulated: bool = False,
     currency: str | None = None,
 ) -> list[Position]:
     from app.positions.queries import stock_positions
 
     return stock_positions(
         current_owner_id(), portfolio_id, broker, group_by_broker=group_by_broker,
-        exclude_simulated=exclude_simulated, currency=currency or selected_currency_filter(),
+        currency=currency or selected_currency_filter(),
     )
 
 
@@ -420,14 +401,13 @@ def price_series_by_ticker(ticker_ids: Iterable[int]) -> dict[int, list[tuple[da
 
 
 def open_real_quantities_by_ticker() -> dict[int, Decimal]:
-    """Quantidade líquida por ticker das posições REAIS ainda abertas.
+    """Quantidade líquida por ticker das posições ainda abertas.
     Usada pelos relatórios de risco e de performance mensal para
     a aproximação "posições atuais constantes no passado" (ver
     ``app.performance.risk.portfolio_value_series``)."""
     statement = (
         select(Position.ticker_id, Position.quantity, Position.side).where(Position.owner_id == current_owner_id())
-        .join(Position.portfolio_ref)
-        .where(Position.owner_id == current_owner_id(), Portfolio.simulated.is_(False))
+        .where(Position.owner_id == current_owner_id())
     )
     totals: dict[int, Decimal] = {}
     for ticker_id, quantity, side in db.session.execute(statement):
@@ -437,7 +417,7 @@ def open_real_quantities_by_ticker() -> dict[int, Decimal]:
 
 
 def open_real_average_cost_by_ticker() -> dict[int, Decimal]:
-    """Custo médio ponderado atual das posições compradas reais por ticker.
+    """Custo médio ponderado atual das posições compradas por ticker.
 
     É a base unitária do YOC anual: proventos por ação recebidos nos últimos
     365 dias divididos pelo custo médio por ação das posições compradas que
@@ -445,11 +425,9 @@ def open_real_average_cost_by_ticker() -> dict[int, Decimal]:
     """
     statement = (
         select(Position.ticker_id, Position.quantity, Position.average_cost)
-        .join(Position.portfolio_ref)
         .where(
             Position.owner_id == current_owner_id(),
             Position.side == Side.BUY,
-            Portfolio.simulated.is_(False),
         )
     )
     totals: dict[int, list[Decimal]] = {}
@@ -473,18 +451,13 @@ def position_movement_events(
     include_options: bool = True,
     ticker_ids: Iterable[int] | None = None,
 ) -> list[HoldingEvent]:
-    """Extrato de posições REAIS — ações e opções — como eventos de
+    """Extrato das posições — ações e opções — como eventos de
     quantidade e fluxo assinados, insumo de ``app.positions.holdings_history`` para o
     TWR encadeado (ver "Performance mensal" em ``docs/planilha-acoes.md``).
 
-    Os filtros são os mesmos de ``app.routes.performance`` — carteira,
-    corretora e exclusão incondicional da carteira Simulada —
-    replicados aqui porque a rota não acessa persistência diretamente.
-    Posição simulada já não gera ``PositionMovement``/``OptionPositionMovement``
-    (``discard_simulation_history``), então a exclusão de
-    ``Portfolio.simulated`` é redundante com esse fato; mesmo assim ela fica
-    explícita, para o relatório financeiro não depender de um efeito
-    colateral de outra função como única garantia.
+    Os filtros são os mesmos de ``app.routes.performance`` — carteira e
+    corretora — replicados aqui porque a rota não acessa persistência
+    diretamente.
 
     São até três consultas — ações vivas, opções vivas e o arquivo das já
     encerradas (``PositionLedgerArchive``) —, nunca uma por posição (sem N+1).
@@ -589,14 +562,12 @@ def position_dividend_allocations(
     crédito; a obrigação de provento correspondente não é registrada pelo app.
 
     A consulta usa apenas eventos de ações: opções não são titulares de
-    proventos de ações, ainda que compartilhem ticker. Carteiras simuladas não
-    entram nem no numerador nem no denominador. Todas as operações monetárias
-    ficam em ``Decimal``.
+    proventos de ações, ainda que compartilhem ticker. Todas as operações
+    monetárias ficam em ``Decimal``.
     """
-    visible_real = [position for position in positions if not position.simulated]
-    if not visible_real:
+    if not positions:
         return {}
-    ticker_ids = {position.ticker_id for position in visible_real}
+    ticker_ids = {position.ticker_id for position in positions}
     dividends = dividend_events(ticker_ids)
     if not dividends:
         return {}
@@ -607,7 +578,7 @@ def position_dividend_allocations(
     )
     total_timeline = QuantityTimeline(total_events)
     if portfolio_id is None and not broker:
-        # O escopo padrão já é o total real do usuário.
+        # O escopo padrão já é o total do usuário.
         scope_timeline = total_timeline
     else:
         scope_events = position_movement_events(
@@ -619,7 +590,7 @@ def position_dividend_allocations(
         scope_timeline = QuantityTimeline(scope_events)
 
     prorated = prorate_dividends(dividends, scope_timeline, total_timeline)
-    current_position_ids = {position.id for position in visible_real}
+    current_position_ids = {position.id for position in positions}
     result: dict[int, Decimal] = {}
     for dividend in prorated:
         quantities = scope_timeline.quantities_at(dividend.payment_date)

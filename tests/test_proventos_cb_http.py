@@ -81,7 +81,7 @@ def caso(app_com_banco, monkeypatch):
         substituida = Dividend(**base, kind=IncomeKind.ALUGUEL, amount=D("777.77"), payment_date=date(2026, 1, 27),
                                superseded_at=func.now())
         congelada = Dividend(**base, kind=IncomeKind.DIVIDENDO, amount=D("30.00"), payment_date=date(2025, 12, 15))
-        carteira = Portfolio(owner_id=usuario.id, name=f"Carteira {sufixo}", currency="BRL", simulated=False)
+        carteira = Portfolio(owner_id=usuario.id, name=f"Carteira {sufixo}", currency="BRL")
         db.session.add_all([linha_cb, substituida, congelada, carteira])
         db.session.flush()
         db.session.add(

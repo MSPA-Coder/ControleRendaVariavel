@@ -24,22 +24,12 @@
       <option value="">Nenhuma</option>
       {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}">{{ currency }}</option>{% endfor %}
     </select></label>
-    <label class="portfolio-simulated-field">
-      <input type="checkbox" name="simulated" value="1">
-      Simulada
-    </label>
     <label>Descrição<input maxlength="500" name="description"></label>
     <button class="button button-primary" type="submit">Adicionar</button>
   </form>
-  <p class="form-help">
-    "Simulada" só pode ser escolhida ao criar a carteira: alterar isso depois
-    exigiria criar ou apagar transações em massa. Para levar uma posição de
-    uma carteira real para uma simulada (ou o contrário), mova a posição —
-    não a carteira.
-  </p>
   <div class="table-wrap">
     <table class="catalog-table">
-      <thead><tr><th>Nome</th><th>Moeda</th><th>Simulada</th><th>Estado</th><th>Descrição</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Moeda</th><th>Estado</th><th>Descrição</th><th>Ações</th></tr></thead>
       <tbody>
       {% for portfolio in portfolios %}
         <tr>
@@ -57,10 +47,6 @@
             <option value="" {{ 'selected' if not portfolio.currency }}>Nenhuma</option>
             {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if portfolio.currency == currency }}>{{ currency }}</option>{% endfor %}
           </select></td>
-          <td>
-            <span class="tag {{ 'tag-open' if portfolio.simulated else 'tag-closed' }}"
-                  title="Definida na criação; não pode ser alterada depois.">{{ 'Sim' if portfolio.simulated else 'Não' }}</span>
-          </td>
           <td>{{ 'Ativa' if portfolio.is_active else 'Arquivada' }}</td>
           <td><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}></td>
           <td class="catalog-actions">
@@ -84,7 +70,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="empty">Nenhuma carteira cadastrada.</td></tr>
+        <tr><td colspan="5" class="empty">Nenhuma carteira cadastrada.</td></tr>
       {% endfor %}
       </tbody>
     </table>

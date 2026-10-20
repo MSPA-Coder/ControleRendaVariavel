@@ -58,8 +58,7 @@ def risk_report() -> str:
     # A quantidade vem do extrato (`position_movement_events`), não do saldo
     # de hoje: medir o passado com a posição atual mostraria um patrimônio
     # que nunca existiu sempre que houve aumento. Sem argumentos porque esta
-    # página não tem filtro de carteira nem de corretora — é a carteira real
-    # inteira, e a exclusão da carteira simulada já vem de dentro.
+    # página não tem filtro de carteira nem de corretora.
     events = position_movement_events()
 
     # Uma consulta para todas as séries da página — métricas por ativo,

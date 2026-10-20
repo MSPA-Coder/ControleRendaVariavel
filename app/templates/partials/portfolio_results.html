@@ -11,7 +11,7 @@
   {% if group_by_broker %}
     {% for group in portfolio.broker_groups %}
     <section class="trade-broker-group">
-      <header class="trade-group-heading"><div><p class="trade-eyebrow">{{ group.currency }} · {{ 'Simulada' if group.simulated else 'Real' }}</p><h3>{{ group.broker }}</h3></div><span>{{ group.positions|length }} posição(ões)</span></header>
+      <header class="trade-group-heading"><div><p class="trade-eyebrow">{{ group.currency }}</p><h3>{{ group.broker }}</h3></div><span>{{ group.positions|length }} posição(ões)</span></header>
       <dl class="trade-group-totals">{{ trades.metric('Custo de entrada', group.cost_total|currency(group.currency, 0)) }}{{ trades.metric('Valor atual', group.current_total|currency(group.currency, 0)) }}{{ trades.metric('Resultado · ' ~ selected_result_label, group.result_total|currency(group.currency, 0), group.result_total|sign_class) }}</dl>
       <div class="trade-card-grid">{% for item in group.positions %}{{ trades.card(item) }}{{ trades.movements(item) }}{% endfor %}</div>
     </section>

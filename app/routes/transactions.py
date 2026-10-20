@@ -230,11 +230,6 @@ def transactions_results_context() -> dict[str, object]:
     )
     if portfolio_id is not None:
         statement = statement.where(Transaction.portfolio_id == portfolio_id)
-    else:
-        # "Todas" quer dizer todas as reais, como no filtro da Carteira.
-        statement = statement.join(Transaction.portfolio_ref).where(
-            Portfolio.simulated.is_(False)
-        )
     if broker:
         statement = statement.where(Broker.name == broker)
     if status_raw != "all":

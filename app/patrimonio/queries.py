@@ -32,8 +32,7 @@ from app.positions.holdings_history import HoldingEvent
 def real_positions(owner_id: int) -> list[Position]:
     statement = (
         select(Position)
-        .join(Position.portfolio_ref)
-        .where(Position.owner_id == owner_id, Portfolio.simulated.is_(False))
+        .where(Position.owner_id == owner_id)
         .options(
             joinedload(Position.quote),
             joinedload(Position.broker_ref),
@@ -74,9 +73,6 @@ def position_timeline(
     - ``include_options=False`` lê só ações; ``ticker_ids`` limita o histórico aos
       ativos que o chamador precisa (lista vazia devolve vazio).
 
-    A carteira simulada fica de fora sempre, de forma explícita: posição simulada já
-    não gera movimento, mas o relatório financeiro não deve depender disso.
-
     O sinal vem do ``side`` da POSIÇÃO, que não existe no movimento, e é aplicado a
     ``resulting_quantity``; os quatro tipos de movimento são lidos pela mesma fórmula,
     sem examinar ``kind``, porque o saldo resultante já está gravado em cada linha.
@@ -110,9 +106,8 @@ def position_timeline(
             Position.broker_id,
         )
         .select_from(Position)
-        .join(Position.portfolio_ref)
         .outerjoin(PositionMovement, PositionMovement.position_id == Position.id)
-        .where(Position.owner_id == owner_id, Portfolio.simulated.is_(False))
+        .where(Position.owner_id == owner_id)
         .order_by(stock_date, PositionMovement.id, Position.id)
     )
     if reference is not None:
@@ -142,12 +137,11 @@ def position_timeline(
             )
             .select_from(OptionPosition)
             .join(OptionPosition.contract)
-            .join(OptionPosition.portfolio_ref)
             .outerjoin(
                 OptionPositionMovement,
                 OptionPositionMovement.option_position_id == OptionPosition.id,
             )
-            .where(OptionPosition.owner_id == owner_id, Portfolio.simulated.is_(False))
+            .where(OptionPosition.owner_id == owner_id)
             .order_by(option_date, OptionPositionMovement.id, OptionPosition.id)
         )
         if reference is not None:
@@ -174,7 +168,7 @@ def position_timeline(
             PositionLedgerArchive.broker_id,
         )
         .join(Portfolio, Portfolio.id == PositionLedgerArchive.portfolio_id)
-        .where(PositionLedgerArchive.owner_id == owner_id, Portfolio.simulated.is_(False))
+        .where(PositionLedgerArchive.owner_id == owner_id)
         .order_by(PositionLedgerArchive.occurred_on, PositionLedgerArchive.id)
     )
     if reference is not None:

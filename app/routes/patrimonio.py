@@ -26,12 +26,9 @@ somaria centavos que nunca existiram.
 
 O QUE ELE OMITE, E DIZ QUE OMITIU
 
-1. **Carteira simulada.** Metade das posições desta base está numa, e somá-la ao
-   patrimônio o infla com dinheiro que não existe -- sem que o número deixe de
-   parecer plausível;
-2. **Opções.** Elas têm valor e ficam de fora até serem publicadas com o mesmo
+1. **Opções.** Elas têm valor e ficam de fora até serem publicadas com o mesmo
    cuidado das ações. Enquanto isso, a contagem aparece na cobertura;
-3. **Posição sem cotação.** Sem preço não há valor a mercado, e inventar um
+2. **Posição sem cotação.** Sem preço não há valor a mercado, e inventar um
    seria pior do que faltar.
 
 Omissão contada é omissão visível; omissão silenciosa é um patrimônio errado com
@@ -61,7 +58,6 @@ from app.models import (
     PatrimonioV4ChangeCounter,
     PatrimonioV4Outbox,
     Portfolio,
-    Position,
     PositionMovementArchive,
     Quote,
     QuoteHistory,
@@ -413,7 +409,7 @@ def _atividades_publicadas(contrato: str):
 
     A lista é deliberadamente materializada após consultas separadas: os dois
     modelos têm datas diferentes e o contrato precisa ordenar o conjunto
-    combinado de forma determinística. Nenhuma linha aberta ou simulada entra.
+    combinado de forma determinística. Nenhuma linha aberta entra.
     Transações são resumos de resultado e não têm os lotes de execução.
     """
     titular_nome = _titular()
@@ -434,11 +430,9 @@ def _atividades_publicadas(contrato: str):
 
     transacoes = (
         select(Transaction)
-        .join(Transaction.portfolio_ref)
         .where(
             Transaction.owner_id == owner_id,
             Transaction.status == TransactionStatus.CLOSED,
-            Portfolio.simulated.is_(False),
         )
         .options(
             joinedload(Transaction.broker_ref),
@@ -850,27 +844,9 @@ def patrimonio_snapshot_v4():
                 **({"origin": item.origin} if from_cb else {}),
             }
         )
-    simulated_equities = int(
-        db.session.scalar(
-            select(func.count(Position.id))
-            .join(Position.portfolio_ref)
-            .where(Position.owner_id == owner_id, Portfolio.simulated.is_(True))
-        )
-        or 0
-    )
-    simulated_options = int(
-        db.session.scalar(
-            select(func.count(OptionPosition.id))
-            .join(OptionPosition.portfolio_ref)
-            .where(OptionPosition.owner_id == owner_id, Portfolio.simulated.is_(True))
-        )
-        or 0
-    )
     real_options = int(
         db.session.scalar(
-            select(func.count(OptionPosition.id))
-            .join(OptionPosition.portfolio_ref)
-            .where(OptionPosition.owner_id == owner_id, Portfolio.simulated.is_(False))
+            select(func.count(OptionPosition.id)).where(OptionPosition.owner_id == owner_id)
         )
         or 0
     )
@@ -900,7 +876,7 @@ def patrimonio_snapshot_v4():
                     "included": len(holdings),
                     "unpriced": unpriced_holdings,
                     "complete": True,
-                    "scope": "posições abertas de ações em carteiras reais; opções e simuladas excluídas",
+                    "scope": "posições abertas de ações; opções excluídas",
                 },
                 "income": {
                     "included": len(income),
@@ -928,13 +904,15 @@ def patrimonio_snapshot_v4():
                 "options": {
                     "available": False,
                     "excluded_options": real_options,
-                    "excluded_simulated": simulated_options,
+                    # A carteira simulada deixou de existir (20/10/2026); o campo
+                    # continua no contrato v4, que o exige, sempre zerado.
+                    "excluded_simulated": 0,
                 },
                 "exclusions": {
                     "unpriced_holdings": unpriced_holdings,
-                    "excluded_simulated": simulated_equities + simulated_options,
-                    "excluded_simulated_equities": simulated_equities,
-                    "excluded_simulated_options": simulated_options,
+                    "excluded_simulated": 0,
+                    "excluded_simulated_equities": 0,
+                    "excluded_simulated_options": 0,
                     "excluded_options": real_options,
                 },
                 "complete_trades": {"available": False},

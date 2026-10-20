@@ -49,7 +49,6 @@ def test_agrega_o_mesmo_ticker_sem_fundir_as_posicoes() -> None:
             ticker_id=12,
             ticker="BRK.B",
             portfolio_ref=SimpleNamespace(name="Exterior"),
-            simulated=False,
             quantity=Decimal(quantity),
             side=Side.BUY,
             broker=broker,

@@ -3,12 +3,7 @@
 {% block title %}{{ "Editar" if editing else "Nova" }} posição{% endblock %}
 {% block workspace_title %}{{ "Editar" if editing else "Nova" }} posição{% endblock %}
 {% block workspace_content %}
-<form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('portfolio.create_position') }}"
-      {# Trocar a carteira para a Simulada ao editar apaga o extrato
-         inteiro (ver `discard_simulation_history`). Os dois atributos abaixo
-         so existem quando ha o que perder de fato; `static/app.js` decide,
-         no submit, se pergunta ou deixa passar. #}
-      {% if editing %}data-confirm-simulated-switch data-position-movement-count="{{ movement_count|default(0) }}"{% endif %}>
+<form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('portfolio.create_position') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if not editing %}<input type="hidden" name="submit_token" value="{{ request.form.get('submit_token') or new_submission_token() }}">{% endif %}
 
@@ -61,7 +56,7 @@
   <label>Carteira<select required name="portfolio_id">
     <option value="">Selecione</option>
     {% for portfolio in portfolios %}
-      <option value="{{ portfolio.id }}" data-simulated="{{ 'true' if portfolio.simulated else 'false' }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>
+      <option value="{{ portfolio.id }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>
     {% endfor %}
   </select></label>
   <div class="form-actions">

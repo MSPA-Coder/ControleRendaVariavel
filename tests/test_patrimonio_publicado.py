@@ -8,8 +8,8 @@ errado do outro lado.
 
 Duas coisas dominam o arquivo, e as duas são sobre **não inflar patrimônio**:
 
-- **carteira simulada não é patrimônio.** Metade das posições da base real está
-  numa. Publicá-las dobraria o número, e ele continuaria parecendo plausível;
+- **o patrimônio só conta o que é do titular.** Posição de outro dono publicada
+  dobraria o número, e ele continuaria parecendo plausível;
 - **titular aqui não é o que titular significa lá.** `owner_id` aponta para o
   usuário do aplicativo; do outro lado é a pessoa dona do dinheiro. Publicar um
   como se fosse o outro atribuiria patrimônio à pessoa errada no dia em que
@@ -238,7 +238,7 @@ banco = pytest.mark.banco
 
 @pytest.fixture
 def cenario(sessao):
-    """Uma carteira real e uma simulada, com uma posição em cada."""
+    """Uma carteira, com o papel e a cotação."""
     usuario = User(username="dono", password_hash="hash")
     corretora = Broker(name="Genial", acronym="GNL")
     papel = Ticker(
@@ -248,9 +248,8 @@ def cenario(sessao):
         rtd_market_code="B",
         currency="BRL",
     )
-    real = Portfolio(name="BRL", owner_ref=usuario, currency="BRL", simulated=False)
-    simulada = Portfolio(name="Simulada", owner_ref=usuario, currency="BRL", simulated=True)
-    sessao.add_all([usuario, corretora, papel, real, simulada])
+    real = Portfolio(name="BRL", owner_ref=usuario, currency="BRL")
+    sessao.add_all([usuario, corretora, papel, real])
     sessao.flush()
     sessao.add(
         Quote(
@@ -267,7 +266,6 @@ def cenario(sessao):
         "corretora": corretora,
         "papel": papel,
         "real": real,
-        "simulada": simulada,
     }
 
 
@@ -316,7 +314,6 @@ def test_snapshot_v4_identifica_explicitamente_cada_holding_como_equity(
 ):
     """O consumidor precisa reconhecer o tipo sem inferi-lo pelo ticker ou rota."""
     sessao.add(_posicao(cenario, cenario["real"]))
-    sessao.add(_posicao(cenario, cenario["simulada"], quantity=Decimal("1000")))
     sessao.flush()
 
     resposta = pedir_snapshot_v4(publicando)
@@ -432,7 +429,6 @@ def test_snapshot_v4_nao_vaza_outro_owner(sessao, cenario, publicando):
         name="Carteira privada de outro",
         owner_ref=outro,
         currency="BRL",
-        simulated=False,
     )
     outro_papel = Ticker(
         symbol="OUTR3",

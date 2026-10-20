@@ -44,11 +44,6 @@ class OptionPortfolioTotal:
     """Nome da carteira, que titula o card. Os totais sao agrupados por
     (carteira, moeda), como em ``app.positions.portfolio``: cada carteira e um bolso
     separado."""
-    simulated: bool
-    """``True`` marca o card visualmente. É atributo da carteira, não do
-    nome dela: pode haver quantas carteiras simuladas o usuário quiser, e
-    cada uma tem o seu card com o seu próprio nome. Dinheiro simulado nunca
-    soma no de uma carteira real."""
     currencies: tuple[str, ...]
     """Moeda do card, sempre uma só desde que o agrupamento passou a incluí-la
     na chave. Continua tupla porque o template já a percorre, e o valor vem
@@ -125,15 +120,9 @@ def build_option_portfolio(
             )
         )
 
-    # "Totais por vencimento" e moneyness excluem a carteira Simulada
-    # (decisão do mantenedor): são leituras de exposição/risco por contrato,
-    # e dinheiro simulado não pode se ler como exposição real — mesmo
-    # mesmo critério de Risco, Performance e exposição, que já excluem
-    # incondicionalmente) e do card de totalização por natureza abaixo (ver
-    # docstring de ``OptionPortfolioTotal``).
     grouped: dict[date, list[OptionMetrics]] = {}
     for view in views:
-        if view.metrics is not None and not view.position.simulated:
+        if view.metrics is not None:
             expiration = view.position.contract.expiration.exercise_date
             grouped.setdefault(expiration, []).append(view.metrics)
     expirations = [
@@ -154,9 +143,7 @@ def build_option_portfolio(
         for expiration, group in sorted(grouped.items())
     ]
 
-    views_with_greeks = [
-        view for view in views if view.greeks is not None and not view.position.simulated
-    ]
+    views_with_greeks = [view for view in views if view.greeks is not None]
     moneyness_counts: dict[str, int] = {}
     for view in views_with_greeks:
         assert view.greeks is not None  # narrows for mypy; filtered above
@@ -174,13 +161,7 @@ def build_option_portfolio(
     def _direction(view: OptionView) -> Decimal:
         return Decimal("1") if view.position.side.value == "C" else Decimal("-1")
 
-    # Ganhos, perdas, resultado e theta somam por natureza (real ou
-    # simulada), nunca juntos: dinheiro simulado não pode se ler
-    # como patrimônio real no card de totalização. O bucket nasce na
-    # primeira posição vista daquela natureza, então uma carteira sem
-    # nenhuma posição simulada simplesmente não ganha um segundo card (mesmo
-    # critério de ``app.positions.portfolio.build_portfolio`` para os totais por
-    # moeda).
+    # Ganhos, perdas, resultado e theta somam por carteira e moeda.
     # Chave (carteira, moeda), como em ``app.positions.portfolio.build_portfolio``:
     # cada carteira e um bolso separado, e a moeda entra na chave porque
     # somar moedas diferentes sem cambio nao significa nada. A moeda vem do
@@ -199,10 +180,9 @@ def build_option_portfolio(
         if view.greeks is not None and view.greeks.theta_daily is not None:
             theta_by_bucket[bucket].append(_direction(view) * view.greeks.theta_daily)
 
-    def _order(bucket: Bucket) -> tuple[bool, str, str]:
+    def _order(bucket: Bucket) -> tuple[str, str]:
         sample = sample_by_bucket[bucket]
-        # Reais antes das simuladas, depois por nome e moeda.
-        return (sample.simulated, sample.portfolio_ref.name, bucket[1])
+        return (sample.portfolio_ref.name, bucket[1])
 
     totals = []
     for bucket in sorted(metrics_by_bucket, key=_order):
@@ -217,7 +197,6 @@ def build_option_portfolio(
         totals.append(
             OptionPortfolioTotal(
                 portfolio_name=sample.portfolio_ref.name,
-                simulated=sample.simulated,
                 currencies=(bucket[1],),
                 gain=gain,
                 loss=loss,

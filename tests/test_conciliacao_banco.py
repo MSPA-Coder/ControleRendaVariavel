@@ -1,5 +1,5 @@
-"""Conciliação mensal contra o PostgreSQL: instantâneo da posição, dono, carteira
-simulada, ativos de fora da B3 e reconhecimentos."""
+"""Conciliação mensal contra o PostgreSQL: instantâneo da posição, dono,
+ativos de fora da B3 e reconhecimentos."""
 
 from __future__ import annotations
 
@@ -66,9 +66,8 @@ def cenario(sessao, app_com_banco, monkeypatch):
     sessao.add_all([dono, outro, corretora])
     sessao.flush()
     real = Portfolio(name=f"Real {sufixo}", owner_ref=dono, currency="BRL")
-    simulada = Portfolio(name=f"Simulada {sufixo}", owner_ref=dono, currency="BRL", simulated=True)
     do_outro = Portfolio(name=f"Real outro {sufixo}", owner_ref=outro, currency="BRL")
-    sessao.add_all([real, simulada, do_outro])
+    sessao.add_all([real, do_outro])
     tickers = {
         nome: Ticker(
             symbol=f"{nome}{sufixo}", trading_name=nome, market=mercado, rtd_market_code=codigo,
@@ -86,7 +85,7 @@ def cenario(sessao, app_com_banco, monkeypatch):
         app_com_banco.config, "MYPROFIT_INSTITUICOES", json.dumps({"GENIAL": corretora.name})
     )
     return {
-        "dono": dono, "outro": outro, "corretora": corretora, "real": real, "simulada": simulada,
+        "dono": dono, "outro": outro, "corretora": corretora, "real": real,
         "do_outro": do_outro, "t": tickers, "sufixo": sufixo,
     }
 
@@ -153,13 +152,12 @@ def test_snapshot_guarda_so_o_que_a_conciliacao_compara_e_marca_o_escopo(sessao,
     assert set(posicao) == {"AAA3"}
 
 
-def test_posicoes_confere_ignora_simulada_exterior_e_outro_dono(sessao, cenario):
+def test_posicoes_confere_ignora_exterior_e_outro_dono(sessao, cenario):
     c = cenario
     a, b, eua = c["t"]["ACAOA"], c["t"]["ACAOB"], c["t"]["EUA"]
     sessao.add_all(
         [
             _posicao(c, a, c["real"], "100", "10.00"),
-            _posicao(c, a, c["simulada"], "999", "1.00"),
             _posicao(c, eua, c["real"], "7", "100.00"),
             _posicao(c, b, c["do_outro"], "50", "3.00", dono=c["outro"]),
         ]

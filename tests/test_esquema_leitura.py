@@ -84,8 +84,7 @@ def cenario(sessao_admin):
     vendida = Ticker(symbol="LTRB3", trading_name="Leitura B", market=Market.B3, rtd_market_code="B", currency="BRL")
     sem_cotacao = Ticker(symbol="LTRC3", trading_name="Leitura C", market=Market.B3, rtd_market_code="B", currency="BRL")
     real = Portfolio(name="Carteira real leitura", owner_ref=usuario, currency="BRL")
-    simulada = Portfolio(name="Carteira simulada leitura", owner_ref=usuario, currency="BRL", simulated=True)
-    sessao_admin.add_all([usuario, corretora, comprada, vendida, sem_cotacao, real, simulada])
+    sessao_admin.add_all([usuario, corretora, comprada, vendida, sem_cotacao, real])
     sessao_admin.flush()
     agora = datetime(2026, 10, 2, 17, 0, tzinfo=UTC)
     sessao_admin.add_all(
@@ -96,7 +95,7 @@ def cenario(sessao_admin):
     )
     sessao_admin.flush()
     return {
-        "usuario": usuario, "corretora": corretora, "real": real, "simulada": simulada,
+        "usuario": usuario, "corretora": corretora, "real": real,
         "comprada": comprada, "vendida": vendida, "sem_cotacao": sem_cotacao,
     }
 
@@ -176,15 +175,14 @@ def test_posicao_sem_cotacao_aparece_sem_preco_e_sem_valor_de_mercado(sessao_adm
     assert custo_total == Decimal("50.00")
 
 
-def test_posicao_de_carteira_simulada_vem_marcada(sessao_admin, cenario):
-    c = cenario
-    sessao_admin.add(_posicao(c, c["comprada"], c["simulada"], lado=Side.BUY, quantidade="10", custo="10.00"))
-    sessao_admin.flush()
-
-    simulada = _consulta(
-        sessao_admin, "SELECT simulada FROM leitura.posicao WHERE carteira = 'Carteira simulada leitura'"
+def test_nenhuma_view_traz_a_coluna_simulada(sessao_admin):
+    """A carteira simulada acabou em 20/10/2026 (revisão 0035)."""
+    colunas = _consulta(
+        sessao_admin,
+        "SELECT table_name FROM information_schema.columns "
+        "WHERE table_schema = 'leitura' AND column_name = 'simulada'",
     )
-    assert simulada == [(True,)]
+    assert colunas == []
 
 
 def test_operacao_fechada_traz_o_resultado_bruto_gravado(sessao_admin, cenario):

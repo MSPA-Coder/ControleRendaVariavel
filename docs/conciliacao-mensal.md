@@ -107,8 +107,7 @@ executa.
 `conciliar-myprofit` tem duas seções.
 
 **Posições** compara quantidade e custo médio da posição do myProfit (somada por
-ativo) com as posições do CRV **na mesma data** (somadas por ativo, sem a carteira
-Simulada): o que foi comprado ou vendido depois dela é desfeito pelos movimentos e
+ativo) com as posições do CRV **na mesma data** (somadas por ativo): o que foi comprado ou vendido depois dela é desfeito pelos movimentos e
 pelas transações fechadas, e o ajuste de cadastro vale para trás. O custo médio
 tolera 0,1%: o myProfit guarda quatro casas, o CRV oito.
 

@@ -339,47 +339,12 @@ def create_portfolio() -> ResponseReturnValue:
     return _portfolios_response(None)
 
 
-def _requested_simulated_change(portfolio: Portfolio) -> bool:
-    """``True`` quando o POST tenta mudar ``simulated`` explicitamente.
-
-    O formulário legítimo de edição não envia o campo (ver
-    ``partials/portfolios_results.html``): só um POST manual chega aqui com
-    ``simulated`` presente. Comparar contra o valor atual — em vez de só
-    checar a presença do campo — evita um falso positivo ao reenviar o
-    mesmo formulário de edição da própria carteira Simulada."""
-    if "simulated" not in request.form:
-        return False
-    requested = request.form.get("simulated", "").strip().lower() in {
-        "1",
-        "true",
-        "on",
-        "yes",
-    }
-    return requested != portfolio.simulated
-
-
 @bp.post("/tables/portfolios/<int:portfolio_id>")
 def update_portfolio(portfolio_id: int) -> ResponseReturnValue:
-    """``simulated`` não é lido do formulário de edição: é fixado na criação
-    e não pode ser alterado depois (ver ``PortfolioUpdateInput``): trocar de
-    real para simulada, ou o
-    contrário, exigiria criar ou apagar transações em massa. Uma posição
-    pode trocar de carteira livremente; a carteira em si, não.
-
-    O formulário legítimo nunca envia ``simulated``; uma tentativa direta
-    (POST manual) é recusada com 422 explícito, em vez de ser ignorada em
-    silêncio como antes."""
+    """Nome, moeda e descrição da carteira."""
     portfolio = owned_or_404(Portfolio, portfolio_id)
     if not portfolio.is_active:
         flash("Reative a carteira antes de editá-la.", "error")
-        return _portfolios_response(portfolio_id, status=422)
-    if _requested_simulated_change(portfolio):
-        flash(
-            "A natureza da carteira (real ou simulada) não muda depois de "
-            "criada. Para mover um investimento entre real e simulada, mova "
-            "a posição — não a carteira.",
-            "error",
-        )
         return _portfolios_response(portfolio_id, status=422)
     try:
         data = parse_portfolio_update(request.form)

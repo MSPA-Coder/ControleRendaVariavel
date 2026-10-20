@@ -54,7 +54,7 @@ def degraus_de_custo_medio(
     ``movimentos`` são pares (data, custo médio resultante) na ordem do
     extrato. Vários movimentos no mesmo dia valem pelo último, que é o estado
     ao fim do pregão. Movimento que não muda o custo não abre degrau.
-    Posição sem extrato (a carteira Simulada não tem) é um único nível, da
+    Posição sem extrato é um único nível, da
     abertura ao custo atual.
     """
     por_dia: dict[date, Decimal] = {}
@@ -120,21 +120,16 @@ def aportes_da_posicao(position: Position) -> list[Aporte]:
 
 
 def linhas_de_custo_medio_do_ticker(ticker_id: int, owner_id: int) -> list[dict[str, object]]:
-    """As linhas de custo médio do usuário no ticker: uma por posição real
+    """As linhas de custo médio do usuário no ticker: uma por posição
     aberta e um segmento por transação de ações já encerrada.
-
-    A carteira Simulada fica de fora: não é dinheiro investido, e os totais
-    do projeto nunca misturam as duas naturezas.
     """
     posicoes = db.session.scalars(
         select(Position)
-        .join(Portfolio, Position.portfolio_id == Portfolio.id)
         # O rótulo usa a corretora; sem isto, uma consulta por posição.
         .options(joinedload(Position.broker_ref))
         .where(
             Position.ticker_id == ticker_id,
             Position.owner_id == owner_id,
-            Portfolio.simulated.is_(False),
         )
         .order_by(Position.opened_on, Position.id)
     ).all()
@@ -160,7 +155,6 @@ def linhas_de_custo_medio_do_ticker(ticker_id: int, owner_id: int) -> list[dict[
             Transaction.ticker_id == ticker_id,
             Transaction.owner_id == owner_id,
             Transaction.status == TransactionStatus.CLOSED,
-            Portfolio.simulated.is_(False),
         )
         .order_by(Transaction.opened_on, Transaction.id)
     ).all()

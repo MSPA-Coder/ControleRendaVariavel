@@ -37,34 +37,11 @@ from app.core.domain import (
 from app.models import (
     OptionPosition,
     OptionPositionMovement,
-    Portfolio,
     PositionMovementKind,
     Transaction,
     TransactionStatus,
 )
 from app.positions.ledger import archive_closed_position
-
-
-def _is_simulated(portfolio_id: int) -> bool:
-    """Mesma ideia de ``position_closure._is_simulated``, para opções: consulta
-    direta porque o ``candidate`` de ``create_or_merge_position`` ainda não foi
-    adicionado à sessão no ponto em que isso precisa ser decidido."""
-
-    portfolio = db.session.get(Portfolio, portfolio_id)
-    return portfolio is not None and portfolio.simulated
-
-
-SIMULATED_MERGE_REJECTED = (
-    "A carteira Simulada não permite reforçar uma posição existente — isso "
-    "seria um aumento, e a carteira Simulada só permite criar, editar e "
-    "excluir. Edite a posição já cadastrada em vez de lançar uma nova "
-    "entrada."
-)
-
-SIMULATED_CLOSE_REJECTED = (
-    "A carteira Simulada não permite encerramento total nem parcial. Para "
-    "desfazer a posição, exclua-a."
-)
 
 
 def create_open_transaction_for_position(position: OptionPosition) -> Transaction:
@@ -109,13 +86,9 @@ def sync_open_transaction_for_position(position: OptionPosition) -> None:
     """Mantém a linha aberta espelhada em dia após uma edição da posição.
     Cria a linha se, por algum motivo, ela ainda não existir.
 
-    Posição simulada não tem transação: não faz nada (ver
-    ``position_closure.sync_open_transaction_for_position``, o mesmo
-    mecanismo para ações, inclusive para a transição simulada -> real: a linha
-    "nasce" aqui porque nenhuma existia antes)."""
+    Ver ``position_closure.sync_open_transaction_for_position``, o mesmo
+    mecanismo para ações."""
 
-    if position.simulated:
-        return
     transaction = _open_transaction_for(position.id, position.owner_id)
     if transaction is None:
         create_open_transaction_for_position(position)
@@ -357,22 +330,17 @@ def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition,
     """
 
     existing = _mergeable_position(candidate)
-    if existing is not None and _is_simulated(candidate.portfolio_id):
-        # A carteira Simulada não tem "aumento": uma
-        # segunda entrada para a mesma exposição é recusada, nunca fundida.
-        raise ValueError(SIMULATED_MERGE_REJECTED)
     if existing is None:
         db.session.add(candidate)
         db.session.flush()
-        if not candidate.simulated:
-            record_movement(
-                candidate,
-                PositionMovementKind.OPEN,
-                quantity_delta=candidate.quantity,
-                price=candidate.average_cost,
-                occurred_on=candidate.opened_on,
-            )
-            create_open_transaction_for_position(candidate)
+        record_movement(
+            candidate,
+            PositionMovementKind.OPEN,
+            quantity_delta=candidate.quantity,
+            price=candidate.average_cost,
+            occurred_on=candidate.opened_on,
+        )
+        create_open_transaction_for_position(candidate)
         return candidate, False
 
     existing.average_cost = weighted_average_cost(
@@ -401,14 +369,8 @@ def record_position_adjustment(
 ) -> None:
     """Mantém o extrato coerente depois de uma edição direta da posição (ver
     ``position_closure.record_position_adjustment``, o mesmo mecanismo para
-    ações).
+    ações)."""
 
-    Posição simulada não tem extrato: não faz nada. O descarte do extrato ao
-    entrar na Simulada é responsabilidade de
-    ``discard_simulation_history``, chamada à parte pela rota."""
-
-    if position.simulated:
-        return
     movements = position.movements
     opening = movements[0] if movements else None
     if opening is None:
@@ -441,14 +403,6 @@ def record_position_adjustment(
     )
 
 
-def discard_simulation_history(position: OptionPosition) -> None:
-    """Apaga a linha aberta e o extrato ao entrar na carteira Simulada."""
-
-    delete_open_transaction_for_position(position.id, position.owner_id)
-    for movement in list(position.movements):
-        position.movements.remove(movement)
-
-
 def apply_position_closure(
     position_id: int,
     exit_price: Decimal,
@@ -463,9 +417,7 @@ def apply_position_closure(
 
     Mesma mecânica de ``position_closure.close_open_position``: reaproveita a
     linha ``status=OPEN`` já existente em ``transactions`` num encerramento
-    total, e insere uma linha fechada nova + reduz o saldo num parcial. A
-    carteira Simulada não permite encerramento — ver a mesma
-    guarda em ``position_closure.close_open_position``.
+    total, e insere uma linha fechada nova + reduz o saldo num parcial.
     """
 
     position = db.session.scalar(
@@ -475,8 +427,6 @@ def apply_position_closure(
     )
     if position is None:
         return None
-    if position.simulated:
-        raise ValueError(SIMULATED_CLOSE_REJECTED)
     split = plan_position_closure(
         held_quantity=position.quantity,
         average_cost=position.average_cost,

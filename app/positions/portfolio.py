@@ -52,16 +52,11 @@ class PortfolioTotal:
     que ninguém pediu. A moeda entra na chave porque somar BRL e USD sem
     taxa de câmbio não significa nada — uma carteira com as duas rende dois
     cards."""
-    simulated: bool
-    """``True`` marca o card visualmente. É atributo da carteira, não do
-    nome dela: pode haver quantas carteiras simuladas o usuário quiser, e
-    cada uma tem o seu card com o seu próprio nome."""
     current_total: Decimal
     cost_total: Decimal
     result_total: Decimal
     return_pct: Decimal | None
-    """Σ resultado / Σ custo desta moeda (e desta natureza, real ou
-    simulada).
+    """Σ resultado / Σ custo desta moeda.
 
     Deliberadamente calculado por moeda, nunca somando moedas diferentes:
     o restante do módulo (pesos, totais) já segrega tudo por moeda porque
@@ -78,34 +73,29 @@ class PortfolioTotal:
 class BrokerGroup:
     broker: str
     currency: str
-    simulated: bool
     positions: list[PositionView]
     current_total: Decimal
     cost_total: Decimal
     result_total: Decimal
     current_weight: Decimal | None
-    """Participação desta corretora no valor atual total da mesma moeda e
-    natureza (real ou simulada — ver ``PortfolioTotal.simulated``)."""
+    """Participação desta corretora no valor atual total da mesma moeda."""
     cost_weight: Decimal | None
-    """Participação desta corretora no custo total da mesma moeda e
-    natureza."""
+    """Participação desta corretora no custo total da mesma moeda."""
 
 
 @dataclass(frozen=True, slots=True)
 class MarketGroup:
     market: Market
     currency: str
-    simulated: bool
     positions: list[PositionView]
     current_total: Decimal
     cost_total: Decimal
     result_total: Decimal
     current_weight: Decimal | None
     """Participação deste mercado (B3/NYSE/NASDAQ) no valor atual total da
-    mesma moeda e natureza (real ou simulada)."""
+    mesma moeda."""
     cost_weight: Decimal | None
-    """Participação deste mercado no custo total da mesma moeda e
-    natureza."""
+    """Participação deste mercado no custo total da mesma moeda."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +109,6 @@ class TickerGroup:
     ticker: str
     currency: str
     portfolio_name: str
-    simulated: bool
     positions: list[PositionView]
     net_quantity: Decimal
     cost_total: Decimal
@@ -183,7 +172,6 @@ def aggregate_by_ticker(views: list[PositionView]) -> list[TickerGroup]:
                 ticker=sample.ticker,
                 currency=currency,
                 portfolio_name=sample.portfolio_ref.name,
-                simulated=sample.simulated,
                 positions=group_views,
                 net_quantity=sum(
                     (
@@ -202,7 +190,7 @@ def aggregate_by_ticker(views: list[PositionView]) -> list[TickerGroup]:
         )
     return sorted(
         groups,
-        key=lambda group: (group.simulated, group.portfolio_name, group.currency, group.ticker),
+        key=lambda group: (group.portfolio_name, group.currency, group.ticker),
     )
 
 
@@ -301,7 +289,7 @@ def build_portfolio(
         if result_mode in {"proventos", "acao_proventos"}:
             dividend_result = (
                 Decimal("0")
-                if position.simulated or dividends_by_position is None
+                if dividends_by_position is None
                 else dividends_by_position.get(position.id, Decimal("0"))
             )
             selected_result = (
@@ -396,7 +384,6 @@ def build_portfolio(
         BrokerGroup(
             broker,
             currency,
-            group_views[0].position.simulated,
             group_views,
             *_aggregate(group_views, (portfolio_id, currency)),
         )
@@ -406,25 +393,22 @@ def build_portfolio(
         MarketGroup(
             market,
             currency,
-            group_views[0].position.simulated,
             group_views,
             *_aggregate(group_views, (portfolio_id, currency)),
         )
         for (market, portfolio_id, currency), group_views in market_grouped.items()
     ]
 
-    # Carteiras reais antes das simuladas, e dentro de cada grupo por nome e
-    # moeda: a ordem de insercao de `totals_by_bucket` segue a dos
-    # `positions` recebidos, que nao tem relacao com "real antes de
-    # simulada". Um pedido ordenado e o que garante os cards reais sempre
-    # aparecerem primeiro, e nao intercalados com os simulados.
+    # Cards por nome da carteira e moeda: a ordem de insercao de
+    # `totals_by_bucket` segue a dos `positions` recebidos, que nao tem
+    # relacao com o nome. Um pedido ordenado da ordem estavel.
     positions_by_bucket: dict[tuple[int, str], Position] = {}
     for position in positions:
         positions_by_bucket.setdefault(_bucket_of(position), position)
 
-    def _order(bucket: tuple[int, str]) -> tuple[bool, str, str]:
+    def _order(bucket: tuple[int, str]) -> tuple[str, str]:
         sample = positions_by_bucket[bucket]
-        return (sample.simulated, sample.portfolio_ref.name, bucket[1])
+        return (sample.portfolio_ref.name, bucket[1])
 
     currency_total_views = []
     for bucket, (current_total, cost_total, result_total) in sorted(
@@ -441,7 +425,6 @@ def build_portfolio(
             PortfolioTotal(
                 currency=bucket[1],
                 portfolio_name=sample.portfolio_ref.name,
-                simulated=sample.simulated,
                 current_total=current_total,
                 cost_total=cost_total,
                 result_total=result_total,

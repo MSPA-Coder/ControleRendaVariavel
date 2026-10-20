@@ -10,7 +10,7 @@ dava uma abertura sintética à ação sem nenhum movimento.
 Este arquivo prova que as duas respostas são a MESMA, para o mesmo dono e sem filtro,
 num cenário que exercita o que poderia separá-las: ação com extrato, ação vendida,
 ação legada sem nenhum movimento, opção com extrato, opção legada sem movimento,
-posição encerrada (arquivo) e carteira simulada.
+posição encerrada (arquivo) e carteira de outro dono.
 """
 
 from __future__ import annotations
@@ -56,11 +56,10 @@ def cenario(sessao, monkeypatch):
     wege, petr, vale, opcao = _ticker("WEGE3"), _ticker("PETR4"), _ticker("VALE3"), _ticker("VALEH100")
     sessao.add_all([usuario, outro, genial, xp, wege, petr, vale, opcao])
     sessao.flush()
-    real = Portfolio(name="Real", owner_ref=usuario, currency="BRL", simulated=False)
-    simulada = Portfolio(name="Simulada", owner_ref=usuario, currency="BRL", simulated=True)
-    do_outro = Portfolio(name="Do outro", owner_ref=outro, currency="BRL", simulated=False)
+    real = Portfolio(name="Real", owner_ref=usuario, currency="BRL")
+    do_outro = Portfolio(name="Do outro", owner_ref=outro, currency="BRL")
     vencimento = OptionExpiration(call_code="HX", put_code="TX", exercise_date=date(2026, 8, 21))
-    sessao.add_all([real, simulada, do_outro, vencimento])
+    sessao.add_all([real, do_outro, vencimento])
     sessao.flush()
     contrato = OptionContract(
         ticker_id=opcao.id, underlying_ticker_id=vale.id, expiration_id=vencimento.id,
@@ -97,9 +96,7 @@ def cenario(sessao, monkeypatch):
     movimento(v, PositionMovementKind.OPEN, "200", "200", date(2026, 1, 20))
     # Ação legada: existe a posição, não existe nenhuma linha de extrato.
     acao(wege, xp, real, Side.BUY, "30", date(2026, 4, 1))
-    # Carteira simulada e carteira de outro dono: ficam de fora.
-    s = acao(petr, genial, simulada, Side.BUY, "999", date(2026, 2, 2))
-    movimento(s, PositionMovementKind.OPEN, "999", "999", date(2026, 2, 2))
+    # Carteira de outro dono: fica de fora.
     acao(vale, genial, do_outro, Side.BUY, "5", date(2026, 2, 2), dono=outro)
 
     def opcao_viva(quantidade, aberta, extrato, corretora=genial):
@@ -138,7 +135,7 @@ def cenario(sessao, monkeypatch):
     sessao.flush()
     monkeypatch.setattr(helpers, "current_owner_id", lambda: usuario.id)
     return {
-        "usuario": usuario, "genial": genial, "xp": xp, "real": real, "simulada": simulada,
+        "usuario": usuario, "genial": genial, "xp": xp, "real": real,
         "wege": wege, "petr": petr, "vale": vale, "opcao": opcao,
     }
 
@@ -166,7 +163,6 @@ def test_o_cenario_exercita_o_que_poderia_separa_las(cenario):
     assert Decimal("-200") in quantidades  # a vendida
     assert Decimal("30") in quantidades  # a ação legada, com a abertura sintética
     assert Decimal("-50") in quantidades  # a opção vendida legada, com a abertura sintética
-    assert Decimal("999") not in quantidades  # a simulada
     assert Decimal("5") not in quantidades  # a do outro dono
     assert len(eventos) == 11
 
@@ -192,8 +188,6 @@ def test_filtro_de_corretora_da_tela(cenario):
 
 def test_filtro_de_carteira_da_tela(cenario):
     assert len(helpers.position_movement_events(portfolio_id=cenario["real"].id)) == 11
-    # A simulada nunca entra, nem pedida pelo id.
-    assert helpers.position_movement_events(portfolio_id=cenario["simulada"].id) == []
 
 
 def test_sem_opcoes_a_tela_le_so_acoes_e_o_arquivo_das_acoes(cenario):
@@ -207,7 +201,7 @@ def test_filtro_de_ativos_da_tela(cenario):
     so_petr = helpers.position_movement_events(ticker_ids=[cenario["petr"].id])
 
     assert {e.ticker_id for e in so_petr} == {cenario["petr"].id}
-    assert len(so_petr) == 1  # a vendida; a da carteira simulada não entra
+    assert len(so_petr) == 1  # a vendida
     assert helpers.position_movement_events(ticker_ids=[]) == []
 
 

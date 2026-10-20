@@ -102,16 +102,15 @@ def test_carteira_real_preserva_natureza_associacao_idempotente_e_exclusao(caso)
     assert cliente.post("/tables/portfolios", data=form).status_code == 302
     with app.app_context():
         portfolio = db.session.scalar(select(Portfolio).where(Portfolio.owner_id == dados["user_ids"][0], Portfolio.name == nome))
-        assert portfolio is not None and not portfolio.simulated
+        assert portfolio is not None
         identificador = portfolio.id
     url = f"/tables/portfolios/{identificador}"
-    assert cliente.post(url, data={**form, "simulated": "1"}).status_code == 422
     assert cliente.post(url, data={**form, "name": nome + " alterada", "description": "Atualizada"}).status_code == 302
     for _ in range(2):
         assert cliente.post(url + "/tickers", data={"csrf_token": token, "ticker_id": dados["ticker"]}).status_code == 302
     with app.app_context():
         portfolio = db.session.get(Portfolio, identificador)
-        assert not portfolio.simulated and portfolio.description == "Atualizada"
+        assert portfolio.description == "Atualizada"
         assert db.session.scalar(select(db.func.count()).select_from(PortfolioTicker).where(PortfolioTicker.portfolio_id == identificador)) == 1
     assert cliente.post(url + f"/tickers/{dados['ticker']}/delete", data={"csrf_token": token}).status_code == 302
     assert cliente.post(url + "/delete", data={"csrf_token": token}).status_code == 302

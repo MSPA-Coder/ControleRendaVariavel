@@ -36,7 +36,6 @@ from app.models import (
 from app.options.closure import (
     conflicting_position,
     delete_open_transaction_for_position,
-    discard_simulation_history,
     record_position_adjustment,
     sync_open_transaction_for_position,
 )
@@ -337,7 +336,6 @@ def update_position(position_id: int) -> ResponseReturnValue:
         ), 422
     previous_quantity = position.quantity
     previous_average_cost = position.average_cost
-    was_simulated = position.simulated
     for key, value in asdict(data).items():
         setattr(position, key, value)
     # Mesma regra de `routes.positions.update_position`, para opções.
@@ -362,13 +360,6 @@ def update_position(position_id: int) -> ResponseReturnValue:
             ticker_id=contract.ticker_id,
             held_on=position.opened_on,
         )
-    # Relacionamento em cache não percebe sozinho a troca de FK — mesmo
-    # motivo de ``routes.positions.update_position``, para ações.
-    db.session.expire(position, ["portfolio_ref"])
-    # Troca de carteira entre a Simulada e uma real — mesmo mecanismo de
-    # ``routes.positions.update_position``, para ações.
-    if position.simulated and not was_simulated:
-        discard_simulation_history(position)
     record_position_adjustment(position, previous_quantity, previous_average_cost)
     sync_open_transaction_for_position(position)
     db.session.commit()
@@ -389,14 +380,6 @@ def delete_position(position_id: int) -> ResponseReturnValue:
 @bp.get("/options/positions/<int:position_id>/close")
 def close_position_form(position_id: int) -> ResponseReturnValue:
     position = owned_or_404(OptionPosition, position_id)
-    if position.simulated:
-        # Mesma guarda de ``routes.positions.close_position_form``, para
-        # ações; a que vale de fato é a do POST (``close_open_position``).
-        flash(
-            "A carteira Simulada não permite encerramento. Exclua a posição para desfazê-la.",
-            "error",
-        )
-        return redirect(url_for("options.index"))
     default_price = position.quote.last_price if position.quote else position.average_cost
     return render_template(
         "close_option_form.html",

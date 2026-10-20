@@ -27,9 +27,9 @@ from app.routes.helpers import (
     dividend_events,
     is_htmx_request,
     parse_positive_id,
+    portfolio_records,
     position_movement_events,
     price_series_by_ticker,
-    real_portfolio_records,
     selected_currency_filter,
     selected_filters,
 )
@@ -55,11 +55,6 @@ def monthly_performance() -> str:
     if portfolio not in {"all", "stocks", "options"}:
         portfolio = "stocks"
 
-    # Performance continua excluindo a carteira Simulada incondicionalmente
-    # qualquer que seja o filtro de Carteira escolhido — a
-    # garantia vem de dentro de `position_movement_events`. Ver
-    # `real_portfolio_records`, que tambem restringe as opcoes do seletor a
-    # carteiras reais.
     events = position_movement_events(portfolio_id, broker)
     # `position_movement_events` devolve acoes e opcoes sempre; o filtro de
     # instrumento e aplicado sobre a origem gravada em `position_key`.
@@ -206,7 +201,7 @@ def monthly_performance() -> str:
         "brokers": brokers(),
         "selected_broker": broker or "",
         "selected_portfolio_id": selected_portfolio_id,
-        "portfolios": real_portfolio_records(),
+        "portfolios": portfolio_records(),
         "selected_portfolio": portfolio,
         "selected_period": period,
         "benchmark_candidates": candidates,

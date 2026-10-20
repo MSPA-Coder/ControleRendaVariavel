@@ -5,7 +5,7 @@ da B3 (ações, opções e ETF; futuros, Tesouro e exterior ficam de fora):
 
 * **posição**: quantidade e custo médio da "Posição detalhada" mais recente
   contra as posições do CRV **na mesma data** (``crv_holdings``), somadas por
-  ativo (o relatório não traz corretora) e sem a carteira Simulada;
+  ativo (o relatório não traz corretora);
 * **venda**: soma das quantidades vendidas nas execuções do período contra a
   soma das quantidades fechadas nas transações do CRV no mesmo período. É o que
   acusa o ciclo inteiro que ficou de fora (compra e venda dentro do período, sem
@@ -312,7 +312,7 @@ def state_on(current: Holding, movements: Iterable[MovementRow], as_of: date) ->
 
 
 def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]:
-    """Posições do CRV por ativo (ações e opções), sem a carteira Simulada.
+    """Posições do CRV por ativo (ações e opções).
 
     Sem ``as_of``, as abertas hoje. Com ``as_of``, as que existiam ao fim daquele
     dia, para comparar com a posição do myProfit **da mesma data**:
@@ -332,17 +332,14 @@ def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]
     stock_rows = db.session.execute(
         select(Position.id, Ticker.symbol, Position.quantity, Position.average_cost, Position.opened_on)
         .join(Ticker, Ticker.id == Position.ticker_id)
-        .join(Portfolio, Portfolio.id == Position.portfolio_id)
-        .where(Position.owner_id == owner_id, Portfolio.simulated.is_(False), Position.side == Side.BUY, Ticker.market == Market.B3)
+        .where(Position.owner_id == owner_id, Position.side == Side.BUY, Ticker.market == Market.B3)
     ).all()
     option_rows = db.session.execute(
         select(OptionPosition.id, Ticker.symbol, OptionPosition.quantity, OptionPosition.average_cost, OptionPosition.opened_on)
         .join(OptionContract, OptionContract.id == OptionPosition.contract_id)
         .join(Ticker, Ticker.id == OptionContract.ticker_id)
-        .join(Portfolio, Portfolio.id == OptionPosition.portfolio_id)
         .where(
             OptionPosition.owner_id == owner_id,
-            Portfolio.simulated.is_(False),
             OptionPosition.side == Side.BUY,
             Ticker.market == Market.B3,
         )
@@ -383,7 +380,6 @@ def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]
         Transaction.side == Side.BUY,
         Transaction.opened_on <= as_of,
         Transaction.closed_on > as_of,
-        Portfolio.simulated.is_(False),
         Ticker.market == Market.B3,
     )
     for is_option, statement in (
@@ -434,7 +430,6 @@ def crv_closed_quantities(owner_id: int, start: date, end: date) -> dict[str, De
         Transaction.side == Side.BUY,
         Transaction.closed_on >= start,
         Transaction.closed_on <= end,
-        Portfolio.simulated.is_(False),
         Ticker.market == Market.B3,
     )
     totals: dict[str, Decimal] = defaultdict(Decimal)

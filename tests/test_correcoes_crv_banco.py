@@ -1,4 +1,4 @@
-"""Correções de 20/10/2026: preço zero, envio duplo, contrato vencido, benchmark e simulada."""
+"""Correções de 20/10/2026: preço zero, envio duplo, contrato vencido e benchmark."""
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -14,7 +14,6 @@ from app.models import (
     OptionContract,
     OptionExpiration,
     OptionType,
-    Portfolio,
     Position,
     QuoteHistory,
     Side,
@@ -132,24 +131,3 @@ def test_benchmark_fora_da_lista_vale_nenhum_e_nao_404(review_case, caminho):
         assert cliente.get(consulta, headers=cabecalhos).status_code == 200
 
 
-def test_carteira_simulada_nao_tem_extrato_no_servidor(review_case):
-    app, dados = review_case
-    with app.app_context():
-        simulada = Portfolio(owner_id=dados["user_ids"][2], name=f"SIM-{uuid4().hex[:6]}", currency="BRL", simulated=True)
-        db.session.add(simulada)
-        db.session.flush()
-        posicao = Position(
-            owner_id=dados["user_ids"][2], broker_id=dados["broker"], ticker_id=dados["ticker_ids"][1],
-            portfolio_id=simulada.id, quantity=Decimal("1"), average_cost=Decimal("5"),
-            target_multiplier=1, side=Side.BUY, opened_on=date.today(),
-        )
-        db.session.add(posicao)
-        db.session.commit()
-        simulada_id = posicao.id
-    cliente, token = client_for(app, dados["ids"][2])
-
-    assert cliente.get(f"/positions/{simulada_id}/movements/1/edit").status_code == 403
-    assert cliente.post(f"/positions/{simulada_id}/movements/1", data={"csrf_token": token}).status_code == 403
-    assert cliente.post(f"/positions/{simulada_id}/movements/1/delete", data={"csrf_token": token}).status_code == 403
-    # Posição real: a guarda não a alcança (movimento inexistente continua 404).
-    assert cliente.get(f"/positions/{dados['position']}/movements/2147483647/edit").status_code == 404

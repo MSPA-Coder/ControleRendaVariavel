@@ -68,7 +68,7 @@ def test_varios_movimentos_no_mesmo_dia_valem_pelo_ultimo() -> None:
 
 
 def test_posicao_sem_extrato_e_um_nivel_no_custo_atual() -> None:
-    """A carteira Simulada não tem extrato."""
+    """Posição sem nenhuma linha de extrato."""
     assert _degraus() == [Degrau(date(2026, 1, 1), Decimal("99"))]
 
 
@@ -81,18 +81,17 @@ def cenario(sessao):
         rtd_market_code="B", currency="BRL",
     )
     carteira = Portfolio(name="Carteira degraus", owner_ref=usuario, currency="BRL")
-    simulada = Portfolio(name="Simulada degraus", owner_ref=usuario, currency="BRL", simulated=True)
-    sessao.add_all([usuario, corretora, papel, carteira, simulada])
+    sessao.add_all([usuario, corretora, papel, carteira])
     sessao.flush()
-    return usuario, corretora, papel, carteira, simulada
+    return usuario, corretora, papel, carteira
 
 
-def _aporte(cenario, dia: date, quantidade: str, preco: str, carteira=None) -> Position:
-    usuario, corretora, papel, real, _simulada = cenario
+def _aporte(cenario, dia: date, quantidade: str, preco: str) -> Position:
+    usuario, corretora, papel, carteira = cenario
     posicao, _ = create_or_merge_position(
         Position(
             owner_id=usuario.id, broker_id=corretora.id, ticker_id=papel.id,
-            portfolio_id=(carteira or real).id, quantity=Decimal(quantidade),
+            portfolio_id=carteira.id, quantity=Decimal(quantidade),
             average_cost=Decimal(preco), side=Side.BUY, opened_on=dia,
         )
     )
@@ -101,10 +100,9 @@ def _aporte(cenario, dia: date, quantidade: str, preco: str, carteira=None) -> P
 
 @pytest.mark.banco
 def test_ticker_mostra_posicao_aberta_em_degraus_e_encerrada_em_segmento(sessao, cenario):
-    usuario, corretora, papel, carteira, simulada = cenario
+    usuario, corretora, papel, carteira = cenario
     _aporte(cenario, date(2026, 1, 10), "100", "10.00")
     _aporte(cenario, date(2026, 2, 12), "100", "20.00")
-    _aporte(cenario, date(2026, 3, 1), "50", "8.00", carteira=simulada)
     sessao.add(
         Transaction(
             owner_id=usuario.id, broker_id=corretora.id, ticker_id=papel.id,

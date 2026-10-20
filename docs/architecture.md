@@ -90,9 +90,11 @@ consolidador. O contrato é `patrimonio/v4`: todo valor viaja como **texto**
 **nome normalizado** — o que os dois sistemas compartilham — e nada é somado
 entre moedas.
 
-Três coisas ficam **sempre** de fora, com a contagem na cobertura: carteira
-simulada (não é patrimônio), opções (ainda não publicadas) e, no valor a mercado,
-a posição sem cotação (a posição vai, com `market_value` nulo). Omissão contada
+Duas coisas ficam **sempre** de fora, com a contagem na cobertura: opções (ainda
+não publicadas) e, no valor a mercado, a posição sem cotação (a posição vai,
+com `market_value` nulo). Os campos `excluded_simulated*` continuam no contrato,
+sempre `0`: a carteira simulada foi retirada em 20/10/2026, mas o schema do v4
+os exige. Omissão contada
 é omissão visível.
 
 O teto de requisições vale também para quem apresenta o token correto: o token
@@ -146,7 +148,7 @@ opaco. Cada item de `holdings` publica `instrument_type: "equity"`, identificand
 de forma explícita e estável o tipo das posições abertas de ações que compõem o
 escopo atual. `coverage.holdings.complete` declara `true` porque a lista contém
 todas as posições abertas de ações em carteiras reais do owner, inclusive as sem
-cotação; carteiras simuladas e opções ficam fora desse escopo. O consumidor só
+cotação; opções ficam fora desse escopo. O consumidor só
 deve reconciliar holdings ausentes dentro desse escopo quando essa cobertura for
 completa. Posições declaram `price_kind` e `valuation_method`: o preço avaliado
 usa cotação específica do lado quando disponível e recorre ao preço geral do
@@ -186,7 +188,7 @@ outbox guarda 30 dias: `flask expurgar-outbox-v4`, no timer diário do
 a mais nova sem dono, para que um checkpoint antigo continue vendo que houve
 mudança (`app/patrimonio/outbox.py`). Regravar uma cotação de histórico com o
 mesmo preço não emite invalidação. Proventos representam o valor recebido, sem
-discriminação de imposto. Carteiras simuladas e opções não entram no snapshot.
+discriminação de imposto. Opções não entram no snapshot.
 As rotas mantêm `Cache-Control: no-store` e usam `REPEATABLE READ` para compor
 uma resposta coerente.
 

@@ -199,12 +199,10 @@ def _open_positions(owner_id: int, trade: Trade, instrument: _Instrument) -> lis
     model = OptionPosition if instrument.is_option else Position
     statement = (
         select(model)
-        .join(Portfolio, Portfolio.id == model.portfolio_id)
         .where(
             model.owner_id == owner_id,
             model.broker_id == trade.broker_id,
             model.side == Side.BUY,
-            Portfolio.simulated.is_(False),
         )
         .order_by(model.id)
     )
@@ -221,7 +219,6 @@ def _default_portfolio(owner_id: int, currency: str) -> int:
         db.session.scalars(
             select(Portfolio.id).where(
                 Portfolio.owner_id == owner_id,
-                Portfolio.simulated.is_(False),
                 Portfolio.is_active.is_(True),
                 Portfolio.currency == currency,
             )
@@ -229,7 +226,7 @@ def _default_portfolio(owner_id: int, currency: str) -> int:
     )
     if len(ids) != 1:
         raise _PendingError(
-            f"não há uma única carteira real em {currency} para abrir a posição ({len(ids)} encontradas)"
+            f"não há uma única carteira ativa em {currency} para abrir a posição ({len(ids)} encontradas)"
         )
     return ids[0]
 

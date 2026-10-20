@@ -42,20 +42,19 @@ def cenario(sessao):
     vencimento = OptionExpiration(call_code=sufixo[:5], put_code=sufixo[3:], exercise_date=date(2035, 1, 19))
     sessao.add_all([dono, outro, corretora, ativo, ticker, vencimento])
     sessao.flush()
-    carteira = Portfolio(owner_id=dono.id, name=f"Real {sufixo}", currency="BRL", simulated=False)
-    simulada = Portfolio(owner_id=dono.id, name=f"Simulada {sufixo}", currency="BRL", simulated=True)
+    carteira = Portfolio(owner_id=dono.id, name=f"Real {sufixo}", currency="BRL")
     contrato = OptionContract(ticker_id=ticker.id, underlying_ticker_id=ativo.id, expiration_id=vencimento.id,
                               option_type=OptionType.CALL, strike=Decimal("20"))
-    sessao.add_all([carteira, simulada, contrato])
+    sessao.add_all([carteira, contrato])
     sessao.flush()
     return SimpleNamespace(dono=dono, outro=outro, corretora=corretora, carteira=carteira,
-                           simulada=simulada, contrato=contrato)
+                           contrato=contrato)
 
 
-def aporte(cenario, quantidade="100", custo="2", simulada=False):
+def aporte(cenario, quantidade="100", custo="2"):
     return OptionPosition(
         owner_id=cenario.dono.id, broker_id=cenario.corretora.id, contract_id=cenario.contrato.id,
-        portfolio_id=(cenario.simulada if simulada else cenario.carteira).id,
+        portfolio_id=cenario.carteira.id,
         quantity=Decimal(quantidade), average_cost=Decimal(custo), side=Side.BUY,
         opened_on=date(2026, 1, 2),
     )
@@ -101,14 +100,3 @@ def test_outro_dono_nao_encerra_posicao_e_quantidade_excessiva_e_recusada(sessao
     assert sessao.query(Transaction).filter_by(status=TransactionStatus.CLOSED).count() == 0
 
 
-def test_simulada_nao_cria_movimento_ou_transacao_e_recusa_fusao_e_fechamento(sessao, cenario):
-    posicao, _ = create_or_merge_position(aporte(cenario, simulada=True))
-    sessao.flush()
-    assert list(posicao.movements) == []
-    assert sessao.query(Transaction).count() == 0
-    with pytest.raises(ValueError):
-        create_or_merge_position(aporte(cenario, simulada=True))
-    with pytest.raises(ValueError):
-        apply_position_closure(posicao.id, Decimal("4"), date(2026, 1, 10), owner_id=cenario.dono.id)
-    assert posicao.quantity == Decimal("100")
-    assert sessao.query(Transaction).count() == 0

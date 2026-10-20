@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
 from app.core.currency_filter import ALL
-from app.models import Broker, OptionContract, OptionPosition, Portfolio, Position, Ticker
+from app.models import Broker, OptionContract, OptionPosition, Position, Ticker
 
 
 def stock_positions(
@@ -14,7 +14,6 @@ def stock_positions(
     broker: str | None = None,
     *,
     group_by_broker: bool = True,
-    exclude_simulated: bool = False,
     currency: str = ALL,
 ) -> list[Position]:
     order_columns = (
@@ -31,9 +30,9 @@ def stock_positions(
             joinedload(Position.quote),
             joinedload(Position.broker_ref),
             joinedload(Position.ticker_ref),
-            # `build_portfolio` lê `position.simulated` (via `portfolio_ref`)
-            # para cada posição, para agrupar os totais por (moeda, simulada)
-            # — sem eager load aqui, cada leitura seria uma consulta própria.
+            # `build_portfolio` lê `portfolio_ref` de cada posição para agrupar
+            # os totais por carteira e moeda — sem eager load aqui, cada
+            # leitura seria uma consulta própria.
             joinedload(Position.portfolio_ref),
             # O extrato entra em uma consulta única para as posições da página:
             # a Carteira consulta o tamanho dele em toda linha, para decidir se
@@ -44,16 +43,6 @@ def stock_positions(
     )
     if portfolio_id is not None:
         statement = statement.where(Position.portfolio_id == portfolio_id)
-    if portfolio_id is None or exclude_simulated:
-        # "Todas" quer dizer todas as **reais**: carteira simulada é insight,
-        # e misturá-la no conjunto padrão faria o número somado na tela se
-        # ler como patrimônio. Para vê-la, escolhe-se ela no filtro.
-        #
-        # `exclude_simulated` força a exclusão mesmo com uma carteira
-        # simulada escolhida na URL: é o que as páginas de Exposição
-        # (Análise) usam, onde ela nunca entra. O resultado
-        # fica vazio nesse caso, o que é seguro.
-        statement = statement.join(Position.portfolio_ref).where(Portfolio.simulated.is_(False))
     if broker:
         statement = statement.where(Broker.name == broker)
     selected_currency = currency
@@ -79,9 +68,8 @@ def option_positions(
             ),
             joinedload(OptionPosition.contract)
             .joinedload(OptionContract.expiration),
-            # `build_option_portfolio` lê `position.simulated` (via
-            # `portfolio_ref`) para cada posição — sem eager load aqui, cada
-            # leitura seria uma consulta própria.
+            # `build_option_portfolio` lê `portfolio_ref` de cada posição — sem
+            # eager load aqui, cada leitura seria uma consulta própria.
             joinedload(OptionPosition.portfolio_ref),
             # O extrato entra em uma consulta única para as posições da
             # página: a grade consulta o tamanho dele em toda linha, para

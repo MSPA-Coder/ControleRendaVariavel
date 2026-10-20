@@ -207,7 +207,7 @@ def test_database_rejects_financial_links_between_owners(legacy_app):
         ticker = Ticker(symbol='TEST3', trading_name='Ativo', market=Market.B3, currency='BRL', rtd_market_code='B')
         db.session.add_all([*users, broker, ticker])
         db.session.flush()
-        portfolios = [Portfolio(name='Mesma carteira', owner_id=user.id, currency='BRL', simulated=False) for user in users]
+        portfolios = [Portfolio(name='Mesma carteira', owner_id=user.id, currency='BRL') for user in users]
         db.session.add_all(portfolios)
         db.session.flush()
         with pytest.raises(IntegrityError) as error, db.session.begin_nested():

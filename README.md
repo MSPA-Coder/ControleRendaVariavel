@@ -23,10 +23,8 @@ detalhados de cálculos e comportamento ficam na documentação funcional.
 
 Toda posição e carteira pertence ao usuário autenticado. Corretoras, tickers,
 contratos, vencimentos e cotações são referências globais; cotações só ficam
-visíveis para tickers que o usuário já possuiu. Carteiras simuladas servem apenas para
-insight: não geram movimentos ou transações, não consolidam novas entradas e
-não podem ser encerradas. Totais permanecem separados por moeda e por natureza
-real ou simulada. Tickers de referência alimentam comparadores e cálculos de
+visíveis para tickers que o usuário já possuiu. Totais permanecem separados por
+moeda. Tickers de referência alimentam comparadores e cálculos de
 risco, mas não são negociáveis.
 
 Tema, taxa de cálculo e comparação são alterados em **Preferências** pela

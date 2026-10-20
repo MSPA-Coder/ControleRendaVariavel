@@ -58,7 +58,7 @@ def review_case(app_com_banco):
                                   exercise_date=date.today() + timedelta(days=2000 + int(suffix[:3], 16)))
         db.session.add_all([*users, broker, *tickers, expiry])
         db.session.flush()
-        portfolios = [Portfolio(owner_id=u.id, name=f'PRIVATE-{suffix}-{i}', currency='BRL', simulated=False)
+        portfolios = [Portfolio(owner_id=u.id, name=f'PRIVATE-{suffix}-{i}', currency='BRL')
                       for i, u in enumerate(users)]
         contract = OptionContract(ticker_id=tickers[1].id, underlying_ticker_id=tickers[0].id,
                                   expiration_id=expiry.id, option_type=OptionType.CALL, strike=Decimal('10'))

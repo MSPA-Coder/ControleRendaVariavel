@@ -89,8 +89,7 @@ def carteira_medida(app_com_banco):
         corretora = Broker(name=f"Perf {sufixo}", acronym=sufixo[:6])
         db.session.add_all([usuario, corretora])
         db.session.flush()
-        carteira = Portfolio(owner_id=usuario.id, name=f"Perf {sufixo}", currency="BRL",
-                             simulated=False)
+        carteira = Portfolio(owner_id=usuario.id, name=f"Perf {sufixo}", currency="BRL")
         db.session.add(carteira)
         db.session.commit()
         criados.update(usuario=usuario.id, sessao=usuario.get_id(), corretora=corretora.id,

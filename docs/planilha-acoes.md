@@ -85,12 +85,6 @@ Todos os valores são um snapshot da cotação carregada na requisição. Uma no
 leitura do coletor pode atualizar a cotação logo depois, e o próximo refresh
 recalculará os resultados; não há nova consulta por movimento.
 
-Nada disso vale numa carteira `simulated`: ela existe só para ver valores nas
-grades, não para operar. Uma segunda entrada na mesma exposição é **rejeitada**
-em vez de fundida (não há aumento), não há extrato de movimentos, e não há
-encerramento total nem parcial — desfazer é excluir a posição. Essas guardas
-ficam no servidor (rota), nunca só na interface.
-
 Regras de um **aumento**:
 
 - o custo médio passa a ser a média ponderada pela quantidade,
@@ -163,7 +157,7 @@ Posições encerradas também aparecem, em cinza: como o encerramento total apag
 o extrato, cada transação fechada vira um segmento reto no custo médio final,
 da abertura ao encerramento. Um encerramento parcial é uma transação fechada
 própria e gera o seu segmento. Opções não entram (o custo delas é prêmio, em
-outra escala) nem a carteira Simulada. Ao aproximar o período, uma linha que
+outra escala). Ao aproximar o período, uma linha que
 começou antes da janela aparece desde o início dela. A comparação com
 benchmark permanece em evolução percentual e, portanto, não mostra
 referências de preço absoluto.
@@ -230,8 +224,8 @@ posições restantes; somente posições atualmente abertas aparecem na grade.
 Assim, uma posição só recebe provento pago numa data em que já detinha
 quantidade comprada.
 
-Somente eventos de **ações reais** entram no cálculo; contratos de opções e
-carteiras simuladas não geram proventos atribuídos. Valores e rateios usam
+Somente eventos de **ações** entram no cálculo; contratos de opções não geram
+proventos atribuídos. Valores e rateios usam
 `Decimal`, sem arredondar no domínio. As linhas sem cotação continuam com
 resultado não aplicável e a indicação **Aguardando primeira cotação RTD**;
 totais e agregados seguem a cobertura atual, que não soma linhas sem cotação.
@@ -480,14 +474,12 @@ Corretora e prazo não alteram o resultado.
 
 - Totais são derivados das posições persistidas; não existem colunas
   redundantes no banco.
-- Totais e pesos são agrupados por (moeda, natureza — real ou simulada, ver
-  `Portfolio.simulated`); BRL e USD nunca são somados, e dinheiro simulado
-  nunca é somado ao patrimônio real, mesmo dentro da mesma moeda.
-- Pesos usam como denominador a carteira visível dentro do mesmo balde
-  (moeda, natureza), mantendo denominadores independentes entre baldes.
+- Totais e pesos são agrupados por moeda; BRL e USD nunca são somados.
+- Pesos usam como denominador a carteira visível dentro da mesma moeda,
+  mantendo denominadores independentes entre moedas.
 - A grade pode ser filtrada por carteira e por corretora; o filtro vale para
   os totais e pesos exibidos. O padrão é "Todas" — linhas de todas as
-  carteiras aparecem juntas, mas os totais continuam separados por balde.
+  carteiras aparecem juntas, mas os totais continuam separados por moeda.
 - O filtro global de moeda vale para as telas financeiras. O padrão é BRL;
   USD restringe à moeda escolhida e `Todas` mostra ambos os grupos sem
   conversão nem soma implícita.
