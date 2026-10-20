@@ -40,8 +40,9 @@ expressa melhor.
 ## Execução e persistência
 
 Aplicação, PostgreSQL, migrações e build rodam em Docker, e é lá que testes e
-lint são validados antes de commitar. Não instale ferramentas do projeto no
-Python global do host. Comandos usuais:
+lint rodam: durante o desenvolvimento, só os testes focados no que mudou; o
+`quality` completo roda na CI do PR (ver "Validação proporcional"). Não
+instale ferramentas do projeto no Python global do host. Comandos usuais:
 
 ```powershell
 docker compose up --build -d
@@ -204,7 +205,11 @@ docker compose --profile quality run --build --rm quality
 O `--build` mantém o comando explícito: o serviço não monta o código do host;
 Compose reconstrói sem cache a partir das tags base atuais antes dos testes.
 
-Registre o que foi executado e omitido. Além do comando acima:
+Esse comando completo não roda mais na máquina antes do PR: a CI do PR executa
+exatamente o mesmo contêiner. Localmente, rode só os testes focados no que
+mudou, e o `quality` completo apenas para reproduzir uma falha da CI.
+
+Registre o que foi executado e omitido. Além dos testes focados:
 
 | Mudança | Validação adicional |
 |---|---|
@@ -231,15 +236,27 @@ edite, faça commit ou merge no VPS. Consulte `docs/deployment-vps.md` antes de
 operá-lo.
 
 O branch `main` é protegido: toda mudança nasce em um branch (use o prefixo
-`codex/` quando não houver outro nome pedido), passa pelo `quality`, é enviada
-em pull request e só chega a `main` após todos os checks obrigatórios passarem.
-Não faça commit ou `git push origin main` direto; depois do merge, atualize o
-checkout local e só então execute o `~/deploy.sh` no VPS.
+`codex/` quando não houver outro nome pedido), é enviada em pull request com
+squash merge e só chega a `main` após todos os checks obrigatórios passarem.
+A branch não precisa estar atualizada em relação ao `main`: não faça merge do
+`main` nela só para o PR entrar. O auto-merge está ligado: depois de
+`gh pr create`, rode `gh pr merge <n> --auto --squash`, e o PR entra sozinho
+quando os checks passarem. Não faça commit ou `git push origin main` direto;
+nunca `--admin`, push forçado ou rebase em branch publicada.
+
+A combinação de PRs é verificada pela CI do `main` depois do merge, e o VPS
+implanta sozinho: o `atualizar-stacks.timer` roda a cada 5 minutos, espera a
+CI do `main`, faz backup verificado e roda `~/deploy.sh renda`. Ele alerta uma
+vez se a CI reprovar ou o deploy for revertido, e não repete aquele commit até
+o `main` andar de novo. Não é preciso esperar a CI nem rodar o deploy à mão
+depois do merge; `~/deploy.sh renda` serve para adiantar ou repetir um deploy,
+e `~/deploy.sh --status` mostra VPS × GitHub.
 
 Ao atualizar dependências, alargue o teto compatível e preserve o piso mínimo
 já verificado. O Dependabot acompanha o `uv.lock` pelo ecossistema `uv`, com
 `versioning-strategy: increase-if-necessary`. Elevar o piso
 declara uma incompatibilidade e só deve ocorrer com justificativa e validação.
-Toda ampliação de faixa reconstrói a imagem e roda `quality`. Migrações são
+Toda ampliação de faixa reconstrói a imagem e roda os testes focados; o
+`quality` completo roda na CI do PR. Migrações são
 aditivas e imutáveis depois de aplicadas; mudanças incompatíveis usam nova
 revisão e estratégia explícita de dados e rollback.

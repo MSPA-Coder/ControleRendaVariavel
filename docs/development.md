@@ -81,6 +81,11 @@ do host; Compose reconstrói sem cache a partir das tags base atuais antes de
 executar os testes. A CI semanal repete esse build, os testes e as auditorias
 para verificar atualizações de sistema e dependências.
 
+Esse comando completo não roda mais na máquina antes do PR: a CI do PR executa
+exatamente o mesmo contêiner. Durante o desenvolvimento, rode só os testes
+focados no que mudou, e o comando completo apenas para reproduzir uma falha da
+CI.
+
 A suíte protege os contratos que valem para toda requisição: negação por padrão,
 autorização por papel, CSRF, cabeçalhos e CSP, health check, resolução de
 segredo, configuração de runtime, persistência dos filtros entre trocas de

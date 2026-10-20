@@ -164,26 +164,29 @@ memória dos workers não deve ser tratado como limite global.
 
 ### Publicação pelo GitHub
 
-`main` é protegido e o VPS o espelha. Portanto, antes de chamar o script do
-servidor, publique a mudança neste fluxo, a partir da máquina de
-desenvolvimento:
+`main` é protegido e o VPS o espelha. Publique a mudança neste fluxo, a partir
+da máquina de desenvolvimento:
 
 ```bash
 git switch -c codex/minha-mudanca
-# valide a mudança pelo portão quality
+# rode os testes focados no que mudou; o quality completo roda na CI do PR
 git add <arquivos>
 git commit -m "Descreve a mudança"
 git push -u origin codex/minha-mudanca
 gh pr create --base main --head codex/minha-mudanca
-gh pr checks <numero-do-pr> --watch
-gh pr merge <numero-do-pr> --squash --delete-branch
-git switch main
-git pull --ff-only origin main
+gh pr merge <numero-do-pr> --auto --squash
 ```
 
-O push direto para `main` é recusado. Não inicie a implantação se algum check
-obrigatório falhar: corrija a causa, valide novamente e atualize o mesmo PR.
-Somente o `main` remoto já mesclado é elegível ao `~/deploy.sh`.
+O push direto para `main` é recusado. Com o auto-merge, o PR entra sozinho
+quando os checks obrigatórios passarem; a branch não precisa estar atualizada
+em relação ao `main`. Se algum check falhar, corrija a causa e atualize o
+mesmo PR. Somente o `main` remoto já mesclado é elegível ao `~/deploy.sh`.
+
+O deploy é automático: o `atualizar-stacks.timer` roda a cada 5 minutos e,
+quando o `main` avança, espera em silêncio a CI do `main`, faz backup
+verificado e roda `~/deploy.sh renda`. Ele alerta uma vez se a CI reprovar ou o
+deploy for revertido, e não repete aquele commit até o `main` andar de novo.
+Não é preciso aguardar a CI nem rodar o deploy à mão depois do merge.
 
 As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
 roteiros continuam valendo para qualquer instalação que ainda esteja antes
@@ -256,7 +259,8 @@ dependência inesperada interrompe a transação integralmente.
 
 ### Fluxo operacional usual
 
-Use o script de implantação do VPS:
+O `atualizar-stacks.timer` chama o script de implantação do VPS sozinho quando
+o `main` avança. Para adiantar ou repetir um deploy, rode-o à mão:
 
 ```bash
 ~/deploy.sh renda

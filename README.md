@@ -223,6 +223,10 @@ docker compose --profile quality run --build --rm quality
 `--build` mantém a validação explícita: o serviço não monta o código do host;
 Compose reconstrói sem cache com as tags base atuais antes dos testes.
 
+A CI do PR roda exatamente esse contêiner, então ele não roda mais na máquina
+antes do PR: localmente, rode só os testes focados no que mudou, e o completo
+apenas para reproduzir uma falha da CI.
+
 Para mudanças de runtime, também reconstrua a imagem e confira `/health`. Para
 alterações apenas documentais, valide o Compose, links, caminhos, buscas
 residuais e `git diff --check`.
