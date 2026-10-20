@@ -182,11 +182,14 @@ quando os checks obrigatórios passarem; a branch não precisa estar atualizada
 em relação ao `main`. Se algum check falhar, corrija a causa e atualize o
 mesmo PR. Somente o `main` remoto já mesclado é elegível ao `~/deploy.sh`.
 
-O deploy é automático: o `atualizar-stacks.timer` roda a cada 5 minutos e,
-quando o `main` avança, espera em silêncio a CI do `main`, faz backup
-verificado e roda `~/deploy.sh renda`. Ele alerta uma vez se a CI reprovar ou o
-deploy for revertido, e não repete aquele commit até o `main` andar de novo.
-Não é preciso aguardar a CI nem rodar o deploy à mão depois do merge.
+Depois do merge, a CI do `main` roda e publica a imagem que o deploy usa. O
+deploy de commits novos é só à mão, com autorização do usuário: quando a
+mudança estiver pronta e só faltar o deploy, o agente avisa o usuário e roda
+`~/deploy.sh renda` somente com o sim dele. Ninguém precisa vigiar a CI do
+`main`: o script recusa sozinho enquanto ela não estiver verde; se ainda
+estiver rodando, tenta-se de novo minutos depois. O `reconstruir-bases.timer`
+(quartas, 12:00 UTC) continua reconstruindo as imagens-base e, se o `main`
+tiver avançado, aplica também os commits ainda não implantados.
 
 As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
 roteiros continuam valendo para qualquer instalação que ainda esteja antes
@@ -259,8 +262,7 @@ dependência inesperada interrompe a transação integralmente.
 
 ### Fluxo operacional usual
 
-O `atualizar-stacks.timer` chama o script de implantação do VPS sozinho quando
-o `main` avança. Para adiantar ou repetir um deploy, rode-o à mão:
+Use o script de implantação do VPS, com a autorização do usuário:
 
 ```bash
 ~/deploy.sh renda
