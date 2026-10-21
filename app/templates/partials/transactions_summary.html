@@ -1,7 +1,7 @@
 {% if performance_by_currency %}
 {% for summary in performance_by_currency %}
 <section class="summary" aria-label="Resultado de transações em {{ summary.currency }}">
-  <article class="workspace-highlight"><span>Resultado realizado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}" data-sensitive-value="true">{{ summary.result|currency(summary.currency) }}</strong><small>Somente operações encerradas, dentro dos filtros</small></article>
+  <article class="workspace-highlight"><span>Resultado realizado · {{ summary.currency }}</span><strong class="{{ summary.result|sign_class }}" data-sensitive-value="true">{{ summary.result|currency(summary.currency) }}</strong><small>Somente operações encerradas, dentro dos filtros. Bruto: sem corretagem, taxas nem IRRF, que estão no Controle Bancário</small></article>
   <article><span>Ganhos · {{ summary.currency }}</span><strong class="positive" data-sensitive-value="true">{{ summary.gain|currency(summary.currency) }}</strong></article>
   <article><span>Perdas · {{ summary.currency }}</span><strong class="negative" data-sensitive-value="true">{{ summary.loss|currency(summary.currency) }}</strong></article>
 </section>
