@@ -82,6 +82,9 @@ PUBLIC_ENDPOINTS = frozenset({
     "portfolio.patrimonio_activities_v4",
     "portfolio.patrimonio_changes_v4",
     "portfolio.patrimonio_ledger_v4",
+    # Status para o Roteiro de fechamento do CB: mesmo desenho, autenticado
+    # pelo token do vínculo CB <-> CRV (`CB_PATRIMONIO_TOKEN`) dentro da view.
+    "portfolio.fechamento_status",
     "static",
     # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
     # tela de login é a única página fora da sessão que precisa de um
@@ -424,6 +427,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "portfolio.patrimonio_activities_v4",
         "portfolio.patrimonio_changes_v4",
         "portfolio.patrimonio_ledger_v4",
+        "portfolio.fechamento_status",
     ):
         aplicar_limite(app, limiter, endpoint, "60 per minute; 1200 per hour", override_defaults=True)
     for endpoint in (

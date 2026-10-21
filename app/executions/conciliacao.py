@@ -311,8 +311,8 @@ def state_on(current: Holding, movements: Iterable[MovementRow], as_of: date) ->
     return True, Holding(quantity, average)
 
 
-def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]:
-    """Posições do CRV por ativo (ações e opções).
+def crv_holdings(owner_id: int, as_of: date | None = None, *, b3: bool = True) -> dict[str, Holding]:
+    """Posições do CRV por ativo (ações e opções); com ``b3=False``, as do exterior.
 
     Sem ``as_of``, as abertas hoje. Com ``as_of``, as que existiam ao fim daquele
     dia, para comparar com a posição do myProfit **da mesma data**:
@@ -328,11 +328,12 @@ def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]
     "só no myProfit" o que foi vendido depois, e a correção ingênua reabre o
     papel vendido.
     """
+    mercado = Ticker.market == Market.B3 if b3 else Ticker.market != Market.B3
     lots: dict[str, list[Holding]] = defaultdict(list)
     stock_rows = db.session.execute(
         select(Position.id, Ticker.symbol, Position.quantity, Position.average_cost, Position.opened_on)
         .join(Ticker, Ticker.id == Position.ticker_id)
-        .where(Position.owner_id == owner_id, Position.side == Side.BUY, Ticker.market == Market.B3)
+        .where(Position.owner_id == owner_id, Position.side == Side.BUY, mercado)
     ).all()
     option_rows = db.session.execute(
         select(OptionPosition.id, Ticker.symbol, OptionPosition.quantity, OptionPosition.average_cost, OptionPosition.opened_on)
@@ -341,7 +342,7 @@ def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]
         .where(
             OptionPosition.owner_id == owner_id,
             OptionPosition.side == Side.BUY,
-            Ticker.market == Market.B3,
+            mercado,
         )
     ).all()
     if as_of is None:
@@ -380,7 +381,7 @@ def crv_holdings(owner_id: int, as_of: date | None = None) -> dict[str, Holding]
         Transaction.side == Side.BUY,
         Transaction.opened_on <= as_of,
         Transaction.closed_on > as_of,
-        Ticker.market == Market.B3,
+        mercado,
     )
     for is_option, statement in (
         (
@@ -501,6 +502,44 @@ def build_conciliation(
         positions=apply_notes(positions, notes),
         sales=apply_notes(sales, notes),
     )
+
+
+#: Grupos do exterior que o CRV também tem como posição (a renda fixa EUA e a conta
+#: corrente em dólar moram no CB).
+EXTERIOR_GROUPS = frozenset({"acao_eua", "etf_usa"})
+
+
+def myprofit_exterior(owner_id: int, as_of: date) -> dict[str, Holding]:
+    """Quantidade por ativo do exterior na posição do myProfit da data.
+
+    Só quantidade: o relatório traz o custo do exterior em reais, convertido por
+    uma taxa do myProfit, e o CRV guarda em dólar; comparar os dois acusaria
+    câmbio, não lote errado.
+    """
+    from app.executions.myprofit import ASSET_GROUPS, _fold
+
+    totals: dict[str, Decimal] = defaultdict(Decimal)
+    for asset, group_label, quantity in db.session.execute(
+        select(MyprofitPosition.asset, MyprofitPosition.group_label, MyprofitPosition.quantity).where(
+            MyprofitPosition.owner_id == owner_id, MyprofitPosition.as_of == as_of
+        )
+    ):
+        if ASSET_GROUPS.get(_fold(group_label)) in EXTERIOR_GROUPS:
+            totals[asset] += quantity
+    return {asset: Holding(total) for asset, total in totals.items()}
+
+
+def build_exterior(owner_id: int, as_of: date) -> list[Finding]:
+    """Ações e ETF do exterior: o myProfit da data contra o CRV da mesma data.
+
+    Quem escolhe ``as_of`` leva em conta o atraso da integração da Avenue no
+    myProfit (dias): a posição de uma data recente ainda não tem os últimos
+    negócios. Diferença explicada (o SGOV da Nomad que o myProfit não lê, por
+    exemplo) fica reconhecida pela mesma nota de posição da B3.
+    """
+    theirs = myprofit_exterior(owner_id, as_of)
+    ours = {asset: Holding(holding.quantity) for asset, holding in crv_holdings(owner_id, as_of, b3=False).items()}
+    return apply_notes(compare_positions(theirs, ours), notes_of(owner_id))
 
 
 def save_position_snapshot(owner_id: int, report: PositionReport) -> tuple[int, int]:

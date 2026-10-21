@@ -21,6 +21,7 @@ def register_blueprints(app: Flask) -> None:
         collector_agent,
         dividends,
         executions,
+        fechamento,
         health,
         partials,
         patrimonio,

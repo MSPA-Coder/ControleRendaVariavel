@@ -48,6 +48,7 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(marcar_execucoes_aplicadas)
     app.cli.add_command(conferir_pregoes)
     app.cli.add_command(importar_posicao_myprofit)
+    app.cli.add_command(importar_coleta_myprofit)
     app.cli.add_command(conciliar_myprofit)
     app.cli.add_command(reconhecer_conciliacao)
     app.cli.add_command(importar_proventos_cb)
@@ -500,6 +501,83 @@ def importar_posicao_myprofit(arquivo: Path, usuario: str | None, gravar: bool) 
     removed, created = save_position_snapshot(owner_id, report)
     db.session.commit()
     click.echo(f"Gravada a posição de {report.as_of:%d/%m/%Y}: {created} linha(s), {removed} substituída(s).")
+
+
+@click.command("importar-coleta-myprofit")
+@click.argument("arquivo", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--usuario", default=None, help="Dono dos dados (padrão: PATRIMONIO_OWNER_ID).")
+@click.option("--gravar", is_flag=True, help="Grava de fato. Sem esta opção o comando só faz o ensaio.")
+def importar_coleta_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -> None:
+    """Importa a coleta do myProfit (pacote myprofit-coleta/1): negócios, posições e proventos.
+
+    O padrão é o ENSAIO. Com --gravar, numa transação só: os negócios entram em
+    executions (repetidos são reconhecidos), cada data de posição substitui a
+    mesma data em myprofit_positions e a conferência de proventos fica
+    registrada para o status de fechamento. Posições, transações e proventos do
+    CRV não são tocados: aplicar os negócios continua sendo aplicar-execucoes.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.executions import coleta
+    from app.executions.conciliacao import save_position_snapshot
+    from app.executions.myprofit import ExecutionReportError
+    from app.executions.service import InstitutionMapError, apply_import, plan_import
+
+    owner_id = _owner_for_command(usuario)
+    if arquivo.stat().st_size > coleta.LIMITE_DE_BYTES:
+        raise click.ClickException("O pacote passa de 4 MB.")
+    try:
+        pacote = coleta.ler(arquivo.read_bytes())
+        retratos = coleta.retratos(pacote)
+        report = coleta.negocios(pacote)
+        plan = plan_import(owner_id, report) if report is not None else None
+    except (coleta.ColetaError, ExecutionReportError, InstitutionMapError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    corte = str(current_app.config.get("PROVENTOS_CB_CORTE") or "").strip()
+    try:
+        corte_do_cb = date.fromisoformat(corte) if corte else None
+    except ValueError as exc:
+        raise click.ClickException("PROVENTOS_CB_CORTE deve usar AAAA-MM-DD.") from exc
+    conferencia = coleta.conferir_proventos(owner_id, pacote, corte_do_cb)
+
+    click.echo(f"Pacote de {pacote.de:%d/%m/%Y} a {pacote.ate:%d/%m/%Y}; sha256 {pacote.sha256[:12]}.")
+    if plan is None:
+        click.echo("Negócios: o pacote não traz o histórico de investimentos.")
+    else:
+        click.echo(
+            f"Negócios: {len(plan.new_rows)} novo(s), {plan.repeated} repetido(s), {len(plan.changed)} alterado(s), "
+            f"{plan.out_of_scope} fora de escopo."
+        )
+        for problem in plan.problems:
+            click.echo(f"PENDÊNCIA: {problem}", err=True)
+    for retrato in retratos:
+        dentro = sum(1 for row in retrato.rows if row.in_scope)
+        click.echo(f"Posição de {retrato.as_of:%d/%m/%Y}: {len(retrato.rows)} linha(s), {dentro} da B3.")
+    if conferencia.inicio and conferencia.fim and conferencia.fim >= conferencia.inicio:
+        click.echo(
+            f"Proventos de {conferencia.inicio:%d/%m/%Y} a {conferencia.fim:%d/%m/%Y}: "
+            f"{conferencia.conferem} conferem, {len(conferencia.divergencias)} com diferença."
+        )
+        for texto in conferencia.divergencias:
+            click.echo(f"  diferença: {texto}")
+    if plan is not None and plan.problems:
+        raise click.ClickException("Os negócios têm pendências; nada foi gravado.")
+    if any(retrato.as_of > date.today() for retrato in retratos):
+        raise click.ClickException("O pacote traz posição com data futura; refaça a coleta.")
+    if not gravar:
+        click.echo("Ensaio: nada foi gravado. Use --gravar para confirmar.")
+        return
+    try:
+        if plan is not None and plan.can_write:
+            apply_import(owner_id, plan, file_name=arquivo.name)
+        for retrato in retratos:
+            save_position_snapshot(owner_id, retrato)
+        coleta.registrar(owner_id, pacote, conferencia)
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
+    click.echo("Gravado. Negócios novos ainda não estão nas posições: use aplicar-execucoes.")
 
 
 def _holding_text(holding: object) -> str:

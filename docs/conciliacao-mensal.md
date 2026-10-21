@@ -7,8 +7,56 @@ CRV (`aplicar-execucoes`) e cada lado é conferido contra o outro; o que não ba
 vira tarefa. A conciliação só **mostra** a diferença; corrigir o que o comando
 não resolve sozinho é decisão de quem mantém.
 
-O que **não** entra: futuros, Tesouro Direto, renda fixa e contas no exterior
-(Avenue, Nomad, Revolut). O IR continua no myProfit; o CRV não o calcula.
+O que **não** entra: futuros, Tesouro Direto, renda fixa e caixa no exterior
+(eles moram no CB, que os recebe da mesma coleta). As ações e os ETF do exterior
+são conferidos só em quantidade, com margem para o atraso da Avenue (ver
+"Exterior"). O IR continua no myProfit; o CRV não o calcula.
+
+Desde 21/10/2026 o caminho é a **coleta única** (seção abaixo): um pacote só,
+que o CB e o CRV importam, no lugar dos relatórios emitidos um a um. Os passos
+seguintes continuam válidos e são o que a coleta faz por baixo. O Roteiro de
+fechamento do CB mostra, a qualquer data de corte, o que falta dos dois lados
+(o CRV publica o próprio estado em `GET /fechamento/status`).
+
+## Coleta única
+
+1. Na aba do myProfit logada no navegador embutido, carregue
+   `scripts/myprofit/ler-relatorio.js` e `scripts/myprofit/coletar.js` e rode
+   `await coletarMyProfit('AAAA-MM-01', 'AAAA-MM-DD')`. O pacote
+   (`myprofit-coleta/1`) traz a posição por corretora em cada fim de mês e na data
+   final, as notas de câmbio, os proventos e o "Histórico de investimentos" já
+   anonimizado. Só campos de uma lista fixa são copiados, e o script recusa o
+   pacote se sobrar algo com cara de CPF ou e-mail. Para uma conta nova no CB
+   (abertura em 31/12/2025), passe `{ fimDeMesDesde: '2025-12-31' }`.
+2. Traga o pacote para um arquivo local: rode
+   `py scripts/myprofit/receber-pacote.py <arquivo.json>` e, na aba, envie o pacote
+   por um formulário POST para `http://127.0.0.1:8766/` (campo `pacote`). O
+   navegador embutido bloqueia download e `fetch` para o `localhost`; a navegação
+   do formulário passa, e nada vai na URL.
+3. **CB**: Roteiro de fechamento › Coleta do myProfit (prévia e gravação), ou
+   `manage.py importar_coleta_myprofit <arquivo> --usuario U [--gravar]`.
+4. **CRV**: leve o arquivo ao contêiner (como no passo 3 abaixo) e rode
+   `flask --app app:create_app importar-coleta-myprofit /tmp/coleta.json` (ensaio)
+   e de novo com `--gravar`. Os negócios entram em `executions` (repetido é
+   reconhecido), cada data de posição substitui a mesma data em
+   `myprofit_positions`, e a conferência de proventos fica em `myprofit_coletas`.
+   Depois, `aplicar-execucoes` como no passo 5.
+
+**Proventos.** A coleta confere, por ativo e mês de pagamento, os proventos do
+myProfit contra os do CRV (que vêm do CB), nas corretoras que o CB cobre e a
+partir de `PROVENTOS_CB_CORTE`. Confere quando o CRV bate com o total ou com o
+total menos o imposto (o CB guarda o líquido), com R$ 1,00 de tolerância. Os
+pagos nos sete dias antes da coleta ficam de fora: o crédito ainda pode não ter
+chegado ao CB.
+
+**Exterior.** O myProfit recebe a Avenue com alguns dias de atraso, então a
+posição do exterior é conferida na data mais recente da coleta que esteja pelo
+menos cinco dias antes dela (na prática, o fim do mês anterior), contra o CRV da
+mesma data, só em quantidade: o custo do exterior no myProfit vem em reais por
+uma taxa dele, e o CRV o guarda em dólar. A renda fixa EUA e a conta corrente em
+dólar ficam no CB. Corretora que o myProfit não lê (a Nomad, por exemplo, quando
+o lançamento lá é manual) aparece como diferença e se reconhece com
+`reconhecer-conciliacao posicao ATIVO "nota"`.
 
 ## Quando e quem
 

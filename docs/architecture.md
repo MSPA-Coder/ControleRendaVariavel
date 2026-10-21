@@ -520,6 +520,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
 | `execution_imports`, `executions` | negócios importados do myProfit e os lotes que os trouxeram (revisão `20261018_0030`); não são posição nem transação |
 | `myprofit_positions`, `reconciliation_notes` | a "Posição detalhada" do myProfit por data e as diferenças da conciliação que o mantenedor explicou (revisão `20261018_0033`); só a conciliação mensal lê |
+| `myprofit_coletas` | cada pacote da coleta do myProfit importado, com o resumo da conferência de proventos (revisão `20261021_0036`); o status de fechamento lê |
 
 A transação é delimitada no caso de uso que inicia a escrita — nunca em camada
 inferior, nunca aberta durante uma chamada externa. Invariantes concorrentes são
@@ -687,6 +688,28 @@ nas URLs `http`.
   posição da mesma data é substituída), `conciliar-myprofit [--inicio] [--fim]
   [--posicao] [--tudo]` (sai com código 1 se houver pendência) e
   `reconhecer-conciliacao posicao|venda ATIVO "nota" [--remover]`.
+* `build_exterior` compara, só em quantidade, as ações e os ETF do exterior
+  (`EXTERIOR_GROUPS`) da posição do myProfit de uma data com o CRV da mesma data
+  (`crv_holdings(..., b3=False)`).
+
+### Coleta do myProfit e status de fechamento
+
+`app/executions/coleta.py` lê o pacote `myprofit-coleta/1` (de
+`scripts/myprofit/coletar.js`, o mesmo que o CB importa): os negócios seguem por
+`plan_import`/`apply_import`, cada data de posição vira um retrato em
+`myprofit_positions` e os proventos são conferidos contra os do CRV; o pacote fica
+em `myprofit_coletas` (revisão `20261021_0036`), com o resumo da conferência.
+Comando: `importar-coleta-myprofit <pacote> [--gravar]` (ensaio por padrão, uma
+transação na gravação).
+
+`GET /fechamento/status?ate=AAAA-MM-DD` (`app/routes/fechamento.py`, contrato
+`crv-fechamento/1`) é lido pelo Roteiro de fechamento do CB pela rede interna. Devolve
+itens já avaliados (coleta importada, negócios a aplicar, posição da B3, exterior,
+pregões, proventos), cada um com etapa, estado, texto e o que fazer. Sem sessão:
+autentica pelo token do vínculo CB ↔ CRV (`CB_PATRIMONIO_TOKEN`, o mesmo com que o
+CRV lê o CB), está em `PUBLIC_ENDPOINTS` e tem o limite de taxa da publicação de
+patrimônio. A conferência por pregão lê o CB de volta; o resultado fica guardado
+dez minutos por processo.
 
 ### Proventos do CB (a partir de 01/01/2026)
 

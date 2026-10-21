@@ -94,6 +94,9 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         "portfolio.patrimonio_changes_v4",
         "portfolio.patrimonio_ledger_v4",
         "portfolio.patrimonio_metadata_v4",
+        # Status para o Roteiro de fechamento do CB, pela rede interna: mesmo
+        # desenho, com o token do vínculo CB <-> CRV conferido na view.
+        "portfolio.fechamento_status",
         "static",
         # CSS do banner de mensagem, que `login.html` usa. Sem isto o
         # `requer_login` bloquearia o próprio arquivo que estiliza "Usuário ou

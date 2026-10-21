@@ -1556,6 +1556,31 @@ class ReconciliationNote(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class MyprofitColeta(Base):
+    """Uma coleta do myProfit importada (``app.executions.coleta``).
+
+    O pacote traz negócios, posições por data e proventos; os negócios vão para
+    ``executions`` e as posições para ``myprofit_positions``, como pelos
+    relatórios. Aqui fica só o que identifica o pacote (``sha256``), até quando
+    ele vai e o resumo da conferência de proventos, que o status de fechamento
+    lê sem refazer a conta.
+    """
+
+    __tablename__ = "myprofit_coletas"
+    __table_args__ = (
+        CheckConstraint("length(sha256) = 64", name="sha256_length"),
+        UniqueConstraint("owner_id", "sha256", name="uq_myprofit_coletas_owner_sha256"),
+        Index("ix_myprofit_coletas_owner_ate", "owner_id", "ate"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    sha256: Mapped[str] = mapped_column(String(64))
+    ate: Mapped[date] = mapped_column(Date)
+    summary: Mapped[dict] = mapped_column(JSONB)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class QuoteHistory(Base):
     """Série temporal de cotações por ativo, base dos relatórios de
     histórico e dos KPIs de risco (volatilidade, Sharpe, drawdown, VaR, Beta
