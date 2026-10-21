@@ -119,6 +119,10 @@
         "name": { "$ref": "#/$defs/texto" },
         "kind": { "enum": ["gerencial", "transferencia", "movimentacao"] },
         "group": { "$ref": "#/$defs/texto_ou_nulo" },
+        "valuation": {
+          "type": "boolean",
+          "description": "Opcional (21/10/2026). Presente (true) so na categoria de variacao de mercado, publicada com kind gerencial: o CB nao a conta como receita ou despesa, mas para o patrimonio ela e retorno. Quem separa retorno realizado de nao realizado usa este campo."
+        },
         "created_at": { "$ref": "#/$defs/instante_ou_nulo" },
         "updated_at": { "$ref": "#/$defs/instante_ou_nulo" }
       }

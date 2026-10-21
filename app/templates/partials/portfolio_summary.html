@@ -36,8 +36,8 @@
         <span>Posição bruta cotada <small class="currency-symbol">{{ symbol }}</small></span>
         <strong data-sensitive-value="true">{{ total.current_total|number(0) }}</strong>
       </article>
-      <article>
-        <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
+      <article title="Posição cotada menos o custo de entrada, das posições abertas. Só se realiza ao vender; o resultado realizado fica em Transações.">
+        <span>Variação não realizada <small class="currency-symbol">{{ symbol }}</small></span>
         <strong class="{{ total.result_total|sign_class }}" data-sensitive-value="true">{{ total.result_total|number(0) }}</strong>
       </article>
       <article>

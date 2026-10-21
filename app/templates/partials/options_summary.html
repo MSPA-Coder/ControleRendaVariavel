@@ -13,8 +13,8 @@
         <span>Perdas <small class="currency-symbol">{{ symbol }}</small></span>
         <strong class="negative" data-sensitive-value="true">{{ total.loss|number(0) }}</strong>
       </article>
-      <article>
-        <span>Resultado <small class="currency-symbol">{{ symbol }}</small></span>
+      <article title="Prêmio e preço atual das posições abertas. Só se realiza ao encerrar; o resultado realizado fica em Transações.">
+        <span>Variação não realizada <small class="currency-symbol">{{ symbol }}</small></span>
         <strong class="{{ total.result|sign_class }}" data-sensitive-value="true">{{ total.result|number(0) }}</strong>
       </article>
       <article title="Soma do decaimento diário esperado do prêmio das posições deste card, já considerando compra/venda.">
