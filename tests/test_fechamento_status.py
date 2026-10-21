@@ -168,10 +168,21 @@ def test_exterior_compara_so_quantidade_na_data(sessao, cenario):
 @pytest.mark.banco
 def test_proventos_conferem_pelo_liquido_e_a_diferenca_aparece(sessao, cenario):
     c = cenario
-    sessao.add(Dividend(
-        owner_id=c["dono"].id, broker_id=c["genial"].id, ticker_id=c["acao"].id, kind=IncomeKind.JCP,
-        amount=D("85.00"), payment_date=date(2026, 9, 10),
-    ))
+    aluguel = Ticker(symbol=f"ALUG{c['sufixo']}", trading_name="Aluguel", market=Market.B3, rtd_market_code="B", currency="BRL")
+    sessao.add(aluguel)
+    sessao.flush()
+    sessao.add_all([
+        Dividend(
+            owner_id=c["dono"].id, broker_id=c["genial"].id, ticker_id=c["acao"].id, kind=IncomeKind.JCP,
+            amount=D("85.00"), payment_date=date(2026, 9, 10),
+        ),
+        # Aluguel vindo do CB: líquido 82,70 de um bruto de 100; o myProfit informa o bruto.
+        Dividend(
+            owner_id=c["dono"].id, broker_id=c["genial"].id, ticker_id=aluguel.id, kind=IncomeKind.ALUGUEL,
+            amount=D("82.70"), gross_amount=D("100.00"), withheld_amount=D("17.30"),
+            payment_date=date(2026, 9, 30), origin="cb", origin_id=f"cb-{c['sufixo']}",
+        ),
+    ])
     sessao.flush()
     proventos = [
         # JCP: o CRV guarda o líquido (100 - 15 de imposto).
@@ -179,15 +190,19 @@ def test_proventos_conferem_pelo_liquido_e_a_diferenca_aparece(sessao, cenario):
          "valor_usd": 19, "data_pagamento": "2026-09-10"},
         {"ticker": "OUTRA3", "tipo": "DIVIDENDO", "corretora": "Genial", "valor": 40, "imposto": 0,
          "valor_usd": 8, "data_pagamento": "2026-09-12"},
-        # Pago na semana da coleta: o CB pode ainda não ter o crédito; fica de fora.
+        {"ticker": f"ALUG{c['sufixo']}", "tipo": "ALUGUEL", "corretora": "Genial", "valor": 100, "imposto": 0,
+         "valor_usd": 19, "data_pagamento": "2026-09-30"},
+        # Depois do último provento que o CB trouxe (30/09): o extrato ainda não
+        # chegou, então fica de fora.
         {"ticker": "OUTRA3", "tipo": "DIVIDENDO", "corretora": "Genial", "valor": 40, "imposto": 0,
-         "valor_usd": 8, "data_pagamento": "2026-10-18"},
+         "valor_usd": 8, "data_pagamento": "2026-10-05"},
         # Corretora que o CB não cobre não entra.
         {"ticker": "Aluguel", "tipo": "ALUGUEL", "corretora": "Avenue", "valor": 30, "imposto": 0,
          "valor_usd": 6, "data_pagamento": "2026-09-17"},
     ]
     registro, conferencia = _importar(c, _pacote(c["sufixo"], proventos=proventos))
-    assert conferencia.conferem == 1
+    assert conferencia.fim == date(2026, 9, 30)
+    assert conferencia.conferem == 2
     assert conferencia.divergencias == ["OUTRA3 09/2026: myProfit R$ 40.00, CRV R$ 0.00"]
     assert registro.summary["proventos"]["divergencias"] == conferencia.divergencias
 

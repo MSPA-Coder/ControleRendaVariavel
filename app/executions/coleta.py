@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import db
 from app.executions.myprofit import (
@@ -178,12 +178,22 @@ def negocios(pacote: Pacote) -> ExecutionReport | None:
 def conferir_proventos(owner_id: int, pacote: Pacote, corte_do_cb: date | None) -> ConferenciaDeProventos:
     """Por ativo e mês de pagamento: o que o myProfit diz contra o que o CRV tem.
 
-    O CRV guarda o líquido que entrou no caixa (o do CB); o myProfit dá o total e
-    o imposto. Confere quando o CRV bate com o total ou com o total menos o
-    imposto, dentro de ``TOLERANCIA_DE_PROVENTOS``.
+    O CRV guarda o líquido que entrou no caixa (o do CB) e, ao lado, o bruto
+    (``gross_amount``); o myProfit dá o total e o imposto, e no aluguel de ações
+    o total é o bruto, sem o IR e as taxas que a corretora retém. Confere quando
+    o total do myProfit bate com o bruto do CRV, ou o total menos o imposto bate
+    com o líquido, dentro de ``TOLERANCIA_DE_PROVENTOS``.
+
+    A janela termina no último provento que o CB já trouxe ao CRV: o crédito de
+    um extrato ainda não importado não é diferença, é extrato que falta.
     """
     inicio = max(pacote.de, corte_do_cb) if corte_do_cb else pacote.de
     fim = pacote.ate - timedelta(days=MARGEM_DE_PROVENTOS)
+    ultimo_do_cb = db.session.scalar(
+        select(func.max(Dividend.payment_date)).where(Dividend.owner_id == owner_id, Dividend.origin == "cb")
+    )
+    if ultimo_do_cb is not None:
+        fim = min(fim, ultimo_do_cb)
     conferencia = ConferenciaDeProventos(inicio, fim)
     if fim < inicio:
         return conferencia
@@ -198,8 +208,9 @@ def conferir_proventos(owner_id: int, pacote: Pacote, corte_do_cb: date | None) 
         total, imposto = deles[chave]
         deles[chave] = (total + _decimal(provento.get("valor")), imposto + _decimal(provento.get("imposto")))
     nossos: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
-    for simbolo, dia, valor in db.session.execute(
-        select(Ticker.symbol, Dividend.payment_date, Dividend.amount)
+    brutos: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
+    for simbolo, dia, valor, bruto in db.session.execute(
+        select(Ticker.symbol, Dividend.payment_date, Dividend.amount, Dividend.gross_amount)
         .join(Ticker, Ticker.id == Dividend.ticker_id)
         .join(Broker, Broker.id == Dividend.broker_id)
         .where(
@@ -211,10 +222,16 @@ def conferir_proventos(owner_id: int, pacote: Pacote, corte_do_cb: date | None) 
         )
     ):
         nossos[(simbolo.upper(), f"{dia:%Y-%m}")] += valor
+        brutos[(simbolo.upper(), f"{dia:%Y-%m}")] += bruto if bruto is not None else valor
     for chave in sorted(deles.keys() | nossos.keys()):
         total, imposto = deles.get(chave, (Decimal(0), Decimal(0)))
         nosso = nossos.get(chave, Decimal(0))
-        if abs(nosso - total) <= TOLERANCIA_DE_PROVENTOS or abs(nosso - (total - imposto)) <= TOLERANCIA_DE_PROVENTOS:
+        bruto = brutos.get(chave, Decimal(0))
+        if (
+            abs(bruto - total) <= TOLERANCIA_DE_PROVENTOS
+            or abs(nosso - total) <= TOLERANCIA_DE_PROVENTOS
+            or abs(nosso - (total - imposto)) <= TOLERANCIA_DE_PROVENTOS
+        ):
             conferencia.conferem += 1
             continue
         ticker, mes = chave
