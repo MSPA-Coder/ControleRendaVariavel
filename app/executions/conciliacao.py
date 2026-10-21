@@ -537,9 +537,21 @@ def build_exterior(owner_id: int, as_of: date) -> list[Finding]:
     negócios. Diferença explicada (o SGOV da Nomad que o myProfit não lê, por
     exemplo) fica reconhecida pela mesma nota de posição da B3.
     """
-    theirs = myprofit_exterior(owner_id, as_of)
-    ours = {asset: Holding(holding.quantity) for asset, holding in crv_holdings(owner_id, as_of, b3=False).items()}
+    def lado(holdings: Mapping[str, Holding]) -> dict[str, Holding]:
+        # O mesmo papel tem dois nomes: o CRV grava "BRK.B" e o myProfit "BRKB".
+        # A comparação usa o código sem ponto, e é por ele que se reconhece.
+        totais: dict[str, Decimal] = defaultdict(Decimal)
+        for asset, holding in holdings.items():
+            totais[_codigo_do_exterior(asset)] += holding.quantity
+        return {asset: Holding(total) for asset, total in totais.items()}
+
+    theirs = lado(myprofit_exterior(owner_id, as_of))
+    ours = lado(crv_holdings(owner_id, as_of, b3=False))
     return apply_notes(compare_positions(theirs, ours), notes_of(owner_id))
+
+
+def _codigo_do_exterior(asset: str) -> str:
+    return asset.replace(".", "").replace("/", "").upper()
 
 
 def save_position_snapshot(owner_id: int, report: PositionReport) -> tuple[int, int]:

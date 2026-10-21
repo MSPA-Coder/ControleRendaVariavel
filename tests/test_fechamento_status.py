@@ -127,7 +127,8 @@ def cenario(sessao, app_com_banco, monkeypatch):
     real = Portfolio(name=f"Real {sufixo}", owner_ref=dono, currency="BRL")
     usd = Portfolio(name=f"USD {sufixo}", owner_ref=dono, currency="USD")
     acao = Ticker(symbol=f"ACAO{sufixo}", trading_name="Ação", market=Market.B3, rtd_market_code="B", currency="BRL")
-    eua = Ticker(symbol=f"EUA{sufixo}", trading_name="EUA", market=Market.NYSE, rtd_market_code="N", currency="USD")
+    # No CRV com ponto (como "BRK.B"); no myProfit, sem (como "BRKB").
+    eua = Ticker(symbol=f"EUA.{sufixo}", trading_name="EUA", market=Market.NYSE, rtd_market_code="N", currency="USD")
     sessao.add_all([real, usd, acao, eua])
     sessao.flush()
     sessao.add_all([
