@@ -38,7 +38,10 @@ lado grava no outro.
 - **Valorização** (CB, categoria `valorizacao`, rótulo "Variação de mercado"):
   mudança de valor de renda fixa, Tesouro ou caixa no exterior, medida pelo saldo
   da conta. Não é receita nem despesa gerencial e não é fluxo de caixa. Para
-  consumidores, é **retorno**: o contrato publica como `gerencial`.
+  consumidores, é **retorno**: o contrato publica como `gerencial`, com
+  `valuation: true` na categoria. No Wealthfolio o ganho entra como `CREDIT` e a
+  perda como `FEE` (reduz o retorno sem ser aporte; não há tipo neutro negativo),
+  sem categoria de gasto ou renda.
 - **Rendimento** (CB): juros e rendimentos de contas e aplicações, que o
   extrato ou o saldo informado mostram. É receita gerencial.
 - **Resultado realizado** (CRV): ganho ou perda de uma operação encerrada, em
