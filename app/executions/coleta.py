@@ -42,7 +42,7 @@ from app.executions.myprofit import (
     read_execution_report,
 )
 from app.executions.posicao_myprofit import PositionReport, PositionRow
-from app.models import Broker, Dividend, MyprofitColeta, Ticker
+from app.models import Broker, Dividend, IncomeKind, MyprofitColeta, Ticker
 
 FORMATO = "myprofit-coleta/1"
 LIMITE_DE_BYTES = 4 * 1024 * 1024
@@ -179,10 +179,14 @@ def conferir_proventos(owner_id: int, pacote: Pacote, corte_do_cb: date | None) 
     """Por ativo e mês de pagamento: o que o myProfit diz contra o que o CRV tem.
 
     O CRV guarda o líquido que entrou no caixa (o do CB) e, ao lado, o bruto
-    (``gross_amount``); o myProfit dá o total e o imposto, e no aluguel de ações
-    o total é o bruto, sem o IR e as taxas que a corretora retém. Confere quando
-    o total do myProfit bate com o bruto do CRV, ou o total menos o imposto bate
-    com o líquido, dentro de ``TOLERANCIA_DE_PROVENTOS``.
+    (``gross_amount``); o myProfit dá o total e o imposto. Confere quando o total
+    do myProfit bate com o bruto do CRV, ou o total menos o imposto bate com o
+    líquido, dentro de ``TOLERANCIA_DE_PROVENTOS``.
+
+    O aluguel de ações fica de fora: cada lado usa uma convenção (o CB chama de
+    bruto o crédito antes da parte da corretora, cerca de duas vezes o líquido; o
+    myProfit informa algo perto do líquido mais o IR), e nenhuma regra fixa leva
+    um ao outro. Comparar acusaria diferença todo mês sem haver erro.
 
     A janela termina no último provento que o CB já trouxe ao CRV: o crédito de
     um extrato ainda não importado não é diferença, é extrato que falta.
@@ -204,6 +208,8 @@ def conferir_proventos(owner_id: int, pacote: Pacote, corte_do_cb: date | None) 
         corretora = str(provento.get("corretora") or "").strip().casefold()
         if not inicio <= dia <= fim or corretora not in corretoras:
             continue
+        if _fold(str(provento.get("tipo") or "")) == "aluguel":
+            continue
         chave = (str(provento.get("ticker") or "").strip().upper(), f"{dia:%Y-%m}")
         total, imposto = deles[chave]
         deles[chave] = (total + _decimal(provento.get("valor")), imposto + _decimal(provento.get("imposto")))
@@ -218,6 +224,7 @@ def conferir_proventos(owner_id: int, pacote: Pacote, corte_do_cb: date | None) 
             Dividend.superseded_at.is_(None),
             Dividend.payment_date >= inicio,
             Dividend.payment_date <= fim,
+            Dividend.kind != IncomeKind.ALUGUEL,
             Broker.name.in_(CORRETORAS_DO_CB),
         )
     ):

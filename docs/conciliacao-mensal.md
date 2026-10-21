@@ -46,8 +46,11 @@ fechamento do CB mostra, a qualquer data de corte, o que falta dos dois lados
 myProfit contra os do CRV (que vêm do CB), nas corretoras que o CB cobre e a
 partir de `PROVENTOS_CB_CORTE`. Confere quando o CRV bate com o total ou com o
 total menos o imposto (o CB guarda o líquido), com R$ 1,00 de tolerância. Os
-pagos nos sete dias antes da coleta ficam de fora: o crédito ainda pode não ter
-chegado ao CB.
+pagos nos sete dias antes da coleta, ou depois do último provento que o CB já
+trouxe, ficam de fora: o crédito ainda pode não ter chegado ao CB. O aluguel de
+ações também fica de fora: o CB chama de bruto o crédito antes da parte da
+corretora (cerca de duas vezes o líquido) e o myProfit informa algo perto do
+líquido mais o IR; nenhuma regra fixa leva um ao outro.
 
 **Exterior.** O myProfit recebe a Avenue com alguns dias de atraso, então a
 posição do exterior é conferida na data mais recente da coleta que esteja pelo

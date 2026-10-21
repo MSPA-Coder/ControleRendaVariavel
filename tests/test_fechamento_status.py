@@ -176,7 +176,8 @@ def test_proventos_conferem_pelo_liquido_e_a_diferenca_aparece(sessao, cenario):
             owner_id=c["dono"].id, broker_id=c["genial"].id, ticker_id=c["acao"].id, kind=IncomeKind.JCP,
             amount=D("85.00"), payment_date=date(2026, 9, 10),
         ),
-        # Aluguel vindo do CB: líquido 82,70 de um bruto de 100; o myProfit informa o bruto.
+        # Aluguel vindo do CB: cada lado usa uma convenção, então fica fora da
+        # conferência; mas ele marca até onde o CB já chegou (30/09).
         Dividend(
             owner_id=c["dono"].id, broker_id=c["genial"].id, ticker_id=aluguel.id, kind=IncomeKind.ALUGUEL,
             amount=D("82.70"), gross_amount=D("100.00"), withheld_amount=D("17.30"),
@@ -202,7 +203,7 @@ def test_proventos_conferem_pelo_liquido_e_a_diferenca_aparece(sessao, cenario):
     ]
     registro, conferencia = _importar(c, _pacote(c["sufixo"], proventos=proventos))
     assert conferencia.fim == date(2026, 9, 30)
-    assert conferencia.conferem == 2
+    assert conferencia.conferem == 1
     assert conferencia.divergencias == ["OUTRA3 09/2026: myProfit R$ 40.00, CRV R$ 0.00"]
     assert registro.summary["proventos"]["divergencias"] == conferencia.divergencias
 
