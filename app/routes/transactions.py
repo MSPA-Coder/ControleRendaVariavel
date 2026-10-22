@@ -12,7 +12,7 @@ from sqlalchemy.orm import contains_eager, joinedload
 from app import db
 from app.core.currency_filter import ALL
 from app.core.domain import operation_result
-from app.core.validation import parse_finite_decimal
+from app.core.validation import limitar_texto, parse_finite_decimal
 from app.models import (
     Broker,
     OptionContract,
@@ -42,6 +42,7 @@ from app.routes.helpers import (
     owned_or_404_for_update,
     parse_positive_id,
     portfolio_records,
+    require_currency_match,
     selected_currency_filter,
     selected_filters,
 )
@@ -171,7 +172,8 @@ def _parse_form() -> TransactionInput:
         raise ValueError("Selecione uma carteira.") from exc
     if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
-    notes = raw.get("notes") or None
+    require_currency_match(ticker, portfolio_id)
+    notes = limitar_texto(raw.get("notes"), field_name="a observação", maximo=500) or None
     return TransactionInput(
         broker_id,
         ticker_id,

@@ -3,7 +3,7 @@
   {% set symbol = total.currencies|map('currency_symbol')|join('/') %}
   <article class="currency-card"
             aria-label="{{ total.portfolio_name }}, totais em {{ total.currencies|join('/') }}">
-    <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
+    <h2 class="currency-card-title">{{ total.portfolio_name }}</h2>
     <div class="currency-card-grid">
       <article>
         <span>Ganhos <small class="currency-symbol">{{ symbol }}</small></span>

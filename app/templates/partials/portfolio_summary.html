@@ -1,6 +1,6 @@
 <section class="summary portfolio-summary portfolio-summary-actions{{ ' portfolio-summary-actions-split' if portfolio.currency_totals }}" aria-label="Resumo da carteira">
   <article class="currency-card" aria-label="Valor bruto das ações cotadas em moeda base">
-    <h3 class="currency-card-title">Ações cotadas · posição bruta em {{ moeda_base }}</h3>
+    <h2 class="currency-card-title">Ações cotadas · posição bruta em {{ moeda_base }}</h2>
     <div class="currency-card-grid">
       <article>
         <span>Valor de mercado bruto</span>
@@ -26,7 +26,7 @@
      repete. #}
   <article class="currency-card"
             aria-label="{{ total.portfolio_name }}, totais em {{ total.currency }}">
-    <h3 class="currency-card-title">{{ total.portfolio_name }}</h3>
+    <h2 class="currency-card-title">{{ total.portfolio_name }}</h2>
     <div class="currency-card-grid">
       <article>
         <span>Valor de entrada bruto <small class="currency-symbol">{{ symbol }}</small></span>
@@ -36,8 +36,22 @@
         <span>Posição bruta cotada <small class="currency-symbol">{{ symbol }}</small></span>
         <strong data-sensitive-value="true">{{ total.current_total|number(0) }}</strong>
       </article>
-      <article title="Posição cotada menos o custo de entrada, das posições abertas. Só se realiza ao vender; o resultado realizado fica em Transações.">
-        <span>Variação não realizada <small class="currency-symbol">{{ symbol }}</small></span>
+      {# O rótulo segue o modo de resultado escolhido: `total.result_total` soma
+         o que o modo mede (ação, proventos ou os dois), e chamar de "variação
+         não realizada" a soma de proventos descrevia outro número. #}
+      {% set modo_resultado = selected_result_mode|default('acao') %}
+      {% if modo_resultado == 'proventos' %}
+        {% set rotulo_resultado = 'Proventos recebidos' %}
+        {% set dica_resultado = 'Proventos pagos atribuídos às posições abertas. Já entraram no caixa; não dependem da cotação.' %}
+      {% elif modo_resultado == 'acao_proventos' %}
+        {% set rotulo_resultado = 'Variação + proventos' %}
+        {% set dica_resultado = 'Posição cotada menos o custo de entrada, somada aos proventos recebidos das posições abertas. A parte da variação só se realiza ao vender.' %}
+      {% else %}
+        {% set rotulo_resultado = 'Variação não realizada' %}
+        {% set dica_resultado = 'Posição cotada menos o custo de entrada, das posições abertas. Só se realiza ao vender; o resultado realizado fica em Transações.' %}
+      {% endif %}
+      <article title="{{ dica_resultado }}">
+        <span>{{ rotulo_resultado }} <small class="currency-symbol">{{ symbol }}</small></span>
         <strong class="{{ total.result_total|sign_class }}" data-sensitive-value="true">{{ total.result_total|number(0) }}</strong>
       </article>
       <article>

@@ -111,6 +111,13 @@ class User(Base, UserMixin):  # type: ignore[misc]
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )
+    #: Soma 1 a cada logout. Entra na marca do cookie (`marca_da_sessao`), então
+    #: o cookie de sessão e o "lembrar-me" emitidos antes do logout deixam de
+    #: valer: sair de verdade derruba a sessão, não só apaga o cookie do
+    #: navegador de quem saiu.
+    session_epoch: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -121,6 +128,18 @@ class User(Base, UserMixin):  # type: ignore[misc]
 
     def check_password(self, password: str) -> bool:
         return conferir_hash(self.password_hash, password)
+
+    def marca_da_sessao(self) -> str:
+        """Marca que amarra o cookie à senha em vigor **e** à época da sessão.
+
+        `marca_de_sessao` aceita qualquer texto como segredo-base: aqui vão o
+        hash da senha e o contador de logouts, então trocar a senha ou sair
+        invalida os cookies anteriores.
+        """
+        return marca_de_sessao(
+            f"{self.password_hash}:{self.session_epoch or 0}",
+            chave_secreta=current_app.secret_key,
+        )
 
     def get_id(self) -> str:
         """Identificador guardado no cookie: o id **e** a marca da senha.
@@ -134,10 +153,7 @@ class User(Base, UserMixin):  # type: ignore[misc]
 
         A marca vem de `sharedauth.session` e e a mesma nos tres apps Flask.
         """
-        return identificador_de_sessao(
-            self.id,
-            marca_de_sessao(self.password_hash, chave_secreta=current_app.secret_key),
-        )
+        return identificador_de_sessao(self.id, self.marca_da_sessao())
 
     @property
     def is_active(self) -> bool:

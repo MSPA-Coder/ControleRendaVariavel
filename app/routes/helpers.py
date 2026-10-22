@@ -99,6 +99,29 @@ def owned_or_404_for_update(
     return record
 
 
+def require_currency_match(ticker: Ticker, portfolio_id: int) -> None:
+    """Recusa lançar um ticker numa carteira de outra moeda.
+
+    ``Portfolio.currency`` é ``None`` na carteira que mistura moedas, e ali
+    qualquer ticker serve. Nas demais, aceitar a combinação (KO em dólar numa
+    carteira em reais) deixaria a posição sob o cartão errado, com valores em
+    uma moeda e o rótulo de outra.
+    """
+    portfolio = db.session.get(Portfolio, portfolio_id)
+    if portfolio is not None and portfolio.currency and portfolio.currency != ticker.currency:
+        raise ValueError(
+            f"{ticker.symbol} é cotado em {ticker.currency} e a carteira {portfolio.name} "
+            f"é em {portfolio.currency}."
+        )
+
+
+def require_not_future(*dates: date, what: str) -> None:
+    """Recusa data posterior a hoje em fato que já aconteceu."""
+    today = date.today()
+    if any(value > today for value in dates):
+        raise ValueError(f"{what} não pode estar no futuro.")
+
+
 def ticker_is_entitled(ticker_id: int) -> bool:
     """Autoriza ativo do histórico privado ou referência global.
 
@@ -223,7 +246,23 @@ def positions_query(
 
 
 def brokers() -> list[str]:
-    statement = select(Broker.name).where(Broker.is_active.is_(True)).order_by(Broker.name)
+    """Corretoras do filtro: as ativas e as arquivadas que ainda têm posição aberta.
+
+    Arquivar uma corretora a tira dos formulários novos, mas não tira as
+    posições dela da carteira. Sem esta segunda metade, as posições seguiam na
+    tela e a corretora sumia do filtro, sem como isolá-las.
+    """
+    com_posicao_acoes = select(Position.id).where(
+        Position.broker_id == Broker.id, Position.owner_id == current_owner_id()
+    ).exists()
+    com_posicao_opcoes = select(OptionPosition.id).where(
+        OptionPosition.broker_id == Broker.id, OptionPosition.owner_id == current_owner_id()
+    ).exists()
+    statement = (
+        select(Broker.name)
+        .where(or_(Broker.is_active.is_(True), com_posicao_acoes, com_posicao_opcoes))
+        .order_by(Broker.name)
+    )
     return list(db.session.scalars(statement))
 
 

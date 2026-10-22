@@ -34,7 +34,10 @@
     </div>
     {% if is_option %}
     <div class="trade-contract-context"><span class="trade-label">Ativo-objeto</span><b>{{ p.contract.underlying_ticker_ref.symbol }}</b>{% if item.greeks %}<span class="trade-moneyness">{{ item.greeks.moneyness }}</span>{% endif %}</div>
-    {% else %}<span class="trade-direction" aria-hidden="true">{{ '↗' if result is not none and result >= 0 else '↘' if result is not none else '—' }}</span>{% endif %}
+    {# A seta fica ao lado da variação do dia e acompanha o sinal dela. Seguia o
+       sinal do resultado acumulado: um papel em alta no dia, mas ainda abaixo do
+       custo, mostrava seta para baixo junto de "+3,03% no dia". #}
+    {% else %}{% set dia = m.daily_variation if m else none %}<span class="trade-direction {{ dia|sign_class }}" role="img" aria-label="{{ 'Sem variação no dia' if dia is none or dia == 0 else 'Em alta no dia' if dia > 0 else 'Em queda no dia' }}">{{ '—' if dia is none or dia == 0 else '↗' if dia > 0 else '↘' }}</span>{% endif %}
   </div>
   <dl class="trade-card-metrics">
     {{ metric('Quantidade', p.quantity|quantity(currency)) }}

@@ -1,7 +1,7 @@
 {% extends "workspace.html" %}
 {% set editing = edit_mode if edit_mode is defined else (dividend and dividend.id is defined) %}
-{% block title %}{{ "Editar" if editing else "Nova" }} renda{% endblock %}
-{% block workspace_title %}{{ "Editar" if editing else "Nova" }} renda{% endblock %}
+{% block title %}{{ "Editar" if editing else "Novo" }} provento · Controle de Renda Variável{% endblock %}
+{% block workspace_title %}{{ "Editar" if editing else "Novo" }} provento{% endblock %}
 {% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_dividend', dividend_id=dividend_id if edit_mode is defined else dividend.id) if editing else url_for('portfolio.create_dividend') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -21,7 +21,7 @@
   </select></label>
   {# O tipo nao e classificacao fiscal: e o que separa a renda no relatorio de
      performance, para se ver quanto cada uma rendeu. #}
-  <label>Tipo de renda<select required name="kind">
+  <label>Tipo de provento<select required name="kind">
     {% for kind in income_kinds %}
       <option value="{{ kind.value }}" {{ 'selected' if value and (value.kind or '') == kind.value }}>{{ kind|income_kind_label }}</option>
     {% endfor %}
@@ -35,17 +35,17 @@
   <div class="form-actions">
     <a class="button" href="{{ voltar_ou(url_for('portfolio.dividends')) }}">Cancelar</a>
     <button class="button button-primary" type="submit"
-            data-sa-confirmar="Salvar esta renda?"
-            data-sa-titulo="Salvar renda" data-sa-severidade="warning">Salvar</button>
+            data-sa-confirmar="Salvar este provento?"
+            data-sa-titulo="Salvar provento" data-sa-severidade="warning">Salvar</button>
   </div>
 </form>
 {% if editing %}
 <form class="delete-form" method="post" action="{{ url_for('portfolio.delete_dividend', dividend_id=dividend_id if edit_mode is defined else dividend.id) }}"
-      data-sa-titulo="Excluir renda" data-sa-severidade="error">
+      data-sa-titulo="Excluir provento" data-sa-severidade="error">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button class="button button-danger" type="submit"
-          data-sa-confirmar="Excluir esta renda?"
-          data-sa-titulo="Excluir renda" data-sa-severidade="error">Excluir renda</button>
+          data-sa-confirmar="Excluir este provento?"
+          data-sa-titulo="Excluir provento" data-sa-severidade="error">Excluir provento</button>
 </form>
 {% endif %}
 {% endblock %}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from flask import Flask, abort, render_template, request, session
+from flask import Flask, abort, request, session
 from flask_login import LoginManager, current_user  # type: ignore[import-untyped]
 from flask_migrate import Migrate  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
@@ -16,7 +16,6 @@ from sharedauth.secrets import resolver_segredo
 from sharedauth.security import registrar_cabecalhos
 from sharedauth.session import (
     configurar_sessao,
-    marca_de_sessao,
     marcas_conferem,
     separar_identificador,
 )
@@ -186,8 +185,6 @@ def _load_user(identificador: str) -> User | None:
     `separar_identificador`: as sessões abertas caem uma vez, no primeiro
     acesso depois do deploy. Mesma guarda do MegaSena.
     """
-    from flask import current_app
-
     from app.models import User
 
     partes = separar_identificador(identificador)
@@ -200,8 +197,7 @@ def _load_user(identificador: str) -> User | None:
         return None
     if user is None or not user.is_active_user:
         return None
-    atual = marca_de_sessao(user.password_hash, chave_secreta=current_app.secret_key)
-    return user if marcas_conferem(marca, atual) else None
+    return user if marcas_conferem(marca, user.marca_da_sessao()) else None
 
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
@@ -363,26 +359,11 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     register_commands(app)
     register_filters(app)
 
-    @app.errorhandler(400)
-    def _bad_request_feedback(error):
-        """Mostra erro de filtro também para uma troca HTMX recusada.
+    from app.core.respostas import registrar_erros
 
-        HTMX não troca respostas 400 por padrão. O fragmento traz o mesmo
-        aviso consumido pelo componente de toast e é inserido no ``main``,
-        sem substituir a tabela que originou a requisição.
-        """
-        if request.headers.get("HX-Request") == "true":
-            message = getattr(error, "description", "Requisição inválida.")
-            return (
-                render_template("partials/request_error.html", message=message),
-                400,
-                {
-                    "HX-Retarget": "main",
-                    "HX-Reswap": "beforeend",
-                    "X-App-Request-Error": "1",
-                },
-            )
-        return error
+    # Páginas de erro em português, o aviso em toast para quem veio do HTMX
+    # (que não troca respostas 4xx/5xx) e o `Cache-Control: no-store` das páginas.
+    registrar_erros(app)
 
     # `csrf`/`limiter` só existem depois de `iniciar_csrf`/`iniciar_limiter`
     # (uma instância por `create_app()`, não singleton de módulo — evita o

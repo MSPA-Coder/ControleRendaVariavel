@@ -2,41 +2,41 @@
 .workspace-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: flex-end; }
 .workspace-toolbar { background: var(--surface); border: 1px solid var(--line); border-radius: .65rem; padding: 1rem 1.2rem; margin-bottom: 1.6rem; }
 .workspace-toolbar .filters { margin: 0; padding: 0; border: 0; gap: 1.2rem; align-items: flex-end; }
-.workspace-toolbar label { color: var(--muted); font-size: .78rem; }
-.workspace-toolbar input, .workspace-toolbar select { min-height: 2.4rem; font-size: .82rem; }
+.workspace-toolbar label { color: var(--muted); font-size: .875rem; }
+.workspace-toolbar input, .workspace-toolbar select { min-height: 2.4rem; font-size: .875rem; }
 .workspace-page .summary { gap: 1rem; margin: 0 0 1.5rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
 .workspace-page .summary article { background: var(--surface); border: 1px solid var(--line); border-radius: .7rem; padding: 1.3rem 1.5rem; }
-.workspace-page .summary article span { color: var(--muted); font-size: .8rem; }
+.workspace-page .summary article span { color: var(--muted); font-size: .875rem; }
 .workspace-page .summary article strong { display: block; margin-top: .6rem; font: 500 1.8rem 'Space Grotesk', Inter, sans-serif; letter-spacing: -.04em; }
-.workspace-page .summary small { display: block; color: var(--muted); margin-top: .5rem; font-size: .72rem; line-height: 1.6; }
+.workspace-page .summary small { display: block; color: var(--muted); margin-top: .5rem; font-size: .875rem; line-height: 1.6; }
 .workspace-page .summary .workspace-highlight { background: var(--accent-soft); border-color: var(--accent-line); }
 .workspace-page .table-wrap { border-radius: .7rem; border: 1px solid var(--line); background: var(--surface); }
-.workspace-page table { font-size: .83rem; }
-.workspace-page th { color: var(--muted); font-size: .73rem; font-weight: 500; background: var(--surface-muted); }
+.workspace-page table { font-size: .875rem; }
+.workspace-page th { color: var(--muted); font-size: .875rem; font-weight: 500; background: var(--surface-muted); }
 .workspace-page td { padding: 1rem 1.1rem; vertical-align: top; }
-.workspace-page td small { display: block; color: var(--muted); font-size: .73rem; margin-top: .4rem; line-height: 1.6; }
+.workspace-page td small { display: block; color: var(--muted); font-size: .875rem; margin-top: .4rem; line-height: 1.6; }
 .workspace-page .workspace-identity { font: 500 1rem 'Space Grotesk', Inter, sans-serif; }
 .workspace-page .workspace-record-row td { border-bottom: 0; }
 .workspace-page .workspace-detail-row > td { padding: 0 1.1rem .8rem; }
-.workspace-disclosure > summary { cursor: pointer; color: var(--accent); padding: .55rem 0; font-size: .78rem; }
+.workspace-disclosure > summary { cursor: pointer; color: var(--accent); padding: .55rem 0; font-size: .875rem; }
 .workspace-disclosure[open] { padding-bottom: .5rem; }
 .workspace-disclosure .trade-data-grid { padding: 1rem 1.2rem; background: var(--surface-muted); border-radius: .5rem; margin: .5rem 0; }
 .workspace-disclosure .trade-data-grid dd { font-size: .88rem; }
-.workspace-note { color: var(--muted); font-size: .8rem; line-height: 1.8; overflow-wrap: anywhere; }
-.workspace-notes { margin: .7rem 0; padding: 1rem 1.2rem; border-left: 2px solid var(--accent-line); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .83rem; line-height: 1.8; }
+.workspace-note { color: var(--muted); font-size: .875rem; line-height: 1.8; overflow-wrap: anywhere; }
+.workspace-notes { margin: .7rem 0; padding: 1rem 1.2rem; border-left: 2px solid var(--accent-line); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .875rem; line-height: 1.8; }
 .workspace-section { margin-top: 2rem; }
 .workspace-section > h2, .workspace-section-heading h2 { font-weight: 500; font-size: 1.2rem; margin: 0 0 .6rem; }
 .workspace-section-heading { margin: 2rem 0 1.2rem; }
-.workspace-section-heading p { color: var(--muted); font-size: .8rem; line-height: 1.7; }
+.workspace-section-heading p { color: var(--muted); font-size: .875rem; line-height: 1.7; }
 .workspace-dividend-card { padding: 1.4rem; }
 .workspace-dividend-card > header { display: flex; align-items: center; gap: .8rem; }
 .workspace-dividend-card h3 { font: 500 1.25rem 'Space Grotesk', Inter, sans-serif; margin: 0; }
-.workspace-dividend-card header p { color: var(--muted); font-size: .72rem; margin: .3rem 0 0; }
+.workspace-dividend-card header p { color: var(--muted); font-size: .875rem; margin: .3rem 0 0; }
 .workspace-income-total { margin: 1.5rem 0; }
 .workspace-income-total strong { display: block; font: 500 1.9rem 'Space Grotesk', Inter, sans-serif; letter-spacing: -.04em; margin-top: .4rem; }
 .workspace-dividend-card .trade-card-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 1rem 0; }
 .workspace-dividend-card .trade-card-metrics dd { font-size: 1rem; }
-.workspace-dividend-card .row-toggle { width: 100%; height: auto; font: 500 .8rem Inter, sans-serif; padding: .85rem 1rem; text-align: left; margin-top: .6rem; color: var(--accent); }
+.workspace-dividend-card .row-toggle { width: 100%; height: auto; font: 500 .875rem Inter, sans-serif; padding: .85rem 1rem; text-align: left; margin-top: .6rem; color: var(--accent); }
 .workspace-page tbody tr { background: var(--surface); }
 .workspace-page tbody tr:hover { background: var(--surface-muted); }
 .workspace-year .exposure-table { border: 0; padding: 1.3rem; }
@@ -46,41 +46,41 @@
 .workspace-event:last-child { border-bottom: 0; }
 .workspace-event-heading { display: flex; justify-content: space-between; gap: 1.5rem; align-items: flex-start; }
 .workspace-event-heading h4 { margin: 0 0 .4rem; font-size: .88rem; font-weight: 500; }
-.workspace-event-heading p { color: var(--muted); font-size: .75rem; margin: 0; line-height: 1.7; }
+.workspace-event-heading p { color: var(--muted); font-size: .875rem; margin: 0; line-height: 1.7; }
 .workspace-event-value { text-align: right; flex-shrink: 0; }
 .workspace-event-value strong { display: block; font: 500 1.2rem 'Space Grotesk', Inter, sans-serif; margin-top: .35rem; }
 .workspace-year { margin-top: 2rem; }
 .workspace-reconciliation-card { padding: 1.4rem; }
 .workspace-reconciliation-card > header { display: flex; justify-content: space-between; gap: 1rem; }
 .workspace-reconciliation-card h3 { font: 500 1.1rem 'Space Grotesk', Inter, sans-serif; margin: 0; }
-.workspace-reconciliation-card header p { color: var(--muted); font-size: .75rem; margin: .5rem 0 0; }
+.workspace-reconciliation-card header p { color: var(--muted); font-size: .875rem; margin: .5rem 0 0; }
 .workspace-reconciliation-card .trade-data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.5rem; }
 .workspace-reconciliation-card .trade-data-grid dd { font-size: 1.1rem; }
 .workspace-cost { padding-top: 1rem; border-top: 1px solid var(--line); }
 .workspace-cost strong { display: block; font: 500 1.65rem 'Space Grotesk', Inter, sans-serif; margin-top: .5rem; }
 .workspace-reconciliation-group { margin-bottom: 2rem; }
 .workspace-reconciliation-group > h2 { font-weight: 500; font-size: 1.1rem; margin: 1.8rem 0 1rem; }
-.workspace-status { font-size: .7rem; color: var(--accent); background: var(--accent-soft); padding: .3rem .5rem; border-radius: .3rem; align-self: flex-start; white-space: nowrap; }
+.workspace-status { font-size: .875rem; color: var(--accent); background: var(--accent-soft); padding: .3rem .5rem; border-radius: .3rem; align-self: flex-start; white-space: nowrap; }
 .workspace-status-warning { color: var(--negative); background: var(--danger-surface); }
 .workspace-risk-card { padding: 1.4rem; }
 .workspace-risk-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
 .workspace-risk-card h3 { font: 500 1.25rem 'Space Grotesk', Inter, sans-serif; margin: 0; }
-.workspace-risk-card header p { color: var(--muted); font-size: .75rem; margin: .5rem 0 0; }
+.workspace-risk-card header p { color: var(--muted); font-size: .875rem; margin: .5rem 0 0; }
 .workspace-risk-card .trade-card-metrics { margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .workspace-risk-card .trade-data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .workspace-create { margin: 1.2rem 0; border: 1px solid var(--accent-line); border-radius: .6rem; background: var(--accent-soft); }
-.workspace-create > summary { padding: 1rem 1.2rem; color: var(--accent); cursor: pointer; font-size: .85rem; }
+.workspace-create > summary { padding: 1rem 1.2rem; color: var(--accent); cursor: pointer; font-size: .875rem; }
 .workspace-create .catalog-create { padding: .5rem 1.2rem 1.2rem; margin: 0; }
 .workspace-page .catalog-card { border-radius: .8rem; padding: 1.5rem; margin-bottom: 1.4rem; min-width: 0; }
 .workspace-page .catalog-card h2 { font-size: 1.15rem; font-weight: 500; margin-bottom: 1rem; }
-.workspace-page .catalog-table input, .workspace-page .catalog-table select { padding: .55rem .65rem; font-size: .8rem; }
+.workspace-page .catalog-table input, .workspace-page .catalog-table select { padding: .55rem .65rem; font-size: .875rem; }
 .workspace-page .catalog-table td { padding: .9rem .8rem; }
 .workspace-page .catalog-actions { gap: .5rem; }
 .workspace-page .catalog-create { gap: 1rem; }
 .workspace-page .form-help { line-height: 1.8; }
 .workspace-page:has(> .position-form) { max-width: 1100px; }
 .workspace-page .position-form { max-width: none; padding: 2rem; border-radius: .8rem; gap: 1.4rem 1.8rem; }
-.workspace-page .position-form label { font-size: .8rem; gap: .6rem; }
+.workspace-page .position-form label { font-size: .875rem; gap: .6rem; }
 .workspace-page .position-form input, .workspace-page .position-form select { min-height: 2.8rem; }
 .workspace-page .form-actions { border-top: 1px solid var(--line); padding-top: 1.4rem; margin-top: .5rem; flex-wrap: wrap; }
 .workspace-page .settings-form { max-width: none; gap: 2rem 1.5rem; margin-top: 2rem; }
@@ -97,12 +97,12 @@
 .workspace-page .monthly-performance-chart-card { border-radius: .8rem; }
 .workspace-page .monthly-performance-chart-card .chart-card-header { padding: 1.2rem 1.5rem; }
 .workspace-page .monthly-performance-chart { height: 350px; }
-.workspace-page .monthly-performance-data-card summary { font-size: .85rem; font-weight: 500; padding: 1.3rem 1.5rem; }
+.workspace-page .monthly-performance-data-card summary { font-size: .875rem; font-weight: 500; padding: 1.3rem 1.5rem; }
 .workspace-page .exposure { grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr)); gap: 1.4rem; margin-bottom: 1.5rem; }
 .workspace-page .exposure-table { border-radius: .8rem; padding: 1.5rem; overflow-x: auto; }
 .workspace-page .chart-toolbar h2 { font-size: 1.1rem; font-weight: 500; }
 .workspace-page .allocation-list { margin-top: 1rem; }
-.workspace-page .allocation-list li { padding: 1rem 0; font-size: .82rem; }
+.workspace-page .allocation-list li { padding: 1rem 0; font-size: .875rem; }
 .workspace-page .quote-history-card { border-radius: .8rem; padding: 1.5rem; }
 .workspace-page .quote-history-controls { align-items: flex-end; gap: 1.5rem; margin-bottom: 1.5rem; }
 .workspace-page .quote-ticker-filter { gap: .8rem; }

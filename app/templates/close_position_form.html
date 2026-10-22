@@ -1,5 +1,5 @@
 {% extends "workspace.html" %}
-{% block title %}Encerrar posição{% endblock %}
+{% block title %}Encerrar posição · Controle de Renda Variável{% endblock %}
 {% block workspace_title %}Encerrar {{ position.ticker }} · {{ position.broker }}{% endblock %}
 {% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.close_position', position_id=position.id) }}">

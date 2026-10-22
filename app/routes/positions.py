@@ -81,6 +81,8 @@ from app.routes.helpers import (
     position_dividend_allocations,
     positions_query,
     quote_stale_after_seconds,
+    require_currency_match,
+    require_not_future,
     selected_filters,
     usd_brl_rate_on,
 )
@@ -269,6 +271,8 @@ def _parse_form() -> PositionInput:
         raise ValueError("Selecione uma carteira.") from exc
     if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
         raise ValueError("Selecione uma carteira cadastrada.")
+    require_currency_match(ticker, portfolio_id)
+    require_not_future(opened_on, what="A data inicial da posição")
     return PositionInput(
         broker_id,
         ticker_id,
@@ -643,6 +647,7 @@ def _movement_values() -> tuple[Decimal, Decimal, date]:
         raise ValueError("Informe quantidade, preço e data válidos.") from exc
     if quantity <= 0 or price < 0:
         raise ValueError("A quantidade deve ser positiva e o preço não pode ser negativo.")
+    require_not_future(occurred_on, what="A data do movimento")
     return quantity, price, occurred_on
 
 
@@ -788,6 +793,11 @@ def close_position(position_id: int) -> ResponseReturnValue:
         return redirect(url_for("portfolio.close_position_form", position_id=position_id))
     if exit_price < 0:
         flash("O preço de saída não pode ser negativo.", "error")
+        return redirect(url_for("portfolio.close_position_form", position_id=position_id))
+    try:
+        require_not_future(closed_on, what="A data de encerramento")
+    except ValueError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("portfolio.close_position_form", position_id=position_id))
     try:
         transaction = close_open_position(

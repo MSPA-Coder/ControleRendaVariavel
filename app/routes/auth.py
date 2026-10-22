@@ -68,6 +68,11 @@ def login() -> ResponseReturnValue:
 def logout() -> Response:
     # Antes de `logout_user`, que apaga o autor da sessao.
     registrar("sessao", "logout", entidade_id=current_user.id)
+    # Sair derruba a sessão no servidor: o cookie de sessão e o "lembrar-me"
+    # emitidos até aqui carregam a época antiga (ver `User.marca_da_sessao`) e
+    # deixam de valer. Sem isto, apagar o cookie do navegador era tudo o que o
+    # logout fazia, e uma cópia do cookie seguia aceita até expirar.
+    current_user.session_epoch = (current_user.session_epoch or 0) + 1
     db.session.commit()
     logout_user()
     flash("Sessão encerrada.", "success")

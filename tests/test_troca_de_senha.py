@@ -15,7 +15,6 @@ por um objeto em memoria.
 from __future__ import annotations
 
 import pytest
-from sharedauth.session import marca_de_sessao
 
 from app import (
     CHAVE_REGIONAL_NA_SESSAO,
@@ -471,6 +470,5 @@ def test_trocar_a_propria_senha_nao_derruba_quem_trocou(app, client, monkeypatch
     assert resposta.status_code == 302
     with client.session_transaction() as sessao:
         assert sessao["_user_id"] != identificador
-        assert sessao["_user_id"].endswith(
-            marca_de_sessao(usuario.password_hash, chave_secreta=app.secret_key)
-        )
+        with app.app_context():
+            assert sessao["_user_id"].endswith(usuario.marca_da_sessao())

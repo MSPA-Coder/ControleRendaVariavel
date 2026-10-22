@@ -8,6 +8,30 @@
 // ordem do documento), que e quando o HTMX de fato le o config.
 htmx.config.includeIndicatorStyles = false;
 
+// Valida o formulario ANTES de perguntar "Salvar?". O componente comum
+// (`sharedauth-ui.js`) intercepta o clique de todo botao `[data-sa-confirmar]`
+// e abre a confirmacao primeiro; a validacao nativa so rodava depois do "Sim",
+// entao um formulario vazio pedia confirmacao e so entao apontava o campo que
+// faltava. O ouvinte fica na `window` (fase de captura), que roda antes dos
+// ouvintes do `document`: com o formulario invalido, mostra o aviso nativo do
+// primeiro campo e nem deixa o clique chegar ao modal.
+window.addEventListener(
+  "click",
+  (event) => {
+    const alvo = event.target.closest ? event.target.closest("[data-sa-confirmar]") : null;
+    if (!alvo || alvo.hasAttribute("formnovalidate")) return;
+    const idDoFormulario = alvo.getAttribute("data-sa-formulario");
+    const formulario = idDoFormulario
+      ? document.getElementById(idDoFormulario)
+      : alvo.form || alvo.closest("form");
+    if (!formulario || formulario.noValidate || formulario.checkValidity()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    formulario.reportValidity();
+  },
+  true
+);
+
 (() => {
   const megaWraps = document.querySelectorAll(".mega-wrap");
   const navScrim = document.querySelector("[data-nav-scrim]");

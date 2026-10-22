@@ -53,13 +53,49 @@ def _role(value: str) -> str:
     return role
 
 
-def _password(password: str, confirmation: str) -> None:
+def _recusar_senha_fraca(password: str, username: str) -> None:
+    """Recusa as senhas que o piso de tamanho deixa passar sem proteger nada.
+
+    O piso (10 caracteres) vem de sharedauth; estas três regras são deste
+    aplicativo: senha igual ao nome de usuário (ou que o contém), só números e
+    senha de um ou dois caracteres repetidos.
+    """
+    senha = password.casefold()
+    nome = username.strip().casefold()
+    if nome and (senha == nome or (len(nome) >= 4 and nome in senha)):
+        raise UserManagementError("A senha não pode ser o nome de usuário nem conter o nome.")
+    if password.isdigit():
+        raise UserManagementError("A senha não pode ter só números.")
+    if len(set(password)) <= 2:
+        raise UserManagementError("A senha não pode repetir só um ou dois caracteres.")
+
+
+def _password(password: str, confirmation: str, *, username: str = "") -> None:
     try:
         validar_tamanho(password)
     except ValueError as exc:
         raise UserManagementError(str(exc)) from exc
     if password != confirmation:
         raise UserManagementError("A confirmação da senha não confere.")
+    _recusar_senha_fraca(password, username)
+
+
+_NOME_EM_USO = (
+    "Esse nome de usuário já está cadastrado (maiúsculas e minúsculas contam como o mesmo nome)."
+)
+
+
+def _nome_em_uso(username: str, *, exceto_id: int | None = None) -> User | None:
+    """Conta que já usa o nome, sem distinguir maiúsculas de minúsculas.
+
+    O login compara o nome exato; aceitar "MSPA" ao lado de "mspa" criaria duas
+    contas que parecem a mesma. A conferência é feita aqui, onde o nome entra,
+    e não por índice: bancos que já tenham o par continuam subindo.
+    """
+    consulta = select(User).where(func.lower(User.username) == username.casefold())
+    if exceto_id is not None:
+        consulta = consulta.where(User.id != exceto_id)
+    return db.session.scalar(consulta.limit(1))
 
 
 def _lock_admin_mutations() -> None:
@@ -102,10 +138,10 @@ def list_users() -> list[User]:
 
 def create_user(username: str, role: str, password: str, confirmation: str) -> User:
     data = UserInput(_username(username), _role(role))
-    _password(password, confirmation)
+    _password(password, confirmation, username=data.username)
     _lock_admin_mutations()
-    if db.session.scalar(select(User).where(User.username == data.username)) is not None:
-        raise UserAlreadyExistsError("Esse nome de usuário já está cadastrado.")
+    if _nome_em_uso(data.username) is not None:
+        raise UserAlreadyExistsError(_NOME_EM_USO)
     if data.role != ROLE_ADMIN and _active_admin_count() == 0:
         raise LastAdminError("Crie pelo menos um administrador ativo antes de operadores.")
     user = User(username=data.username, role=data.role, is_active_user=True)
@@ -135,7 +171,7 @@ def upsert_from_cli(username: str, role: str, password: str) -> User:
     a marca de uma conta que ja a tenha.
     """
     data = UserInput(_username(username), _role(role))
-    _password(password, password)
+    _password(password, password, username=data.username)
     _lock_admin_mutations()
     user = db.session.scalar(select(User).where(User.username == data.username))
     if user is None:
@@ -168,11 +204,8 @@ def update_user(user_id: int, username: str, role: str) -> User:
     data = UserInput(_username(username), _role(role))
     _lock_admin_mutations()
     user = _locked_user(user_id)
-    duplicate = db.session.scalar(
-        select(User).where(User.username == data.username, User.id != user_id)
-    )
-    if duplicate is not None:
-        raise UserAlreadyExistsError("Esse nome de usuário já está cadastrado.")
+    if _nome_em_uso(data.username, exceto_id=user_id) is not None:
+        raise UserAlreadyExistsError(_NOME_EM_USO)
     if user.role == ROLE_ADMIN and data.role != ROLE_ADMIN and (
         (user.is_active_user and _active_admin_count() <= 1)
         or (not user.is_active_user and _active_admin_count() == 0)
@@ -234,6 +267,7 @@ def change_own_password(
         )
     except ValueError as exc:
         raise UserManagementError(str(exc)) from exc
+    _recusar_senha_fraca(senha_nova, user.username)
     user.set_password(senha_nova)
     user.must_change_password = False
     # Sem `detalhes`: quem trocou ja e o autor registrado pela trilha, e nao ha

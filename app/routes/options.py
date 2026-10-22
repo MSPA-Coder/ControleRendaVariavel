@@ -60,6 +60,8 @@ from app.routes.helpers import (
     parse_positive_id,
     poll_interval_seconds,
     portfolio_records,
+    require_currency_match,
+    require_not_future,
     selected_currency_filter,
     selected_filters,
     user_preferences,
@@ -165,6 +167,8 @@ def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositio
         target_price is not None and target_price < 0
     ):
         raise ValueError("Quantidade deve ser positiva e preços não podem ser negativos.")
+    require_currency_match(contract.ticker_ref, portfolio_id)
+    require_not_future(opened_on, what="A data inicial da posição")
     return OptionPositionInput(
         broker_id,
         contract_id,
@@ -410,6 +414,11 @@ def close_position(position_id: int) -> ResponseReturnValue:
         return redirect(url_for("options.close_position_form", position_id=position_id))
     if exit_price < 0:
         flash("O preço de saída não pode ser negativo.", "error")
+        return redirect(url_for("options.close_position_form", position_id=position_id))
+    try:
+        require_not_future(closed_on, what="A data de encerramento")
+    except ValueError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("options.close_position_form", position_id=position_id))
     try:
         transaction = close_open_position(

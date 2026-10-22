@@ -1,6 +1,6 @@
 {% extends "workspace.html" %}
 {% set editing = edit_mode if edit_mode is defined else (transaction and transaction.id is defined) %}
-{% block title %}{{ "Editar" if editing else "Nova" }} transação{% endblock %}
+{% block title %}{{ "Editar" if editing else "Nova" }} transação · Controle de Renda Variável{% endblock %}
 {% block workspace_title %}{{ "Editar" if editing else "Nova" }} transação{% endblock %}
 {% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_transaction', transaction_id=transaction_id if edit_mode is defined else transaction.id) if editing else url_for('portfolio.create_transaction') }}">

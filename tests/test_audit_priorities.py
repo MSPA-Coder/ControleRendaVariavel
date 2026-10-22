@@ -13,7 +13,9 @@ from app.routes import dividends, helpers, options, quotes, transactions
 def _reference(model, identifier):
     if model is Ticker:
         return SimpleNamespace(id=identifier, is_benchmark=False)
-    if model in {Broker, Portfolio}:
+    if model is Portfolio:
+        return SimpleNamespace(id=identifier, name="Carteira", currency=None)
+    if model is Broker:
         return SimpleNamespace(id=identifier)
     raise AssertionError(f"consulta inesperada: {model}")
 
@@ -59,6 +61,7 @@ def test_new_option_position_rejects_expired_contract(app, monkeypatch):
     expired_contract = SimpleNamespace(
         id=2,
         expiration=SimpleNamespace(exercise_date=date.today() - timedelta(days=1)),
+        ticker_ref=SimpleNamespace(symbol="OPCAO", currency="BRL"),
     )
 
     def get(model, identifier):

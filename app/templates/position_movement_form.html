@@ -1,5 +1,5 @@
 {% extends "workspace.html" %}
-{% block title %}Editar lançamento{% endblock %}
+{% block title %}Editar lançamento · Controle de Renda Variável{% endblock %}
 {% block workspace_title %}Editar {{ movement.kind|movement_label|lower }} · {{ position.ticker }}{% endblock %}
 {% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_position_movement', position_id=position.id, movement_id=movement.id) }}">
