@@ -17,7 +17,8 @@
   <main class="login-page">
     <form class="login-form" method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <h1>Controle de Renda Variável</h1>
+      <h1>Entrar</h1>
+      <p class="login-lead">Acesse o Controle de Renda Variável para continuar.</p>
       {% include "sharedauth/flash_messages.html" %}
       <label>Usuário
         <input type="text" name="username" value="{{ username }}" autocomplete="username" autofocus required>
