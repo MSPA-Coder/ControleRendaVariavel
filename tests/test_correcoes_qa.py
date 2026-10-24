@@ -224,6 +224,19 @@ def test_todo_titulo_de_pagina_termina_com_o_nome_do_sistema(review_case, caminh
     assert titulo.endswith("· Controle de Renda Variável"), titulo
 
 
+def test_login_tem_titulo_entrar_frase_de_apoio_e_mensagens(review_case):
+    """O login segue o desenho do CB: título curto, frase com o nome do app, banner no cartão."""
+    app, _ = review_case
+    cliente = app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["_flashes"] = [("success", "Sessão encerrada.")]
+    html = cliente.get("/login").get_data(as_text=True)
+    assert "<h1>Entrar</h1>" in html
+    assert 'class="login-lead"' in html and "Controle de Renda Variável para continuar" in html
+    assert html.index("<h1>Entrar</h1>") < html.index('class="login-lead"') < html.index("Sessão encerrada.")
+    assert html.index("Sessão encerrada.") < html.index('name="username"')
+
+
 def test_formulario_de_provento_usa_a_palavra_provento(review_case):
     app, dados = review_case
     cliente, _ = client_for(app, dados["ids"][2])
