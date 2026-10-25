@@ -235,7 +235,8 @@ no `main` e `git push origin main`, sem PR e sem esperar nada. A regra do
 `main` continua impedindo apagá-lo ou reescrever o histórico: nada de push
 forçado nem de rebase do `main`. A CI do GitHub roda depois de cada push só
 como aviso e não bloqueia nada; se falhar, investigue. O Dependabot continua
-por PR, com os checks obrigatórios e auto-merge.
+por PR, com os checks obrigatórios; o merge é manual (o workflow de
+auto-merge foi removido).
 
 O deploy (`~/deploy.sh renda`) só roda quando o usuário mandar. O servidor
 monta a imagem a partir do código do `main`, sem esperar nem baixar nada da
