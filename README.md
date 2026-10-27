@@ -7,6 +7,13 @@ corretagem. Dados financeiros persistem no
 PostgreSQL; a planilha `Trades.xlsm` é apenas referência funcional e não faz
 parte do runtime.
 
+## Ambiente oficial
+
+| Atividade | Ambiente |
+| --- | --- |
+| Aplicação, PostgreSQL, migrações, qualidade e build | Docker Compose |
+| Agente RTD/COM do ProfitPro no Windows | `.venv` Python 3.15 com `uv sync --locked --extra rtd` |
+
 ## Stack e arquitetura
 
 - Flask e SharedAuth no servidor, com páginas HTML atualizadas por HTMX e
