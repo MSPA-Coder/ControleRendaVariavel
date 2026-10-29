@@ -157,7 +157,8 @@ def test_opcao_http_reenvio_nao_duplica_aporte_e_ajuste_persiste(caso):
         posicao = db.session.scalar(select(OptionPosition).where(OptionPosition.owner_id == dados["user_ids"][0]))
         assert posicao.quantity == 4
         identificador = posicao.id
-    assert cliente.post(f"/options/positions/{identificador}", data={**form, "target_price": "2.5"}).status_code == 302
+        versao = posicao.edit_version
+    assert cliente.post(f"/options/positions/{identificador}", data={**form, "edit_version": str(versao), "target_price": "2.5"}).status_code == 302
     with app.app_context():
         assert db.session.get(OptionPosition, identificador).target_price == Decimal("2.5")
     assert cliente.post(f"/options/positions/{identificador}/delete", data={"csrf_token": token}).status_code == 302

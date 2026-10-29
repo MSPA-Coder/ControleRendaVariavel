@@ -36,6 +36,7 @@ from app.models import (
     OptionType,
     Portfolio,
     Position,
+    PositionMovementKind,
     Side,
     Ticker,
     Transaction,
@@ -136,6 +137,21 @@ def test_ensaio_mostra_o_que_faria_e_nao_grava_nada(sessao, cenario):
     assert len(pending_executions(c["dono"])) == 1
 
 
+def test_plano_antigo_nao_altera_execucao_ja_aplicada(sessao, cenario):
+    c = cenario
+    simbolo = c["acao"].symbol
+    original = linha(date(2026, 11, 3), "B3_GENIAL_03112026", simbolo, 100, "-1000.00")
+    alterada = linha(date(2026, 11, 3), "B3_GENIAL_03112026", simbolo, 100, "-1100.00")
+    _importar(c, sessao, [original])
+    plano = plan_import(c["dono"], read_execution_report(relatorio_xlsx([alterada])))
+    assert len(plano.changed) == 1 and not plano.problems
+    assert _estados(apply_executions(c["dono"])) == [(simbolo, APPLIED)]
+    with pytest.raises(ValueError, match="refaça o ensaio"):
+        apply_import(c["dono"], plano, file_name="alterado.xlsx")
+    execucao = sessao.scalar(select(Execution).where(Execution.owner_id == c["dono"]))
+    assert execucao.price_without_fees == D("10") and execucao.application == APPLIED
+
+
 def test_venda_parcial_e_total_fecham_pelo_preco_medio_ponderado(sessao, cenario):
     c = cenario
     simbolo = c["acao"].symbol
@@ -200,6 +216,48 @@ def test_negocio_ja_digitado_a_mao_so_e_marcado(sessao, cenario):
     assert _estados(relatorio) == [(c["acao"].symbol, ALREADY_ENTERED)]
     assert _posicao(sessao, c, c["acao"]).quantity == D("100")
     assert pending_executions(c["dono"]) == []
+
+
+@pytest.mark.parametrize("instrumento", ["stock", "option"])
+@pytest.mark.parametrize("coincidencia", ["igual", "igual_com_abertura", "data_diferente", "quantidade_diferente"])
+def test_compra_coincidente_com_ajuste_manual_fica_pendente(sessao, cenario, instrumento, coincidencia):
+    from app.options import closure as options
+    from app.positions import closure as stocks
+
+    c = cenario
+    opcao = instrumento == "option"
+    modulo = options if opcao else stocks
+    ticker = c["opcao"] if opcao else c["acao"]
+    campos = {"contract_id": c["contrato"]} if opcao else {"ticker_id": ticker.id}
+    modelo = OptionPosition if opcao else Position
+    inicial = D("100") if coincidencia == "igual_com_abertura" else D("200")
+    posicao, _ = modulo.create_or_merge_position(modelo(
+        owner_id=c["dono"], broker_id=c["corretora"], portfolio_id=c["carteira"],
+        quantity=inicial, average_cost=D("10"), side=Side.BUY,
+        opened_on=date(2026, 11, 3) if coincidencia == "igual_com_abertura" else date(2026, 11, 1), **campos,
+    ))
+    ajuste = D("80") if coincidencia == "quantidade_diferente" else D("100")
+    dia_ajuste = date(2026, 11, 2) if coincidencia == "data_diferente" else date(2026, 11, 3)
+    posicao.quantity += ajuste
+    modulo.record_movement(posicao, PositionMovementKind.ADJUSTMENT,
+                           quantity_delta=ajuste, price=D("10"), occurred_on=dia_ajuste)
+    modulo.sync_open_transaction_for_position(posicao)
+    sessao.flush()
+    _importar(c, sessao, [linha(date(2026, 11, 3), "B3_GENIAL_03112026", ticker.symbol,
+                                100, "-1000.00", grupo="Opções" if opcao else "Ações")])
+
+    relatorio = apply_executions(c["dono"])
+    if coincidencia in ("igual", "igual_com_abertura"):
+        assert [item.state for item in relatorio.outcomes] == [PENDING]
+        assert "ajuste manual" in relatorio.pending[0].detail
+        assert posicao.quantity == inicial + ajuste
+        assert len(pending_executions(c["dono"])) == 1
+        assert mark_baseline(c["dono"], until=date(2026, 11, 3), note="conferido", asset=ticker.symbol) == 1
+        assert apply_executions(c["dono"]).outcomes == []
+        assert posicao.quantity == inicial + ajuste
+    else:
+        assert [item.state for item in relatorio.outcomes] == [APPLIED]
+        assert posicao.quantity == D("200") + ajuste + D("100")
 
 
 def test_o_que_pede_decisao_fica_pendente_e_o_resto_e_aplicado(sessao, cenario):

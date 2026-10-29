@@ -19,6 +19,7 @@ from flask import current_app
 from sqlalchemy import select
 
 from app import db
+from app.executions.locking import lock_executions
 from app.executions.myprofit import ExecutionReport, ExecutionRow, safe_file_name
 from app.models import Broker, Execution, ExecutionImport
 
@@ -151,6 +152,22 @@ def apply_import(owner_id: int, plan: ImportPlan, *, file_name: str | None) -> E
     """
     if plan.problems:
         raise ValueError("O ensaio tem pendências; nada foi gravado.")
+    def assinatura(plano: ImportPlan) -> tuple:
+        return (
+            sorted((row.document, row.line_order, row.content_hash) for row in plano.new_rows),
+            sorted((record.id, row.content_hash) for record, row in plano.changed),
+            plano.repeated, plano.absent_from_file, plano.broker_ids,
+        )
+
+    anterior = assinatura(plan)
+    lock_executions(owner_id)
+    # O ensaio pode ter sido preparado antes de outra importação ou aplicação.
+    # Releia os registros sob a mesma trava antes de decidir o que gravar.
+    db.session.flush()
+    db.session.expire_all()
+    plan = plan_import(owner_id, plan.report)
+    if plan.problems or assinatura(plan) != anterior:
+        raise ValueError("As execuções mudaram durante a importação; refaça o ensaio antes de gravar.")
     report = plan.report
     batch = ExecutionImport(
         owner_id=owner_id,

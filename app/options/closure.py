@@ -30,8 +30,10 @@ from app import db
 from app.core.domain import (
     StatementEntry,
     is_duplicate_entry,
+    operation_result,
     plan_position_closure,
     replay_statement,
+    validate_backdated_closure,
     weighted_average_cost,
 )
 from app.models import (
@@ -78,7 +80,7 @@ def _open_transaction_for(option_position_id: int, owner_id: int) -> Transaction
             # mesmo id numérico faria esta consulta encontrar duas linhas
             # ou a linha errada.
             Transaction.option_contract_id.is_not(None),
-        ).with_for_update()
+        ).with_for_update().execution_options(populate_existing=True)
     )
 
 
@@ -141,7 +143,7 @@ def record_movement(
         resulting_average_cost=position.average_cost,
         owner_id=position.owner_id,
     )
-    db.session.add(movement)
+    position.movements.append(movement)
     return movement
 
 
@@ -154,7 +156,7 @@ def replay_movements(position: OptionPosition) -> None:
     ``position_closure.replay_movements``, o mesmo algoritmo para ações).
     """
 
-    movements = list(position.movements)
+    movements = sorted(position.movements, key=lambda movement: (movement.occurred_on, movement.id or 0))
     replayed = replay_statement(
         [
             StatementEntry(
@@ -164,12 +166,27 @@ def replay_movements(position: OptionPosition) -> None:
         ]
     )
     if replayed is None:
-        # Sem um lançamento de abertura não há de onde partir; preserva o que
-        # está gravado em vez de zerar a posição.
+        # Sem abertura, o histórico legado não permite reconstruir o estado.
         return
     for movement, result in zip(movements, replayed, strict=True):
         movement.resulting_quantity = result.resulting_quantity
         movement.resulting_average_cost = result.resulting_average_cost
+    for index, movement in enumerate(movements):
+        if movement.kind is not PositionMovementKind.DECREASE or movement.transaction_id is None:
+            continue
+        transaction = db.session.get(Transaction, movement.transaction_id)
+        if transaction is None:
+            continue
+        average_cost = replayed[index - 1].resulting_average_cost
+        quantity = -movement.quantity_delta
+        result = operation_result(position.side.value, quantity, average_cost, movement.price)
+        movement.result = result
+        transaction.quantity = quantity
+        transaction.average_cost = average_cost
+        transaction.exit_price = movement.price
+        transaction.closed_on = movement.occurred_on
+        transaction.opened_on = position.opened_on
+        transaction.result = result
     position.quantity = replayed[-1].resulting_quantity
     position.average_cost = replayed[-1].resulting_average_cost
 
@@ -214,6 +231,7 @@ def revert_partial_close(transaction: Transaction) -> OptionPosition | None:
             OptionPosition.owner_id == transaction.owner_id,
         )
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if position is None:
         return None
@@ -274,7 +292,7 @@ def _mergeable_position(candidate: OptionPosition) -> OptionPosition | None:
             )
         },
     )
-    return db.session.scalar(_mergeable_statement(candidate).with_for_update())
+    return db.session.scalar(_mergeable_statement(candidate).with_for_update().execution_options(populate_existing=True))
 
 
 def conflicting_position(position: OptionPosition) -> OptionPosition | None:
@@ -343,6 +361,28 @@ def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition,
         create_open_transaction_for_position(candidate)
         return candidate, False
 
+    movements = existing.movements
+    retroativo = any(m.occurred_on > candidate.opened_on for m in movements)
+    if candidate.opened_on < existing.opened_on:
+        if not movements:
+            raise ValueError("O extrato anterior está ausente; revise a posição antes de registrar este aporte.")
+        if not any(m.kind is PositionMovementKind.OPEN for m in movements):
+            raise ValueError("O extrato precisa começar por uma abertura para registrar este aporte.")
+        for movement in movements:
+            if movement.kind is PositionMovementKind.OPEN:
+                movement.kind = PositionMovementKind.INCREASE
+        existing.opened_on = candidate.opened_on
+        record_movement(
+            existing, PositionMovementKind.OPEN, quantity_delta=candidate.quantity,
+            price=candidate.average_cost, occurred_on=candidate.opened_on,
+        )
+        db.session.flush()
+        replay_movements(existing)
+        sync_open_transaction_for_position(existing)
+        return existing, True
+
+    if retroativo and not any(m.kind is PositionMovementKind.OPEN for m in movements):
+        raise ValueError("O extrato precisa começar por uma abertura para registrar este aporte.")
     existing.average_cost = weighted_average_cost(
         existing.quantity,
         existing.average_cost,
@@ -358,6 +398,9 @@ def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition,
         price=candidate.average_cost,
         occurred_on=candidate.opened_on,
     )
+    if retroativo:
+        db.session.flush()
+        replay_movements(existing)
     sync_open_transaction_for_position(existing)
     return existing, True
 
@@ -424,6 +467,7 @@ def apply_position_closure(
         select(OptionPosition)
         .where(OptionPosition.id == position_id, OptionPosition.owner_id == owner_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if position is None:
         return None
@@ -436,6 +480,11 @@ def apply_position_closure(
         exit_price=exit_price,
         requested_quantity=quantity,
     )
+    retroativo = validate_backdated_closure(
+        [(m.occurred_on, StatementEntry(kind=m.kind, quantity_delta=m.quantity_delta, price=m.price))
+         for m in sorted(position.movements, key=lambda m: (m.occurred_on, m.id or 0))],
+        closed_on, split.closing_quantity, is_total=split.is_total,
+    )
 
     if split.is_total:
         transaction = _close_entirely(position, exit_price, closed_on, split.result)
@@ -443,6 +492,10 @@ def apply_position_closure(
         transaction = _close_partially(
             position, split.closing_quantity, exit_price, closed_on, split.result
         )
+        if retroativo:
+            db.session.flush()
+            replay_movements(position)
+            sync_open_transaction_for_position(position)
     return transaction
 
 

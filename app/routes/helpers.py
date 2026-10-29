@@ -18,6 +18,7 @@ from app.collector.settings import (
 )
 from app.core.currency import TaxaDeCambio
 from app.core.currency_filter import parse_currency_filter
+from app.executions.locking import lock_executions
 from app.models import (
     AppSetting,
     Broker,
@@ -89,10 +90,13 @@ def owned_or_404_for_update(
     """
     if not 0 < record_id <= 2_147_483_647:
         abort(400, description="Identificador inválido.")
+    if model in (Position, OptionPosition, Transaction):
+        lock_executions(current_owner_id())
     record = db.session.scalar(
         select(model)
         .where(model.id == record_id, model.owner_id == current_owner_id())
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if record is None:
         abort(404)

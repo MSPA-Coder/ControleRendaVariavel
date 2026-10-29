@@ -9,11 +9,13 @@ from flask_login import UserMixin  # type: ignore[import-untyped]
 from sharedauth.passwords import conferir_hash, gerar_hash
 from sharedauth.session import identificador_de_sessao, marca_de_sessao
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     Enum,
+    FetchedValue,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -403,6 +405,7 @@ class Position(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    edit_version: Mapped[int] = mapped_column(BigInteger, server_default="1", server_onupdate=FetchedValue(), nullable=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     broker_id: Mapped[int] = mapped_column(
         ForeignKey("brokers.id", ondelete="RESTRICT"), index=True
@@ -864,6 +867,7 @@ class OptionPosition(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    edit_version: Mapped[int] = mapped_column(BigInteger, server_default="1", server_onupdate=FetchedValue(), nullable=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     broker_id: Mapped[int] = mapped_column(
         ForeignKey("brokers.id", ondelete="RESTRICT"), index=True

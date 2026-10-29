@@ -23,6 +23,9 @@ ticker pode estar associado a mais de uma carteira ao mesmo tempo
 lançar uma posição nova); a carteira da posição já existente, porém, não é
 ambígua.
 
+Se a posição mudar depois que o formulário de edição for aberto, o envio é
+recusado e a pessoa precisa recarregar os dados antes de editar novamente.
+
 | Conceito | Campo do sistema |
 |---|---|
 | corretora | `broker` |
@@ -110,9 +113,18 @@ diminuições, também reaplicando o extrato. A abertura também pode ser removi
 quando o próximo lançamento cronológico for um aumento: ele passa a ser a nova
 abertura e o extrato é reaplicado. Sem esse aumento, a abertura é removida pela
 exclusão da posição inteira. Ajustes continuam sendo corrigidos pela edição da posição.
-Se a edição de um aumento ou diminuição o mover para antes da abertura, o
-sistema também pede confirmação: confirmado, esse lançamento passa a ser a
-abertura e a abertura anterior passa a ser aumento antes do recálculo.
+Se a edição de um aumento o mover para antes da abertura, o sistema também pede
+confirmação: confirmado, esse lançamento passa a ser a abertura e a abertura
+anterior passa a ser aumento antes do recálculo. Uma diminuição anterior à
+abertura é recusada, pois não há posição para encerrar nessa data.
+
+Na edição da posição, corrigir a data inicial também corrige a abertura do
+extrato e a data inicial das transações parciais vinculadas. A nova data não
+pode colocar a abertura depois de outro movimento; se o extrato legado não
+tiver abertura, a alteração é recusada para revisão.
+Quando há encerramentos parciais, a edição da posição não permite trocar
+ativo, corretora, carteira ou lado; os lançamentos históricos devem ser
+corrigidos separadamente.
 
 Regras de um **encerramento parcial**:
 
@@ -126,6 +138,16 @@ Regras de um **encerramento parcial**:
 - em Transações, a operação produz duas linhas — uma fechada, com a
   quantidade encerrada e o resultado, e a linha aberta original reduzida ao
   saldo. As duas somam a quantidade anterior ao encerramento.
+
+Encerramentos parciais anteriores a movimentos já registrados são inseridos
+em ordem de data. O custo e o resultado da venda e dos encerramentos posteriores
+são recalculados. A operação é recusada se algum saldo histórico ficar zerado ou
+negativo. Um encerramento total anterior a outros movimentos é recusado, pois
+os movimentos posteriores precisam pertencer a uma posição ainda aberta.
+Um aporte anterior a movimentos existentes também reaplica o extrato e os
+resultados posteriores.
+Um aporte anterior à abertura de uma posição legada sem extrato é recusado
+para revisão: não há histórico suficiente para reconstruí-lo com segurança.
 
 Encerrar a quantidade inteira é o encerramento total: a posição sai da
 carteira e o extrato vai junto, porque o resultado realizado já fica

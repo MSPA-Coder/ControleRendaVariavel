@@ -41,6 +41,8 @@ from app.positions.closure import (
     sync_open_transaction_for_position,
 )
 from app.positions.commands import PositionInput
+from app.positions.identity import validate_identity_change
+from app.positions.opening_date import update_opening_date
 from app.positions.portfolio import (
     PortfolioView,
     build_portfolio,
@@ -570,9 +572,17 @@ def edit_position(position_id: int) -> str:
 @bp.post("/positions/<int:position_id>")
 def update_position(position_id: int) -> ResponseReturnValue:
     position = owned_or_404_for_update(Position, position_id)
+    if request.form.get("edit_version") != str(position.edit_version):
+        return render_template(
+            "position_form.html", position=request.form, edit_mode=True, position_id=position_id,
+            movement_count=len(position.movements), stale_edit=True, brokers=broker_records(),
+            tickers=investable_ticker_records(), sides=Side, portfolios=portfolio_records(),
+        ), 409
     previous_ticker_id = position.ticker_id
     try:
         data = _parse_form()
+        validate_identity_change(position, data)
+        update_opening_date(position, data.opened_on)
     except ValueError as exc:
         flash(str(exc), "error")
         return render_template(
@@ -676,6 +686,8 @@ def update_position_movement(position_id: int, movement_id: int) -> ResponseRetu
             and opening is not None
             and occurred_on < opening.occurred_on
         )
+        if moves_before_opening and movement.kind is PositionMovementKind.DECREASE:
+            raise ValueError("Uma diminuição não pode ocorrer antes da abertura da posição.")
         if moves_before_opening and request.form.get("confirm_prior_opening") != "1":
             return render_template(
                 "position_movement_form.html",

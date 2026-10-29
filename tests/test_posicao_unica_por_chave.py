@@ -232,7 +232,8 @@ def test_tela_recusa_edicao_que_colide_com_422(review_case):
             owner_id=data["user_ids"][0], ticker_id=data["ticker_ids"][2]
         ).one()
 
-    response = client.post(f"/positions/{movida.id}", data=form)
+        versao = movida.edit_version
+    response = client.post(f"/positions/{movida.id}", data={**form, "edit_version": str(versao)})
 
     assert response.status_code == 422
     # O toast leva a mensagem em JSON num atributo, com os acentos escapados.

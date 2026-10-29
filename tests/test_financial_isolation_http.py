@@ -210,6 +210,7 @@ def test_create_edit_delete_preserves_quote_entitlement_without_adopting_posted_
     with app.app_context():
         position = db.session.query(Position).filter_by(owner_id=data['user_ids'][0]).one()
         identifier = position.id
+        form['edit_version'] = str(position.edit_version)
         assert db.session.get(UserTickerEntitlement,(data['user_ids'][0],data['ticker_ids'][0]))
     form['ticker_id'] = data['ticker_ids'][2]
     response = client.post(f'/positions/{identifier}', data=form)

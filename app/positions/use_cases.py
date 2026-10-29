@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app import db
 from app.accounts.entitlements import grant_ticker_entitlement
 from app.core.submissions import claim_submission
+from app.executions.locking import lock_executions
 from app.models import OptionPosition, Portfolio, Position, Transaction
 from app.options import closure as options
 from app.positions import closure as stocks
@@ -73,10 +74,14 @@ def register_stock(
     confirm_duplicate: bool = False, confirm_prior_opening: bool = False,
 ) -> SubmissionResult[Position]:
     with _transaction():
+        lock_executions(owner_id)
         _require_portfolio(owner_id, data.portfolio_id)
         if not _claim(owner_id, "stock", token, asdict(data)):
             return SubmissionResult(None)
         candidate = Position(owner_id=owner_id, **asdict(data))
+        # A decisão de exigir confirmação precisa observar aportes anteriores
+        # depois de adquirir a mesma trava que serializa a gravação da chave.
+        stocks._mergeable_position(candidate)
         earlier = stocks.prior_opening(candidate)
         earlier_date = earlier.opened_on if earlier is not None else None
         if earlier_date is not None and not confirm_prior_opening:
@@ -93,10 +98,12 @@ def register_option(
     data: OptionPositionInput, *, owner_id: int, token: str, confirm_duplicate: bool = False,
 ) -> SubmissionResult[OptionPosition]:
     with _transaction():
+        lock_executions(owner_id)
         _require_portfolio(owner_id, data.portfolio_id)
         if not _claim(owner_id, "option", token, asdict(data)):
             return SubmissionResult(None)
         candidate = OptionPosition(owner_id=owner_id, **asdict(data))
+        options._mergeable_position(candidate)
         if not confirm_duplicate and options.duplicate_entry(candidate) is not None:
             raise ConfirmationRequiredError()
         position, merged = options.create_or_merge_position(candidate)
@@ -110,6 +117,7 @@ def close_stock(
     quantity: Decimal | None = None, *, owner_id: int,
 ) -> Transaction | None:
     with _transaction():
+        lock_executions(owner_id)
         return stocks.apply_position_closure(position_id, exit_price, closed_on, quantity, owner_id=owner_id)
 
 
@@ -118,4 +126,5 @@ def close_option(
     quantity: Decimal | None = None, *, owner_id: int,
 ) -> Transaction | None:
     with _transaction():
+        lock_executions(owner_id)
         return options.apply_position_closure(position_id, exit_price, closed_on, quantity, owner_id=owner_id)

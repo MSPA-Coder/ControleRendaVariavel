@@ -24,6 +24,7 @@ from app.core.domain import (
     operation_result,
     plan_position_closure,
     replay_statement,
+    validate_backdated_closure,
     weighted_average_cost,
 )
 from app.models import (
@@ -70,7 +71,7 @@ def _open_transaction_for(position_id: int, owner_id: int) -> Transaction | None
             # mesmo id numérico faria esta consulta encontrar duas linhas
             # (``MultipleResultsFound``) ou a linha errada.
             Transaction.ticker_id.is_not(None),
-        ).with_for_update()
+        ).with_for_update().execution_options(populate_existing=True)
     )
 
 
@@ -233,6 +234,7 @@ def revert_partial_close(transaction: Transaction) -> Position | None:
             Position.owner_id == transaction.owner_id,
         )
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if position is None:
         return None
@@ -296,7 +298,7 @@ def _mergeable_position(candidate: Position) -> Position | None:
         text("SELECT pg_advisory_xact_lock(hashtextextended(:chave, 0))"),
         {"chave": _chave(candidate)},
     )
-    return db.session.scalar(_mergeable_statement(candidate).with_for_update())
+    return db.session.scalar(_mergeable_statement(candidate).with_for_update().execution_options(populate_existing=True))
 
 
 def conflicting_position(position: Position) -> Position | None:
@@ -390,6 +392,7 @@ def create_or_merge_position(
         create_open_transaction_for_position(candidate)
         return candidate, False
 
+    retroativo = any(m.occurred_on > candidate.opened_on for m in existing.movements)
     if candidate.opened_on < existing.opened_on:
         if not confirm_prior_opening:
             raise ValueError(
@@ -399,6 +402,10 @@ def create_or_merge_position(
         # existia vira aumento e a cadeia inteira é reaplicada em ordem de
         # data, preservando baixas e ajustes posteriores como fatos do
         # extrato, agora sobre a nova base.
+        if not existing.movements:
+            raise ValueError("O extrato anterior está ausente; revise a posição antes de registrar este aporte.")
+        if not any(m.kind is PositionMovementKind.OPEN for m in existing.movements):
+            raise ValueError("O extrato precisa começar por uma abertura para registrar este aporte.")
         existing.opened_on = candidate.opened_on
         for movement in existing.movements:
             if movement.kind is PositionMovementKind.OPEN:
@@ -427,6 +434,9 @@ def create_or_merge_position(
             price=candidate.average_cost,
             occurred_on=candidate.opened_on,
         )
+        if retroativo:
+            db.session.flush()
+            replay_movements(existing)
     sync_open_transaction_for_position(existing)
     return existing, True
 
@@ -510,6 +520,7 @@ def apply_position_closure(
         select(Position)
         .where(Position.id == position_id, Position.owner_id == owner_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if position is None:
         return None
@@ -522,6 +533,11 @@ def apply_position_closure(
         exit_price=exit_price,
         requested_quantity=quantity,
     )
+    retroativo = validate_backdated_closure(
+        [(m.occurred_on, StatementEntry(kind=m.kind, quantity_delta=m.quantity_delta, price=m.price))
+         for m in sorted(position.movements, key=lambda m: (m.occurred_on, m.id or 0))],
+        closed_on, split.closing_quantity, is_total=split.is_total,
+    )
 
     if split.is_total:
         transaction = _close_entirely(position, exit_price, closed_on, split.result)
@@ -529,6 +545,10 @@ def apply_position_closure(
         transaction = _close_partially(
             position, split.closing_quantity, exit_price, closed_on, split.result
         )
+        if retroativo:
+            db.session.flush()
+            replay_movements(position)
+            sync_open_transaction_for_position(position)
     return transaction
 
 

@@ -41,6 +41,8 @@ from app.options.closure import (
 )
 from app.options.portfolio import build_option_portfolio
 from app.positions.commands import OptionPositionInput
+from app.positions.identity import validate_identity_change
+from app.positions.opening_date import update_opening_date
 from app.positions.use_cases import (
     ConfirmationRequiredError,
     SubmissionConflictError,
@@ -322,9 +324,18 @@ def edit_position(position_id: int) -> str:
 @bp.post("/options/positions/<int:position_id>")
 def update_position(position_id: int) -> ResponseReturnValue:
     position = owned_or_404_for_update(OptionPosition, position_id)
+    if request.form.get("edit_version") != str(position.edit_version):
+        return render_template(
+            "option_form.html", position=request.form, edit_mode=True, position_id=position_id,
+            movement_count=len(position.movements), stale_edit=True, brokers=_brokers(),
+            contracts=_contracts(somente_vigentes=True, manter=position.contract_id),
+            sides=Side, portfolios=portfolio_records(),
+        ), 409
     previous_contract_id = position.contract_id
     try:
         data = _parse_position(permitir_contrato_vencido=True)
+        validate_identity_change(position, data)
+        update_opening_date(position, data.opened_on)
     except ValueError as exc:
         flash(str(exc), "error")
         return render_template(

@@ -196,6 +196,31 @@ class ReplayedEntry:
     resulting_average_cost: Decimal
 
 
+def validate_backdated_closure(
+    entries: Sequence[tuple[date, StatementEntry]], closed_on: date,
+    quantity: Decimal, *, is_total: bool,
+) -> bool:
+    """Valida o saldo cronológico antes de inserir uma baixa retroativa."""
+    if not any(day > closed_on for day, _ in entries):
+        return False
+    if is_total:
+        raise ValueError("Um encerramento total não pode anteceder movimentos posteriores da posição.")
+    if not entries or entries[0][1].kind != "open":
+        raise ValueError("O extrato precisa começar por uma abertura para registrar um encerramento retroativo.")
+    balance = ZERO
+    inserted = False
+    for day, entry in entries:
+        if not inserted and day > closed_on:
+            balance -= quantity
+            inserted = True
+            if balance <= ZERO:
+                raise ValueError("O encerramento deixaria a posição sem saldo na data informada.")
+        balance += entry.quantity_delta
+        if balance <= ZERO:
+            raise ValueError("O encerramento deixaria a posição sem saldo em um movimento posterior.")
+    return True
+
+
 def replay_statement(entries: Sequence[StatementEntry]) -> list[ReplayedEntry] | None:
     """Recalcula o saldo (quantidade, custo médio) depois de cada lançamento.
 

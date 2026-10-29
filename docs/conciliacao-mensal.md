@@ -132,6 +132,19 @@ executa.
    | exercício (`...E`) | lançar à mão o papel recebido ou entregue, com o custo líquido do prêmio, e marcar |
    | venda sem posição comprada | lançamento de opção ou venda a descoberto: decidir e marcar |
    | carteira ambígua | aplicar à mão e marcar |
+   | compra com ajuste manual coincidente | revisar o ajuste; se já refletir a compra, marcar como linha de base |
+
+   Uma compra fica pendente se houver ajuste manual positivo da mesma
+   quantidade, na mesma data, corretora e ativo ou contrato. A coincidência não
+   determina se o ajuste é a compra. A posição e a execução permanecem como
+   estavam até a revisão. Se o ajuste já refletir a compra, marque a execução;
+   se forem fatos distintos, registre a compra manualmente e marque a execução
+   somente depois de conferir o resultado. Antes de marcar, confira também as
+   demais execuções do ativo até a data indicada, pois o comando alcança todas
+   elas.
+
+   A importação revalida o ensaio antes de gravar. Se outra operação mudar as
+   execuções nesse intervalo, ela recusa a gravação e pede um novo ensaio.
 
    Marcar é registrar que a execução já está refletida, sem mexer em posição:
 

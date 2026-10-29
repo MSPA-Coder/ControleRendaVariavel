@@ -167,6 +167,11 @@ reescreva revisão que possa ter sido aplicada, não use `create_all()` como
 bootstrap e não use `stamp` no lugar de uma migração. Banco vazio nasce de
 `alembic upgrade head`.
 
+A revisão `20261028_0038` acrescenta a versão de edição às posições existentes.
+Seu downgrade remove essa versão, preservando os dados financeiros, mas perde
+o histórico de versões: após retornar ou reaplicar a revisão, formulários de
+edição abertos anteriormente devem ser recarregados.
+
 Gerar uma revisão exige o override de desenvolvimento: o serviço `web` roda com
 filesystem raiz somente leitura e, sem o bind mount, o arquivo gerado não teria
 onde ser gravado nem chegaria ao repositório.

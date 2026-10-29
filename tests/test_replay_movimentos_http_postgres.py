@@ -120,6 +120,21 @@ def test_antecipar_aporte_exige_confirmacao_e_depois_reordena_sem_perder_resulta
         assert t.opened_on == p.opened_on and t.result == Decimal("400")
 
 
+@pytest.mark.parametrize("confirmacao", [None, "1"])
+def test_baixa_nao_pode_ser_mudada_para_antes_da_abertura(review_case, confirmacao):
+    app, dados = review_case
+    pid, ids, _ = cadeia(app, dados)
+    antes = fotografia(app, pid)
+    cliente, token = client_for(app, dados["ids"][0])
+    extras = {"confirm_prior_opening": confirmacao} if confirmacao else {}
+    resposta = atualizar(cliente, token, pid, ids[PositionMovementKind.DECREASE],
+                         "40", "25", "2026-06-01", **extras)
+    assert resposta.status_code == 302
+    with cliente.session_transaction() as sessao:
+        assert ("error", "Uma diminuição não pode ocorrer antes da abertura da posição.") in sessao["_flashes"]
+    assert fotografia(app, pid) == antes
+
+
 def test_administrador_alheio_nao_pode_reescrever_movimento_financeiro(review_case):
     app, dados = review_case
     pid, ids, _ = cadeia(app, dados)

@@ -42,6 +42,7 @@ from sqlalchemy import func, select
 from app import db
 from app.accounts.entitlements import grant_ticker_entitlement
 from app.core.domain import Side
+from app.executions.locking import lock_executions
 from app.models import (
     Execution,
     Market,
@@ -250,6 +251,29 @@ def _already_entered(owner_id: int, trade: Trade, instrument: _Instrument) -> st
         movement = OptionPositionMovement if instrument.is_option else PositionMovement
         position_model = OptionPosition if instrument.is_option else Position
         parent = movement.option_position_id if instrument.is_option else movement.position_id
+        # Um ajuste não identifica o negócio que o motivou. Mesmo que tenha
+        # os mesmos dados, aplicá-lo ou marcá-lo como compra seria adivinhação.
+        adjustment = db.session.scalar(
+            select(func.count())
+            .select_from(movement)
+            .join(position_model, position_model.id == parent)
+            .where(
+                movement.owner_id == owner_id,
+                position_model.broker_id == trade.broker_id,
+                position_model.side == Side.BUY,
+                (OptionPosition.contract_id == instrument.contract.id)
+                if instrument.is_option and instrument.contract is not None
+                else (Position.ticker_id == instrument.ticker.id),
+                movement.kind == PositionMovementKind.ADJUSTMENT,
+                movement.occurred_on == trade.trade_date,
+                movement.quantity_delta == trade.quantity,
+            )
+        )
+        if adjustment:
+            raise _PendingError(
+                "há ajuste manual da mesma data e quantidade; revise antes de aplicar "
+                "ou marcar a execução como já refletida"
+            )
         live = db.session.scalar(
             select(func.count())
             .select_from(movement)
@@ -359,6 +383,7 @@ def apply_executions(owner_id: int, *, until: date | None = None, now: datetime 
     mostra exatamente o que a gravação faria. Cada negócio roda num ponto de
     salvamento: a pendência desfaz só o dele.
     """
+    lock_executions(owner_id)
     moment = now or datetime.now(UTC)
     report = ApplicationReport()
     for trade in group_trades(pending_executions(owner_id, until=until)):
@@ -390,6 +415,7 @@ def mark_baseline(
     Para a adoção (o que já foi conferido pela conciliação) e para o negócio que
     o mantenedor resolveu à mão (``asset``), como o exercício de opção.
     """
+    lock_executions(owner_id)
     executions = pending_executions(owner_id, until=until)
     if asset is not None:
         executions = [execution for execution in executions if execution.asset.upper() == asset.upper()]

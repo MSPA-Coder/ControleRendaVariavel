@@ -6,6 +6,10 @@
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('portfolio.create_position') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if not editing %}<input type="hidden" name="submit_token" value="{{ request.form.get('submit_token') or new_submission_token() }}">{% endif %}
+  {% if editing %}<input type="hidden" name="edit_version" value="{{ request.form.get('edit_version', '') if edit_mode is defined else position.edit_version }}">{% endif %}
+  {% if stale_edit %}
+  <p class="form-warning" role="alert">A posição mudou desde que este formulário foi aberto. <a href="{{ url_for('portfolio.edit_position', position_id=position_id) }}">Recarregue os dados</a> antes de editar.</p>
+  {% endif %}
 
   {% if duplicate_warning %}
   <p class="form-warning" role="alert">
@@ -69,7 +73,7 @@
             data-sa-titulo="Excluir posição" data-sa-severidade="error">Excluir posição</button>
     {% endif %}
     <a class="button" href="{{ voltar_ou(url_for('portfolio.index')) }}">Cancelar</a>
-    <button class="button button-primary" type="submit"
+    <button class="button button-primary" type="submit" {{ 'disabled' if stale_edit else '' }}
             data-sa-confirmar="Salvar as alterações desta posição?"
             data-sa-titulo="Salvar posição" data-sa-severidade="warning">
       {{ "Confirmar mesmo assim" if duplicate_warning or prior_opening_warning else "Salvar" }}

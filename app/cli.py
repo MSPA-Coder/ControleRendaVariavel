@@ -341,7 +341,7 @@ def importar_negocios_myprofit(arquivo: Path, usuario: str | None, gravar: bool)
     try:
         batch = apply_import(owner_id, plan, file_name=arquivo.name)
         db.session.commit()
-    except IntegrityError as exc:
+    except (IntegrityError, ValueError) as exc:
         db.session.rollback()
         raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
     click.echo(
@@ -574,7 +574,7 @@ def importar_coleta_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -
             save_position_snapshot(owner_id, retrato)
         coleta.registrar(owner_id, pacote, conferencia)
         db.session.commit()
-    except IntegrityError as exc:
+    except (IntegrityError, ValueError) as exc:
         db.session.rollback()
         raise click.ClickException("Conflito de gravação concorrente; refaça o ensaio.") from exc
     click.echo("Gravado. Negócios novos ainda não estão nas posições: use aplicar-execucoes.")

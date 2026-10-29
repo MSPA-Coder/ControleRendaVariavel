@@ -1,5 +1,8 @@
 # Contrato funcional: Opções
 
+Se a posição mudar depois que o formulário de edição for aberto, o envio é
+recusado e a pessoa precisa recarregar os dados antes de editar novamente.
+
 Este documento é a referência normativa das regras de opções implementadas
 pelo sistema, nos mesmos termos de
 [`planilha-acoes.md`](planilha-acoes.md). A origem das regras são as abas
@@ -24,6 +27,25 @@ ativo-objeto, strike e vencimento.
 | exercício | `option_expirations.exercise_date` |
 | ativo-objeto | `option_contracts.underlying_ticker_id` |
 | início | `option_positions.opened_on` |
+
+Ao corrigir a data inicial da posição, o sistema atualiza a abertura do extrato
+e a data inicial das transações parciais vinculadas. A nova data não pode
+colocar a abertura depois de outro movimento; se um extrato legado não tiver
+abertura, a alteração é recusada para revisão.
+Quando há encerramentos parciais, a edição não permite trocar contrato,
+corretora, carteira ou lado; os lançamentos históricos devem ser corrigidos
+separadamente.
+
+Ao excluir a transação de um encerramento parcial de posição ainda aberta,
+o encerramento é desfeito e os movimentos seguintes são reaplicados. Custos
+médios e resultados das transações de encerramento posteriores são recalculados
+conforme a direção comprada ou vendida da posição.
+Encerramentos parciais retroativos também reaplicam o extrato; são recusados se
+deixarem saldo histórico zerado ou negativo. Encerramentos totais anteriores a
+outros movimentos são recusados. Aportes anteriores a movimentos registrados
+também reaplicam o extrato e os resultados posteriores.
+Um aporte anterior à abertura de uma posição legada sem extrato é recusado
+para revisão, pois não há histórico suficiente para reconstruí-lo com segurança.
 
 ## Cotações
 

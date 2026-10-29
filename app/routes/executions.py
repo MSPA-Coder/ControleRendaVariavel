@@ -62,9 +62,9 @@ def import_executions() -> ResponseReturnValue:
     try:
         batch = apply_import(current_owner_id(), plan, file_name=uploaded.filename)
         db.session.commit()
-    except IntegrityError:
+    except (IntegrityError, ValueError):
         db.session.rollback()
-        flash("Outra importação gravou essas linhas ao mesmo tempo; refaça o ensaio.", "error")
+        flash("As execuções mudaram durante a importação; refaça o ensaio.", "error")
         return _render_import(status=409)
     flash(
         f"Importação gravada: {batch.rows_created} nova(s), {batch.rows_updated} alterada(s), "
