@@ -94,6 +94,11 @@ provedor de cotação, RTD, rede, relógio). Nunca mock de módulo próprio para
 fugir do banco: congela a divisão interna, que é o que a refatoração muda.
 SQLite não substitui o PostgreSQL.
 
+**Trava de banco** (`select_for_update`, `with_for_update`, `pg_advisory_xact_lock`)
+em fluxo de dinheiro, saldo, posição ou acesso nasce com um teste de disputa que
+falha quando ela é retirada, ou com uma linha na documentação dizendo qual outra
+garantia a cobre (constraint, ou outra trava mais externa). Como conferir: T11.
+
 ## T8. Migração que mexe em dado tem teste com dado
 
 Revisão só de schema já é coberta pelo bootstrap (a cadeia inteira num banco
@@ -129,6 +134,24 @@ adicione exclusões de código de produto ou escreva asserções vazias para
 atingi-la. Execução não prova verificação: confira por mutação representativa
 que as asserções novas detectam o erro que pretendem proteger.
 
+**Mutação sob demanda, sem portão na CI.** `mutmut` 3.x e `pytest-cov` rodam na
+imagem `quality`, inclusive com Django e PostgreSQL real. Configuração que
+funcionou: `source_paths` com os módulos alvo, `pytest_add_cli_args_test_selection`
+só com os arquivos de teste que os exercitam e `also_copy` com o que o `conftest`
+precisa (o diretório `logs`, por exemplo). Selecionar a suíte inteira falhou
+antes de mutar: mantenha a seleção enxuta e confira que ela roda. O conjunto de
+sobreviventes muda de uma execução para outra: rode pelo menos 3 vezes e trate
+como lacuna só o que sobrevive em todas. Borda de data, arredondamento e regra de
+moeda são lacunas; o texto de uma mensagem de recusa não é (T5).
+
+**Trava de banco.** Para saber se um teste protege um `select_for_update`, um
+`with_for_update` ou um `pg_advisory_xact_lock`, retire a chamada numa cópia do
+commit e rode a suíte com `-x`: saída 0 quer dizer que nenhum teste a protege.
+Repita o arquivo de disputa algumas vezes, porque uma corrida que não ocorre numa
+rodada engana, e rode também a suíte inteira: há trava que o arquivo de disputa
+detecta sozinho e que a suíte inteira deixa passar. Um teste que só confere que a palavra da trava aparece no SQL não
+protege nada (T2).
+
 ## T12. O que a documentação pode impor
 
 **Pode:**
@@ -143,6 +166,22 @@ que as asserções novas detectam o erro que pretendem proteger.
 - listar quais arquivos formam uma camada (o marcador diz, e a lista apodrece);
 - afirmar "ainda não tem teste" sem data;
 - exigir teste para toda mudança, independentemente do risco.
+
+## T13. Fluxo crítico: cinco cenários e frases confirmadas
+
+Para cada fluxo que mexe em dinheiro, dado ou acesso, o conjunto mínimo é:
+
+1. o caminho feliz;
+2. o erro esperado (entrada inválida, regra recusada);
+3. a repetição ou a simultaneidade: o mesmo envio duas vezes e duas requisições
+   ao mesmo tempo, contra o PostgreSQL real (T7);
+4. o limite (zero, máximo, virada de mês, saldo exato);
+5. o acesso indevido (outro dono, perfil sem permissão).
+
+As frases de comportamento ("quando X, o sistema faz Y") vão ao mantenedor antes
+de virarem teste, e o nome do teste é a frase aprovada (T9). Vale só para
+dinheiro, dado e acesso: não se aplica a telas de leitura (T11) e não exige teste
+para toda mudança (T12).
 
 ## Diante de vermelho
 
