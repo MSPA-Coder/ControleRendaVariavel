@@ -35,9 +35,9 @@ Dockerfile declara o secret BuildKit como `required=false`, portanto o build e
 `docker compose config --quiet` funcionam sem o arquivo em hosts sem inspeção
 TLS; não é necessário criar um arquivo vazio.
 
-Sem `compose.dev.yaml`, o Compose não monta o código do host. Cada subida
-reconstrói as imagens sem cache a partir das tags base móveis; a CI executa
-testes e auditorias antes de integrar atualizações de dependências. O serviço
+Sem `compose.dev.yaml`, o Compose não monta o código do host. Cada subida com
+`--build` reconstrói as imagens a partir do código atual, com cache e com as
+imagens-base já baixadas (ver "Imagens-base" abaixo). O serviço
 `migrate` roda `flask db upgrade` e termina com sucesso antes de `web` iniciar;
 `create_app()` só monta a aplicação e não consulta o banco.
 
@@ -77,9 +77,33 @@ Para executá-lo sozinho: `docker compose --profile quality run --build --rm qua
 Amplie a lista por fronteira quando o código correspondente estiver pronto.
 
 **`--build` mantém o comando explícito.** O serviço `quality` não monta o código
-do host; Compose reconstrói sem cache a partir das tags base atuais antes de
-executar os testes. A CI semanal repete esse build, os testes e as auditorias
-para verificar atualizações de sistema e dependências.
+do host; Compose reconstrói a partir do código atual, com cache: só as camadas
+afetadas pela mudança são refeitas.
+
+A suíte completa roda em paralelo com `pytest-xdist` (o `CMD` do estágio
+`quality` passa `-n`). Cada worker cria o próprio banco
+(`investimentos_gw0`, `_gw1`...; `investimentos_master` sem xdist) como cópia
+do `investimentos` que o `db-teste-provision` preparou, aplica nele a cadeia
+Alembic e o apaga no fim. O banco é novo a cada execução, então a promessa de
+migrar um banco vazio não depende de o `db-teste` ser recriado. Para iterar
+num arquivo, passe o comando, e ele roda em série:
+`docker compose --profile quality run --build --rm quality pytest tests/test_x.py`.
+
+### Imagens-base
+
+Nem o `quality` nem o deploy buscam imagens-base novas por conta própria: o
+Compose não declara `pull` nem `no_cache`, e as camadas do `apt-get upgrade`
+ficam em cache até alguém pedir bases novas. É a mesma regra do servidor, onde
+um deploy comum monta sem `--pull` e só `deploy.sh renda --refresh` busca bases
+novas. Para testar bases novas na máquina antes do `--refresh`:
+
+```powershell
+docker compose --profile quality build --pull --no-cache quality
+docker compose --profile quality run --build --rm quality
+```
+
+A CI semanal faz o mesmo build sem cache e com `--pull`, só como aviso, para
+verificar atualizações de sistema e dependências.
 
 A suíte protege os contratos que valem para toda requisição: negação por padrão,
 autorização por papel, CSRF, cabeçalhos e CSP, health check, resolução de

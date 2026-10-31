@@ -6,8 +6,8 @@
 #
 #   docker compose -f compose.yaml -f compose.dev.yaml up
 #
-# Portanto `docker compose up` reconstrói sem cache a imagem atual, sem código
-# do host. A CI testa e audita as atualizações antes de integrá-las.
+# Portanto `docker compose up --build` reconstrói a imagem atual, com cache e
+# sem código do host. A CI testa e audita as atualizações antes de integrá-las.
 
 services:
   web:

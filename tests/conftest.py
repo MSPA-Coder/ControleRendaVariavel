@@ -39,6 +39,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from psycopg import sql
 
 from app import create_app
 
@@ -88,6 +89,9 @@ def client(app):
 # ---------------------------------------------------------------------------
 
 
+_VARIAVEIS_DO_BANCO = ("TESTE_POSTGRES_HOST", "TESTE_POSTGRES_DB", "TESTE_POSTGRES_USER")
+
+
 def _url_do_banco_de_teste(*, administrativo: bool = False) -> str:
     """Monta a URL a partir das variaveis `TESTE_POSTGRES_*` do Compose.
 
@@ -100,11 +104,7 @@ def _url_do_banco_de_teste(*, administrativo: bool = False) -> str:
     """
     from urllib.parse import quote
 
-    faltando = [
-        nome
-        for nome in ("TESTE_POSTGRES_HOST", "TESTE_POSTGRES_DB", "TESTE_POSTGRES_USER")
-        if not os.environ.get(nome)
-    ]
+    faltando = [nome for nome in _VARIAVEIS_DO_BANCO if not os.environ.get(nome)]
     if faltando:
         pytest.skip(
             "camada com banco: rode pelo servico `quality` do Compose "
@@ -129,6 +129,67 @@ def _url_do_banco_de_teste(*, administrativo: bool = False) -> str:
         f"@{os.environ['TESTE_POSTGRES_HOST']}:{os.environ.get('TESTE_POSTGRES_PORT', '5432')}"
         f"/{os.environ['TESTE_POSTGRES_DB']}"
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _banco_proprio_da_execucao(worker_id):
+    """Da a cada execucao, e a cada worker do xdist, um banco de teste novo.
+
+    E o mesmo padrao do pytest-django: `investimentos_gw0`, `_gw1`... e
+    `investimentos_master` sem xdist, criado no inicio e apagado no fim. Por
+    dois motivos:
+
+    - em paralelo, cada worker aplica as migracoes e escreve no proprio banco,
+      sem disputar o `alembic_version` nem as linhas dos outros;
+    - o `db-teste` sobrevive entre execucoes quando a imagem nao muda, e so um
+      banco novo a cada execucao mantem a promessa de `app_com_banco`: a
+      cadeia Alembic inteira sobre um banco vazio.
+
+    O banco nasce como copia (`TEMPLATE`) do `investimentos` que o
+    `db-teste-provision` preparou: as permissoes do papel restrito vivem
+    dentro do banco e vem junto. Por isso o modelo nunca e migrado, e um
+    modelo que ja traga tabelas para a execucao inteira, em vez de deixar a
+    suite passar sobre um schema que nao nasceu da cadeia.
+    """
+    if any(not os.environ.get(nome) for nome in _VARIAVEIS_DO_BANCO):
+        yield
+        return
+    from sqlalchemy.engine import make_url
+
+    modelo = os.environ["TESTE_POSTGRES_DB"]
+    proprio = f"{modelo}_{worker_id}"
+    url_admin = make_url(_url_do_banco_de_teste(administrativo=True)).set(drivername="postgresql")
+    servidor = url_admin.set(database="postgres").render_as_string(hide_password=False)
+    apagar = sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(proprio))
+
+    with psycopg.connect(servidor, autocommit=True) as conexao:
+        conexao.execute(apagar)
+        conexao.execute(
+            sql.SQL("CREATE DATABASE {} TEMPLATE {}").format(
+                sql.Identifier(proprio), sql.Identifier(modelo)
+            )
+        )
+    copia = url_admin.set(database=proprio).render_as_string(hide_password=False)
+    with psycopg.connect(copia) as conexao:
+        tabelas = conexao.execute(
+            "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
+        ).fetchone()[0]
+    if tabelas:
+        with psycopg.connect(servidor, autocommit=True) as conexao:
+            conexao.execute(apagar)
+        pytest.fail(
+            f"o banco-modelo `{modelo}` do db-teste ja tem {tabelas} tabela(s); "
+            "recrie-o com `docker compose --profile quality rm -sf db-teste`",
+            pytrace=False,
+        )
+
+    os.environ["TESTE_POSTGRES_DB"] = proprio
+    try:
+        yield
+    finally:
+        os.environ["TESTE_POSTGRES_DB"] = modelo
+        with psycopg.connect(servidor, autocommit=True) as conexao:
+            conexao.execute(apagar)
 
 
 @pytest.fixture(scope="session")

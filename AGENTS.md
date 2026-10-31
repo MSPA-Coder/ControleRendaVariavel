@@ -61,9 +61,9 @@ commit registrado em `uv.lock`.
 
 O Compose publica a aplicação em `127.0.0.1:5301` e PostgreSQL em
 `127.0.0.1:5302`; na rede interna, o banco é `db:5432`. `migrate` aplica
-Alembic antes de `web`. O runtime padrão reconstrói sem cache a partir das tags
-base móveis em cada subida; atualizações de dependências são integradas após
-os testes e auditorias. Edição ao vivo exige
+Alembic antes de `web`. O build usa o cache e as imagens-base já baixadas,
+como o deploy no servidor; bases novas só entram quando pedidas (ver
+"Imagens-base" em `docs/development.md`). Edição ao vivo exige
 `docker compose -f compose.yaml -f compose.dev.yaml up`.
 
 Dados financeiros e configurações vivem no volume `postgres_data`. Nunca use
@@ -200,8 +200,9 @@ docker compose --profile quality run --build --rm quality
 ```
 
 O `--build` mantém o comando explícito: o serviço não monta o código do host;
-Compose reconstrói sem cache a partir das tags base atuais antes dos testes.
-Rode-o completo antes de cada commit: é essa verificação que vale, e a CI
+Compose reconstrói a imagem com o código atual, com cache, antes dos testes. A
+suíte roda em paralelo (`pytest -n`), com um banco de teste novo por worker e
+por execução (ver `tests/conftest.py`). Rode-o completo antes de cada commit: é essa verificação que vale, e a CI
 depois do push é só aviso.
 
 Registre o que foi executado e omitido. Além do comando acima:

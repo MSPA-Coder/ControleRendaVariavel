@@ -116,8 +116,11 @@ COPY --chown=app:app compose.yaml ./
 # `--extra dev` acrescenta as ferramentas de teste ao MESMO conjunto que o
 # runtime instala: a suite tem de medir o que a imagem servida usa, e o lock
 # garante que sejam as mesmas versoes.
-RUN uv sync --locked --no-editable --extra dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-editable --extra dev
 USER app
 ENV RUFF_CACHE_DIR=/tmp/ruff-cache \
     PYTEST_ADDOPTS="-o cache_dir=/tmp/pytest-cache"
-CMD ["sh", "-c", "ruff check . && mypy && pytest"]
+# `-n auto` distribui a suite pelos nucleos, ate 8 workers; cada um com o
+# proprio banco de teste (ver `tests/conftest.py`).
+CMD ["sh", "-c", "ruff check . && mypy && pytest -n auto --maxprocesses 8"]

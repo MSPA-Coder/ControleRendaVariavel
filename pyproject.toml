@@ -43,6 +43,9 @@ dev = [
   "mypy>=2.4,<3",
   "ruff>=0.12.5,<1",
   "pytest>=8.3.5,<10",
+  # Distribui a suite entre processos; cada worker recebe o proprio banco de
+  # teste (ver `tests/conftest.py`).
+  "pytest-xdist>=3.8,<4",
   "pip-audit>=2.10,<3",
   # Os testes de configuracao leem o `compose.yaml` pelo que ele declara, e
   # nao pelo texto (docs/TESTES.md, T4).

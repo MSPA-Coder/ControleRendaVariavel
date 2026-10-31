@@ -226,7 +226,8 @@ docker compose --profile quality run --build --rm quality
 ```
 
 `--build` mantém a validação explícita: o serviço não monta o código do host;
-Compose reconstrói sem cache com as tags base atuais antes dos testes.
+Compose reconstrói a imagem com o código atual, com cache, antes dos testes, e
+a suíte roda em paralelo.
 
 Para mudanças de runtime, também reconstrua a imagem e confira `/health`. Para
 alterações apenas documentais, valide o Compose, links, caminhos, buscas
