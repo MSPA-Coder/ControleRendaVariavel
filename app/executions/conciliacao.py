@@ -28,11 +28,11 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from flask import current_app
 from sqlalchemy import func, select
 
 from app import db
 from app.core.domain import Side
-from app.executions.conferencia import ledger_brokers
 from app.executions.posicao_myprofit import PositionReport
 from app.models import (
     Broker,
@@ -314,11 +314,11 @@ def state_on(current: Holding, movements: Iterable[MovementRow], as_of: date) ->
 
 
 def crv_holdings(
-    owner_id: int, as_of: date | None = None, *, b3: bool = True, brokers: Iterable[str] | None = None
+    owner_id: int, as_of: date | None = None, *, b3: bool = True, exclude_brokers: Iterable[str] = ()
 ) -> dict[str, Holding]:
     """Posições do CRV por ativo (ações e opções); com ``b3=False``, as do exterior.
 
-    ``brokers`` (nomes no CRV) limita às posições dessas corretoras; ``None`` não filtra.
+    ``exclude_brokers`` (nomes no CRV) deixa de fora as posições dessas corretoras.
 
     Sem ``as_of``, as abertas hoje. Com ``as_of``, as que existiam ao fim daquele
     dia, para comparar com a posição do myProfit **da mesma data**:
@@ -335,7 +335,8 @@ def crv_holdings(
     papel vendido.
     """
     mercado = Ticker.market == Market.B3 if b3 else Ticker.market != Market.B3
-    wanted = None if brokers is None else select(Broker.id).where(Broker.name.in_(list(brokers)))
+    excluded = list(exclude_brokers)
+    wanted = select(Broker.id).where(Broker.name.not_in(excluded)) if excluded else None
     lots: dict[str, list[Holding]] = defaultdict(list)
     stock_rows = db.session.execute(
         select(Position.id, Ticker.symbol, Position.quantity, Position.average_cost, Position.opened_on)
@@ -546,11 +547,12 @@ def build_exterior(owner_id: int, as_of: date) -> list[Finding]:
 
     Quem escolhe ``as_of`` leva em conta o atraso da integração da Avenue no
     myProfit (dias): a posição de uma data recente ainda não tem os últimos
-    negócios. Só entram as corretoras do exterior que o myProfit lê -- as de
-    ``ledger_brokers``, que têm extrato no CB (hoje a Avenue): Nomad e Revolut são
-    dinheiro de viagem que o myProfit não vê, e somá-las ao mesmo ativo acusaria
-    diferença em toda data (a BRK.B da Revolut, por exemplo). Outra diferença
-    explicada fica reconhecida pela mesma nota de posição da B3.
+    negócios. Ficam de fora as corretoras que o myProfit não lê
+    (``exterior_brokers_outside_myprofit``; hoje a Revolut): somá-las ao mesmo ativo
+    acusaria diferença em toda data (a BRK.B da Revolut contra a da Avenue). A lista
+    é de exclusão de propósito: uma corretora nova entra na comparação e aparece,
+    em vez de sumir calada. Outra diferença explicada fica reconhecida pela mesma
+    nota de posição da B3.
     """
     def lado(holdings: Mapping[str, Holding]) -> dict[str, Holding]:
         # O mesmo papel tem dois nomes: o CRV grava "BRK.B" e o myProfit "BRKB".
@@ -561,8 +563,20 @@ def build_exterior(owner_id: int, as_of: date) -> list[Finding]:
         return {asset: Holding(total) for asset, total in totais.items()}
 
     theirs = lado(myprofit_exterior(owner_id, as_of))
-    ours = lado(crv_holdings(owner_id, as_of, b3=False, brokers=ledger_brokers()))
+    ours = lado(crv_holdings(owner_id, as_of, b3=False, exclude_brokers=exterior_brokers_outside_myprofit()))
     return apply_notes(compare_positions(theirs, ours), notes_of(owner_id))
+
+
+#: Corretoras do exterior que a integração do myProfit não lê.
+#: ``CONCILIACAO_CORRETORAS_FORA_DO_MYPROFIT`` (nomes no CRV, separados por vírgula)
+#: substitui a lista.
+DEFAULT_OUTSIDE_MYPROFIT: tuple[str, ...] = ("Revolut",)
+
+
+def exterior_brokers_outside_myprofit(config: Mapping[str, object] | None = None) -> tuple[str, ...]:
+    raw = (config if config is not None else current_app.config).get("CONCILIACAO_CORRETORAS_FORA_DO_MYPROFIT")
+    names = tuple(part.strip() for part in str(raw or "").split(",") if part.strip())
+    return names or DEFAULT_OUTSIDE_MYPROFIT
 
 
 def _codigo_do_exterior(asset: str) -> str:

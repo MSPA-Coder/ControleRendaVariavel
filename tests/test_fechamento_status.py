@@ -127,6 +127,13 @@ def test_pregao_que_liquida_depois_do_corte_pertence_ao_mes_seguinte(ativo, preg
     assert fechamento._liquida_depois_do_corte(SimpleNamespace(instrument=ativo, pregao=pregao), date(2026, 9, 30)) is depois
 
 
+@pytest.mark.parametrize(("bruto", "esperado"), [(None, ("Revolut",)), ("Revolut, Wise", ("Revolut", "Wise"))])
+def test_corretoras_fora_do_myprofit_configuraveis_com_padrao_revolut(bruto, esperado):
+    from app.executions.conciliacao import exterior_brokers_outside_myprofit
+
+    assert exterior_brokers_outside_myprofit({"CONCILIACAO_CORRETORAS_FORA_DO_MYPROFIT": bruto}) == esperado
+
+
 def _resumo(**mudancas):
     resumo = {
         "status": "ok", "mensagem": "", "aguardando_depois_do_corte": 0,
@@ -196,7 +203,7 @@ def cenario(sessao, app_com_banco, monkeypatch):
     sessao.add(Position(owner_id=dono.id, broker_id=revolut.id, ticker_id=eua.id, portfolio_id=usd.id,
                         quantity=D("0.47723749"), average_cost=D("506.29"), side=Side.BUY, opened_on=date(2026, 3, 2)))
     sessao.flush()
-    monkeypatch.setitem(app_com_banco.config, "CONFERENCIA_CORRETORAS_EXTERIOR", avenue.name)
+    monkeypatch.setitem(app_com_banco.config, "CONCILIACAO_CORRETORAS_FORA_DO_MYPROFIT", revolut.name)
     monkeypatch.setitem(app_com_banco.config, "MYPROFIT_INSTITUICOES", json.dumps({"GENIAL": "Genial"}))
     monkeypatch.setitem(app_com_banco.config, "CB_PATRIMONIO_TOKEN", TOKEN)
     monkeypatch.setitem(app_com_banco.config, "PATRIMONIO_OWNER_ID", str(dono.id))
