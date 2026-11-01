@@ -297,3 +297,82 @@ def test_cliente_le_so_os_lancamentos_de_renda_realizados_do_contrato_v4():
         ("e4", "irrf_aluguel", "despesa", "SMTO3", D("0.17"), "genial"),
     ]
     assert renda.not_realized == 1
+
+
+# --- exterior: Avenue em dólar e cupom de título (01/11/2026) ------------------
+
+AVENUE = {**INSTITUICOES, "avenue": "Avenue"}
+EM_DOLAR = {"Avenue": "USD"}
+
+
+def no_exterior(entradas, **kwargs):
+    kwargs.setdefault("broker_by_institution", AVENUE)
+    kwargs.setdefault("known_tickers", TICKERS | {"CGC", "ORCL-3.95-25-03-51"})
+    kwargs.setdefault("currency_by_broker", EM_DOLAR)
+    return calcular(entradas, **kwargs)
+
+
+def test_cupom_de_titulo_vira_provento_em_dolar_com_o_simbolo_do_cadastro():
+    dia = date(2026, 9, 28)
+    resultado = no_exterior(
+        [lancamento(1, "credito", "39.50", dia, ativo="ORCL 3.95 25/03/51", kind="cupom",
+                    conta="conta-a", instituicao="avenue", moeda="USD")]
+    )
+
+    (provento,) = resultado.proventos
+    assert (provento.ticker, provento.kind, provento.currency, provento.net) == (
+        "ORCL-3.95-25-03-51", "cupom", "USD", D("39.50"),
+    )
+    assert provento.broker == "Avenue" and resultado.review == []
+
+
+def test_aluguel_da_avenue_desconta_o_ir_retido_do_mesmo_ativo_e_dia():
+    dia = date(2026, 9, 17)
+    resultado = no_exterior(
+        [
+            lancamento(1, "credito", "9.04", dia, ativo="CGC", conta="conta-a", instituicao="avenue", moeda="USD"),
+            lancamento(2, "irrf_aluguel", "2.71", dia, ativo="CGC", conta="conta-a", instituicao="avenue", moeda="USD"),
+        ]
+    )
+
+    (provento,) = resultado.proventos
+    assert (provento.ticker, provento.gross, provento.withheld, provento.net) == ("CGC", D("9.04"), D("2.71"), D("6.33"))
+
+
+def test_cada_corretora_so_entra_na_sua_moeda():
+    """A Avenue tem conta em reais e em dólar; o CB assume os proventos dela em dólar.
+    E a Genial continua só em reais."""
+    dia = date(2026, 5, 4)
+    resultado = no_exterior(
+        [
+            lancamento(1, "credito", "51.25", dia, ativo="CGC", kind="dividendo",
+                       conta="conta-ab", instituicao="avenue", moeda="BRL"),
+            lancamento(2, "credito", "10.00", dia, ativo="RAIZ4", kind="dividendo", moeda="USD"),
+        ]
+    )
+
+    assert resultado.proventos == [] and resultado.other_currency == 2
+
+
+def test_sem_moeda_por_corretora_vale_reais_como_antes():
+    dia = date(2026, 9, 28)
+    resultado = calcular(
+        [lancamento(1, "credito", "39.50", dia, ativo="CGC", kind="cupom",
+                    conta="conta-a", instituicao="avenue", moeda="USD")],
+        broker_by_institution=AVENUE,
+    )
+
+    assert resultado.proventos == [] and resultado.other_currency == 1
+
+
+@pytest.mark.parametrize(
+    ("ativo", "simbolo"),
+    [("EALT4", "EALT4"), ("BRK.B", "BRK.B"), ("ORCL 3.95 25/03/51", "ORCL-3.95-25-03-51"),
+     ("PETBRA 6.85 05/06/15", "PETBRA-6.85-05-06-15")],
+)
+def test_o_ativo_do_cb_vira_simbolo_de_ticker_valido(ativo, simbolo):
+    from app.dividends.cb_income import symbol_for_instrument
+    from app.quotes.reference_data import _SYMBOL_PATTERN
+
+    assert symbol_for_instrument(ativo) == simbolo
+    assert _SYMBOL_PATTERN.fullmatch(simbolo)

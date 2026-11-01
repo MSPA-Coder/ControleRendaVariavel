@@ -35,12 +35,17 @@ from app.models import (
 from app.patrimonio.cb_client import CbIncome
 
 DEFAULT_CUTOFF = date(2026, 1, 1)
-DEFAULT_CB_BROKERS = ("Genial", "XP")
+DEFAULT_CB_BROKERS = ("Genial", "XP", "Avenue")
 #: Moeda das contas cujo provento o CB assume.
 CB_CURRENCY = "BRL"
+#: Corretora cujo provento o CB assume em outra moeda. A Avenue entrou em
+#: 01/11/2026, com o extrato mensal em dólar importado no CB: cupom dos títulos e
+#: aluguel de ações. Nomad e Revolut ficam fora de propósito: o dinheiro delas é
+#: de viagem, e os dividendos delas continuam lançados aqui (CONCEITOS, regra 10).
+CB_CURRENCY_BY_BROKER = {"Avenue": "USD"}
 
 CB_ORIGIN_MESSAGE = (
-    "Proventos em reais da {broker} a partir de {cutoff:%d/%m/%Y} vêm do Controle Bancário "
+    "Proventos em {currency} da {broker} a partir de {cutoff:%d/%m/%Y} vêm do Controle Bancário "
     "(dono do dinheiro) e não podem ser lançados nem importados por planilha aqui."
 )
 
@@ -77,17 +82,24 @@ def broker_by_institution(config: Mapping[str, object] | None = None) -> dict[st
     return result
 
 
+def cb_currency(broker_name: str) -> str:
+    """A moeda em que o CB assume os proventos da corretora."""
+    by_broker = {name.casefold(): currency for name, currency in CB_CURRENCY_BY_BROKER.items()}
+    return by_broker.get(broker_name.casefold(), CB_CURRENCY)
+
+
 def comes_from_cb(*, currency: str, broker_name: str, payment_date: date) -> bool:
     """Este provento (ticker em ``currency``, corretora, data) e do CB, nao da planilha?"""
     return (
-        currency == CB_CURRENCY
-        and broker_name.casefold() in {name.casefold() for name in cb_brokers()}
+        broker_name.casefold() in {name.casefold() for name in cb_brokers()}
+        and currency == cb_currency(broker_name)
         and payment_date >= cutoff_date()
     )
 
 
 def refusal_message(broker_name: str) -> str:
-    return CB_ORIGIN_MESSAGE.format(broker=broker_name, cutoff=cutoff_date())
+    moeda = "dólar" if cb_currency(broker_name) == "USD" else "reais"
+    return CB_ORIGIN_MESSAGE.format(currency=moeda, broker=broker_name, cutoff=cutoff_date())
 
 
 # --- importar ---------------------------------------------------------------
@@ -144,6 +156,8 @@ def plan_cb_import(owner_id: int, income: CbIncome, *, cutoff: date | None = Non
         cutoff=cutoff,
         broker_by_institution=broker_by_institution(),
         known_tickers=set(tickers),
+        currency=CB_CURRENCY,
+        currency_by_broker={name: cb_currency(name) for name in cb_brokers()},
     )
     plan = ImportPlan(income=result, cutoff=cutoff, not_realized=income.not_realized)
 
@@ -161,9 +175,10 @@ def plan_cb_import(owner_id: int, income: CbIncome, *, cutoff: date | None = Non
             missing_brokers.add(provento.broker)
             continue
         ticker = tickers[provento.ticker]
-        if ticker.currency != CB_CURRENCY:
+        if ticker.currency != provento.currency:
             plan.problems.append(
-                f"{provento.ticker} está cadastrado em {ticker.currency}, mas o crédito {provento.origin_id} do CB é em reais."
+                f"{provento.ticker} está cadastrado em {ticker.currency}, mas o crédito {provento.origin_id} "
+                f"do CB é em {provento.currency}."
             )
             continue
         prepared = PreparedRow(provento, ticker.id, broker.id, existing.get(provento.origin_id))
@@ -252,7 +267,6 @@ def plan_substitution(owner_id: int, *, cutoff: date | None = None) -> Substitut
         .where(
             Dividend.owner_id == owner_id,
             Dividend.payment_date >= cutoff,
-            Ticker.currency == CB_CURRENCY,
         )
         .order_by(Dividend.payment_date, Dividend.id)
     )
@@ -261,7 +275,7 @@ def plan_substitution(owner_id: int, *, cutoff: date | None = None) -> Substitut
     superseded_lines: list[SheetLine] = []
     already = 0
     for row in db.session.scalars(statement):
-        if row.broker.casefold() not in allowed:
+        if row.broker.casefold() not in allowed or row.currency != cb_currency(row.broker):
             continue
         if row.origin == DIVIDEND_ORIGIN_CB:
             assert row.gross_amount is not None

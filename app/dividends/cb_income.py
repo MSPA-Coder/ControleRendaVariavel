@@ -7,7 +7,7 @@ revisao. A gravacao e a leitura do cadastro ficam em ``app.dividends.cb_sync``.
 REGRA DO VALOR (decisao do mantenedor, 18/10/2026): o provento e o LIQUIDO do
 caixa. Para cada credito (``income_role = credito``):
 
-* dividendo e JCP nao tem retencao lancada: liquido = credito;
+* dividendo, JCP e cupom de titulo nao tem retencao lancada: liquido = credito;
 * aluguel: liquido = credito
   - o IRRF do aluguel do MESMO ativo, conta e dia (exato);
   - a corretagem do aluguel, as taxas pequenas e os estornos do dia na mesma
@@ -41,7 +41,9 @@ ROLE_BROKERAGE = "corretagem_aluguel"
 ROLE_FEE = "taxa_aluguel"
 ROLE_REVERSAL = "estorno"
 KIND_RENT = "aluguel"
-KINDS = frozenset({KIND_RENT, "jcp", "dividendo"})
+KINDS = frozenset({KIND_RENT, "jcp", "dividendo", "cupom"})
+#: Moeda dos proventos que o CB assume quando a corretora não diz outra.
+DEFAULT_CURRENCY = "BRL"
 
 #: Motivos da fila de revisao. O texto de cada um diz o que o mantenedor faz.
 REASON_NO_INSTRUMENT = "sem_ativo"
@@ -75,6 +77,7 @@ class CbProvento:
     payment_date: date
     gross: Decimal
     withheld: Decimal
+    currency: str = DEFAULT_CURRENCY
 
     @property
     def net(self) -> Decimal:
@@ -154,25 +157,41 @@ def _review(reason: str, entry: CbIncomeEntry) -> ReviewItem:
     )
 
 
+def symbol_for_instrument(instrument: str | None) -> str | None:
+    """O símbolo de ticker do CRV para o ativo que o CB publica.
+
+    Ticker da B3 ou dos EUA passa igual (``EALT4``, ``CGC``, ``BRK.B``). O título
+    de renda fixa vem como o extrato da Avenue o imprime (``ORCL 3.95 25/03/51``),
+    e o cadastro de tickers não aceita espaço nem barra: os dois viram hífen
+    (``ORCL-3.95-25-03-51``)."""
+    if not instrument:
+        return instrument
+    return instrument.strip().upper().replace(" ", "-").replace("/", "-")
+
+
 def build_proventos(
     entries: Collection[CbIncomeEntry],
     *,
     cutoff: date,
     broker_by_institution: Mapping[str, str],
     known_tickers: Collection[str],
-    currency: str = "BRL",
+    currency: str = DEFAULT_CURRENCY,
+    currency_by_broker: Mapping[str, str] | None = None,
 ) -> IncomeResult:
     """Transforma os lancamentos de renda do CB nos proventos do CRV.
 
-    So entram lancamentos em ``currency`` (reais), de instituicoes mapeadas a uma
-    corretora do CRV e com data realizada ``>= cutoff``. ``known_tickers`` e o
-    cadastro de tickers do CRV: credito de ativo desconhecido vai para a fila de
-    revisao, e nunca cria ticker.
+    So entram lancamentos na moeda da corretora (``currency_by_broker``; na falta,
+    ``currency``, reais), de instituicoes mapeadas a uma corretora do CRV e com
+    data realizada ``>= cutoff``. ``known_tickers`` e o cadastro de tickers do
+    CRV: credito de ativo desconhecido vai para a fila de revisao, e nunca cria
+    ticker.
     """
+    currency_by_broker = currency_by_broker or {}
     result = IncomeResult()
     scoped: list[CbIncomeEntry] = []
     for entry in entries:
-        if entry.currency != currency:
+        expected = currency_by_broker.get(broker_by_institution.get(entry.institution, ""), currency)
+        if entry.currency != expected:
             result.other_currency += 1
         elif entry.institution not in broker_by_institution:
             result.other_institution += 1
@@ -249,7 +268,8 @@ def build_proventos(
         if not entry.instrument:
             result.review.append(_review(REASON_NO_INSTRUMENT, entry))
             continue
-        if entry.instrument not in known_tickers:
+        symbol = symbol_for_instrument(entry.instrument)
+        if symbol not in known_tickers:
             result.review.append(_review(REASON_UNKNOWN_TICKER, entry))
             continue
         withheld = irrf_by_credit.get(entry.entry_id, ZERO) + pool_by_credit.get(entry.entry_id, ZERO)
@@ -261,11 +281,12 @@ def build_proventos(
                 origin_id=entry.entry_id,
                 broker=broker_by_institution[entry.institution],
                 institution=entry.institution,
-                ticker=entry.instrument,
+                ticker=symbol,
                 kind=entry.kind,
                 payment_date=entry.realized_date,
                 gross=entry.amount,
                 withheld=withheld,
+                currency=entry.currency,
             )
         )
     result.review.sort(key=lambda item: (item.payment_date, item.entry_id))

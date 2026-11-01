@@ -715,20 +715,31 @@ dez minutos por processo.
 
 O CB é o dono de todo movimento de dinheiro, inclusive o das contas de
 corretora; o CRV é dono dos papéis. Por isso, **de 01/01/2026 em diante** os
-proventos em reais das corretoras que o CB cobre (Genial e XP, configuráveis em
-`PROVENTOS_CB_CORRETORAS`; corte em `PROVENTOS_CB_CORTE`, AAAA-MM-DD) não nascem
-na planilha: são lidos do CB e gravados em `dividends` com `origin = 'cb'`. Dólar
-(Nomad), Avenue e tudo anterior ao corte seguem pela planilha (`origin =
-'planilha'`) até haver extrato com o evento; as 40 linhas até 31/12/2025 ficam
+proventos das corretoras que o CB cobre (Genial e XP em reais, e desde 01/11/2026
+a Avenue em dólar, configuráveis em `PROVENTOS_CB_CORRETORAS`; a moeda de cada uma
+em `CB_CURRENCY_BY_BROKER`, em `cb_sync.py`; corte em `PROVENTOS_CB_CORTE`,
+AAAA-MM-DD) não nascem na planilha: são lidos do CB e gravados em `dividends` com
+`origin = 'cb'`. A Avenue entrou quando o CB passou a importar o extrato mensal em
+dólar dela: cupom dos títulos de renda fixa (tipo `cupom`) e aluguel de CGC. Nomad
+e Revolut seguem lançadas aqui, de propósito: o dinheiro delas é de viagem e o CB
+não o acompanha (`CONCEITOS_FINANCEIROS.md`, regra 10). Tudo anterior ao corte
+segue pela planilha (`origin = 'planilha'`); as 40 linhas até 31/12/2025 ficam
 congeladas e aparecem como o subtotal "Até 31/12/2025 · saldo de corte".
+
+O título de renda fixa não é papel do CRV (fica no CB, opção A de 01/11/2026), mas
+o cupom precisa de um ticker para se ligar: cada título tem um cadastro em
+Tabelas > Tickers, mercado NYSE e moeda USD, sem posição nem cotação. O CB publica
+o título como o extrato o imprime (`ORCL 3.95 25/03/51`), e o cadastro não aceita
+espaço nem barra: `symbol_for_instrument` troca os dois por hífen
+(`ORCL-3.95-25-03-51`).
 
 * **Leitura** (`app/patrimonio/cb_client.py`, `read_income_entries`): os
   lançamentos que o CB-1 marcou com `income_kind`/`income_role` no contrato v4
-  (`instrument`, `income_kind` aluguel|jcp|dividendo, `income_role` credito|
+  (`instrument`, `income_kind` aluguel|jcp|dividendo|cupom, `income_role` credito|
   irrf_aluguel|corretagem_aluguel|taxa_aluguel|estorno), só os realizados. A
   categoria não é consultada.
 * **Valor** (`app/dividends/cb_income.py`, função pura): o provento é o **líquido
-  do caixa**. Dividendo e JCP não têm retenção: líquido = crédito. Aluguel:
+  do caixa**. Dividendo, JCP e cupom não têm retenção: líquido = crédito. Aluguel:
   líquido = crédito − IRRF do **mesmo ativo, conta e dia** − (corretagem + taxas −
   estornos) da conta no dia, **rateados** entre os créditos de aluguel do dia na
   proporção do valor (maior resto: a soma das partes é exata ao centavo). `amount`

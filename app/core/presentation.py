@@ -32,6 +32,7 @@ INCOME_KIND_LABELS = {
     "dividendo": "Dividendo",
     "jcp": "JCP",
     "aluguel": "Aluguel de ações",
+    "cupom": "Cupom de título",
 }
 """Rótulos das rendas (``app.models.IncomeKind``). Mantidos aqui, e não
 derivados do valor gravado, porque "JCP" é sigla e "aluguel" sozinho seria

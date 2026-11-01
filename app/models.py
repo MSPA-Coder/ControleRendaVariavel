@@ -67,6 +67,9 @@ class IncomeKind(StrEnum):
     DIVIDENDO = "dividendo"
     JCP = "jcp"
     ALUGUEL = "aluguel"
+    #: Cupom de título de renda fixa (01/11/2026). O título fica no Controle
+    #: Bancário; aqui só o cupom, lido do CB, para a visão de rendimento.
+    CUPOM = "cupom"
 
 
 class PositionMovementKind(StrEnum):

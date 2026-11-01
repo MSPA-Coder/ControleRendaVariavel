@@ -345,3 +345,26 @@ def test_rotina_diaria_grava_o_valido_e_sai_com_erro_quando_ha_o_que_revisar(
 
     assert resultado.exit_code == codigo, resultado.output
     assert trecho in resultado.output
+
+
+def test_cupom_da_avenue_em_dolar_e_gravado_com_o_tipo_novo(sessao, cenario):
+    """O enum `income_kind` do banco precisa aceitar o cupom (revisão 20261101_0039)."""
+    avenue = Broker(name="Avenue", acronym="AVN")
+    titulo = Ticker(symbol="ORCL-3.95-25-03-51", trading_name="Oracle 3,95% 2051", market=Market.NYSE,
+                    rtd_market_code="N", currency="USD")
+    sessao.add_all([avenue, titulo])
+    sessao.flush()
+    dono = cenario["usuario"]
+    cupom = lancamento(30, "credito", "39.50", date(2026, 9, 28), ativo="ORCL 3.95 25/03/51", kind="cupom",
+                       conta="conta-a", instituicao="avenue", moeda="USD")
+
+    plano = plan_cb_import(dono.id, _renda(cupom))
+    assert plano.problems == [] and len(plano.create) == 1
+    apply_cb_import(dono.id, plano)
+    sessao.flush()
+
+    (linha,) = _linhas_do_cb(sessao, dono)
+    sessao.expire(linha)
+    assert (linha.kind, linha.ticker, linha.amount, linha.currency) == (
+        IncomeKind.CUPOM, "ORCL-3.95-25-03-51", D("39.50"), "USD",
+    )
