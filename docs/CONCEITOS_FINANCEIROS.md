@@ -16,9 +16,9 @@ diferentes para a mesma coisa, o patrimônio aparece com duas verdades.
 | Assunto | Dono | Os outros |
 |---|---|---|
 | Todo movimento de dinheiro, em qualquer conta (inclusive de corretora), e os custos dele (corretagem, taxas, IRRF) | CB | CRV e Wealthfolio leem |
-| Proventos, JCP, aluguel de ações e juros: o fato de caixa | CB | CRV lê o líquido; o Wealthfolio lê o bruto e as deduções |
+| Proventos, JCP, aluguel de ações, cupom de título e juros: o fato de caixa | CB | CRV lê o líquido; o Wealthfolio lê o bruto e as deduções |
 | Papéis: quantidade, preço médio, opções, cotações, risco, resultado por operação | CRV | |
-| Renda fixa, Tesouro Direto e caixa no exterior | CB | o CRV não os trata |
+| Renda fixa, Tesouro Direto e caixa no exterior | CB | o CRV não os trata; do título, só mostra o cupom como provento |
 | A visão consolidada (patrimônio, retorno, alocação) | Wealthfolio | nenhum dos dois reconstrói a do outro |
 
 Só a compra e a venda de um papel têm dois registros: a operação (CRV) e a
@@ -76,4 +76,22 @@ lado grava no outro.
 6. **Ajuste assumido não é rendimento.** Diferença sem explicação entra com
    categoria e motivo próprios, para aparecer e poder ser revisada.
 7. **Fonte dos dados.** Extratos e faturas para o dinheiro; o myProfit (que lê a
-   B3) para negócios e posições; o RTD só para cotação ao vivo.
+   B3) para negócios e posições da B3; o RTD só para cotação ao vivo. No exterior
+   o extrato mensal da corretora é a fonte do caixa e dos títulos, e o myProfit
+   só confere: ele recebe a corretora com atraso e não marca título a mercado.
+8. **Caixa é caixa.** O saldo de uma conta de corretora no CB é só o dinheiro
+   parado nela. O total que o aplicativo mostra (caixa mais investimentos) nunca
+   é fonte desse saldo: os papéis já estão no CRV, e contá-los no caixa os conta
+   duas vezes.
+9. **Conta sem extrato.** Quando a corretora não fornece extrato e tem poucos
+   eventos, cada liquidação e cada provento entra à mão no CB, na data do
+   negócio. A conferência é o **caixa derivado**: remessas − compras + vendas +
+   proventos = saldo da conta.
+10. **Dinheiro de viagem.** O real enviado para Nomad e Revolut é despesa de
+    viagem no dia em que sai. O CB não acompanha esse dólar, e as contas em dólar
+    delas ficam zeradas. O CRV guarda o que esse dinheiro comprou enquanto espera
+    (SGOV, BRK.B) e os dividendos dele, só para mostrar o rendimento: é a única
+    exceção à regra de que o provento nasce no CB. Decidido em 01/11/2026.
+11. **Mês fechado.** Um mês só fecha com o extrato importado, a conciliação em
+    100% e as conferências entre CB e CRV em dia: saldos, proventos, liquidações
+    contra negócios e posição.
