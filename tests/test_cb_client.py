@@ -235,3 +235,44 @@ def test_cobertura_do_extrato_vem_da_conta_e_vale_a_maior_por_instituicao_e_moed
     )
 
     assert resultado.coverage == {("genial", "BRL"): date(2026, 10, 2)}
+
+
+def test_negocio_do_exterior_traz_ativo_e_quantidade_com_o_sinal_da_posicao():
+    itens = [
+        _conta(CONTA_XP, "Avenue"),
+        _categoria(CATEGORIA_BOLSA, "Operações em Bolsa"),
+        _lancamento("compra", CONTA_XP, CATEGORIA_BOLSA, "Compra de CGC na Avenue", "4750.00", tipo="despesa",
+                    instrument="cgc", settlement={"pregao_date": "2026-06-16", "quantity": "5000"}),
+        _lancamento("venda", CONTA_XP, CATEGORIA_BOLSA, "Venda de BRK.B na Avenue", "780.46",
+                    instrument="BRK.B", settlement={"pregao_date": "2026-10-01", "quantity": "1.56365"}),
+        _lancamento("b3", CONTA_XP, CATEGORIA_BOLSA, "Operações Bolsa D+2 Pr 27/01/2026 Nc. 1", "9.00"),
+    ]
+
+    resultado = read_settlements(CbConfig("http://cb.test", "t"), fetcher=_snapshot(*itens))
+
+    assert [(s.entry_id, s.instrument, s.quantity) for s in resultado.items] == [
+        ("compra", "CGC", Decimal("5000")),
+        ("venda", "BRK.B", Decimal("-1.56365")),
+        ("b3", None, None),
+    ]
+
+
+def test_carteira_de_cada_extrato_vem_da_conta_por_instituicao_moeda_e_data():
+    avenue = _conta(CONTA_XP, "Avenue")
+    avenue["payload"]["currency"] = "USD"
+    avenue["payload"]["statement_holdings"] = [
+        {"date": "2026-08-31", "positions": [{"instrument": "CGC", "quantity": "7500"},
+                                             {"instrument": "brk.b", "quantity": "1.56365"}]},
+        {"date": "2026-04-30", "positions": []},
+        # Uma linha ilegível tira a data inteira: carteira pela metade não é comparada.
+        {"date": "2026-05-31", "positions": [{"instrument": "CGC", "quantity": "x"}]},
+    ]
+
+    resultado = read_settlements(CbConfig("http://cb.test", "t"), fetcher=_snapshot(avenue, _conta(CONTA_GENIAL, "Genial")))
+
+    assert resultado.holdings == {
+        ("avenue", "USD"): {
+            date(2026, 8, 31): {"CGC": Decimal("7500"), "BRK.B": Decimal("1.56365")},
+            date(2026, 4, 30): {},
+        }
+    }

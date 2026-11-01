@@ -13,7 +13,9 @@ O contrato publica tudo em um snapshot (contas, categorias e lançamentos). Este
 cliente o lê inteiro e filtra: os lançamentos da categoria "Operações em
 Bolsa", em ordem de data de pregão (``read_settlements``), e os lançamentos de
 renda que o CB marcou com ``income_kind``/``income_role`` (``read_income_entries``),
-que alimentam os proventos de 2026 em diante do CRV.
+que alimentam os proventos de 2026 em diante do CRV. Das contas vêm a cobertura do
+extrato importado e a carteira que o extrato da corretora imprime
+(``statement_holdings``), usada na conferência da posição do exterior.
 
 TRANSIÇÃO (CB-1): o CB está acrescentando ao ``cash_entry`` o campo opcional
 ``settlement`` (``pregao_date`` e ``note``). Enquanto ele não está em produção, o
@@ -74,6 +76,10 @@ class CbSettlement:
     amount: Decimal
     status: str
     description: str
+    #: Ativo e quantidade negociada, com o sinal da posição (compra positiva):
+    #: só o extrato do exterior os traz por negócio (CB desde 01/11/2026).
+    instrument: str | None = None
+    quantity: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +95,11 @@ class CbSettlements:
     #: ``statement_covered_until`` opcional das contas (CB desde 19/10/2026).
     #: Instituição sem o campo não aparece.
     coverage: dict[tuple[str, str], date] = field(default_factory=dict)
+    #: (instituição, moeda) -> data do extrato -> ativo -> quantidade, pelo
+    #: ``statement_holdings`` opcional das contas (CB desde 01/11/2026): a
+    #: carteira que o extrato da corretora imprime. Data sem ativo fica com
+    #: carteira vazia; instituição sem o campo não aparece.
+    holdings: dict[tuple[str, str], dict[date, dict[str, Decimal]]] = field(default_factory=dict)
 
 
 _PREGAO_NA_DESCRICAO = re.compile(r"\bPr\s+(\d{2})/(\d{2})/(\d{4})\b")
@@ -184,6 +195,25 @@ def _amount(payload: dict[str, Any]) -> Decimal:
     return -abs(value) if payload.get("entry_type") == "despesa" else abs(value)
 
 
+def _decimal_or_none(raw: Any) -> Decimal | None:
+    try:
+        value = Decimal(str(raw))
+    except (InvalidOperation, ValueError):
+        return None
+    return value if value.is_finite() else None
+
+
+def _traded_quantity(payload: dict[str, Any]) -> Decimal | None:
+    """Quantidade do negócio com o sinal da posição: a compra (despesa) soma."""
+    settlement = payload.get("settlement")
+    if not isinstance(settlement, dict) or settlement.get("quantity") in (None, ""):
+        return None
+    quantity = _decimal_or_none(settlement["quantity"])
+    if quantity is None:
+        return None
+    return abs(quantity) if payload.get("entry_type") == "despesa" else -abs(quantity)
+
+
 def _pregao(payload: dict[str, Any]) -> date | None:
     settlement = payload.get("settlement")
     if isinstance(settlement, dict) and settlement.get("pregao_date"):
@@ -243,6 +273,8 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
                 amount=_amount(payload),
                 status=str(payload.get("status") or ""),
                 description=str(payload.get("description") or ""),
+                instrument=str(payload["instrument"]).upper() if payload.get("instrument") else None,
+                quantity=_traded_quantity(payload),
             )
         )
     futures = [item for item in settlements if is_futures_settlement(item.description)]
@@ -252,7 +284,42 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
         without_pregao=[item for item in stocks if item.pregao_date is None],
         futures=futures,
         coverage=statement_coverage(accounts),
+        holdings=statement_holdings(accounts),
     )
+
+
+def statement_holdings(accounts: dict[str, dict[str, Any]]) -> dict[tuple[str, str], dict[date, dict[str, Decimal]]]:
+    """A carteira de cada extrato, por (instituição, moeda) e data.
+
+    Entrada malformada é ignorada, e não adivinhada: uma data com ativo ilegível
+    sai inteira, para a conferência não comparar uma carteira pela metade.
+    """
+    holdings: dict[tuple[str, str], dict[date, dict[str, Decimal]]] = {}
+    for account in accounts.values():
+        statements = account.get("statement_holdings")
+        if not isinstance(statements, list):
+            continue
+        key = (
+            str(account.get("institution") or institution_identity(account.get("institution_name"))),
+            str(account.get("currency") or ""),
+        )
+        for statement in statements:
+            if not isinstance(statement, dict) or not isinstance(statement.get("positions"), list):
+                continue
+            try:
+                day = date.fromisoformat(str(statement.get("date")))
+            except ValueError:
+                continue
+            positions: dict[str, Decimal] = {}
+            for position in statement["positions"]:
+                quantity = _decimal_or_none(position.get("quantity")) if isinstance(position, dict) else None
+                instrument = str(position.get("instrument") or "").upper() if isinstance(position, dict) else ""
+                if quantity is None or not instrument:
+                    break
+                positions[instrument] = positions.get(instrument, Decimal("0")) + quantity
+            else:
+                holdings.setdefault(key, {})[day] = positions
+    return holdings
 
 
 def statement_coverage(accounts: dict[str, dict[str, Any]]) -> dict[tuple[str, str], date]:

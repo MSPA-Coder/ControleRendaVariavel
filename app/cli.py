@@ -442,9 +442,19 @@ def conferir_pregoes(
         cb = f"{row.cb_amount:,.2f}" if row.cb_amount is not None else "-"
         crv = f"{row.crv_amount:,.2f}" if row.crv_amount is not None else "-"
         cost = f"{row.implicit_cost:,.2f}" if row.implicit_cost is not None else "-"
+        negocio = ""
+        if row.instrument:
+            quantidades = [f"{q.normalize():f}" if q is not None else "-" for q in (row.cb_quantity, row.crv_quantity)]
+            negocio = f"  {row.instrument} qtd CB {quantidades[0]} CRV {quantidades[1]}"
         click.echo(
             f"{row.pregao:%d/%m/%Y}  {row.broker:<10} {row.currency}  {STATE_LABELS[row.state]:<15} "
-            f"CB {cb:>14}  CRV {crv:>14}  custo {cost:>10}"
+            f"CB {cb:>14}  CRV {crv:>14}  custo {cost:>10}{negocio}"
+        )
+    for check in result.holdings:
+        click.echo(
+            f"Carteira {check.statement_date:%d/%m/%Y}  {check.broker:<10} {check.instrument:<20} "
+            f"extrato {check.statement_quantity.normalize():f}  CRV {check.crv_quantity.normalize():f} "
+            f"(pregão {check.position_date:%d/%m})  {'confere' if check.matches else 'DIFERENÇA'}"
         )
     counts = result.counts
     click.echo(

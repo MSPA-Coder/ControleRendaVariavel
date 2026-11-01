@@ -259,6 +259,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         CB_PATRIMONIO_TOKEN=resolver_segredo("CB_PATRIMONIO_TOKEN") or "",
         CB_CORRESPONDENCIA_CONTAS=os.getenv("CB_CORRESPONDENCIA_CONTAS", "").strip(),
         CONFERENCIA_TOLERANCIA=os.getenv("CONFERENCIA_TOLERANCIA", "").strip(),
+        CONFERENCIA_CORRETORAS_EXTERIOR=os.getenv("CONFERENCIA_CORRETORAS_EXTERIOR", "").strip(),
         MYPROFIT_INSTITUICOES=os.getenv("MYPROFIT_INSTITUICOES", "").strip(),
         # Proventos de 2026 em diante vêm do CB (corte AAAA-MM-DD) para as
         # corretoras em reais listadas (nomes no CRV, separados por vírgula).

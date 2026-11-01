@@ -658,6 +658,27 @@ substituída por `CB_CORRESPONDENCIA_CONTAS` (JSON). A tela é
 período) e o comando é `flask --app app:create_app conferir-pregoes [--usuario U]
 [--corretora C] [--inicio AAAA-MM-DD] [--fim AAAA-MM-DD]`.
 
+**Exterior (desde 01/11/2026).** O myProfit não traz os negócios fora da B3
+(`Execution.in_scope`), mas o extrato mensal em dólar da Avenue traz cada um, e o
+CB o publica com `instrument` e `settlement.quantity`. Para as corretoras de
+`CONFERENCIA_CORRETORAS_EXTERIOR` (padrão: Avenue) a comparação é **negócio a
+negócio** -- corretora, pregão, moeda e ativo (`compare_trades`) -- e o lado do CRV
+é o extrato de posição (`ledger_trades`): a quantidade é a variação do saldo da
+posição no dia, lida da mesma linha do tempo do desempenho (`position_timeline`,
+que inclui as encerradas), e o valor vem do movimento vivo ou arquivado. Confere
+quando a quantidade é a mesma e, se o CRV tem o preço, o valor fica na tolerância;
+a posição encerrada antes do arquivo de movimentos só tem quantidade, e confere por
+ela. O ativo é casado sem pontuação (o extrato imprime BRK.B e BRKB). Negócio
+anterior a `PROVENTOS_CB_CORTE` (o começo do CB) não entra. Nomad e Revolut ficam
+de fora: são dinheiro de viagem, sem liquidação no CB.
+
+A mesma tela mostra a **carteira do extrato × posição do CRV**
+(`app/executions/carteira.py`): o CB publica a carteira de ações de cada extrato
+(`statement_holdings` da conta) e o CRV compara com a sua quantidade no último
+pregão que o extrato já liquidou (`settled_cutoff`: D+1 útil, sem feriados dos
+EUA). É a única conferência independente da quantidade no exterior; a do myProfit
+chega com dias de atraso.
+
 Rede e token no VPS1 (em produção desde 18/10/2026): o `web` do CRV entra na rede
 interna `patrimonio-internal` e o `web` do CB responde nela como `cb-api:8000`,
 então `CB_PATRIMONIO_URL=http://cb-api:8000/patrimonio/v4` é alcançável sem sair do

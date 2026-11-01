@@ -26,11 +26,11 @@
   <div class="trade-card-grid">
     {% for row in rows %}
     <article class="trade-card workspace-reconciliation-card">
-      <header><div><h3>{{ row.pregao|udate }}</h3><p>{{ row.broker }} · {{ row.currency }}</p></div><span class="workspace-status {{ 'workspace-status-warning' if row.state != 'confere' }}">{{ row.state_label }}</span></header>
-      <dl class="trade-data-grid">{{ trades.metric('CB · liquidação', row.cb_amount|currency(row.currency) if row.cb_amount is not none else '—') }}{{ trades.metric('CRV · execuções', row.crv_amount|currency(row.currency) if row.crv_amount is not none else '—') }}</dl>
+      <header><div><h3>{{ row.pregao|udate }}</h3><p>{{ row.broker }} · {{ row.currency }}{% if row.instrument %} · {{ row.instrument }}{% endif %}</p></div><span class="workspace-status {{ 'workspace-status-warning' if row.state != 'confere' }}">{{ row.state_label }}</span></header>
+      <dl class="trade-data-grid">{{ trades.metric('CB · liquidação', row.cb_amount|currency(row.currency) if row.cb_amount is not none else '—') }}{{ trades.metric('CRV · extrato de posição' if row.instrument else 'CRV · execuções', row.crv_amount|currency(row.currency) if row.crv_amount is not none else '—') }}{% if row.instrument %}{{ trades.metric('CB · quantidade', row.cb_quantity|quantity if row.cb_quantity is not none else '—') }}{{ trades.metric('CRV · quantidade', row.crv_quantity|quantity if row.crv_quantity is not none else '—') }}{% endif %}</dl>
       <div class="workspace-cost"><span class="trade-label">Custo implícito · CRV − CB</span><strong data-sensitive-value="true">{{ row.implicit_cost|currency(row.currency) if row.implicit_cost is not none else '—' }}</strong></div>
       <details class="workspace-disclosure"><summary>Contexto e documentos</summary>
-        <p class="workspace-note">{% if row.state == 'sem_cb' %}A integração não forneceu os dados da liquidação. Não é possível concluir se este pregão confere.{% elif row.state == 'so_cb' %}Há liquidação no CB e nenhum negócio em escopo no CRV para esta corretora, data e moeda.{% elif row.state == 'so_crv' %}Há negócios no CRV e nenhuma liquidação no CB para esta corretora, data e moeda.{% elif row.state == 'aguardando_extrato' %}O extrato desta corretora importado no CB ainda não chega à data da liquidação. Importe o extrato do período no CB.{% elif row.state == 'diferenca' %}Os valores diferem além da tolerância. Consulte os documentos e a liquidação para entender o custo implícito.{% else %}A diferença está dentro da tolerância da conferência.{% endif %}</p>
+        <p class="workspace-note">{% if row.state == 'sem_cb' %}A integração não forneceu os dados da liquidação. Não é possível concluir se este pregão confere.{% elif row.state == 'so_cb' %}Há liquidação no CB e nenhum negócio em escopo no CRV para esta corretora, data e moeda{% if row.instrument %} neste ativo{% endif %}.{% elif row.state == 'so_crv' %}Há negócios no CRV e nenhuma liquidação no CB para esta corretora, data e moeda{% if row.instrument %} neste ativo{% endif %}.{% elif row.state == 'aguardando_extrato' %}O extrato desta corretora importado no CB ainda não chega à data da liquidação. Importe o extrato do período no CB.{% elif row.state == 'diferenca' and row.instrument %}A quantidade difere, ou o valor difere além da tolerância. No exterior o CRV é conferido pelo extrato de posição: corrija o movimento da posição ou o lançamento no CB.{% elif row.state == 'diferenca' %}Os valores diferem além da tolerância. Consulte os documentos e a liquidação para entender o custo implícito.{% elif row.instrument and row.crv_amount is none %}A quantidade confere. O CRV não guardou o preço deste negócio (posição encerrada antes do arquivo de movimentos), então o valor não foi comparado.{% else %}A diferença está dentro da tolerância da conferência.{% endif %}</p>
         <h4 class="trade-label">Documentos do CRV</h4><p class="workspace-note">{{ row.documents|join(', ') or 'Nenhum documento do CRV para este pregão.' }}</p>
       </details>
     </article>
@@ -41,6 +41,28 @@
 {% endfor %}
 {% else %}
 <div class="trade-empty"><span aria-hidden="true">✓</span><h2>Nenhum pregão neste filtro</h2><p>Importe os negócios para conferir a liquidação por corretora e data.</p><a class="button" href="{{ url_for('portfolio.import_executions') }}">Importar negócios</a></div>
+{% endif %}
+{% if result.holdings %}
+{% set divergent = result.holdings|rejectattr('matches')|list %}
+<section class="workspace-reconciliation-group" aria-label="Carteira do extrato">
+  <h2>Carteira do extrato × posição do CRV · {{ divergent|length }} diferença(s) em {{ result.holdings|length }}</h2>
+  <p class="workspace-note">A carteira de ações que o extrato mensal da corretora imprime, guardada no CB, contra a quantidade do CRV no último pregão que o extrato já liquidou.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Extrato</th><th>Corretora</th><th>Ativo</th><th class="number">Extrato</th><th class="number">CRV</th><th>Posição em</th><th>Situação</th></tr></thead>
+      <tbody>
+        {% for row in result.holdings %}
+        <tr>
+          <td>{{ row.statement_date|udate }}</td><td>{{ row.broker }}</td><td>{{ row.instrument }}</td>
+          <td class="number">{{ row.statement_quantity|quantity }}</td><td class="number">{{ row.crv_quantity|quantity }}</td>
+          <td>{{ row.position_date|udate }}</td>
+          <td><span class="workspace-status {{ 'workspace-status-warning' if not row.matches }}">{{ 'Confere' if row.matches else 'Diferença' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endif %}
 {% if result.executions_out_of_scope %}<p class="workspace-note">{{ result.executions_out_of_scope }} execução(ões) fora de escopo não comparadas.</p>{% endif %}
 {% if result.futures_settlements %}<p class="workspace-note">{{ result.futures_settlements }} lançamento(s) de BM&amp;F (futuros) no CB ficaram fora da conferência: o CRV não trata futuros.</p>{% endif %}

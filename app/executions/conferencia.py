@@ -1,17 +1,23 @@
-"""Conferência por pregão: liquidação do CB contra as execuções do myProfit.
+"""Conferência por pregão: liquidação do CB contra os negócios do CRV.
 
 Só leitura. Nenhum lado grava no outro: a diferença é mostrada, e ela é o
 **custo implícito** do pregão — o que a corretora e a liquidação levaram além
 das taxas da B3 que o myProfit já contabiliza (o CRV não guarda custos).
 
-A comparação é por corretora, data do pregão e moeda:
+Na B3 a comparação é por corretora, data do pregão e moeda:
 
 * CB: soma assinada dos lançamentos "Operações em Bolsa" da(s) conta(s) da
   corretora (venda positiva, compra negativa);
 * CRV: soma de ``total_with_fees`` das execuções **em escopo** (ações, opções e
   ETF da B3), que já vem com o sinal do caixa.
 
-``compare`` é pura; ``build_reconciliation`` é a ligação com o banco e o CB.
+No exterior (``ledger_brokers``) o myProfit não traz os negócios, mas o extrato
+traz cada um com ativo e quantidade. A comparação é negócio a negócio --
+corretora, pregão, moeda e ativo -- contra o extrato de posição do CRV: a
+quantidade sempre, e o valor quando o CRV tem o preço (``ledger_trades``).
+
+``compare`` e ``compare_trades`` são puras; ``build_reconciliation`` é a
+ligação com o banco e o CB.
 """
 
 from __future__ import annotations
@@ -27,7 +33,17 @@ from flask import current_app
 from sqlalchemy import select
 
 from app import db
-from app.models import Broker, Execution
+from app.executions.carteira import HoldingCheck, holdings_rows, symbol_key
+from app.models import (
+    Broker,
+    Execution,
+    Position,
+    PositionMovement,
+    PositionMovementArchive,
+    PositionMovementKind,
+    Side,
+    Ticker,
+)
 from app.patrimonio.cb_client import (
     CbConfig,
     CbSettlement,
@@ -36,8 +52,16 @@ from app.patrimonio.cb_client import (
     parse_config,
     read_settlements,
 )
+from app.patrimonio.queries import position_timeline
 
 DEFAULT_TOLERANCE = Decimal("5.00")
+
+#: Corretoras cujos negócios o myProfit não traz (``Execution.in_scope`` é só a
+#: B3): o lado do CRV é o extrato de posição, negócio a negócio. Nomad e Revolut
+#: ficam de fora: são dinheiro de viagem e não têm liquidação no CB
+#: (CONCEITOS_FINANCEIROS, regra 10). ``CONFERENCIA_CORRETORAS_EXTERIOR`` (nomes
+#: no CRV, separados por vírgula) substitui a lista.
+DEFAULT_LEDGER_BROKERS: tuple[str, ...] = ("Avenue",)
 
 #: Corretora do CRV -> identidades das instituições do CB (``institution`` no
 #: contrato v4) cujas contas recebem a liquidação dos pregões dela. Em produção
@@ -99,10 +123,105 @@ class ReconciliationRow:
     #: CRV - CB: positivo quando a liquidação levou mais do que o myProfit contou.
     implicit_cost: Decimal | None
     documents: tuple[str, ...] = ()
+    #: Só no exterior, onde a comparação é negócio a negócio: o ativo e a
+    #: quantidade de cada lado, com o sinal da posição (compra positiva).
+    instrument: str = ""
+    cb_quantity: Decimal | None = None
+    crv_quantity: Decimal | None = None
 
     @property
     def state_label(self) -> str:
         return STATE_LABELS[self.state]
+
+
+@dataclass(frozen=True, slots=True)
+class Trade:
+    """Um negócio no exterior, de um dos lados: ativo, quantidade e caixa.
+
+    ``quantity`` tem o sinal da posição (compra positiva); ``amount``, o do caixa
+    (compra negativa). ``amount`` é ``None`` quando o CRV só sabe a quantidade:
+    posição encerrada antes de o extrato de movimentos ser arquivado.
+    """
+
+    broker: str
+    pregao: date
+    currency: str
+    instrument: str
+    quantity: Decimal | None
+    amount: Decimal | None
+
+
+def _sum_or_none(values: Iterable[Decimal | None]) -> Decimal | None:
+    total = Decimal("0")
+    for value in values:
+        if value is None:
+            return None
+        total += value
+    return total
+
+
+def compare_trades(
+    cb: Iterable[Trade],
+    crv: Iterable[Trade],
+    *,
+    tolerance: Decimal = DEFAULT_TOLERANCE,
+    cb_available: bool = True,
+    coverage: Mapping[tuple[str, str], date] | None = None,
+) -> list[ReconciliationRow]:
+    """Classifica cada (corretora, pregão, moeda, ativo) do exterior.
+
+    Confere quando a quantidade é a mesma dos dois lados e, se o CRV tem o
+    preço, o valor fica dentro da tolerância. Sem nada a comparar (o CB sem
+    quantidade e o CRV sem preço) é diferença: confere é afirmação, não falta de
+    dado. Os demais estados são os de ``compare``.
+    """
+    coverage = coverage or {}
+
+    def group(trades: Iterable[Trade]) -> dict[tuple[str, date, str, str], list[Trade]]:
+        grouped: dict[tuple[str, date, str, str], list[Trade]] = defaultdict(list)
+        for trade in trades:
+            grouped[(trade.broker, trade.pregao, trade.currency, symbol_key(trade.instrument))].append(trade)
+        return grouped
+
+    cb_groups, crv_groups = group(cb), group(crv)
+    rows: list[ReconciliationRow] = []
+    for key in sorted(cb_groups.keys() | crv_groups.keys(), key=lambda k: (k[1], k[0], k[2], k[3])):
+        cb_trades, crv_trades = cb_groups.get(key), crv_groups.get(key)
+        cb_quantity = _sum_or_none(t.quantity for t in cb_trades) if cb_trades else None
+        cb_amount = _sum_or_none(t.amount for t in cb_trades) if cb_trades else None
+        crv_quantity = _sum_or_none(t.quantity for t in crv_trades) if crv_trades else None
+        crv_amount = _sum_or_none(t.amount for t in crv_trades) if crv_trades else None
+        if not cb_available:
+            state = NO_CB
+        elif cb_trades is None:
+            covered = coverage.get((key[0], key[2]))
+            state = AWAITING_STATEMENT if covered is not None and key[1] + SETTLEMENT_MARGIN > covered else ONLY_CRV
+        elif crv_trades is None:
+            state = ONLY_CB
+        else:
+            checks = []
+            if cb_quantity is not None and crv_quantity is not None:
+                checks.append(cb_quantity == crv_quantity)
+            if cb_amount is not None and crv_amount is not None:
+                checks.append(abs(crv_amount - cb_amount) <= tolerance)
+            state = MATCH if checks and all(checks) else DIFFERENCE
+        instrument = (crv_trades or cb_trades or [])[0].instrument
+        rows.append(
+            ReconciliationRow(
+                broker=key[0],
+                pregao=key[1],
+                currency=key[2],
+                state=state,
+                cb_amount=cb_amount,
+                crv_amount=crv_amount,
+                implicit_cost=crv_amount - cb_amount if cb_amount is not None and crv_amount is not None else None,
+                documents=(instrument,) if instrument else (),
+                instrument=instrument,
+                cb_quantity=cb_quantity,
+                crv_quantity=crv_quantity,
+            )
+        )
+    return rows
 
 
 def _totals(movements: Iterable[Movement]) -> tuple[dict[tuple[str, date, str], Decimal], dict[tuple[str, date, str], set[str]]]:
@@ -177,6 +296,12 @@ def broker_institutions(config: Mapping[str, object] | None = None) -> dict[str,
         raise ValueError("CB_CORRESPONDENCIA_CONTAS deve mapear corretora para lista de instituições.") from exc
 
 
+def ledger_brokers(config: Mapping[str, object] | None = None) -> tuple[str, ...]:
+    raw = (config if config is not None else current_app.config).get("CONFERENCIA_CORRETORAS_EXTERIOR")
+    names = tuple(part.strip() for part in str(raw or "").split(",") if part.strip())
+    return names or DEFAULT_LEDGER_BROKERS
+
+
 def tolerance_from_config(config: Mapping[str, object] | None = None) -> Decimal:
     raw = (config if config is not None else current_app.config).get("CONFERENCIA_TOLERANCIA")
     if raw in (None, ""):
@@ -188,6 +313,87 @@ def tolerance_from_config(config: Mapping[str, object] | None = None) -> Decimal
     if not value.is_finite() or value < 0:
         raise ValueError("CONFERENCIA_TOLERANCIA deve ser um decimal não negativo.")
     return value
+
+
+def _priced_cash(owner_id: int, broker_ids: Iterable[int]) -> dict[tuple[tuple[str, int], date], Decimal]:
+    """Caixa de cada negócio que o CRV tem com preço, por (posição, dia), com o sinal do caixa.
+
+    Vem do extrato vivo das posições e da cópia arquivada no encerramento. O
+    ajuste manual não é negócio e fica de fora.
+    """
+    ids = list(broker_ids)
+    cash: dict[tuple[tuple[str, int], date], Decimal] = defaultdict(Decimal)
+    live = (
+        select(Position.id, Position.side, PositionMovement.occurred_on, PositionMovement.quantity_delta, PositionMovement.price)
+        .join(PositionMovement, PositionMovement.position_id == Position.id)
+        .where(
+            Position.owner_id == owner_id,
+            Position.broker_id.in_(ids),
+            PositionMovement.kind != PositionMovementKind.ADJUSTMENT,
+        )
+    )
+    for position_id, side, occurred_on, delta, price in db.session.execute(live):
+        sign = Decimal("1") if side == Side.BUY else Decimal("-1")
+        cash[(("stock", position_id), occurred_on)] -= sign * delta * price
+    archived = select(
+        PositionMovementArchive.source_position_id,
+        PositionMovementArchive.side,
+        PositionMovementArchive.occurred_on,
+        PositionMovementArchive.quantity_delta,
+        PositionMovementArchive.price,
+    ).where(
+        PositionMovementArchive.owner_id == owner_id,
+        PositionMovementArchive.broker_id.in_(ids),
+        PositionMovementArchive.kind != "adjustment",
+    )
+    for position_id, side, occurred_on, delta, price in db.session.execute(archived):
+        sign = Decimal("1") if side == "C" else Decimal("-1")
+        cash[(("stock", position_id), occurred_on)] -= sign * delta * price
+    return cash
+
+
+def ledger_trades(
+    owner_id: int, brokers: Iterable[str], *, start: date | None = None, end: date | None = None
+) -> list[Trade]:
+    """Os negócios das corretoras pelo extrato de posição do CRV (ações; vivas e encerradas).
+
+    A quantidade é a variação do saldo da posição no dia, lida da mesma linha do
+    tempo que o desempenho usa (``position_timeline``), que inclui as posições
+    encerradas. O valor vem de ``_priced_cash`` e fica ``None`` quando o CRV não
+    guardou o preço daquele dia.
+    """
+    names = list(brokers)
+    broker_names = dict(db.session.execute(select(Broker.id, Broker.name).where(Broker.name.in_(names))).all())
+    if not broker_names:
+        return []
+    tickers = {ticker.id: ticker for ticker in db.session.scalars(select(Ticker))}
+    by_position: dict[tuple[str, int], list] = defaultdict(list)
+    for event in position_timeline(owner_id, include_options=False):
+        if event.broker_id in broker_names:
+            by_position[event.position_key].append(event)
+    cash = _priced_cash(owner_id, broker_names)
+    trades: list[Trade] = []
+    for position_key, events in by_position.items():
+        closing_by_day: dict[date, Decimal] = {}
+        for event in sorted(events, key=lambda item: item.occurred_on):
+            closing_by_day[event.occurred_on] = event.resulting_signed_quantity
+        ticker = tickers[events[0].ticker_id]
+        previous = Decimal("0")
+        for day in sorted(closing_by_day):
+            delta, previous = closing_by_day[day] - previous, closing_by_day[day]
+            if delta == 0 or (start and day < start) or (end and day > end):
+                continue
+            trades.append(
+                Trade(
+                    broker=broker_names[events[0].broker_id],
+                    pregao=day,
+                    currency=ticker.currency,
+                    instrument=ticker.symbol,
+                    quantity=delta,
+                    amount=cash.get((position_key, day)),
+                )
+            )
+    return trades
 
 
 def cb_config_from_app() -> CbConfig | None:
@@ -206,6 +412,9 @@ class Reconciliation:
     without_pregao: list[CbSettlement] = field(default_factory=list)
     futures_settlements: int = 0
     executions_out_of_scope: int = 0
+    #: A carteira de cada extrato da corretora contra a posição do CRV
+    #: (``app.executions.carteira``), lida do mesmo snapshot do CB.
+    holdings: list[HoldingCheck] = field(default_factory=list)
 
     @property
     def counts(self) -> dict[str, int]:
@@ -254,6 +463,16 @@ def build_reconciliation(
             )
         )
 
+    # O CB começa no corte dos proventos (01/01/2026): negócio do exterior anterior a
+    # ele não tem liquidação para conferir. Import local: cb_sync importa este módulo.
+    from app.dividends.cb_sync import cutoff_date
+
+    ledger = ledger_brokers()
+    ledger_start = max(start, cutoff_date()) if start else cutoff_date()
+    crv_trades = ledger_trades(
+        owner_id, [name for name in ledger if not broker or name == broker], start=ledger_start, end=end
+    )
+
     try:
         config = config_factory()
     except CbUnavailableError as exc:
@@ -265,7 +484,10 @@ def build_reconciliation(
             ("indisponivel", error) if error else ("nao_configurado", "CB não configurado.")
         )
         return Reconciliation(
-            rows=compare([], crv, tolerance=tolerance, cb_available=False),
+            rows=_in_order(
+                compare([], crv, tolerance=tolerance, cb_available=False)
+                + compare_trades([], crv_trades, tolerance=tolerance, cb_available=False)
+            ),
             tolerance=tolerance,
             cb_status=status,
             cb_message=message,
@@ -275,7 +497,10 @@ def build_reconciliation(
         settlements = read_settlements(config, fetcher=fetcher)
     except CbUnavailableError as exc:
         return Reconciliation(
-            rows=compare([], crv, tolerance=tolerance, cb_available=False),
+            rows=_in_order(
+                compare([], crv, tolerance=tolerance, cb_available=False)
+                + compare_trades([], crv_trades, tolerance=tolerance, cb_available=False)
+            ),
             tolerance=tolerance,
             cb_status="indisponivel",
             cb_message=str(exc),
@@ -293,6 +518,7 @@ def build_reconciliation(
             key = (broker_name, currency)
             coverage[key] = max(covered, coverage.get(key, covered))
     cb: list[Movement] = []
+    cb_trades: list[Trade] = []
     for item in settlements.items:
         broker_name = institution_to_broker.get(item.institution)
         pregao = item.pregao_date
@@ -300,12 +526,27 @@ def build_reconciliation(
             continue
         if (broker and broker_name != broker) or (start and pregao < start) or (end and pregao > end):
             continue
-        cb.append(Movement(broker_name, pregao, item.currency, item.amount))
+        if broker_name in ledger:
+            cb_trades.append(
+                Trade(broker_name, pregao, item.currency, item.instrument or "", item.quantity, item.amount)
+            )
+        else:
+            cb.append(Movement(broker_name, pregao, item.currency, item.amount))
     return Reconciliation(
-        rows=compare(cb, crv, tolerance=tolerance, coverage=coverage),
+        rows=_in_order(
+            compare(cb, crv, tolerance=tolerance, coverage=coverage)
+            + compare_trades(cb_trades, crv_trades, tolerance=tolerance, coverage=coverage)
+        ),
         tolerance=tolerance,
         cb_status="ok",
         without_pregao=settlements.without_pregao,
         futures_settlements=len(settlements.futures),
         executions_out_of_scope=out_of_scope,
+        holdings=holdings_rows(
+            owner_id, settlements.holdings, institution_to_broker, broker=broker, start=start, end=end
+        ),
     )
+
+
+def _in_order(rows: list[ReconciliationRow]) -> list[ReconciliationRow]:
+    return sorted(rows, key=lambda row: (row.pregao, row.broker, row.currency, row.instrument))

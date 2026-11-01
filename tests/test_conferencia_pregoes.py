@@ -7,6 +7,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.executions.carteira import compare_holdings, settled_cutoff
 from app.executions.conferencia import (
     AWAITING_STATEMENT,
     DIFFERENCE,
@@ -16,7 +17,10 @@ from app.executions.conferencia import (
     ONLY_CRV,
     STATE_LABELS,
     Movement,
+    Trade,
     compare,
+    compare_trades,
+    ledger_brokers,
     tolerance_from_config,
 )
 
@@ -129,6 +133,11 @@ def test_tolerancia_configuravel_com_padrao_de_cinco_reais(bruto, esperado):
     assert tolerance_from_config({"CONFERENCIA_TOLERANCIA": bruto}) == esperado
 
 
+@pytest.mark.parametrize(("bruto", "esperado"), [(None, ("Avenue",)), ("", ("Avenue",)), ("Avenue, IBKR", ("Avenue", "IBKR"))])
+def test_corretoras_do_exterior_configuraveis_com_padrao_avenue(bruto, esperado):
+    assert ledger_brokers({"CONFERENCIA_CORRETORAS_EXTERIOR": bruto}) == esperado
+
+
 @pytest.mark.parametrize("bruto", ["-1", "abc", "NaN"])
 def test_tolerancia_invalida_e_recusada(bruto):
     with pytest.raises(ValueError, match="CONFERENCIA_TOLERANCIA"):
@@ -152,3 +161,73 @@ def test_so_no_crv_vira_aguardando_extrato_quando_a_liquidacao_passa_do_extrato_
         ("XP", 5, ONLY_CRV),  # sem cobertura publicada, nada muda
     ]
     assert AWAITING_STATEMENT in STATE_LABELS
+
+
+def _negocio(dia, ativo, quantidade, valor, corretora="Avenue"):
+    return Trade(corretora, dia, "USD", ativo, None if quantidade is None else D(quantidade),
+                 None if valor is None else D(valor))
+
+
+def test_no_exterior_cada_negocio_confere_por_ativo_quantidade_e_valor():
+    """Dois negócios no mesmo pregão (CGC e BRK.B) viram duas linhas, uma por ativo."""
+    dia = date(2026, 6, 16)
+    cb = [_negocio(dia, "CGC", "5000", "-4750.00"), _negocio(dia, "BRK.B", "-1.56365", "780.46")]
+    crv = [_negocio(dia, "CGC", "5000", "-4750.00"), _negocio(dia, "BRKB", "-1.56365", "780.4646")]
+
+    linhas = compare_trades(cb, crv)
+
+    assert [(linha.instrument, linha.state) for linha in linhas] == [("BRKB", MATCH), ("CGC", MATCH)]
+
+
+def test_quantidade_diferente_no_exterior_e_diferenca_mesmo_com_o_valor_igual():
+    dia = date(2026, 7, 23)
+    linha = compare_trades([_negocio(dia, "CGC", "2500", "-2250.00")], [_negocio(dia, "CGC", "2400", "-2250.00")])[0]
+
+    assert (linha.state, linha.cb_quantity, linha.crv_quantity) == (DIFFERENCE, D("2500"), D("2400"))
+
+
+def test_sem_preco_no_crv_a_quantidade_basta_e_sem_nada_a_comparar_nao_confere():
+    """Posição encerrada antes do arquivo de movimentos: o CRV só sabe a quantidade."""
+    dia = date(2026, 2, 11)
+    so_quantidade = compare_trades([_negocio(dia, "CGC", "1200", "-1260.00")], [_negocio(dia, "CGC", "1200", None)])[0]
+    nada = compare_trades([_negocio(dia, "CGC", None, "-1260.00")], [_negocio(dia, "CGC", "1200", None)])[0]
+
+    assert (so_quantidade.state, so_quantidade.implicit_cost) == (MATCH, None)
+    assert nada.state == DIFFERENCE
+
+
+def test_negocio_so_no_crv_do_exterior_aguarda_o_extrato_quando_passa_da_cobertura():
+    linhas = compare_trades(
+        [], [_negocio(date(2026, 9, 30), "CGC", "2308", "-2077.20"), _negocio(date(2026, 8, 3), "CGC", "1", "-1")],
+        coverage={("Avenue", "USD"): date(2026, 9, 30)},
+    )
+
+    assert [(linha.pregao, linha.state) for linha in linhas] == [
+        (date(2026, 8, 3), ONLY_CRV), (date(2026, 9, 30), AWAITING_STATEMENT),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("extrato", "pregao"),
+    [
+        (date(2026, 9, 30), date(2026, 9, 29)),  # quarta: o de terça já liquidou
+        (date(2026, 1, 31), date(2026, 1, 29)),  # sábado: o de sexta liquida na segunda
+        (date(2026, 6, 1), date(2026, 5, 29)),   # segunda: o de sexta liquida hoje
+    ],
+)
+def test_a_carteira_do_extrato_e_a_do_ultimo_pregao_ja_liquidado(extrato, pregao):
+    assert settled_cutoff(extrato) == pregao
+
+
+def test_carteira_do_extrato_contra_a_posicao_do_crv():
+    linhas = compare_holdings(
+        "Avenue", date(2026, 1, 31), date(2026, 1, 29),
+        {"BRKB": D("1.56365"), "CGC": D("1200")},
+        {"BRK.B": D("1.56365"), "SGOV": D("0"), "AAPL": D("3")},
+    )
+
+    assert [(linha.instrument, linha.statement_quantity, linha.crv_quantity, linha.matches) for linha in linhas] == [
+        ("AAPL", D("0"), D("3"), False),
+        ("BRK.B", D("1.56365"), D("1.56365"), True),
+        ("CGC", D("1200"), D("0"), False),
+    ]

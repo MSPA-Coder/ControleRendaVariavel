@@ -108,6 +108,28 @@
         "statement_covered_until": {
           "$ref": "#/$defs/data",
           "description": "Opcional (19/10/2026). Ultimo dia que o extrato importado cobre: o maior entre a ultima linha, a data do saldo informado pelo arquivo e o fim de periodo declarado. Ausente quando a conta nunca teve extrato."
+        },
+        "statement_holdings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["date", "positions"],
+            "properties": {
+              "date": { "$ref": "#/$defs/data" },
+              "positions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["instrument", "quantity"],
+                  "properties": {
+                    "instrument": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9 ./-]{0,19}$" },
+                    "quantity": { "$ref": "#/$defs/decimal" }
+                  }
+                }
+              }
+            }
+          },
+          "description": "Opcional (01/11/2026). A carteira de acoes que cada extrato da corretora imprime na data do saldo, com o simbolo como o extrato o imprime (BRK.B ou BRKB). Lista vazia em `positions` quando o extrato nao tem acao; datas sem extrato que traga carteira nao aparecem. O CB nao controla quantidade de papel: publica para o CRV conferir a posicao. Hoje so o extrato mensal em dolar da Avenue traz carteira."
         }
       }
     },
@@ -176,7 +198,12 @@
           "minProperties": 1,
           "properties": {
             "pregao_date": { "$ref": "#/$defs/data" },
-            "note": { "type": "string", "minLength": 1 }
+            "note": { "type": "string", "minLength": 1 },
+            "quantity": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+              "description": "Opcional (01/11/2026). Quantidade negociada, sem sinal: compra e despesa, venda e receita. So o extrato do exterior a imprime por negocio, e o ativo vem em `instrument`."
+            }
           },
           "description": "Opcional (18/10/2026). Liquidacao de pregao da corretora: a data do pregao e o numero da nota. Nota mascarada no extrato (Nc. *) fica sem `note`."
         }
