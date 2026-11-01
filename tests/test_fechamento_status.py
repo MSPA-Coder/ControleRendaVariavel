@@ -189,7 +189,14 @@ def cenario(sessao, app_com_banco, monkeypatch):
         Position(owner_id=dono.id, broker_id=avenue.id, ticker_id=eua.id, portfolio_id=usd.id,
                  quantity=D("60"), average_cost=D("5"), side=Side.BUY, opened_on=date(2026, 3, 2)),
     ])
+    # Dinheiro de viagem: o mesmo ativo numa corretora que o myProfit não lê.
+    revolut = Broker(name=f"Revolut {sufixo}", acronym=f"R{sufixo[:4]}")
+    sessao.add(revolut)
     sessao.flush()
+    sessao.add(Position(owner_id=dono.id, broker_id=revolut.id, ticker_id=eua.id, portfolio_id=usd.id,
+                        quantity=D("0.47723749"), average_cost=D("506.29"), side=Side.BUY, opened_on=date(2026, 3, 2)))
+    sessao.flush()
+    monkeypatch.setitem(app_com_banco.config, "CONFERENCIA_CORRETORAS_EXTERIOR", avenue.name)
     monkeypatch.setitem(app_com_banco.config, "MYPROFIT_INSTITUICOES", json.dumps({"GENIAL": "Genial"}))
     monkeypatch.setitem(app_com_banco.config, "CB_PATRIMONIO_TOKEN", TOKEN)
     monkeypatch.setitem(app_com_banco.config, "PATRIMONIO_OWNER_ID", str(dono.id))
@@ -211,6 +218,7 @@ def test_exterior_compara_so_quantidade_na_data(sessao, cenario):
     _importar(c, _pacote(c["sufixo"]))
     achados = {f.asset: f for f in build_exterior(c["dono"].id, date(2026, 9, 30))}
     eua = achados[f"EUA{c['sufixo']}"]
+    # 60 na Avenue; os 0,47723749 da Revolut, que o myProfit não lê, ficam de fora.
     assert (eua.state, eua.myprofit.quantity, eua.crv.quantity) == (QUANTITY, D("50"), D("60"))
     # A renda fixa EUA mora no CB: fica fora da comparação.
     assert "5CYTYK9" not in achados

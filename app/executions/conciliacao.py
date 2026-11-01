@@ -32,8 +32,10 @@ from sqlalchemy import func, select
 
 from app import db
 from app.core.domain import Side
+from app.executions.conferencia import ledger_brokers
 from app.executions.posicao_myprofit import PositionReport
 from app.models import (
+    Broker,
     Execution,
     Market,
     MyprofitPosition,
@@ -311,8 +313,12 @@ def state_on(current: Holding, movements: Iterable[MovementRow], as_of: date) ->
     return True, Holding(quantity, average)
 
 
-def crv_holdings(owner_id: int, as_of: date | None = None, *, b3: bool = True) -> dict[str, Holding]:
+def crv_holdings(
+    owner_id: int, as_of: date | None = None, *, b3: bool = True, brokers: Iterable[str] | None = None
+) -> dict[str, Holding]:
     """Posições do CRV por ativo (ações e opções); com ``b3=False``, as do exterior.
+
+    ``brokers`` (nomes no CRV) limita às posições dessas corretoras; ``None`` não filtra.
 
     Sem ``as_of``, as abertas hoje. Com ``as_of``, as que existiam ao fim daquele
     dia, para comparar com a posição do myProfit **da mesma data**:
@@ -329,11 +335,15 @@ def crv_holdings(owner_id: int, as_of: date | None = None, *, b3: bool = True) -
     papel vendido.
     """
     mercado = Ticker.market == Market.B3 if b3 else Ticker.market != Market.B3
+    wanted = None if brokers is None else select(Broker.id).where(Broker.name.in_(list(brokers)))
     lots: dict[str, list[Holding]] = defaultdict(list)
     stock_rows = db.session.execute(
         select(Position.id, Ticker.symbol, Position.quantity, Position.average_cost, Position.opened_on)
         .join(Ticker, Ticker.id == Position.ticker_id)
-        .where(Position.owner_id == owner_id, Position.side == Side.BUY, mercado)
+        .where(
+            Position.owner_id == owner_id, Position.side == Side.BUY, mercado,
+            *([Position.broker_id.in_(wanted)] if wanted is not None else []),
+        )
     ).all()
     option_rows = db.session.execute(
         select(OptionPosition.id, Ticker.symbol, OptionPosition.quantity, OptionPosition.average_cost, OptionPosition.opened_on)
@@ -343,6 +353,7 @@ def crv_holdings(owner_id: int, as_of: date | None = None, *, b3: bool = True) -
             OptionPosition.owner_id == owner_id,
             OptionPosition.side == Side.BUY,
             mercado,
+            *([OptionPosition.broker_id.in_(wanted)] if wanted is not None else []),
         )
     ).all()
     if as_of is None:
@@ -382,6 +393,7 @@ def crv_holdings(owner_id: int, as_of: date | None = None, *, b3: bool = True) -
         Transaction.opened_on <= as_of,
         Transaction.closed_on > as_of,
         mercado,
+        *([Transaction.broker_id.in_(wanted)] if wanted is not None else []),
     )
     for is_option, statement in (
         (
@@ -534,8 +546,11 @@ def build_exterior(owner_id: int, as_of: date) -> list[Finding]:
 
     Quem escolhe ``as_of`` leva em conta o atraso da integração da Avenue no
     myProfit (dias): a posição de uma data recente ainda não tem os últimos
-    negócios. Diferença explicada (o SGOV da Nomad que o myProfit não lê, por
-    exemplo) fica reconhecida pela mesma nota de posição da B3.
+    negócios. Só entram as corretoras do exterior que o myProfit lê -- as de
+    ``ledger_brokers``, que têm extrato no CB (hoje a Avenue): Nomad e Revolut são
+    dinheiro de viagem que o myProfit não vê, e somá-las ao mesmo ativo acusaria
+    diferença em toda data (a BRK.B da Revolut, por exemplo). Outra diferença
+    explicada fica reconhecida pela mesma nota de posição da B3.
     """
     def lado(holdings: Mapping[str, Holding]) -> dict[str, Holding]:
         # O mesmo papel tem dois nomes: o CRV grava "BRK.B" e o myProfit "BRKB".
@@ -546,7 +561,7 @@ def build_exterior(owner_id: int, as_of: date) -> list[Finding]:
         return {asset: Holding(total) for asset, total in totais.items()}
 
     theirs = lado(myprofit_exterior(owner_id, as_of))
-    ours = lado(crv_holdings(owner_id, as_of, b3=False))
+    ours = lado(crv_holdings(owner_id, as_of, b3=False, brokers=ledger_brokers()))
     return apply_notes(compare_positions(theirs, ours), notes_of(owner_id))
 
 
