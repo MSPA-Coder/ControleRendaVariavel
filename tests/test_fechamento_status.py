@@ -110,6 +110,58 @@ def test_retratos_marcam_so_a_b3_como_escopo():
     assert retratos[0].sha256 != retratos[1].sha256
 
 
+@pytest.mark.parametrize(
+    ("ativo", "pregao", "depois"),
+    [
+        ("CGC", date(2026, 9, 30), True),   # exterior, D+1: liquida em 01/10
+        ("CGC", date(2026, 9, 29), False),  # liquida em 30/09, dentro do corte
+        ("", date(2026, 9, 28), False),     # B3, D+2: liquida em 30/09
+        ("", date(2026, 9, 29), True),      # B3, D+2: liquida em 01/10
+    ],
+)
+def test_pregao_que_liquida_depois_do_corte_pertence_ao_mes_seguinte(ativo, pregao, depois):
+    from types import SimpleNamespace
+
+    from app.routes import fechamento
+
+    assert fechamento._liquida_depois_do_corte(SimpleNamespace(instrument=ativo, pregao=pregao), date(2026, 9, 30)) is depois
+
+
+def _resumo(**mudancas):
+    resumo = {
+        "status": "ok", "mensagem": "", "aguardando_depois_do_corte": 0,
+        "contagem": {"confere": 12, "diferenca": 0, "so_cb": 0, "so_crv": 0, "aguardando_extrato": 0, "sem_cb": 0},
+        "carteira": {"conferidas": 18, "ultima": date(2026, 9, 30), "diferencas": []},
+        "proventos": {"status": "ok", "iguais": 91, "faltam": 0, "fila": 0, "ausentes": 0, "problemas": []},
+    }
+    resumo.update(mudancas)
+    return resumo
+
+
+def test_itens_de_conferencia_com_o_cb_em_dia_e_com_pendencias(monkeypatch):
+    from app.routes import fechamento
+
+    ate = date(2026, 9, 30)
+    contagem = {**_resumo()["contagem"], "aguardando_extrato": 1}
+    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes",
+                        lambda owner, dia: _resumo(contagem=contagem, aguardando_depois_do_corte=1))
+    pregoes = fechamento._item_dos_pregoes(1, ate)
+    assert (pregoes["estado"], pregoes["texto"]) == ("em_dia", "12 conferem")
+    assert "liquida depois do corte" in pregoes["detalhe"]
+    assert fechamento._item_da_carteira(1, ate)["texto"] == "Confere até 30/09"
+    assert fechamento._item_dos_proventos_do_cb(1, ate)["texto"] == "91 iguais ao CB"
+
+    pendente = _resumo(
+        carteira={"conferidas": 18, "ultima": ate, "diferencas": ["CGC em 30/09: extrato 7500, CRV 9808"]},
+        proventos={"status": "ok", "iguais": 89, "faltam": 2, "fila": 1, "ausentes": 0, "problemas": []},
+    )
+    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes", lambda owner, dia: pendente)
+    carteira = fechamento._item_da_carteira(1, ate)
+    proventos = fechamento._item_dos_proventos_do_cb(1, ate)
+    assert (carteira["estado"], carteira["detalhe"]) == ("pendente", "CGC em 30/09: extrato 7500, CRV 9808")
+    assert (proventos["estado"], proventos["detalhe"]) == ("pendente", "2 a importar ou atualizar; 1 na fila de revisão")
+
+
 # --- com banco ------------------------------------------------------------------
 
 @pytest.fixture
@@ -252,6 +304,8 @@ def test_status_resume_o_crv_para_o_roteiro_do_cb(sessao, cenario, app_com_banco
     assert itens["negocios"]["texto"] == "1 negócio para aplicar às posições"
     assert itens["exterior"]["estado"] == "pendente"  # 50 no myProfit, 60 no CRV, em 30/09
     assert itens["pregoes"]["estado"] == "espera"  # CB não configurado neste teste
+    assert itens["carteira"]["estado"] == "espera"
+    assert (itens["proventos-cb"]["estado"], itens["proventos-cb"]["texto"]) == ("espera", "CB não configurado")
     assert {item["etapa"] for item in corpo["itens"]} <= {"myprofit", "conferencias"}
     texto = json.dumps(corpo, ensure_ascii=False)
     assert "000.000.000-00" not in texto

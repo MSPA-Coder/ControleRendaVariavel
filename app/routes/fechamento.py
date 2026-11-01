@@ -3,7 +3,9 @@
 ``GET /fechamento/status?ate=AAAA-MM-DD`` (contrato ``crv-fechamento/1``). O
 painel fica no Controle Bancário, que tem a maior parte das fontes; o que só o
 CRV sabe -- coleta importada, negócios aplicados, posição e exterior conferidos
-com o myProfit, pregões conferidos com o CB, proventos -- chega como itens já
+com o myProfit, pregões conferidos com o CB (na B3 e, negócio a negócio, no
+exterior), carteira do exterior × extrato, proventos do CB iguais no CRV,
+proventos × myProfit -- chega como itens já
 avaliados, com etapa (``myprofit`` ou ``conferencias``), estado, texto e o que
 fazer. O CB só os mostra.
 
@@ -26,6 +28,7 @@ from flask import abort, current_app, jsonify, request
 from sqlalchemy import func, select
 
 from app import db
+from app.dividends.cb_sync import plan_cb_import
 from app.executions import coleta as coleta_myprofit
 from app.executions.aplicacao import pending_executions
 from app.executions.conciliacao import STATE_LABELS as ESTADOS_DA_CONCILIACAO
@@ -37,8 +40,10 @@ from app.executions.conferencia import (
     ONLY_CB,
     ONLY_CRV,
     build_reconciliation,
+    cb_config_from_app,
 )
 from app.models import Execution, MyprofitPosition
+from app.patrimonio.cb_client import CbUnavailableError, read_income_entries
 from app.routes import bp
 from app.routes.patrimonio import _owner_id
 
@@ -159,13 +164,63 @@ def _item_do_exterior(owner_id: int, coleta) -> dict:
                  detalhe=f"Data com {ATRASO_DA_AVENUE} dias de margem para o atraso da Avenue.")
 
 
+def _liquida_depois_do_corte(row, ate: date) -> bool:
+    """A liquidação do pregão cai depois do corte: D+1 útil no exterior, D+2 na B3.
+
+    Pregão assim pertence ao caixa do mês seguinte; esperar o extrato dele não
+    impede o mês do corte de fechar.
+    """
+    dias, dia = (1 if row.instrument else 2), row.pregao
+    while dias:
+        dia += timedelta(days=1)
+        if dia.weekday() < 5:
+            dias -= 1
+    return dia > ate
+
+
+def _resumo_dos_proventos_do_cb(owner_id: int) -> dict:
+    try:
+        config = cb_config_from_app()
+        if config is None:
+            return {"status": "nao_configurado", "mensagem": "CB não configurado"}
+        plano = plan_cb_import(owner_id, read_income_entries(config))
+    except CbUnavailableError as exc:
+        return {"status": "indisponivel", "mensagem": str(exc)}
+    return {
+        "status": "ok",
+        "iguais": plano.unchanged,
+        "faltam": len(plano.create) + len(plano.update),
+        "fila": len(plano.income.review),
+        "ausentes": len(plano.absent_from_cb),
+        "problemas": list(plano.problems),
+    }
+
+
 def _resumo_dos_pregoes(owner_id: int, ate: date) -> dict:
     agora = time.monotonic()
     guardado = _pregoes_guardados.get((owner_id, ate))
     if guardado and agora - guardado[0] < CACHE_DOS_PREGOES:
         return guardado[1]
     resultado = build_reconciliation(owner_id, start=date(ate.year, 1, 1), end=ate)
-    resumo = {"status": resultado.cb_status, "mensagem": resultado.cb_message, "contagem": resultado.counts}
+    carteira = resultado.holdings
+    resumo = {
+        "status": resultado.cb_status,
+        "mensagem": resultado.cb_message,
+        "contagem": resultado.counts,
+        "aguardando_depois_do_corte": sum(
+            1 for row in resultado.rows if row.state == AWAITING_STATEMENT and _liquida_depois_do_corte(row, ate)
+        ),
+        "carteira": {
+            "conferidas": len(carteira),
+            "ultima": max((linha.statement_date for linha in carteira), default=None),
+            "diferencas": [
+                f"{linha.instrument} em {_dia(linha.statement_date)}: extrato {linha.statement_quantity.normalize():f}, "
+                f"CRV {linha.crv_quantity.normalize():f}"
+                for linha in carteira if not linha.matches
+            ],
+        },
+        "proventos": _resumo_dos_proventos_do_cb(owner_id),
+    }
     _pregoes_guardados[(owner_id, ate)] = (agora, resumo)
     return resumo
 
@@ -185,13 +240,65 @@ def _item_dos_pregoes(owner_id: int, ate: date) -> dict:
                     f"só no CRV {contagem.get(ONLY_CRV, 0)}.",
             acao="Abrir a conferência", url="/executions/reconciliation",
         )
-    aguardando = contagem.get(AWAITING_STATEMENT, 0)
+    depois = resumo.get("aguardando_depois_do_corte", 0)
+    aguardando = contagem.get(AWAITING_STATEMENT, 0) - depois
     if aguardando:
         return _item("pregoes", "conferencias", titulo, "espera",
                      f"{aguardando} pregão{'ões' if aguardando > 1 else ''} aguardando o extrato no CB",
                      url="/executions/reconciliation")
+    if depois == 1:
+        detalhe = "1 pregão do fim do período liquida depois do corte e entra no mês seguinte."
+    elif depois:
+        detalhe = f"{depois} pregões do fim do período liquidam depois do corte e entram no mês seguinte."
+    else:
+        detalhe = ""
     return _item("pregoes", "conferencias", titulo, "em_dia", f"{contagem.get(MATCH, 0)} conferem",
+                 detalhe=detalhe, url="/executions/reconciliation")
+
+
+def _item_da_carteira(owner_id: int, ate: date) -> dict:
+    titulo = "Carteira do exterior × extrato"
+    resumo = _resumo_dos_pregoes(owner_id, ate)
+    if resumo["status"] != "ok":
+        return _item("carteira", "conferencias", titulo, "espera", resumo["mensagem"] or "CB indisponível")
+    carteira = resumo["carteira"]
+    if not carteira["conferidas"]:
+        return _item("carteira", "conferencias", titulo, "espera", "Nenhum extrato com carteira no CB",
+                     detalhe="A carteira vem do extrato mensal em dólar da Avenue importado no CB.")
+    diferencas = carteira["diferencas"]
+    if diferencas:
+        n = len(diferencas)
+        return _item(
+            "carteira", "conferencias", titulo, "pendente", f"{n} diferença{'s' if n > 1 else ''} com o extrato",
+            detalhe="; ".join(diferencas[:6]), acao="Abrir a conferência", url="/executions/reconciliation",
+            passos=["O extrato da corretora é a verdade sobre a quantidade: corrija o movimento da posição no CRV."],
+        )
+    return _item("carteira", "conferencias", titulo, "em_dia", f"Confere até {_dia(carteira['ultima'])}",
+                 detalhe="Posição do CRV no último pregão que o extrato já liquidou.",
                  url="/executions/reconciliation")
+
+
+def _item_dos_proventos_do_cb(owner_id: int, ate: date) -> dict:
+    titulo = "Proventos do CB no CRV"
+    proventos = _resumo_dos_pregoes(owner_id, ate)["proventos"]
+    if proventos["status"] != "ok":
+        return _item("proventos-cb", "conferencias", titulo, "espera", proventos["mensagem"])
+    problemas = proventos["faltam"] + proventos["fila"] + proventos["ausentes"] + len(proventos["problemas"])
+    if problemas:
+        partes = [
+            f"{proventos['faltam']} a importar ou atualizar" if proventos["faltam"] else "",
+            f"{proventos['fila']} na fila de revisão" if proventos["fila"] else "",
+            f"{proventos['ausentes']} gravado(s) que o CB não tem mais" if proventos["ausentes"] else "",
+            *proventos["problemas"][:3],
+        ]
+        return _item(
+            "proventos-cb", "conferencias", titulo, "pendente", "O CRV não está igual ao CB",
+            detalhe="; ".join(parte for parte in partes if parte), acao="Ver a fila", url="/dividends/cb",
+            passos=["Ensaio: flask --app app:create_app importar-proventos-cb (o VPS grava todo dia com --rotina).",
+                    "Fila de revisão: corrija o lançamento no CB ou cadastre o ticker no CRV."],
+        )
+    return _item("proventos-cb", "conferencias", titulo, "em_dia", f"{proventos['iguais']} iguais ao CB",
+                 detalhe="Em reais e em dólar, desde o corte.", url="/dividends/cb")
 
 
 def _item_dos_proventos(coleta) -> dict:
@@ -228,6 +335,8 @@ def fechamento_status():
         _item_da_posicao(owner_id, ate),
         _item_do_exterior(owner_id, coleta),
         _item_dos_pregoes(owner_id, ate),
+        _item_da_carteira(owner_id, ate),
+        _item_dos_proventos_do_cb(owner_id, ate),
         _item_dos_proventos(coleta),
     ]
     resposta = jsonify({"contrato": CONTRATO, "ate": ate.isoformat(), "itens": itens})

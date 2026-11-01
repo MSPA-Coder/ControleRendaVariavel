@@ -726,7 +726,10 @@ transação na gravação).
 `GET /fechamento/status?ate=AAAA-MM-DD` (`app/routes/fechamento.py`, contrato
 `crv-fechamento/1`) é lido pelo Roteiro de fechamento do CB pela rede interna. Devolve
 itens já avaliados (coleta importada, negócios a aplicar, posição da B3, exterior,
-pregões, proventos), cada um com etapa, estado, texto e o que fazer. Sem sessão:
+pregões, carteira do exterior × extrato, proventos do CB iguais no CRV, proventos ×
+myProfit), cada um com etapa, estado, texto e o que fazer. O pregão cuja liquidação
+cai depois do corte (D+1 no exterior, D+2 na B3) não segura o mês: entra no
+seguinte. Sem sessão:
 autentica pelo token do vínculo CB ↔ CRV (`CB_PATRIMONIO_TOKEN`, o mesmo com que o
 CRV lê o CB), está em `PUBLIC_ENDPOINTS` e tem o limite de taxa da publicação de
 patrimônio. A conferência por pregão lê o CB de volta; o resultado fica guardado
