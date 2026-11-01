@@ -160,12 +160,12 @@
         "updated_at": { "$ref": "#/$defs/instante_ou_nulo" },
         "instrument": {
           "type": "string",
-          "pattern": "^[A-Z]{4}[0-9]{1,2}$",
-          "description": "Opcional (18/10/2026). O ticker do ativo a que o lancamento se refere, lido da descricao do extrato da corretora. Presente so quando o CB o conhece."
+          "pattern": "^[A-Z0-9][A-Z0-9 ./-]{0,19}$",
+          "description": "Opcional (18/10/2026). O ativo a que o lancamento se refere, lido do extrato da corretora: ticker da B3 (EALT4), ticker dos EUA (CGC, BRK.B) ou o titulo de renda fixa como o extrato o imprime (ORCL 3.95 25/03/51; desde 01/11/2026). Presente so quando o CB o conhece."
         },
         "income_kind": {
-          "enum": ["aluguel", "jcp", "dividendo"],
-          "description": "Opcional (18/10/2026). O tipo de renda de proventos e de aluguel de acoes."
+          "enum": ["aluguel", "jcp", "dividendo", "cupom"],
+          "description": "Opcional (18/10/2026). O tipo de renda de proventos e de aluguel de acoes; cupom de titulo de renda fixa desde 01/11/2026."
         },
         "income_role": {
           "enum": ["credito", "irrf_aluguel", "corretagem_aluguel", "taxa_aluguel", "estorno"],
@@ -409,7 +409,10 @@
         "snapshot_id": { "$ref": "#/$defs/texto" },
         "date": { "$ref": "#/$defs/data" },
         "instrument": { "$ref": "#/$defs/texto" },
-        "kind": { "enum": ["dividendo", "jcp", "aluguel"] },
+        "kind": {
+          "enum": ["dividendo", "jcp", "aluguel", "cupom"],
+          "description": "cupom (01/11/2026): o cupom de um titulo de renda fixa que o CB registrou; o titulo continua no CB."
+        },
         "currency": { "$ref": "#/$defs/moeda" },
         "amount": { "$ref": "#/$defs/decimal" },
         "role": { "const": "analytic_only" },

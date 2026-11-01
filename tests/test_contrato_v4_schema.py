@@ -213,13 +213,17 @@ def _sem_high_watermark(s):
     del s["high_watermark"]
 
 
+def _tipo_de_renda_fora_do_vocabulario(s):
+    _primeiro(s["income"])["kind"] = "bonificacao"
+
+
 @pytest.mark.parametrize(
     "mutacao",
     [
         _holding_sem_instrument_type, _instrument_type_que_o_consumidor_rejeita, _quantidade_vira_numero,
         _valor_de_mercado_vira_float, _lado_fora_do_vocabulario, _id_sem_prefixo_da_fonte, _campo_renomeado,
         _renda_sem_papel_analitico, _data_fora_do_iso, _preco_historico_sem_data, _sistema_errado,
-        _sem_cobertura_de_posicoes, _sem_high_watermark,
+        _sem_cobertura_de_posicoes, _sem_high_watermark, _tipo_de_renda_fora_do_vocabulario,
     ],
     ids=lambda f: f.__name__.strip("_"),
 )
@@ -236,6 +240,15 @@ def test_o_schema_aceita_um_acrescimo_opcional(snapshot):
     novo = copy.deepcopy(snapshot)
     _primeiro(novo["holdings"])["campo_novo_e_opcional"] = "x"
     novo["extra_na_raiz"] = True
+
+    validar("crv_snapshot", novo)
+
+
+def test_o_schema_aceita_cupom_de_titulo(snapshot):
+    """Desde 01/11/2026 o cupom de título que o CB registra chega aqui como renda."""
+    novo = copy.deepcopy(snapshot)
+    renda = _primeiro(novo["income"])
+    renda["instrument"], renda["kind"], renda["currency"] = "ORCL 3.95 25/03/51", "cupom", "USD"
 
     validar("crv_snapshot", novo)
 
