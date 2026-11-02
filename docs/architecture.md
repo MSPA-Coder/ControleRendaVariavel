@@ -569,8 +569,9 @@ execução ao lote de outro dono.
 
 `in_scope` marca o que a conferência e o uso futuro consideram: **ações, opções
 e ETF da B3**, sem o documento de aluguel (`B3_ALUGUEL_*`, tarifas de centavos).
-Índice futuro, Tesouro Direto e o exterior (Ações EUA, ETF USA) ficam gravados e
-marcados como fora de escopo.
+Índice futuro, Tesouro Direto e o exterior (Ações EUA, ETF USA, Renda Fixa EUA)
+ficam gravados e marcados como fora de escopo. Os títulos de Renda Fixa EUA
+(Avenue) são do CB, como aplicação; o CRV recebe só o cupom, como provento.
 
 ### Importador (`app/executions/myprofit.py`)
 

@@ -121,6 +121,7 @@ def test_day_trade_de_futuro_mantem_tipo_e_operacao_e_o_sinal_do_total_e_a_verda
         ("Tesouro Direto", "B3_TD_XP_23062026", False),
         ("Ações EUA", "Avenue_11022026", False),
         ("ETF USA", "20260811", False),
+        ("Renda Fixa EUA", "Avenue_15102026", False),
         ("Ações", "B3_ALUGUEL_GENIAL_26062026", False),
     ],
 )

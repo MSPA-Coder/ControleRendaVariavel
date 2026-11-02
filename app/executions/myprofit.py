@@ -55,7 +55,9 @@ _DECIMAL_STEP = Decimal("0.00000001")
 _DECIMAL_LIMIT = Decimal(10) ** 15  # Numeric(24, 8)
 
 #: Grupo do relatório -> código gravado. Um grupo novo é recusado de propósito:
-#: melhor parar e decidir do que gravar sem saber se pertence à B3.
+#: melhor parar e decidir do que gravar sem saber se pertence à B3. A renda fixa
+#: dos EUA (títulos da Avenue) fica no CB como aplicação; aqui só se registra,
+#: fora de escopo, como o Tesouro Direto.
 ASSET_GROUPS = {
     "acoes": "acao",
     "opcoes": "opcao",
@@ -64,6 +66,7 @@ ASSET_GROUPS = {
     "tesouro direto": "tesouro_direto",
     "acoes eua": "acao_eua",
     "etf usa": "etf_usa",
+    "renda fixa eua": "renda_fixa_eua",
 }
 #: Os grupos que a conferência e o uso futuro consideram.
 B3_GROUPS = frozenset({"acao", "opcao", "etf"})

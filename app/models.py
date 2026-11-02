@@ -1457,7 +1457,8 @@ class Execution(Base):
         CheckConstraint("side IN ('C', 'V')", name="side_valid"),
         CheckConstraint("cash_operation IN ('C', 'D')", name="cash_operation_valid"),
         CheckConstraint(
-            "asset_group IN ('acao', 'opcao', 'etf', 'indice_futuro', 'tesouro_direto', 'acao_eua', 'etf_usa')",
+            "asset_group IN ('acao', 'opcao', 'etf', 'indice_futuro', 'tesouro_direto', 'acao_eua', 'etf_usa', "
+            "'renda_fixa_eua')",
             name="asset_group_valid",
         ),
         CheckConstraint("currency ~ '^[A-Z]{3}$'", name="currency_valid"),

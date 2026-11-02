@@ -80,6 +80,16 @@ def test_primeira_importacao_grava_e_a_segunda_nao_duplica(sessao, cenario):
     assert {item.broker_id for item in gravadas} == {corretora.id}
 
 
+def test_venda_de_titulo_dos_eua_e_gravada_fora_de_escopo(sessao, cenario):
+    dono, _, _ = cenario
+    titulo = linha(DIA, "Avenue_15102026", "5CYRWW7", -2000, "1097.84", grupo="Renda Fixa EUA", moeda="USD", taxas=0)
+
+    apply_import(dono.id, _plano(dono, [titulo]), file_name=None)
+
+    gravada = sessao.scalar(select(Execution).where(Execution.owner_id == dono.id))
+    assert (gravada.asset_group, gravada.in_scope) == ("renda_fixa_eua", False)
+
+
 def test_linhas_identicas_no_mesmo_documento_sao_todas_gravadas_e_reimportar_nao_duplica(sessao, cenario):
     dono, _, _ = cenario
     quatro_iguais = [_venda(quantidade=-10, total="100.00")] * 4
