@@ -19,8 +19,9 @@ usuário para controlar ações, opções, cotações, risco e performance. Post
 operacional de dados e configurações; Docker Compose é a interface de execução.
 A planilha `Trades.xlsm` é somente referência funcional de leitura.
 
-Antes de mudar código, leia este arquivo, `README.md`, `pyproject.toml`,
-`compose.yaml`, as migrações relevantes e o contrato afetado:
+Antes de mudar código, leia o código, os testes, as migrações e o contrato que
+a mudança toca. Os documentos abaixo cobrem um assunto cada; leia o do assunto
+afetado, não todos:
 
 - `docs/architecture.md` para a forma interna: camadas, módulos, contrato HTMX,
   coleta de cotações e limites de transação;
@@ -254,3 +255,12 @@ declara uma incompatibilidade e só deve ocorrer com justificativa e validação
 Toda ampliação de faixa reconstrói a imagem e roda `quality`. Migrações são
 aditivas e imutáveis depois de aplicadas; mudanças incompatíveis usam nova
 revisão e estratégia explícita de dados e rollback.
+
+## Arquivos sincronizados com o manutencao
+
+`Dockerfile.browser`, `scripts/provision-db-runtime.sh`,
+`docs/security-audit/gerar_relatorio.py`, `docs/TESTES.md`, `tests/contrato/patrimonio-v4.schema.json` são cópias
+de arquivos canônicos do repositório `manutencao` (ver
+`manutencao/compartilhados/README.md`). Não os edite aqui: mude a canônica e
+rode `python compartilhados/sincronizar.py --aplicar` no `manutencao`, que
+copia para todos os repositórios de uma vez.

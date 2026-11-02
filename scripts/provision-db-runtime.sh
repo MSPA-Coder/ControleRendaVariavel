@@ -1,10 +1,8 @@
 #!/bin/sh
 # Cria/atualiza o papel usado pela aplicação sem expor a credencial
 # administrativa ao contêiner web. O mesmo script roda no Compose local, no VPS
-# e no banco efêmero da suíte. Nasceu aqui; o ControleBancario o levou e lá ele
-# ganhou vários esquemas, a permissão de manutenção opcional e a guarda que
-# recusa o papel administrativo como papel da aplicação. Esta cópia voltou a
-# ser igual à de lá.
+# e na CI. É igual nos quatro apps: a cópia canônica fica em
+# `manutencao/compartilhados/`; mude lá e rode `sincronizar.py --aplicar`.
 #
 # O papel administrativo (o `POSTGRES_USER` da imagem, superusuário) continua
 # dono das tabelas e só aparece no banco, neste serviço e no `migrate`. O
