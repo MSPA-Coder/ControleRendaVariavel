@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from sharedauth.access import url_proximo_seguro
 
 from app import PUBLIC_ENDPOINTS
@@ -101,13 +102,46 @@ def test_lista_de_publicos_e_curta_e_conhecida():
         # CSS do banner de mensagem, que `login.html` usa. Sem isto o
         # `requer_login` bloquearia o próprio arquivo que estiliza "Usuário ou
         # senha inválidos" e a mensagem apareceria sem cor nenhuma.
-        #
-        # `sharedauth_ui.static` (modal e toast) NÃO entra: só é referenciado em
-        # `base.html`, e `login.html` não o estende. Deixar de fora é
-        # deliberado, não esquecimento -- superfície pública é o que esta lista
-        # existe para manter curta.
         "sharedauth.static",
+        # CSS e JS do modal/toast, carregados por `base.html`. `login.html` não
+        # o estende, mas `error.html` sim, e é ele que um visitante sem sessão
+        # recebe num 404 ou num 400 de CSRF vencido no POST de `/login`. Sem
+        # esta entrada os dois arquivos voltam 302 para o login e o navegador
+        # recusa o HTML por MIME. São dois estáticos da biblioteca, sem dado.
+        "sharedauth_ui.static",
     } == PUBLIC_ENDPOINTS
+
+
+@pytest.mark.parametrize(
+    ("rota", "tipo"),
+    [
+        ("/sharedauth/ui/sharedauth-ui.css", "text/css"),
+        ("/sharedauth/ui/sharedauth-ui.js", "text/javascript"),
+        ("/sharedauth/static/flash_messages.css", "text/css"),
+    ],
+)
+def test_estaticos_do_sharedauth_sao_servidos_sem_sessao(client, rota, tipo):
+    resposta = client.get(rota)
+
+    assert resposta.status_code == 200, f"{rota} respondeu {resposta.status_code}"
+    assert resposta.headers["Content-Type"].startswith(tipo)
+
+
+def test_pagina_de_erro_anonima_recebe_css_e_js_de_verdade(client):
+    # O que o navegador viu em produção: o 404 estende `base.html`, que pede o
+    # CSS/JS do sharedauth; se o gate os redireciona, o console acusa MIME
+    # `text/html`. Mede a página inteira, não só os dois endereços conhecidos.
+    pagina = client.get("/rota-que-nao-existe")
+    assert pagina.status_code == 404
+
+    destinos = re.findall(
+        r'(?:href|src)="(/[^"]+\.(?:css|js))(?:\?[^"]*)?"', pagina.get_data(as_text=True)
+    )
+    assert any(d.startswith("/sharedauth/ui/") for d in destinos)
+    for destino in destinos:
+        resposta = client.get(destino)
+        assert resposta.status_code == 200, f"{destino} respondeu {resposta.status_code}"
+        assert not resposta.headers["Content-Type"].startswith("text/html"), destino
 
 
 def test_login_aceita_apenas_destino_local_sem_barra_invertida():

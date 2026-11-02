@@ -85,14 +85,16 @@ PUBLIC_ENDPOINTS = frozenset({
     # pelo token do vínculo CB <-> CRV (`CB_PATRIMONIO_TOKEN`) dentro da view.
     "portfolio.fechamento_status",
     "static",
-    # CSS do banner de `flash()` (ícone por categoria) que login.html usa: a
-    # tela de login é a única página fora da sessão que precisa de um
-    # estático do sharedauth, e sem isto `requer_login` bloquearia o
-    # próprio arquivo que renderiza "Usuário ou senha inválidos." — a
-    # mensagem apareceria sem estilo nenhum. `sharedauth_ui.static` (o
-    # modal/toast) não entra aqui: só é referenciado em base.html, que já
-    # não é servido sem sessão.
+    # CSS do banner de `flash()` (ícone por categoria) que login.html usa: sem
+    # isto `requer_login` bloquearia o próprio arquivo que renderiza "Usuário
+    # ou senha inválidos." — a mensagem apareceria sem estilo nenhum.
     "sharedauth.static",
+    # CSS e JS do modal/toast, carregados por base.html. Quem não tem sessão
+    # também recebe base.html: error.html o estende, e é ele que aparece num
+    # 404 ou num 400 de CSRF vencido no POST de /login. Sem esta entrada os
+    # dois arquivos voltam 302 para o login e o navegador os recusa por MIME
+    # (text/html). São dois estáticos da biblioteca, sem dado nenhum.
+    "sharedauth_ui.static",
 })
 
 #: Onde o tema persistido fica guardado entre requisições. Ver
