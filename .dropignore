@@ -1,0 +1,60 @@
+# .dropignore: o que o Dropbox NAO deve sincronizar se esta pasta entrar nele.
+# Sintaxe do .gitignore. O Dropbox nao le este arquivo: quem aplica e
+#   py -3 C:/Dev/VSCodeProjects/_manutencao/higiene/dropignore.py <pasta> --aplicar
+# que grava a marca com.dropbox.ignored em cada item. Rode antes de mover a
+# pasta para o Dropbox (a marca vai junto na mudanca) e de novo depois de
+# recriar algum segredo solto. Detalhes em _manutencao/higiene/README.md.
+
+# --- Segredos e credenciais
+.env
+.env.*
+!.env.example
+!.env.*.example
+.secrets/
+secrets/
+instance/
+.certs/
+*.key
+*.pem
+*.p12
+*.pfx
+*.ppk
+*.kdbx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.local.json
+*.toml.local
+.netrc
+.pgpass
+.htpasswd
+.claude/settings.local.json
+.idea/workspace.xml
+.idea/dataSources*
+
+# --- Dados, backups e registros
+backups/
+*.dump
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+logs/
+*.log
+.browser-results/
+
+# --- Ambientes e caches (pesados e recriaveis)
+.venv/
+venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.claude/worktrees/
+
+# --- Deste projeto
+# tokens e env do coletor RTD local
+.docker-local/
