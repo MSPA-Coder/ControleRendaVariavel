@@ -643,8 +643,10 @@ tela mostra **"CB não configurado"** e lista só as execuções do CRV.
 `app/executions/conferencia.py` compara, por **corretora, data do pregão e
 moeda**, a soma assinada da liquidação do CB (conta(s) da corretora) com a soma
 de `total_with_fees` das execuções em escopo. Estados: **confere** (diferença
-absoluta até a tolerância, `CONFERENCIA_TOLERANCIA`, padrão R$ 5,00),
-**diferença**, **só no CB** e **só no CRV**; sem CB disponível o estado é "sem
+absoluta até a tolerância, `CONFERENCIA_TOLERANCIA`, padrão 5,25 na moeda do
+pregão: uma corretagem de 5,00, que o preço do CRV já traz e o CB lança à parte,
+mais o arredondamento do preço em quatro casas), **diferença**, **só no CB** e
+**só no CRV**; sem CB disponível o estado é "sem
 comparação". "Só no CRV" vira **aguardando extrato** quando a conta da corretora
 no CB publica `statement_covered_until` (o último dia que o extrato importado
 cobre, acréscimo opcional do v4 desde 19/10/2026) e a liquidação esperada do

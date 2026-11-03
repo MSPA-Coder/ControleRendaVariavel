@@ -54,7 +54,11 @@ from app.patrimonio.cb_client import (
 )
 from app.patrimonio.queries import position_timeline
 
-DEFAULT_TOLERANCE = Decimal("5.00")
+#: Cobre uma corretagem de 5,00 mais o arredondamento do preço em quatro casas. A
+#: da Avenue (US$ 5 por ordem) está dentro do preço do CRV e à parte no CB, e o
+#: arredondamento soma centavos ao total (até 0,25 em 5 mil ações): em 09 e
+#: 20/10/2026 dois pregões de CGC deram 5,01 e 5,07 e reprovavam com 5,00.
+DEFAULT_TOLERANCE = Decimal("5.25")
 
 #: Corretoras cujos negócios o myProfit não traz (``Execution.in_scope`` é só a
 #: B3): o lado do CRV é o extrato de posição, negócio a negócio. Nomad e Revolut

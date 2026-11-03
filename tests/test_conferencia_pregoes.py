@@ -73,16 +73,16 @@ def test_o_custo_implicito_e_crv_menos_cb_com_sinal():
 
 
 def test_diferenca_acima_da_tolerancia_e_classificada_como_diferenca():
-    cb, crv = _lados([(date(2026, 1, 27), D("100.00"), D("105.01"))])
+    cb, crv = _lados([(date(2026, 1, 27), D("100.00"), D("105.26"))])
 
     assert compare(cb, crv)[0].state == DIFFERENCE
 
 
 def test_exatamente_a_tolerancia_ainda_confere():
-    cb, crv = _lados([(date(2026, 1, 27), D("100.00"), D("105.00"))])
+    cb, crv = _lados([(date(2026, 1, 27), D("100.00"), D("105.25"))])
 
     assert compare(cb, crv)[0].state == MATCH
-    assert compare(cb, crv, tolerance=D("4.99"))[0].state == DIFFERENCE
+    assert compare(cb, crv, tolerance=D("5.24"))[0].state == DIFFERENCE
 
 
 def test_so_no_cb_e_so_no_crv():
@@ -128,8 +128,8 @@ def test_linhas_saem_em_ordem_de_pregao():
     assert [linha.pregao for linha in compare(cb, crv)] == [date(2026, 1, 1), date(2026, 8, 1)]
 
 
-@pytest.mark.parametrize(("bruto", "esperado"), [(None, D("5.00")), ("", D("5.00")), ("2.50", D("2.50")), ("0", D("0"))])
-def test_tolerancia_configuravel_com_padrao_de_cinco_reais(bruto, esperado):
+@pytest.mark.parametrize(("bruto", "esperado"), [(None, D("5.25")), ("", D("5.25")), ("2.50", D("2.50")), ("0", D("0"))])
+def test_tolerancia_configuravel_com_padrao_de_cinco_e_vinte_e_cinco(bruto, esperado):
     assert tolerance_from_config({"CONFERENCIA_TOLERANCIA": bruto}) == esperado
 
 
@@ -177,6 +177,17 @@ def test_no_exterior_cada_negocio_confere_por_ativo_quantidade_e_valor():
     linhas = compare_trades(cb, crv)
 
     assert [(linha.instrument, linha.state) for linha in linhas] == [("BRKB", MATCH), ("CGC", MATCH)]
+
+
+def test_a_corretagem_de_cinco_dolares_e_o_arredondamento_do_preco_ainda_conferem():
+    """Outubro de 2026: o preço do CRV (quatro casas) traz a corretagem de US$ 5 que o CB lança à parte."""
+    cb = [_negocio(date(2026, 10, 9), "CGC", "1284", "-1065.72"), _negocio(date(2026, 10, 20), "CGC", "2115", "-1520.90")]
+    crv = [_negocio(date(2026, 10, 9), "CGC", "1284", "-1070.7276"), _negocio(date(2026, 10, 20), "CGC", "2115", "-1525.9725")]
+
+    linhas = compare_trades(cb, crv)
+
+    assert [(linha.state, linha.implicit_cost) for linha in linhas] == [(MATCH, D("-5.0076")), (MATCH, D("-5.0725"))]
+    assert compare_trades(cb[:1], [_negocio(date(2026, 10, 9), "CGC", "1284", "-1071.00")])[0].state == DIFFERENCE
 
 
 def test_quantidade_diferente_no_exterior_e_diferenca_mesmo_com_o_valor_igual():
