@@ -161,74 +161,11 @@ cada push só como aviso e não bloqueia nada; se falhar, investigue. A regra do
 forçado nem de rebase do `main`. O Dependabot continua por PR, com merge
 manual.
 
-As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
-roteiros continuam valendo para qualquer instalação que ainda esteja antes
-delas — a local, por exemplo.
-
-### Isolamento financeiro — revisão 20260912_0016
-
-Esta revisão altera o contrato dos dados e requer janela de manutenção. Não
-permita processos da versão antiga atendendo requisições ou gravando no banco
-depois da migração. O procedimento abaixo é um roteiro de implantação; os
-testes de desenvolvimento usam exclusivamente PostgreSQL descartável.
-
-1. Valide um backup pelo fluxo do BackupRestore e ensaie sua restauração em
-   ambiente separado. Registre contagens, valores e datas das carteiras,
-   posições, opções, transações, proventos, movimentos e arquivos históricos.
-2. Confirme o login exato `mspa` na cópia restaurada. Todos os registros
-   financeiros legados serão atribuídos a essa conta, conforme decisão do
-   mantenedor. Havendo legado sem esse login, a migração para antes de atribuir
-   dados; não crie uma conta arbitrária para contornar a recusa. Banco vazio
-   inicializa sem inventar um dono. Carteiras padrão personalizadas também
-   exigem o proprietário confirmado.
-3. Na janela autorizada, interrompa escritas e o envio do coletor e retire todos
-   os workers web antigos. Aplique a nova imagem e `flask db upgrade` pelo
-   serviço `migrate` do Compose operacional. Não use apenas uma troca gradual
-   de workers: o código antigo não respeita o novo isolamento.
-4. Compare o inventário financeiro antes/depois para `mspa`. Outras contas
-   começam sem fatos financeiros legados. Corretoras e instrumentos continuam
-   globais. Os snapshots antes repetidos por posição são consolidados por
-   ticker/contrato, preservando a leitura mais recente e usando o ID da posição
-   para desempatar timestamps iguais; a redução dessa contagem é esperada.
-5. Confirme o health check e, com duas contas, a recusa de IDs alheios, a
-   separação dos relatórios e das preferências e o acesso às cotações somente
-   após posse atual ou histórica. Benchmarks seguem essa mesma regra.
-6. Retome o coletor. O protocolo remoto continua usando IDs de posição, e o
-   receptor resolve esses IDs para o instrumento global: isso preserva a
-   compatibilidade com o agente existente. A coleta local que grava diretamente
-   no banco deve usar o código novo. Verifique pulso, horários e atualização de
-   ações e opções antes de reabrir o uso normal.
-
-A revisão não oferece `downgrade` de dados. Se for necessário recuar, mantenha
-o serviço fechado e restaure banco e código compatíveis a partir do backup
-validado. Voltar somente a imagem antiga reintroduz leitura global indevida e
-não constitui rollback seguro.
-
-### Higienização do schema — revisão 20260913_0017
-
-Esta revisão conclui a normalização anterior removendo cinco colunas obsoletas
-em `positions`, o índice associado, e tornando obrigatórios timestamps já
-exigidos pelos modelos. Antes de aplicá-la, valide backup e restauração pelo
-BackupRestore. A revisão verifica que as colunas obsoletas estão vazias antes
-de removê-las; se detectar qualquer valor, ela interrompe toda a transação sem
-apagar schema ou dados. Nesse caso, mantenha o serviço fechado, investigue a
-origem do valor e prepare uma migração explícita — não remova a pré-condição
-nem altere a revisão publicada.
-
-Os timestamps nulos recebem `CURRENT_TIMESTAMP` na própria transação antes da
-restrição `NOT NULL`. A implantação habitual pelo `~/deploy.sh` aplica a
-revisão; confirme depois `flask --app app:create_app db check` sem operações
-pendentes e o health check público antes de encerrar a janela.
-
-### Limpeza do coletor — revisão 20260913_0018
-
-Esta revisão remove os campos sem efeito `collector_mode` e
-`collector_destination`, seus tipos PostgreSQL e a rota de alternância já
-desativada. Aplique somente depois de confirmar que a tarefa Windows usa
-`scripts/rtd-agent-run.ps1 -Destination remote` e executa
-`app.collector.remote_agent`; esse agente ignora o campo removido da resposta
-de configuração. A revisão não usa `CASCADE` ao remover os tipos: uma
-dependência inesperada interrompe a transação integralmente.
+Banco com outra revisão gravada em `alembic_version` que não a da base de
+03/11/2026 (um dump antigo, por exemplo): ver a docstring de
+`migrations/versions/20261103_base.py`. Os roteiros das revisões de setembro
+(isolamento financeiro, higienização do schema, limpeza do coletor) estão no
+git até o commit ce22512.
 
 ### Fluxo operacional usual
 

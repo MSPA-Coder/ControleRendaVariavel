@@ -36,8 +36,7 @@ risco, mas não são negociáveis.
 
 Tema, taxa de cálculo e comparação são alterados em **Preferências** pela
 própria conta. O prazo de alerta de cotação e a administração do coletor e das
-referências globais exigem o papel administrativo, em **Configurações**. Antes de atualizar uma instalação
-existente para o isolamento por usuário, siga o [roteiro de migração](docs/deployment-vps.md#isolamento-financeiro--revisão-20260912_0016).
+referências globais exigem o papel administrativo, em **Configurações**.
 
 ## Execução com Docker
 

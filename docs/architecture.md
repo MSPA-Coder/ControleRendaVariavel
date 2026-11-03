@@ -823,8 +823,9 @@ nelas.
 
 Ficam de fora, de propósito, usuários, senhas, sessões, preferências e
 auditoria. O PostgreSQL recusa `DROP COLUMN` e `ALTER ... TYPE` de coluna que uma
-view lê. Quem precisar mudar uma coluna lida aqui escreve a revisão dependendo
-de `20261003_0027`, recria a view e atualiza `tests/test_esquema_leitura.py`: a
+view lê. Quem precisar mudar uma coluna lida aqui escreve uma revisão que
+recria a view, devolve o `SELECT` ao `mcp_leitura` (se o papel existir) e
+atualiza `tests/test_esquema_leitura.py`: a
 quebra deixa de aparecer em produção, no leitor, e passa a reprovar a revisão na
 suíte, que aplica todas elas a um banco vazio. Uma view nova só chega ao usuário
 de leitura depois de rodar de novo `python -m financas_mcp.usuario_leitura`
