@@ -1,266 +1,155 @@
-# ControleRendaVariavel — guia de engenharia
+# ControleRendaVariavel — guia de trabalho
 
-> **A frota é este projeto, o ControleBancario e o MegaSena.** Os três
-> compartilham o `SharedAuth`, o mesmo formato de Compose e Dockerfile e o mesmo
-> portão `quality`, e servem de referência uns aos outros. Divergir é permitido
-> quando for uma escolha consciente: experimente num deles e, se der certo, leve
-> aos outros.
->
-> **O ConfortoTermico não está na frota** e segue trilha própria desde
-> 07/09/2026: a arquitetura dele é livre, e diferença em relação a ele **não é
-> débito**. O que ele preserva é o contrato operacional — VPS, `deploy.sh`,
-> vigia, autocura, alerta, backup e `SharedAuth`. Ver o ADR 008 daquele
-> repositório.
+<!-- comum: início. Cópia de _manutencao/compartilhados/AGENTS-comum.md; mude lá e rode sincronizar.py --aplicar. -->
+## Regras comuns aos repositórios
 
-## Escopo e fontes de verdade
+**O que espera o "sim" do mantenedor:** commit e push (quando ele pedir),
+deploy, qualquer ação no VPS, e apagar dados, volumes ou backups
+(`docker compose down -v` inclusive). Na dúvida sobre algo irreversível,
+pergunte; no resto, decida e diga o que decidiu.
 
-Este repositório contém uma aplicação Flask com dados financeiros privados por
-usuário para controlar ações, opções, cotações, risco e performance. PostgreSQL é a fonte
-operacional de dados e configurações; Docker Compose é a interface de execução.
-A planilha `Trades.xlsm` é somente referência funcional de leitura.
+**Ciclo.** Altere, rode a verificação completa deste repositório (seção
+"Validação"), commite direto no `main` e dê `git push`: sem PR, sem push
+forçado, sem rebase do `main` publicado. A CI roda depois, só como aviso, mas
+vermelho no `main` se investiga. O Dependabot chega por PR, com merge manual. O
+deploy é `~/deploy.sh <app>` no VPS1: monta a imagem a partir do `main`,
+confere `/health` e volta sozinho se falhar. O VPS só espelha o `main`; nada se
+edita lá. Imagem-base nova (correção do Debian ou do Python) só quando ele
+pedir: testa na máquina e depois `~/deploy.sh <app> --refresh`. Ao terminar,
+diga o que rodou, o resultado e o que deixou de validar.
 
-Antes de mudar código, leia o código, os testes, as migrações e o contrato que
-a mudança toca. Os documentos abaixo cobrem um assunto cada; leia o do assunto
-afetado, não todos:
+**Dados e segredos.** Mudança destrutiva ou conversão de dados reais começa por
+backup conferido no BackupRestore. Segredos ficam fora do Git (`.secrets/` ou
+configuração do usuário) e não aparecem em código, imagem, log, diff,
+documento nem relatório.
 
-- `docs/architecture.md` para a forma interna: camadas, módulos, contrato HTMX,
-  coleta de cotações e limites de transação;
-- `docs/development.md` para ambiente, o que a suíte cobre e o que ela
-  deliberadamente não cobre, e validação proporcional;
-- `docs/planilha-acoes.md` para ações, performance, risco e RTD;
-- `docs/planilha-opcoes.md` para opções;
-- `docs/deployment-vps.md` para operação no VPS;
-- `docs/conciliacao-mensal.md` para a rotina mensal de conciliação com o myProfit;
-- `docs/CONCEITOS_FINANCEIROS.md` para o vocabulário comum com o CB e o Wealthfolio.
+**Dependências.** Alargue o teto e preserve o piso já verificado: elevar o piso
+afirma uma incompatibilidade, e isso exige prova. Vulnerabilidade se corrige
+atualizando; exceção só explícita, com motivo e data. Enquanto o Dependabot não
+aceitar Python 3.15, ele não propõe atualização de `uv` e o grafo do GitHub fica
+parado no lock de 13/10/2026: confira alerta pela versão do `uv.lock`, e
+atualize à mão (`uv lock --upgrade-package <pacote>`) quando o `pip-audit` ou o
+Trivy apontarem.
 
-Em conflito, prevalecem: solicitação explícita atual do mantenedor; este
-arquivo; contratos funcionais em `docs/`; testes e contratos públicos; código
-existente. Atualize o contrato funcional na mesma mudança quando uma regra de
-produto mudar. Não replique nos documentos detalhes internos que o código
-expressa melhor.
+**Testes.** `docs/TESTES.md` diz o que testar e como. Diante de vermelho,
+decida de quem é o defeito; nunca escreva código para um teste passar. Não
+rode duas verificações do mesmo repositório ao mesmo tempo: a segunda recria o
+banco de teste e derruba a primeira.
 
-## Execução e persistência
+**Cópias.** Este bloco, `docs/TESTES.md` e os arquivos listados em
+`_manutencao/compartilhados/sincronizar.py` são cópias: mude a canônica lá e
+rode `python compartilhados/sincronizar.py --aplicar` no `_manutencao`.
 
-Aplicação, PostgreSQL, migrações e build rodam em Docker, e é lá que testes e
-lint são validados antes de commitar. Não instale ferramentas do projeto no
-Python global do host. Comandos usuais:
+**Este arquivo.** Guarde aqui só o que o código não diz: limites, decisões com
+o motivo, armadilhas e comandos. História fica no `git log`; decisão com
+alternativas vira ADR; detalhe de implementação fica no código. Para
+acrescentar uma regra, retire ou funda outra: `sincronizar.py` reprova este
+arquivo acima de 900 palavras fora deste bloco.
+<!-- comum: fim -->
 
-```powershell
-docker compose up --build -d
-docker compose down
-docker compose --profile quality run --build --rm quality
-docker compose exec web flask --app app:create_app <comando>
-Invoke-WebRequest http://127.0.0.1:5301/health
-```
+## O sistema
 
-O `.venv` local existe apenas para o agente RTD do Windows, que precisa da
-integração COM do ProfitPro. Crie-o ou atualize-o com `uv sync --locked
---extra rtd --python 3.15`; não instale dependências de desenvolvimento nele.
-Lint, testes, migrações, banco e auditorias rodam nos serviços Compose acima.
-`sharedauth` é instalado do GitHub na tag declarada em `pyproject.toml` e no
-commit registrado em `uv.lock`.
+Aplicação Flask com dados financeiros privados por usuário: ações, opções,
+cotações, risco e performance. PostgreSQL é a fonte de dados e configurações;
+a planilha `Trades.xlsm` é só referência funcional de leitura. No ar em
+`https://renda-mspa.duckdns.org` (deploy `~/deploy.sh renda`; no VPS,
+`/home/ubuntu/apps/controle-renda-variavel`).
 
-O Compose publica a aplicação em `127.0.0.1:5301` e PostgreSQL em
-`127.0.0.1:5302`; na rede interna, o banco é `db:5432`. `migrate` aplica
-Alembic antes de `web`. O build usa o cache e as imagens-base já baixadas,
-como o deploy no servidor; bases novas só entram quando pedidas (ver
-"Imagens-base" em `docs/development.md`). Edição ao vivo exige
-`docker compose -f compose.yaml -f compose.dev.yaml up`.
+Faz parte da frota com o ControleBancario e o MegaSena: mesmo SharedAuth,
+mesmo formato de Compose e de `quality`. Divergir é permitido quando for
+escolha consciente. O ConfortoTermico segue trilha própria, e diferença em
+relação a ele não é débito.
 
-Dados financeiros e configurações vivem no volume `postgres_data`. Nunca use
-`docker compose down --volumes` fora de ambiente descartável. Backup, retenção
-e restauração são responsabilidade exclusiva do BackupRestore; não replique
-seus procedimentos ou detalhes internos neste repositório. Alteração destrutiva
-de dados exige backup validado e autorização explícita.
+Leia só o documento do assunto da mudança:
 
-O que merece teste, em que camada e em que forma está em `docs/TESTES.md`,
-comum aos repositórios; leia antes de escrever ou remover um teste. Diante de
-vermelho, decida de quem é o defeito antes de mexer: teste que mede texto
-literal reprova mudança legítima, e nesse caso quem se corrige é a asserção.
-Nunca escreva código para o teste passar. Os testes marcados com
-`sentinela_front` são verificações textuais temporárias; os fluxos críticos
-de navegador usam `compose.browser.yaml`, com banco descartável e fontes
-externas controladas, conforme `docs/TESTES.md`.
+- `docs/architecture.md`: camadas, contrato HTMX, coleta de cotações,
+  transações, esquema `leitura` e "Proventos do CB";
+- `docs/development.md`: ambiente e o que a suíte deliberadamente não cobre;
+- `docs/planilha-acoes.md` e `docs/planilha-opcoes.md`: as regras de cálculo,
+  com os exemplos normativos;
+- `docs/conciliacao-mensal.md`: a rotina mensal com o myProfit;
+- `docs/deployment-vps.md`: operação no VPS;
+- `docs/CONCEITOS_FINANCEIROS.md`: vocabulário comum com o CB e o Wealthfolio;
+- `docs/travas.md`: locks de banco e o que cada um protege.
 
-PostgreSQL é o único backend dos testes com persistência; SQLite não o
-substitui. A suíte tem duas camadas (ver o docstring de `tests/conftest.py`): a
-maior parte recusa a conexão de propósito, e os testes marcados com
-`@pytest.mark.banco` falam com o serviço `db-teste` do Compose — efêmero, em
-tmpfs, e deliberadamente separado do `db` com dados reais.
+Quando uma regra de produto mudar, atualize o documento que a define na mesma
+mudança.
 
-O que a camada com banco cobre hoje é o piso, não a cobertura toda: as
-`CheckConstraint` de quantidade e custo médio, o guarda contra `NaN`, o tipo
-`numeric` das colunas de valor, e a aplicação da cadeia de migrações em banco
-vazio. Concorrência também mora nela: índice único e lock consultivo das
-posições (`test_posicao_unica_por_chave.py`). Teste de atomicidade ou de
-concorrência novo vai nessa camada.
-
-**O bootstrap em PostgreSQL vazio deixou de ser passo manual:** toda execução
-do `quality` aplica todas as revisões Alembic a um banco vazio, porque é assim
-que a fixture `app_com_banco` monta o cenário. Uma revisão que falha ao
-executar reprova na CI, e não mais no `deploy.sh` — que reverte código e
-imagem, mas não reverte migração.
-
-Colunas lidas pelo esquema `leitura` (ver `docs/architecture.md`, seção
-Persistência) não podem ser removidas nem ter o tipo trocado sem recriar a view
-na mesma revisão: o PostgreSQL recusa, de propósito.
-
-Mudança de schema cria nova revisão Alembic, revisada manualmente.
-Não edite uma migração que possa ter sido aplicada. Banco vazio nasce por
-`alembic upgrade head`, nunca por `create_all()` ou `stamp`; adoção de banco
-legado é procedimento administrativo explícito.
-
-## Segurança e runtime
-
-- Autenticação é padrão; somente os endpoints explicitamente públicos de
-  login, health, estáticos e agente coletor podem dispensar sessão. A API do
-  agente exige Bearer token próprio. Autorização é verificada no servidor e
-  toda escrita de navegador usa CSRF.
-- Sessão, CSRF, rate limiting da aplicação, controle de acesso, hash de senha,
-  senha temporária e trava de troca pendente, destino pós-login seguro e a
-  marca que amarra a sessão à senha em vigor,
-  cabeçalhos de segurança, CSP, formatação pt-BR e health vêm de SharedAuth.
-  O padrão é usar a biblioteca; uma variação pode nascer aqui para
-  experimentar e, se servir aos outros, sobe para ela com tag nova. `_number`
-  em `presentation.py` é apenas um adaptador para regras de apresentação deste
-  projeto.
-- `SECRET_KEY`, senha do banco e token do agente vêm de arquivos de segredo
-  (`*_FILE` no contêiner e `.secrets/` no host). Não os registre em código,
-  imagem, logs, documentação, diffs ou commits. `.env`, `.secrets/`,
-  `.docker-local/`, `.certs/` e backups permanecem locais e ignorados.
-- Preserve CSP sem `unsafe-inline`, assets locais, validação e escape de
-  entrada, SQL parametrizado e cookies `HttpOnly`/`SameSite=Lax`. Em produção,
-  habilite cookies `Secure` com `FORCE_HTTPS` e `TRUST_PROXY_HEADERS` atrás do
-  proxy TLS.
-- Produção usa imagem multi-stage, Gunicorn com dois workers, usuário não-root,
-  filesystem somente leitura, health checks e dependências de runtime. Não
-  monte código do host, socket Docker nem use modo privilegiado em produção.
-
-O padrão `RATELIMIT_STORAGE_URI=memory://` mantém um contador independente por
-worker e o zera em reinícios. Na topologia de produção, a configuração de
-Nginx versionada em `../_manutencao/vps/nginx/` é requisito e limita de forma
-compartilhada somente o `POST /login`. Outra topologia ou múltiplas instâncias
-exigem storage compartilhado para o limitador da aplicação ou proteção
-equivalente no edge.
-
-## Invariantes financeiros
-
-Delimite a transação no caso de uso que inicia a escrita. Não faça commits
-parciais em camadas inferiores nem mantenha transação aberta durante RTD ou
-outra chamada externa. Proteja invariantes concorrentes no banco.
-
-- valores monetários e quantidades persistidos usam `Decimal`, nunca `float`;
-- quantidade e preço médio não são negativos; ticker é normalizado;
-- divisão por zero resulta em `None`/não aplicável; arredondamento é explícito;
-- totais derivam das posições e permanecem separados por moeda;
-- proventos em reais das corretoras que o CB cobre (Genial e XP), pagos a partir
-  de 01/01/2026, vêm do Controle Bancário (`origin = 'cb'`, somente leitura, valor
-  líquido do caixa): planilha e formulário os recusam, e a linha de planilha que o
-  CB passou a cobrir é marcada como substituída, nunca apagada (ver
-  `docs/architecture.md`, "Proventos do CB");
-- mudanças em cálculos devem ser conferidas contra os exemplos normativos dos
-  contratos funcionais, com teste de domínio proporcional.
-
-## Exceção RTD no Windows
-
-COM/RTD não roda no contêiner Linux. Somente o ambiente Python isolado do
-agente RTD pode executar no host Windows; o restante continua em Docker.
-
-O agente de produção é instalado por `scripts/rtd-agent.ps1`: uma tarefa
-Windows automática executa `python -m app.collector.remote_agent`, sempre
-entregando ao VPS. Ele não cria Flask nem carrega configuração/segredos do banco
-local. O local é separado e sob demanda: `scripts/rtd-local.ps1 -Action Start`
-executa `poll-rtd --watch`, sempre para PostgreSQL local; `-Action Stop`
-sinaliza um evento Windows e encerra o processo (fechando sua sessão RTD).
-Local parado não tem processo, vigia, polling ou reinício automático. Banco
-local indisponível encerra essa coleta; não afeta o agente do VPS.
-
-Os dois usam `app/collector/loop.py`, com locks e controles de parada separados.
-Configurações, agenda e intervalos vêm do respectivo destino. Os dois leem o RTD
-direto do `IRtdServer` do ProfitPro (`app/collector/rtd_direct.py`); não há ponte
-pelo Excel nem escolha de modo. A aplicação web não inicia,
-supervisiona nem encerra processos Windows. No VPS, o botão pausa/retoma a
-coleta pelo campo `collector_paused`; no local, o controle real é Start/Stop
-no Windows.
-`REMOTE_COLLECTOR_ENABLED` identifica o servidor receptor; no destino remoto
-nunca há conexão iniciada pelo servidor para o Windows. O estado exibido vem
-do pulso persistido, alimentado separadamente pelos dois destinos.
-
-Sem o agente, a aplicação continua utilizável e informa cotações indisponíveis
-ou desatualizadas; cadastros não dependem de RTD. Normalize e valide leituras
-antes do domínio, preserve a última cotação válida, use timeouts e retentativas
-limitadas e não registre credenciais nem dados financeiros sensíveis. Testes e
-desenvolvimento sem COM usam provedores determinísticos.
-
-## Validação proporcional
-
-A interface de validação do projeto é:
+## Validação
 
 ```powershell
 docker compose --profile quality run --build --rm quality
 ```
 
-O `--build` mantém o comando explícito: o serviço não monta o código do host;
-Compose reconstrói a imagem com o código atual, com cache, antes dos testes. A
-suíte roda em paralelo (`pytest -n`), com um banco de teste novo por worker e
-por execução (ver `tests/conftest.py`). Rode-o completo antes de cada commit: é essa verificação que vale, e a CI
-depois do push é só aviso.
+Ruff e pytest em paralelo, com um banco de teste novo por worker e por
+execução; toda execução aplica a cadeia inteira de Alembic a um banco vazio.
+Rode antes de todo commit de código.
 
-Registre o que foi executado e omitido. Além do comando acima:
+A suíte tem duas camadas (docstring de `tests/conftest.py`): a maior parte
+recusa conexão de propósito, e os testes `@pytest.mark.banco` falam com o
+`db-teste`, efêmero e separado do `db` com dados reais. Atomicidade e
+concorrência novas vão nessa camada.
 
-| Mudança | Validação adicional |
-|---|---|
-| documentação | links, caminhos, comandos, buscas residuais, `git diff --check` e `docker compose config --quiet` |
-| rota, domínio ou interface | percorrer o fluxo afetado com cenário real |
-| autenticação, autorização, CSRF ou sessão | confirmar também a negação anônima |
-| schema ou migração | backup validado, bootstrap em PostgreSQL vazio e health check |
-| dependência, Dockerfile ou Compose | build limpo e subida completa da pilha |
-| RTD Windows | provedor fake e, quando disponível, ticker conhecido sem dados sensíveis |
+- Mudança visível: suba a pilha (`docker compose up --build -d`, app em
+  `127.0.0.1:5301`, banco em `127.0.0.1:5302`) e percorra o fluxo.
+- Cálculo: confira contra os exemplos normativos do documento da planilha.
+- Autenticação, autorização, CSRF ou sessão: confirme também a negação anônima.
+- Só documentação: `git diff --check` e
+  `python ../_manutencao/compartilhados/sincronizar.py`.
+- Docker ou dependência: build limpo, pilha completa e `/health`.
+- RTD: provedor fake; com o ProfitPro disponível, um ticker conhecido.
 
-A CI valida Compose, executa o estágio `quality`, audita dependências Python e
-varre a imagem servida. Não afrouxe controles para contornar achados: atualize
-a dependência ou imagem; exceções sem correção disponível devem ser explícitas
-e justificadas. A varredura da imagem roda em contêiner com `docker save` e
-`--input`, sem montar o socket Docker. O serviço `web` mantém nome de imagem
-fixo para oferecer um alvo estável à inspeção.
+## Invariantes
 
-## Produção e versões
+- Valores e quantidades persistidos em `Decimal`, nunca `float`. Quantidade e
+  preço médio não são negativos; ticker é normalizado; divisão por zero dá
+  `None` (não aplicável); arredondamento é explícito.
+- Totais derivam das posições e ficam separados por moeda.
+- A transação é delimitada no caso de uso que inicia a escrita: nada de commit
+  parcial em camada inferior, nem transação aberta durante RTD ou outra chamada
+  externa. Invariante concorrente se protege no banco.
+- Proventos em reais das corretoras que o CB cobre (Genial e XP), pagos a
+  partir de 01/01/2026, vêm do CB (`origin = 'cb'`, só leitura, valor líquido
+  do caixa). Planilha e formulário os recusam; a linha de planilha que o CB
+  passou a cobrir é marcada como substituída, nunca apagada.
+- Migração: revisão Alembic nova, revisada à mão; não se edita revisão que
+  possa ter sido aplicada; banco vazio nasce por `alembic upgrade head`, nunca
+  por `create_all()` ou `stamp`. Colunas lidas pelo esquema `leitura` não são
+  removidas nem mudam de tipo sem recriar a view na mesma revisão.
+- Autenticação é padrão: só login, health, estáticos e a API do agente coletor
+  (que exige Bearer token próprio) dispensam sessão. Sessão, CSRF, limite de
+  login, senhas, cabeçalhos, CSP, formatação pt-BR e health vêm do SharedAuth;
+  `_number` em `app/core/presentation.py` é só adaptador de apresentação.
 
-A produção roda atrás de Nginx com TLS em
-`https://renda-mspa.duckdns.org`, a partir de
-`/home/ubuntu/apps/controle-renda-variavel`. O servidor espelha `main`: não
-edite, faça commit ou merge no VPS. Consulte `docs/deployment-vps.md` antes de
-operá-lo.
+## Coleta RTD no Windows
 
-Toda mudança passa pelo `quality` completo na máquina e vai por commit direto
-no `main` e `git push origin main`, sem PR e sem esperar nada. A regra do
-`main` continua impedindo apagá-lo ou reescrever o histórico: nada de push
-forçado nem de rebase do `main`. A CI do GitHub roda depois de cada push só
-como aviso e não bloqueia nada; se falhar, investigue. O Dependabot continua
-por PR, com os checks obrigatórios; o merge é manual (o workflow de
-auto-merge foi removido).
+COM/RTD não roda no contêiner Linux: só o `.venv` do agente RTD roda no host
+(`uv sync --locked --extra rtd --python 3.15`). Os dois coletores leem direto
+do `IRtdServer` do ProfitPro (`app/collector/rtd_direct.py`) e compartilham
+`app/collector/loop.py`, com locks e controles de parada separados:
 
-O deploy (`~/deploy.sh renda`) só roda quando o usuário mandar. O servidor
-monta a imagem a partir do código do `main`, sem esperar nem baixar nada da
-CI, confere a saúde e volta sozinho para a versão anterior se falhar.
-`~/deploy.sh --status` compara VPS × GitHub. Nada muda em produção sem o
-usuário mandar. As correções de segurança das imagens-base (Debian/Python)
-entram só quando ele pedir: testa localmente com as bases novas e depois roda
-`~/deploy.sh renda --refresh`.
+- produção: `scripts/rtd-agent.ps1` instala uma tarefa do Windows que roda
+  `python -m app.collector.remote_agent` e sempre entrega ao VPS, sem Flask nem
+  segredos do banco local. No VPS, o botão pausa e retoma pelo campo
+  `collector_paused`; o servidor nunca abre conexão para o Windows
+  (`REMOTE_COLLECTOR_ENABLED` marca o receptor);
+- local: `scripts/rtd-local.ps1 -Action Start` / `-Action Stop`, sempre para o
+  PostgreSQL local, sob demanda, sem vigia nem reinício.
 
-Ao atualizar dependências, alargue o teto compatível e preserve o piso mínimo
-já verificado. O Dependabot acompanha o `uv.lock` pelo ecossistema `uv`, com
-`versioning-strategy: increase-if-necessary`. Elevar o piso
-declara uma incompatibilidade e só deve ocorrer com justificativa e validação.
-Toda ampliação de faixa reconstrói a imagem e roda `quality`. Migrações são
-aditivas e imutáveis depois de aplicadas; mudanças incompatíveis usam nova
-revisão e estratégia explícita de dados e rollback.
+Sem agente, a aplicação continua utilizável e mostra cotação indisponível ou
+desatualizada. Leitura se normaliza antes do domínio, a última cotação válida
+se preserva, e timeout e retentativa são limitados.
 
-## Arquivos sincronizados com o manutencao
+## Armadilhas
 
-`Dockerfile.browser`, `scripts/provision-db-runtime.sh`,
-`docs/security-audit/gerar_relatorio.py`, `docs/TESTES.md`, `tests/contrato/patrimonio-v4.schema.json` são cópias
-de arquivos canônicos do repositório `manutencao` (ver
-`manutencao/compartilhados/README.md`). Não os edite aqui: mude a canônica e
-rode `python compartilhados/sincronizar.py --aplicar` no `manutencao`, que
-copia para todos os repositórios de uma vez.
+- O limite de login da aplicação usa `memory://`: um contador por worker,
+  zerado no reinício. Em produção quem limita de verdade o `POST /login` é o
+  Nginx versionado em `../_manutencao/vps/nginx/`; outra topologia precisa de
+  storage compartilhado ou proteção equivalente no edge.
+- Backup, retenção e restauração são do BackupRestore; não replique os
+  procedimentos aqui. `docker compose down --volumes` só em ambiente
+  descartável: os dados vivem no volume `postgres_data`.
+- Segredos (`SECRET_KEY`, senha do banco, token do agente) vêm de arquivos
+  (`*_FILE` no contêiner, `.secrets/` no host).
+- A varredura da imagem roda como contêiner, com `docker save` e `--input`; o
+  serviço `web` mantém nome de imagem fixo para ser o alvo.

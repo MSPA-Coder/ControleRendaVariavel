@@ -158,8 +158,8 @@ git push origin main
 A verificação completa na máquina é a que vale. A CI do GitHub roda depois de
 cada push só como aviso e não bloqueia nada; se falhar, investigue. A regra do
 `main` continua impedindo apagá-lo ou reescrever o histórico: nada de push
-forçado nem de rebase do `main`. O Dependabot continua por PR, com os checks
-obrigatórios e auto-merge.
+forçado nem de rebase do `main`. O Dependabot continua por PR, com merge
+manual.
 
 As três revisões abaixo já estão aplicadas em produção desde 13/09/2026. Os
 roteiros continuam valendo para qualquer instalação que ainda esteja antes

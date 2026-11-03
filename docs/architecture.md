@@ -111,23 +111,13 @@ O snapshot limita a janela de preços históricos a `PATRIMONIO_MAX_HISTORICO_DI
 com padrão de dez anos. Isso protege o worker contra reconstruções sem limite;
 exportações mais antigas devem ser produzidas por fluxo controlado.
 
-### Contratos v1 a v3 (retirados)
-
-Os contratos `patrimonio/v1` (resumo), `v2` (dashboard) e `v3` (atividades,
-categorias, metadata, renda, desempenho, eventos e histórico por posição) serviam
-ao NetWorth, aposentado em 29/09/2026, e foram retirados em 03/10/2026: o nginx
-não registra acesso a eles desde 28/09, o Wealthfolio só lê o v4 (o patch dele
-recusa qualquer outro caminho), e o histórico está no Git. O `PATRIMONIO_TOKEN`
-antigo, que os autorizava, deixou de existir (Compose, código e CI).
-
 ### Snapshot inicial v4 para integração com carteira externa
 
 `GET /patrimonio/v4/metadata`, `GET /patrimonio/v4/snapshot`,
 `GET /patrimonio/v4/activities`, `GET /patrimonio/v4/changes` e
 `GET /patrimonio/v4/ledger` publicam dados somente-leitura, com escopo
 explícito de `PATRIMONIO_OWNER_ID`.
-As rotas v4 usam o token exclusivo `PATRIMONIO_INTEGRATION_TOKEN`;
-o `PATRIMONIO_TOKEN` antigo deixou de existir. Os cursores v4
+As rotas v4 usam o token exclusivo `PATRIMONIO_INTEGRATION_TOKEN`. Os cursores v4
 são assinados pelo token exclusivo, e sua rotação invalida cursores emitidos
 anteriormente. O snapshot contém posições abertas de ações em carteiras
 reais, proventos persistidos e cotações atuais e diárias de tickers que o owner
@@ -361,24 +351,12 @@ para vários leitores de uma vez.
 `app/core/domain.py` é o núcleo puro: custo médio ponderado, resultado de operação,
 métricas de posição, replay de extrato e plano de encerramento. Sem Flask, sem
 ORM, sem I/O. `Decimal` do início ao fim, com arredondamento explícito — a
-política de arredondamento é do domínio, não do driver.
+política de arredondamento é do domínio, não do driver. Em volta dele, os
+pacotes `positions`, `options`, `performance` e `quotes` têm um módulo por
+responsabilidade, cada um com o seu docstring.
 
-Em volta dele:
-
-| Módulo | Responsabilidade |
-|---|---|
-| `app/positions/closure.py`, `app/options/closure.py` | ciclo de vida da posição: abertura, aumento, ajuste e encerramento total ou parcial |
-| `app/positions/ledger.py` | preserva o extrato antes de a posição encerrada ser apagada |
-| `app/positions/holdings_history.py` | quantidade histórica e fluxo, base do TWR |
-| `app/performance/monthly.py` | reduz a série diária a um ponto por mês |
-| `app/performance/risk.py`, `app/options/greeks.py` | KPIs de risco e sensibilidades de opção |
-| `app/positions/portfolio.py`, `app/options/portfolio.py` | agregação para exibição, por corretora e por mercado |
-| `app/performance/dividends.py` | proventos por período e por ticker |
-| `app/quotes/history.py` | o que importar de cotação e a gravação única por (ticker, dia), usada pela tela, pela CLI e pelo coletor |
-| `app/patrimonio/fotografia.py` | a fotografia do patrimônio publicada ao NetWorth, hoje ou numa data passada |
-| `app/core/validation.py`, `app/core/presentation.py` | entrada e saída: parse de decimal, filtros Jinja |
-
-Os dois módulos de encerramento mantêm **três registros em dia, sempre juntos e
+Os dois módulos de encerramento (`app/positions/closure.py` e
+`app/options/closure.py`) mantêm **três registros em dia, sempre juntos e
 nunca nas rotas**: `Position` (o estado consolidado), `PositionMovement` (o
 extrato que explica como se chegou nele) e `Transaction` (o que a aba Transações
 mostra). Uma rota que atualizasse um deles sozinha produziria uma carteira que
@@ -440,15 +418,6 @@ depois desse pregão (o coletor lendo o código morto) são apagadas na troca.
 A execução do myProfit de um ativo com fator diferente de 1, com o código
 novo, fica **pendente**: ainda não se viu se o myProfit registra o preço por
 ação ou por lote.
-
-### Apoio
-
-`app/accounts/authorization.py` (papel `admin`, sobre
-`sharedauth.access.requer_papel`), `app/accounts/users.py` (contas),
-`app/core/privacy.py` (ocultação de valores na tela), `app/core/themes.py`,
-`app/core/instrument_status.py`, `app/core/pricing_settings.py`,
-`app/quotes/reference_data.py` e `app/cli.py` (`auditoria`, `poll-rtd`,
-`probe-rtd-direct`, `import-position-history`, `trocar-codigo`, `users`).
 
 ## O agente RTD no Windows
 
@@ -534,20 +503,20 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `app_settings` | infraestrutura e agenda globais do coletor; campos pessoais antigos preservados para adoção do legado |
 | `user_preferences` | tema, taxa de cálculo e comparação privados por usuário |
 | `user_ticker_entitlements` | primeira posse confirmada; preserva acesso à cotação após encerramento ou exclusão |
-| `brokers`, `tickers` | referências globais, mantidas por administradores; `tickers.quote_factor` é o fator de cotação (revisão `20261103_0042`) |
-| `ticker_former_symbols` | código anterior de um ticker que a bolsa renomeou e o último pregão dele (revisão `20261103_0042`) |
+| `brokers`, `tickers` | referências globais, mantidas por administradores; `tickers.quote_factor` é o fator de cotação |
+| `ticker_former_symbols` | código anterior de um ticker que a bolsa renomeou e o último pregão dele |
 | `portfolios`, `portfolio_tickers` | carteiras privadas e seus catálogos; associação de catálogo não concede acesso a preços |
 | `positions`, `position_movements` | posição de ações e seu extrato |
 | `option_expirations`, `option_contracts`, `option_positions`, `option_position_movements` | o mesmo par, para opções |
 | `transactions` | o que a aba Transações mostra |
-| `dividends` | proventos, por tipo de renda; `origin` (`planilha` ou `cb`), `origin_id`, `gross_amount`, `withheld_amount` e `superseded_at` (revisões `20261018_0031` e `20261018_0032`) |
+| `dividends` | proventos, por tipo de renda; `origin` (`planilha` ou `cb`), `origin_id`, `gross_amount`, `withheld_amount` e `superseded_at` |
 | `quotes`, `option_quotes` | última leitura global por ticker ou contrato; leituras atrasadas não substituem as mais recentes |
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
 | `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
-| `execution_imports`, `executions` | negócios importados do myProfit e os lotes que os trouxeram (revisão `20261018_0030`); não são posição nem transação |
-| `myprofit_positions`, `reconciliation_notes` | a "Posição detalhada" do myProfit por data e as diferenças da conciliação que o mantenedor explicou (revisão `20261018_0033`); só a conciliação mensal lê |
-| `myprofit_coletas` | cada pacote da coleta do myProfit importado, com o resumo da conferência de proventos (revisão `20261021_0036`); o status de fechamento lê |
+| `execution_imports`, `executions` | negócios importados do myProfit e os lotes que os trouxeram; não são posição nem transação |
+| `myprofit_positions`, `reconciliation_notes` | a "Posição detalhada" do myProfit por data e as diferenças da conciliação que o mantenedor explicou; só a conciliação mensal lê |
+| `myprofit_coletas` | cada pacote da coleta do myProfit importado, com o resumo da conferência de proventos; o status de fechamento lê |
 
 A transação é delimitada no caso de uso que inicia a escrita — nunca em camada
 inferior, nunca aberta durante uma chamada externa. Invariantes concorrentes são
@@ -847,7 +816,7 @@ nelas.
 | View | O que carrega |
 |---|---|
 | `leitura.posicao` | posições abertas de ações e opções juntas: preço que vale (última cotação ou fechamento anterior), valor de mercado e resultado em aberto com o sinal do lado (`SELL` é negativo) |
-| `leitura.operacao`, `leitura.provento` | operações com o resultado bruto gravado, e proventos por tipo, com os campos opcionais nulos quando não informados. Desde a revisão `20261018_0031` a view exclui as linhas de planilha **substituídas** pelo CB (senão o mesmo dinheiro apareceria duas vezes) e `valor` das linhas do CB é o líquido do caixa |
+| `leitura.operacao`, `leitura.provento` | operações com o resultado bruto gravado, e proventos por tipo, com os campos opcionais nulos quando não informados. A view exclui as linhas de planilha **substituídas** pelo CB (senão o mesmo dinheiro apareceria duas vezes) e `valor` das linhas do CB é o líquido do caixa |
 | `leitura.cotacao`, `leitura.cotacao_historico`, `leitura.opcao`, `leitura.cotacao_opcao` | cotação atual e série diária, contratos de opção e suas cotações |
 | `leitura.movimento_posicao`, `leitura.movimento_opcao`, `leitura.posicao_historica` | extrato das posições e o histórico preservado das encerradas |
 | `leitura.ativo`, `leitura.carteira`, `leitura.corretora`, `leitura.carteira_ativo` | cadastros |
