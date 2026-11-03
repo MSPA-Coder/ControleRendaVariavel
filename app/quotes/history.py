@@ -26,6 +26,7 @@ from app.models import (
     Transaction,
 )
 from app.quotes.history_import import TickerImportTarget
+from app.quotes.symbols import first_day_of_current_symbol
 
 DEFAULT_BENCHMARK_IMPORT_LOOKBACK_DAYS = 730
 """Janela usada para a primeira importação de um ticker de referência
@@ -111,17 +112,21 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date, date]]:
             Ticker.symbol,
             Ticker.market,
             Ticker.is_benchmark,
+            Ticker.quote_factor,
             select(OptionContract.id)
             .where(OptionContract.ticker_id == Ticker.id)
             .exists()
             .label("is_option"),
         ).where(Ticker.id.in_(list(periods)) | Ticker.is_benchmark.is_(True))
     ).all()
+    first_days = first_day_of_current_symbol()
     targets = []
     for row in tickers:
         if row.is_option:
             continue
-        target = TickerImportTarget(row.id, row.symbol, row.market, row.is_benchmark)
+        target = TickerImportTarget(
+            row.id, row.symbol, row.market, row.is_benchmark, row.quote_factor, first_days.get(row.id)
+        )
         if row.is_benchmark:
             # Referência cobre a carteira inteira, mesmo que tenha sido detida.
             start = min(benchmark_start, periods.get(row.id, (benchmark_start,))[0])

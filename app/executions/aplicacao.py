@@ -59,6 +59,7 @@ from app.models import (
 )
 from app.options import closure as options
 from app.positions import closure as stocks
+from app.quotes.symbols import current_symbol, former_symbol_map
 
 APPLIED = "aplicada"
 ALREADY_ENTERED = "ja_lancada"
@@ -177,12 +178,20 @@ def _instrument(trade: Trade) -> _Instrument:
             "exercício de opção: registre à mão o papel recebido ou entregue (custo líquido do prêmio) "
             "e marque a execução com marcar-execucoes-aplicadas"
         )
+    symbol = current_symbol(trade.asset, former_symbol_map())
     ticker = db.session.scalar(
-        select(Ticker).where(func.upper(Ticker.symbol) == trade.asset, Ticker.market == Market.B3)
+        select(Ticker).where(func.upper(Ticker.symbol) == symbol, Ticker.market == Market.B3)
     )
     if trade.asset_group in _STOCK_GROUPS:
         if ticker is None:
             raise _PendingError(f"{trade.asset} não está cadastrado no CRV")
+        if ticker.quote_factor != 1 and symbol == trade.asset:
+            # O CRV guarda preço por unidade. Ainda não se viu como o
+            # myProfit registra o negócio de um ativo cotado por lote.
+            raise _PendingError(
+                f"{trade.asset} é cotado por lote de {ticker.quote_factor}: confira se o preço do "
+                "myProfit é por ação, lance o negócio à mão e marque a execução com marcar-execucoes-aplicadas"
+            )
         return _Instrument(False, ticker, None)
     if trade.asset_group == _OPTION_GROUP:
         contract = (

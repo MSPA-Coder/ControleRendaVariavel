@@ -33,6 +33,7 @@ from app.models import (
     Ticker,
 )
 from app.patrimonio.cb_client import CbIncome
+from app.quotes.symbols import former_symbol_map
 
 DEFAULT_CUTOFF = date(2026, 1, 1)
 DEFAULT_CB_BROKERS = ("Genial", "XP", "Avenue")
@@ -150,6 +151,11 @@ def plan_cb_import(owner_id: int, income: CbIncome, *, cutoff: date | None = Non
         ticker.symbol.upper(): ticker
         for ticker in db.session.scalars(select(Ticker).where(Ticker.is_benchmark.is_(False)))
     }
+    # O CB guarda o crédito com o código da data dele: o aluguel de RAIZ4
+    # anterior à troca para RAIZ55 continua chegando como RAIZ4.
+    for former, current in former_symbol_map().items():
+        if current in tickers:
+            tickers.setdefault(former, tickers[current])
     brokers = {broker.name.casefold(): broker for broker in db.session.scalars(select(Broker))}
     result = build_proventos(
         income.entries,

@@ -415,6 +415,32 @@ próprio Yahoo (o câmbio é carimbado à meia-noite de Londres, não em UTC), e
 dia corrente não é importado: só entram dias encerrados. O dia de hoje dos
 tickers com RTD continua chegando pelo coletor.
 
+### Fator de cotação e troca de código
+
+O CRV guarda tudo **por unidade**: quantidade, custo médio, cotação e
+histórico. Quando a bolsa cota um ativo por lote (desde 03/11/2026, RAIZ55 em
+R$ por 100 ações), `tickers.quote_factor` diz quantas unidades o preço
+publicado representa, e as duas entradas de preço dividem por ele antes de
+gravar: `persist_readings`, para a ação, a opção e o ativo-objeto da opção, e
+`fetch_yahoo_daily_quotes`. Nada depois delas conhece o fator. A cotação
+lançada à mão em Cotações é gravada como digitada: deve ser por unidade. O strike da opção também fica por
+unidade: a B3 mostra 150 para a RAIZH150, o contrato guarda 1,50. O fator se
+edita em Tabelas > Tickers, e vale para a cotação que chega dali em diante.
+
+A troca de código feita pela bolsa (RAIZ4 → RAIZ55) **não cria ativo novo**:
+`flask trocar-codigo RAIZ4 RAIZ55 --ultimo-pregao 2026-10-30 --fator 100
+[--aplicar]` renomeia o mesmo cadastro. Posição, extrato, proventos, opções e
+cotações seguem ligados pelo id. O ensaio é o padrão. O código anterior fica em
+`ticker_former_symbols` e serve a quem ainda o manda (`app/quotes/symbols.py`):
+os créditos do CB, a planilha de proventos, as execuções e a posição do
+myProfit e os negócios do extrato. Ele não pode ser dado a outro cadastro. A
+importação do Yahoo não pede datas até o último pregão do código anterior,
+que o código novo não tem e que já têm a série do antigo. As cotações gravadas
+depois desse pregão (o coletor lendo o código morto) são apagadas na troca.
+A execução do myProfit de um ativo com fator diferente de 1, com o código
+novo, fica **pendente**: ainda não se viu se o myProfit registra o preço por
+ação ou por lote.
+
 ### Apoio
 
 `app/accounts/authorization.py` (papel `admin`, sobre
@@ -422,7 +448,7 @@ tickers com RTD continua chegando pelo coletor.
 `app/core/privacy.py` (ocultação de valores na tela), `app/core/themes.py`,
 `app/core/instrument_status.py`, `app/core/pricing_settings.py`,
 `app/quotes/reference_data.py` e `app/cli.py` (`auditoria`, `poll-rtd`,
-`probe-rtd-direct`, `import-position-history`, `users`).
+`probe-rtd-direct`, `import-position-history`, `trocar-codigo`, `users`).
 
 ## O agente RTD no Windows
 
@@ -508,7 +534,8 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `app_settings` | infraestrutura e agenda globais do coletor; campos pessoais antigos preservados para adoção do legado |
 | `user_preferences` | tema, taxa de cálculo e comparação privados por usuário |
 | `user_ticker_entitlements` | primeira posse confirmada; preserva acesso à cotação após encerramento ou exclusão |
-| `brokers`, `tickers` | referências globais, mantidas por administradores |
+| `brokers`, `tickers` | referências globais, mantidas por administradores; `tickers.quote_factor` é o fator de cotação (revisão `20261103_0042`) |
+| `ticker_former_symbols` | código anterior de um ticker que a bolsa renomeou e o último pregão dele (revisão `20261103_0042`) |
 | `portfolios`, `portfolio_tickers` | carteiras privadas e seus catálogos; associação de catálogo não concede acesso a preços |
 | `positions`, `position_movements` | posição de ações e seu extrato |
 | `option_expirations`, `option_contracts`, `option_positions`, `option_position_movements` | o mesmo par, para opções |

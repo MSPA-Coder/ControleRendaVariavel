@@ -10,13 +10,14 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.accounts.auditoria import registrar
 from app.accounts.authorization import requer_admin
-from app.models import Broker, Market, Portfolio, PortfolioTicker, Ticker
+from app.models import Broker, Market, Portfolio, PortfolioTicker, Ticker, TickerFormerSymbol
 from app.quotes.reference_data import (
     parse_broker,
     parse_portfolio_create,
     parse_portfolio_update,
     parse_ticker,
 )
+from app.quotes.symbols import former_symbol_map
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
@@ -36,6 +37,14 @@ def _tables_redirect(endpoint: str) -> ResponseReturnValue:
     return redirect(url_for(f"portfolio.{endpoint}"))
 
 
+def _refuse_former_symbol(symbol: str) -> None:
+    """Um código antigo continua apontando para o ticker que o usou: o CB e o
+    myProfit ainda o mandam. Dá-lo a outro cadastro faria os dois disputá-lo."""
+    current = former_symbol_map().get(symbol.upper())
+    if current is not None:
+        raise ValueError(f"{symbol} é o código anterior de {current}.")
+
+
 def _int_or_none(raw: str | None) -> int | None:
     return parse_positive_id(raw, allow_all=True)
 
@@ -49,8 +58,14 @@ def table_brokers() -> str:
 @bp.get("/tables/tickers")
 @requer_admin
 def table_tickers() -> str:
+    former_symbols: dict[int, list[str]] = {}
+    for row in db.session.scalars(select(TickerFormerSymbol).order_by(TickerFormerSymbol.last_trading_day)):
+        former_symbols.setdefault(row.ticker_id, []).append(row.symbol)
     return render_template(
-        "table_tickers.html", tickers=ticker_records(include_inactive=True), markets=Market
+        "table_tickers.html",
+        tickers=ticker_records(include_inactive=True),
+        markets=Market,
+        former_symbols=former_symbols,
     )
 
 
@@ -139,6 +154,7 @@ def create_ticker() -> ResponseReturnValue:
         data = parse_ticker(request.form)
         if db.session.scalar(select(Ticker).where(Ticker.symbol == data.symbol)) is not None:
             raise ValueError("Esse ticker já está cadastrado.")
+        _refuse_former_symbol(data.symbol)
         db.session.add(Ticker(**asdict(data)))
         db.session.commit()
         flash("Ticker adicionado.", "success")
@@ -165,6 +181,8 @@ def update_ticker(ticker_id: int) -> ResponseReturnValue:
         )
         if duplicate is not None:
             raise ValueError("Esse ticker já está cadastrado.")
+        if data.symbol != ticker.symbol:
+            _refuse_former_symbol(data.symbol)
         if data.is_benchmark and not ticker.is_benchmark and ticker_has_holdings(ticker.id):
             raise ValueError(
                 "Esse ticker já está em uso em uma posição, transação, provento ou "

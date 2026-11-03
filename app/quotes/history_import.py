@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models import Market
+from app.quotes.symbols import per_unit
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,12 @@ class TickerImportTarget:
     """Decide QUAL preço do Yahoo é gravado — ver ``fetch_yahoo_daily_quotes``.
     Um ticker de referência não é detido por ninguém, então nunca terá renda
     cadastrada contra ele; é o único caso em que o preço ajustado é o certo."""
+    quote_factor: int = 1
+    """``Ticker.quote_factor``: o Yahoo publica o preço da bolsa, por lote."""
+    first_day: date | None = None
+    """Primeiro dia do código atual, quando o ticker trocou de código
+    (``app.quotes.symbols.first_day_of_current_symbol``). Antes dele o
+    Yahoo não tem o código novo, e a série gravada é a do código antigo."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +113,14 @@ def fetch_yahoo_daily_quotes(
 
     No retry, cache or breaker is introduced. Timeout semantics and returned
     quotes remain unchanged; these observations support a later budget decision.
+
+    O período começa no máximo no primeiro dia do código atual
+    (``TickerImportTarget.first_day``); se ele não chega lá, nada é pedido.
     """
+    if target.first_day is not None and start_date < target.first_day:
+        start_date = target.first_day
+    if start_date > end_date:
+        return []
     started = perf_counter()
     outcome = "error"
     records = 0
@@ -233,5 +247,7 @@ def _fetch_yahoo_daily_quotes(
         if not price.is_finite() or price < 0:
             raise QuoteHistoryImportError(f"Invalid Yahoo history received for {target.symbol}.")
         if start_date <= recorded_date <= end_date and recorded_date < current_exchange_date:
-            quotes_by_date[recorded_date] = DailyQuote(recorded_date, price, recorded_at)
+            quotes_by_date[recorded_date] = DailyQuote(
+                recorded_date, per_unit(price, target.quote_factor), recorded_at
+            )
     return [quotes_by_date[recorded_date] for recorded_date in sorted(quotes_by_date)]

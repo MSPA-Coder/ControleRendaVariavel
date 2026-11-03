@@ -277,10 +277,22 @@ class Ticker(Base):
     __table_args__ = (
         CheckConstraint("rtd_market_code IN ('B', 'Y', 'N')", name="rtd_market_code_valid"),
         CheckConstraint("currency IN ('BRL', 'USD')", name="currency_valid"),
+        CheckConstraint("quote_factor >= 1", name="quote_factor_positive"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     symbol: Mapped[str] = mapped_column(String(24), unique=True)
+    quote_factor: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    """Fator de cotação da bolsa: quantas unidades o preço publicado representa.
+
+    A B3 cota alguns ativos por lote (RAIZ55: R$ por 100 ações). O CRV guarda
+    tudo por unidade -- quantidade, custo médio, cotação e histórico --, então
+    a cotação que chega do RTD e do Yahoo é dividida por este fator antes de
+    ser gravada (``app.quotes.symbols.per_unit``). Nada calculado depois dela
+    conhece o fator; é diferente do antigo "delta da cotação" por posição
+    (revisão ``20260923_0019``), que multiplicava o valor a mercado na tela."""
     trading_name: Mapped[str] = mapped_column(String(80))
     market: Mapped[Market] = mapped_column(Enum(Market, name="market"))
     rtd_market_code: Mapped[str] = mapped_column(String(1))
@@ -311,6 +323,36 @@ class Ticker(Base):
         back_populates="underlying_ticker_ref",
         foreign_keys="OptionContract.underlying_ticker_id",
     )
+    former_symbols: Mapped[list[TickerFormerSymbol]] = relationship(
+        back_populates="ticker_ref", order_by="TickerFormerSymbol.last_trading_day"
+    )
+
+
+class TickerFormerSymbol(Base):
+    """Um código que o ticker já teve (RAIZ4, hoje RAIZ55).
+
+    A troca de código feita pela bolsa não cria ativo novo: o cadastro é o
+    mesmo, com posição, extrato, proventos e cotações ligados pelo id. O que
+    continua chegando com o código antigo -- créditos do CB, execuções e
+    posições do myProfit, extratos de corretora anteriores à troca -- é
+    resolvido para o ticker por aqui (``app.quotes.symbols``). O Yahoo não
+    tem o código novo antes da troca, então a importação dele não pede
+    datas até ``last_trading_day``, que já têm a série do código antigo.
+    """
+
+    __tablename__ = "ticker_former_symbols"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ticker_id: Mapped[int] = mapped_column(
+        ForeignKey("tickers.id", ondelete="CASCADE"), index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(24), unique=True)
+    last_trading_day: Mapped[date] = mapped_column(Date)
+    """Último pregão negociado com este código."""
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    ticker_ref: Mapped[Ticker] = relationship(back_populates="former_symbols")
 
 
 class Portfolio(Base):

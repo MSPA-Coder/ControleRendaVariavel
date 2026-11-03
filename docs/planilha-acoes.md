@@ -39,7 +39,11 @@ recusado e a pessoa precisa recarregar os dados antes de editar novamente.
 
 O **delta da cotação** da planilha não tem correspondente: foi removido do
 sistema em 23/09/2026 (revisão `20260923_0019`). Era um ajuste da planilha,
-e aqui a cotação já é o preço do ativo; todas as posições usavam 1.
+e aqui a cotação já é o preço do ativo; todas as posições usavam 1. O ativo
+que a bolsa cota por lote (RAIZ55, por 100 ações) não volta a ele: o fator de
+cotação é do ticker e divide a cotação na entrada, e a cotação gravada
+continua por unidade (ver "Fator de cotação e troca de código" em
+`architecture.md`).
 
 Corretoras e tickers têm cadastros próprios. Mercado, código RTD e moeda
 pertencem ao ticker; posições apenas referenciam esses cadastros.

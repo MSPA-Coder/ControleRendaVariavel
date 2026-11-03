@@ -53,6 +53,7 @@ from app.patrimonio.cb_client import (
     read_settlements,
 )
 from app.patrimonio.queries import position_timeline
+from app.quotes.symbols import current_symbol, former_symbol_map
 
 #: Cobre uma corretagem de 5,00 mais o arredondamento do preço em quatro casas. A
 #: da Avenue (US$ 5 por ordem) está dentro do preço do CRV e à parte no CB, e o
@@ -523,6 +524,8 @@ def build_reconciliation(
             coverage[key] = max(covered, coverage.get(key, covered))
     cb: list[Movement] = []
     cb_trades: list[Trade] = []
+    # O extrato traz o código da data dele; o CRV, o vigente.
+    former = former_symbol_map()
     for item in settlements.items:
         broker_name = institution_to_broker.get(item.institution)
         pregao = item.pregao_date
@@ -531,8 +534,9 @@ def build_reconciliation(
         if (broker and broker_name != broker) or (start and pregao < start) or (end and pregao > end):
             continue
         if broker_name in ledger:
+            instrument = current_symbol(item.instrument or "", former)
             cb_trades.append(
-                Trade(broker_name, pregao, item.currency, item.instrument or "", item.quantity, item.amount)
+                Trade(broker_name, pregao, item.currency, instrument, item.quantity, item.amount)
             )
         else:
             cb.append(Movement(broker_name, pregao, item.currency, item.amount))

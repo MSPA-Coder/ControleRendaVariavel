@@ -35,6 +35,7 @@ from app.patrimonio.cb_client import CbUnavailableError, read_income_entries
 from app.patrimonio.queries import position_timeline
 from app.performance.dividends import build_dividend_report
 from app.positions.holdings_history import QuantityTimeline, closing_price_on
+from app.quotes.symbols import former_symbol_map
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
@@ -420,6 +421,9 @@ def import_dividends() -> ResponseReturnValue:
 
     owner_id = current_owner_id()
     tickers = {ticker.symbol.upper(): ticker for ticker in db.session.scalars(select(Ticker))}
+    for former, current in former_symbol_map().items():
+        if current in tickers:
+            tickers.setdefault(former, tickers[current])
     brokers = {broker.name.casefold(): broker for broker in db.session.scalars(select(Broker))}
     existing: dict[tuple[object, ...], Dividend] = {
         (record.ticker_id, record.broker_id, record.kind, record.payment_date, record.amount): record

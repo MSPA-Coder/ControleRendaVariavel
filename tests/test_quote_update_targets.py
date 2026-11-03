@@ -35,13 +35,17 @@ def _ticker(ticker_id, symbol, *, is_benchmark=False, is_option=False):
         symbol=symbol,
         market=Market.B3,
         is_benchmark=is_benchmark,
+        quote_factor=1,
         is_option=is_option,
     )
 
 
-def _executar(monkeypatch, *, abertas=(), opcoes=(), operacoes=(), arquivo=(), tickers=()):
-    """As quatro fontes de `_held_periods`, na ordem, e depois os tickers."""
-    respostas = iter([list(abertas), list(opcoes), list(operacoes), list(arquivo), _Rows(tickers)])
+def _executar(monkeypatch, *, abertas=(), opcoes=(), operacoes=(), arquivo=(), tickers=(), trocas=()):
+    """As quatro fontes de `_held_periods`, na ordem, depois os tickers e, por
+    fim, o último pregão do código anterior de quem trocou de código."""
+    respostas = iter(
+        [list(abertas), list(opcoes), list(operacoes), list(arquivo), _Rows(tickers), list(trocas)]
+    )
     monkeypatch.setattr(history.db.session, "execute", lambda _statement: next(respostas))
 
 
@@ -138,6 +142,24 @@ def test_atualizacao_diaria_deixa_de_fora_o_ativo_ja_encerrado(monkeypatch):
     )
 
     assert [target.symbol for target in history.quote_update_target_tickers()] == ["BOVA11", "CGC"]
+
+
+def test_ticker_que_trocou_de_codigo_leva_o_fator_e_o_primeiro_dia_do_codigo_novo(monkeypatch):
+    """RAIZ4 virou RAIZ55, cotada por lote de 100, depois do pregão de 30/10."""
+    raiz = _ticker(6, "RAIZ55")
+    raiz.quote_factor = 100
+    _executar(
+        monkeypatch,
+        abertas=[(6, date(2022, 5, 9), None)],
+        tickers=[raiz],
+        trocas=[(6, date(2026, 10, 30))],
+    )
+
+    ((target, start, end),) = history.quote_update_targets()
+
+    assert (target.quote_factor, target.first_day) == (100, date(2026, 10, 31))
+    # O período continua o da carteira; quem não pede o passado é a importação.
+    assert (start, end) == (date(2022, 5, 9), HOJE)
 
 
 @pytest.mark.banco

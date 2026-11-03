@@ -51,6 +51,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
+from app.quotes.symbols import current_symbol, former_symbol_map
 
 QUANTITY_TOLERANCE = Decimal("0.00000001")
 #: Custo médio: o myProfit guarda quatro casas e o CRV oito, e a média ponderada
@@ -256,7 +257,12 @@ class Conciliation:
 
 
 def myprofit_holdings(owner_id: int, as_of: date | None = None) -> tuple[date | None, dict[str, Holding]]:
-    """Posição do myProfit na data pedida, ou na mais recente gravada."""
+    """Posição do myProfit na data pedida, ou na mais recente gravada.
+
+    O ativo sai pelo código vigente: a posição de um mês anterior à troca de
+    código (RAIZ4 → RAIZ55) é comparada com o mesmo ticker do CRV.
+    """
+    former = former_symbol_map()
     if as_of is None:
         as_of = db.session.scalar(
             select(func.max(MyprofitPosition.as_of)).where(MyprofitPosition.owner_id == owner_id)
@@ -273,7 +279,7 @@ def myprofit_holdings(owner_id: int, as_of: date | None = None) -> tuple[date | 
         )
         .order_by(MyprofitPosition.line_order)
     ):
-        lots[row.asset].append(Holding(row.quantity, row.average_price))
+        lots[current_symbol(row.asset, former)].append(Holding(row.quantity, row.average_price))
     return as_of, {asset: combined for asset, rows in lots.items() if (combined := combine(rows))}
 
 

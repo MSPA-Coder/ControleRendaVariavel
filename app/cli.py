@@ -42,6 +42,7 @@ def register_commands(app: Flask) -> None:
     app.cli.add_command(poll_rtd)
     app.cli.add_command(probe_rtd_direct)
     app.cli.add_command(import_position_history)
+    app.cli.add_command(trocar_codigo)
     app.cli.add_command(expurgar_outbox)
     app.cli.add_command(importar_negocios_myprofit)
     app.cli.add_command(aplicar_execucoes)
@@ -254,6 +255,66 @@ def import_position_history(estrito: bool) -> None:
         raise click.ClickException(
             "Ainda detidos ou de referência, sem série: " + ", ".join(current_failures)
         )
+
+
+@click.command("trocar-codigo")
+@click.argument("codigo_atual")
+@click.argument("codigo_novo")
+@click.option(
+    "--ultimo-pregao",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    required=True,
+    help="Último pregão negociado com o código atual (AAAA-MM-DD).",
+)
+@click.option(
+    "--fator",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Fator de cotação do código novo: quantas unidades o preço da bolsa representa.",
+)
+@click.option("--aplicar", is_flag=True, help="Grava de fato (pede confirmação). Sem esta opção, só o ensaio.")
+@click.option("--sim", is_flag=True, help="Dispensa a pergunta de confirmação (uso em script).")
+def trocar_codigo(
+    codigo_atual: str, codigo_novo: str, ultimo_pregao: datetime, fator: int, aplicar: bool, sim: bool
+) -> None:
+    """Troca o código de um ticker quando a bolsa o troca (RAIZ4 -> RAIZ55).
+
+    O cadastro é o mesmo: posição, extrato, proventos, opções e cotações
+    continuam ligados a ele, e quantidade e custo não mudam. O código atual
+    fica guardado como anterior, para o CB e o myProfit que ainda o mandam; o
+    fator passa a dividir a cotação que chega do RTD e do Yahoo; e as cotações
+    gravadas depois do último pregão (o coletor lendo o código morto) saem.
+    Em produção, --aplicar só depois de backup validado do banco.
+    """
+    from app.quotes.symbols import apply_symbol_change, plan_symbol_change
+
+    try:
+        change = plan_symbol_change(
+            codigo_atual, codigo_novo, last_trading_day=ultimo_pregao.date(), quote_factor=fator
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        f"{change.old_symbol} passa a ser {change.new_symbol} (último pregão do código atual: "
+        f"{change.last_trading_day:%d/%m/%Y}); fator de cotação {change.old_factor} -> {change.new_factor}."
+    )
+    click.echo(f"{change.old_symbol} fica guardado como código anterior de {change.new_symbol}.")
+    if change.stale_history:
+        click.echo(f"Cotações posteriores ao último pregão, que saem ({len(change.stale_history)}):")
+        for recorded_date, price in change.stale_history:
+            click.echo(f"  {recorded_date:%d/%m/%Y} {price.normalize():f}")
+    if not aplicar:
+        click.echo("Ensaio: nada foi gravado. Use --aplicar para confirmar (depois do backup validado).")
+        return
+    if not sim:
+        click.confirm(f"Trocar {change.old_symbol} por {change.new_symbol}?", abort=True)
+    apply_symbol_change(change)
+    db.session.commit()
+    click.echo(
+        f"Feito: {change.new_symbol}. A próxima leitura do coletor já usa o código novo; "
+        "confira a cotação dele na tela Ações."
+    )
 
 
 @click.command("expurgar-outbox-v4")

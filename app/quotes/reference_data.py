@@ -24,6 +24,11 @@ class TickerInput:
     rtd_market_code: str
     currency: str
     is_benchmark: bool
+    quote_factor: int = 1
+
+
+#: Maior fator de cotação aceito: a B3 usa 1, 100 e 1000.
+MAX_QUOTE_FACTOR = 1000
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +88,12 @@ def parse_ticker(form: Mapping[str, str]) -> TickerInput:
     esperada = _MARKET_CURRENCY.get(market)
     if not is_benchmark and esperada is not None and currency != esperada:
         raise ValueError(f"Um ticker de {market.value} é cotado em {esperada}, não em {currency}.")
-    return TickerInput(symbol, trading_name, market, rtd_market_code, currency, is_benchmark)
+    raw_factor = form.get("quote_factor", "").strip() or "1"
+    if not (raw_factor.isascii() and raw_factor.isdigit()) or not 1 <= int(raw_factor) <= MAX_QUOTE_FACTOR:
+        raise ValueError(f"O fator de cotação é um número inteiro de 1 a {MAX_QUOTE_FACTOR}.")
+    return TickerInput(
+        symbol, trading_name, market, rtd_market_code, currency, is_benchmark, int(raw_factor)
+    )
 
 
 def _parse_portfolio_name(form: Mapping[str, str]) -> str:

@@ -667,8 +667,9 @@ input, select { background: var(--surface); border: 1px solid var(--line); borde
 details.catalog-card > h2 { display: none; }
 .broker-fields { grid-template-columns: minmax(180px, 1fr) minmax(120px, .5fr) auto; }
 .ticker-fields {
-  grid-template-columns: 1fr 1.5fr repeat(3, minmax(110px, .7fr)) auto;
+  grid-template-columns: 1fr 1.5fr repeat(4, minmax(110px, .7fr)) auto;
 }
+.ticker-factor-input { width: 6rem; }
 
 @media (max-width: 1000px) {
   .topbar { align-items: stretch; flex-direction: column; }

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import socket
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -42,6 +42,7 @@ from app.models import (
     Side,
 )
 from app.quotes.history import upsert_quote_history
+from app.quotes.symbols import per_unit
 
 
 def collector_settings_row() -> AppSetting:
@@ -148,6 +149,21 @@ def split_readings(
     return stock_values, option_readings
 
 
+def _in_units(value: QuoteValue, quote_factor: int) -> QuoteValue:
+    """A leitura do RTD por unidade: o ProfitPro publica o preço da bolsa,
+    que para alguns ativos é por lote (ver ``Ticker.quote_factor``)."""
+    if quote_factor == 1:
+        return value
+    return replace(
+        value,
+        last_price=per_unit(value.last_price, quote_factor),
+        previous_close=per_unit(value.previous_close, quote_factor),
+        last_trade_price=(
+            None if value.last_trade_price is None else per_unit(value.last_trade_price, quote_factor)
+        ),
+    )
+
+
 def persist_readings(
     stock_values: Sequence[QuoteValue], option_readings: Sequence[OptionReading]
 ) -> None:
@@ -156,18 +172,28 @@ def persist_readings(
     Levanta ``ValueError`` quando uma leitura aponta para uma posição que não
     existe mais -- o caso de uma posição encerrada entre a configuração e a
     entrega, que do lado do agente remoto chega como entrada não confiável.
+
+    Os preços são gravados por unidade: cada leitura é dividida pelo fator de
+    cotação do seu ticker antes de qualquer outra coisa.
     """
     position_ids = {value.position_id for value in stock_values}
     positions = {
         item.id: item
-        for item in db.session.scalars(select(Position).where(Position.id.in_(position_ids)))
+        for item in db.session.scalars(
+            select(Position)
+            .options(joinedload(Position.ticker_ref))
+            .where(Position.id.in_(position_ids))
+        )
     }
     option_position_ids = {reading.option_position_id for reading in option_readings}
     option_positions = {
         item.id: item
         for item in db.session.scalars(
             select(OptionPosition)
-            .options(joinedload(OptionPosition.contract))
+            .options(
+                joinedload(OptionPosition.contract).joinedload(OptionContract.ticker_ref),
+                joinedload(OptionPosition.contract).joinedload(OptionContract.underlying_ticker_ref),
+            )
             .where(OptionPosition.id.in_(option_position_ids))
         ).unique()
     }
@@ -176,6 +202,7 @@ def persist_readings(
 
     ticker_prices: dict[int, tuple[Decimal, datetime]] = {}
     for value in stock_values:
+        value = _in_units(value, positions[value.position_id].ticker_ref.quote_factor)
         prefix = "buy" if positions[value.position_id].side == Side.BUY else "sell"
         side_price = f"{prefix}_price"
         side_time = f"{prefix}_observed_at"
@@ -213,12 +240,16 @@ def persist_readings(
             ticker_prices[ticker_id] = (value.quote_history_price, value.observed_at)
 
     for reading in option_readings:
-        option_value = reading.option
+        contract = option_positions[reading.option_position_id].contract
+        option_value = _in_units(reading.option, contract.ticker_ref.quote_factor)
+        underlying_factor = contract.underlying_ticker_ref.quote_factor
+        underlying_last_price = per_unit(reading.underlying_last_price, underlying_factor)
+        underlying_history_price = per_unit(reading.underlying_history_price, underlying_factor)
         statement = insert(OptionQuote).values(
-            contract_id=option_positions[reading.option_position_id].contract_id,
+            contract_id=contract.id,
             last_price=option_value.last_price,
             previous_close=option_value.previous_close,
-            underlying_price=reading.underlying_last_price,
+            underlying_price=underlying_last_price,
             instrument_status=option_value.instrument_status,
             source_status="online",
             error_message=None,
@@ -239,8 +270,7 @@ def persist_readings(
                 where=statement.excluded.observed_at >= OptionQuote.observed_at,
             )
         )
-        contract = option_positions[reading.option_position_id].contract
-        for ticker_id, price in ((contract.ticker_id, option_value.quote_history_price), (contract.underlying_ticker_id, reading.underlying_history_price)):
+        for ticker_id, price in ((contract.ticker_id, option_value.quote_history_price), (contract.underlying_ticker_id, underlying_history_price)):
             previous = ticker_prices.get(ticker_id)
             if previous is None or option_value.observed_at >= previous[1]:
                 ticker_prices[ticker_id] = (price, option_value.observed_at)
