@@ -214,8 +214,14 @@ def test_falha_do_coletor_e_recuperacao_preservam_protocolo(caso):
 def test_importacao_http_persiste_parcial_nao_duplica_nem_sobrescreve_observacao_posterior(caso, yahoo, caminho):
     app, dados = caso
     cliente, token = client_for(app, dados["ids"][1])
+    # Dois dias úteis já encerrados: sábado e domingo não têm pregão, e a
+    # importação não os grava.
     dia = date.today() - timedelta(days=3)
+    while dia.isoweekday() > 5:
+        dia -= timedelta(days=1)
     anterior = dia - timedelta(days=1)
+    while anterior.isoweekday() > 5:
+        anterior -= timedelta(days=1)
     with app.app_context():
         db.session.get(Position, dados["position"]).opened_on = anterior
         # Outra referência sem série permite verificar sucesso parcial do lote.

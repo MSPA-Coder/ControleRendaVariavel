@@ -279,6 +279,74 @@ def test_consulta_em_dia_sem_pregao_nao_inventa_cotacao(yahoo):
 
 
 # --------------------------------------------------------------------------
+# Fim de semana: a entrada do momento não é fechamento (04/11/2026)
+# --------------------------------------------------------------------------
+#
+# Com o mercado fechado, o Yahoo ainda devolve o preço do último negócio numa
+# entrada extra, depois da barra do dia. Na importação de sábado de manhã essa
+# entrada é da sexta, que não é o dia corrente, e passava pelo filtro acima.
+# Em produção ficaram congeladas as sextas 02, 16 e 23/10/2026 (carimbos 22:10
+# e 21:30 UTC) e um sábado, 17/10, às 09:58 UTC.
+
+
+def test_entrada_extra_da_sexta_consultada_no_sabado_nao_substitui_a_barra(yahoo):
+    yahoo(
+        LONDRES,
+        [
+            ("2026-10-14T23:00:00", 5.0412),  # quinta, 15/10
+            ("2026-10-15T23:00:00", 5.0750),  # sexta, 16/10: a barra do dia
+            ("2026-10-16T22:10:02", 5.0693),  # sexta, 16/10: o último negócio
+        ],
+    )
+
+    cotacoes = fetch_yahoo_daily_quotes(
+        CAMBIO, date(2026, 10, 15), date(2026, 10, 17), now=_instante("2026-10-17T09:40:13")
+    )
+
+    assert _datas(cotacoes) == [date(2026, 10, 15), date(2026, 10, 16)]
+    assert cotacoes[-1].price == Decimal("5.0750")
+    assert cotacoes[-1].recorded_at == _instante("2026-10-15T23:00:00")
+
+
+def test_barra_sem_fechamento_nao_e_trocada_pela_entrada_extra(yahoo):
+    # Se a barra da sexta ainda vier sem fechamento, a sexta fica para a
+    # próxima importação: a entrada extra não a preenche.
+    yahoo(
+        LONDRES,
+        [
+            ("2026-10-15T23:00:00", None),  # sexta, 16/10: barra sem fechamento
+            ("2026-10-16T22:10:02", 5.0693),  # sexta, 16/10: o último negócio
+        ],
+    )
+
+    cotacoes = fetch_yahoo_daily_quotes(
+        CAMBIO, date(2026, 10, 16), date(2026, 10, 17), now=_instante("2026-10-17T09:40:13")
+    )
+
+    assert cotacoes == []
+
+
+@pytest.mark.parametrize("alvo", [CAMBIO, ACAO_B3, ACAO_EUA], ids=lambda alvo: alvo.symbol)
+def test_data_de_fim_de_semana_nunca_e_importada(yahoo, alvo):
+    # Nenhum mercado do CRV (B3, NYSE, NASDAQ) tem pregão no fim de semana.
+    yahoo(
+        LONDRES if alvo is CAMBIO else (SAO_PAULO if alvo is ACAO_B3 else NOVA_YORK),
+        [
+            ("2026-10-16T12:00:00", 5.0750),  # sexta
+            ("2026-10-17T09:58:16", 5.0693),  # sábado
+            ("2026-10-18T12:00:00", 5.0693),  # domingo
+            ("2026-10-19T12:00:00", 5.0610),  # segunda
+        ],
+    )
+
+    cotacoes = fetch_yahoo_daily_quotes(
+        alvo, date(2026, 10, 16), date(2026, 10, 19), now=_instante("2026-10-20T09:40:00")
+    )
+
+    assert _datas(cotacoes) == [date(2026, 10, 16), date(2026, 10, 19)]
+
+
+# --------------------------------------------------------------------------
 # Sem fuso, a série é recusada
 # --------------------------------------------------------------------------
 
@@ -382,6 +450,43 @@ def test_importacao_do_dia_seguinte_grava_o_fechamento_do_cambio(sessao, yahoo, 
     assert _linhas(sessao, cambio) == [
         (date(2026, 9, 16), Decimal("5.14290000"), _instante("2026-09-15T23:00:00")),
         (date(2026, 9, 17), Decimal("5.16000000"), _instante("2026-09-16T23:00:00")),
+    ]
+
+
+@pytest.mark.banco
+def test_importacao_de_sabado_grava_o_fechamento_da_sexta(sessao, yahoo, ticker_no_banco):
+    # A rotina do VPS roda de terça a sábado às 06:40 de São Paulo. Antes da
+    # correção, a de sábado gravava o último negócio da sexta (22:10 UTC), e a
+    # de terça não conseguia trocá-lo pela barra, carimbada antes (23:00 UTC
+    # de quinta).
+    cambio = ticker_no_banco(Market.NYSE, is_benchmark=True)
+
+    yahoo(
+        LONDRES,
+        [
+            ("2026-10-14T23:00:00", 5.0412),
+            ("2026-10-15T23:00:00", 5.0750),
+            ("2026-10-16T22:10:02", 5.0693),
+        ],
+    )
+    _importar(cambio, date(2026, 10, 15), date(2026, 10, 17), _instante("2026-10-17T09:40:13"))
+
+    yahoo(
+        LONDRES,
+        [
+            ("2026-10-14T23:00:00", 5.0412),
+            ("2026-10-15T23:00:00", 5.0750),
+            ("2026-10-18T23:00:00", 5.0610),
+            ("2026-10-19T23:00:00", None),
+        ],
+    )
+    _importar(cambio, date(2026, 10, 15), date(2026, 10, 20), _instante("2026-10-20T09:40:10"))
+    sessao.flush()
+
+    assert _linhas(sessao, cambio) == [
+        (date(2026, 10, 15), Decimal("5.04120000"), _instante("2026-10-14T23:00:00")),
+        (date(2026, 10, 16), Decimal("5.07500000"), _instante("2026-10-15T23:00:00")),
+        (date(2026, 10, 19), Decimal("5.06100000"), _instante("2026-10-18T23:00:00")),
     ]
 
 

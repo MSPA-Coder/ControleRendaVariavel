@@ -389,9 +389,11 @@ ProfitChart está aberto; `heartbeat.py` resume a última leitura persistida
 Yahoo, usadas por performance e risco. Ele decide qual preço gravar — ajustado
 só para ticker de referência, que ninguém detém e contra o qual nunca haverá
 renda cadastrada. A data de cada barra é a do fuso da bolsa informado pelo
-próprio Yahoo (o câmbio é carimbado à meia-noite de Londres, não em UTC), e o
-dia corrente não é importado: só entram dias encerrados. O dia de hoje dos
-tickers com RTD continua chegando pelo coletor.
+próprio Yahoo (o câmbio é carimbado à meia-noite de Londres, não em UTC), e só
+entram fechamentos: nem o dia corrente, nem a entrada extra com o último
+negócio que o Yahoo põe depois da barra do dia (de cada dia vale a primeira
+entrada), nem sábado e domingo, que nenhum mercado do CRV negocia. O dia de
+hoje dos tickers com RTD continua chegando pelo coletor.
 
 ### Fator de cotação e troca de código
 

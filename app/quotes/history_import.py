@@ -222,31 +222,51 @@ def _fetch_yahoo_daily_quotes(
     field = ("adjclose", "adjclose") if target.is_benchmark else ("quote", "close")
     closes = _indicator_values(indicators, field[0], field[1], target)
     exchange_timezone = _exchange_timezone(series, target)
-    # O dia corrente fica de fora. O Yahoo o devolve com o preço do momento no
-    # lugar do fechamento e, no câmbio e em dia sem pregão, numa entrada extra
-    # carimbada com a hora da consulta. Esse carimbo é POSTERIOR ao da barra
+    # Só entra fechamento. O Yahoo devolve o dia corrente com o preço do
+    # momento no lugar do fechamento e, no câmbio e com o mercado fechado, o
+    # preço do último negócio numa entrada extra, DEPOIS da barra do dia e
+    # carimbada com a hora desse negócio. Esse carimbo é POSTERIOR ao da barra
     # definitiva, e `upsert_quote_history` só substitui por um instante igual
     # ou mais novo: gravado, o preço parcial nunca mais seria trocado pelo
-    # fechamento. O dia corrente dos tickers com RTD continua chegando pelo
-    # coletor, que grava por conta própria (`app.collector.database`).
+    # fechamento. Por isso, três regras:
+    #
+    # - o dia corrente, no fuso da bolsa, fica de fora;
+    # - de cada dia vale só a primeira entrada, a barra (carimbada no início
+    #   do pregão). Sem isso, a importação de sábado de manhã gravava o último
+    #   negócio da sexta, que não é o dia corrente: as sextas 02, 16 e
+    #   23/10/2026 do `USDBRL=X` ficaram assim em produção;
+    # - sábado e domingo nunca entram: nenhum mercado do CRV (B3, NYSE,
+    #   NASDAQ) tem pregão neles, e a entrada que o Yahoo carimba ali é o preço
+    #   parado da sexta (17/10/2026 às 09:58 UTC, também em produção).
+    #
+    # O dia corrente dos tickers com RTD continua chegando pelo coletor, que
+    # grava por conta própria (`app.collector.database`).
     current_exchange_date = (now or datetime.now(UTC)).astimezone(exchange_timezone).date()
 
     quotes_by_date: dict[date, DailyQuote] = {}
+    seen_dates: set[date] = set()
     for index, timestamp in enumerate(timestamps):
         close = closes[index] if index < len(closes) else None
-        if close is None:
-            continue
         try:
             recorded_at = datetime.fromtimestamp(int(timestamp), UTC)
             recorded_date = recorded_at.astimezone(exchange_timezone).date()
-            price = Decimal(str(close))
+            price = None if close is None else Decimal(str(close))
         except (TypeError, ValueError, InvalidOperation, OSError, OverflowError) as exc:
             raise QuoteHistoryImportError(
                 f"Invalid Yahoo history received for {target.symbol}."
             ) from exc
+        if recorded_date in seen_dates:
+            continue
+        seen_dates.add(recorded_date)
+        if price is None:
+            continue
         if not price.is_finite() or price < 0:
             raise QuoteHistoryImportError(f"Invalid Yahoo history received for {target.symbol}.")
-        if start_date <= recorded_date <= end_date and recorded_date < current_exchange_date:
+        if (
+            start_date <= recorded_date <= end_date
+            and recorded_date < current_exchange_date
+            and recorded_date.isoweekday() <= 5
+        ):
             quotes_by_date[recorded_date] = DailyQuote(
                 recorded_date, per_unit(price, target.quote_factor), recorded_at
             )
