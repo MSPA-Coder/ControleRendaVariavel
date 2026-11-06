@@ -114,6 +114,24 @@ def test_erro_de_validacao_no_formulario_mantem_a_volta(mini_app: Flask) -> None
     assert query == {"volta": lista}
 
 
+def test_cancelar_apos_erro_de_validacao_volta_a_lista_original(mini_app: Flask) -> None:
+    lista = "/dividends?currency=USD"
+    pagina = f"/dividends/new?volta={quote(lista, safe='')}"
+    with mini_app.test_request_context("/dividends", method="POST", data={"volta": pagina}):
+        from app.core.volta import voltar_ou
+
+        assert voltar_ou("/dividends") == lista
+
+
+def test_cancelar_apos_erro_sem_volta_nao_aponta_para_o_proprio_formulario(mini_app: Flask) -> None:
+    with mini_app.test_request_context(
+        "/positions", method="POST", data={"volta": "/positions/new?currency=USD"}
+    ):
+        from app.core.volta import voltar_ou
+
+        assert voltar_ou("/") == "/"
+
+
 def test_sem_campo_usa_hx_current_url_e_depois_o_referer(mini_app: Flask) -> None:
     cliente = mini_app.test_client()
 

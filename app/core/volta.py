@@ -130,8 +130,19 @@ def _query_a_levar(
 
 def voltar_ou(padrao: str) -> str:
     """Destino do "Cancelar": a lista de onde o formulário foi aberto, ou ``padrao``."""
-    bruto = request.args.get("volta")
-    return bruto if endereco_de_volta(bruto) is not None else padrao
+    bruto = request.args.get("volta") or request.form.get("volta")
+    origem = endereco_de_volta(bruto)
+    if origem is None:
+        return padrao
+    # Após uma validação, o campo pode conter a URL do formulário enviada
+    # pelo navegador, que por sua vez guarda a lista de origem em `volta`.
+    caminho, query = origem
+    interna = next((valor for chave, valor in query if chave == "volta"), None)
+    if interna and endereco_de_volta(interna) is not None:
+        return interna
+    if request.method == "POST" and caminho.rsplit("/", 1)[-1] in {"new", "edit", "close"}:
+        return padrao
+    return bruto
 
 
 def instalar_volta_com_filtros(app: Flask) -> None:

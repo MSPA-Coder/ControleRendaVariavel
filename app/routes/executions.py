@@ -21,7 +21,12 @@ from app.executions.myprofit import (
 )
 from app.executions.service import InstitutionMapError, apply_import, plan_import
 from app.routes import bp
-from app.routes.helpers import broker_records, current_owner_id, is_htmx_request
+from app.routes.helpers import (
+    broker_records,
+    current_owner_id,
+    is_htmx_request,
+    selected_currency_filter,
+)
 
 #: Quantas linhas do ensaio a tela detalha; o resto fica nas contagens.
 PREVIEW_ROWS = 200
@@ -88,11 +93,15 @@ def _date_arg(name: str) -> date | None:
 def execution_reconciliation() -> str:
     """Liquidação do CB contra as execuções, por corretora e pregão (leitura)."""
     broker = request.args.get("broker") or None
+    currency = selected_currency_filter()
     start, end = _date_arg("start"), _date_arg("end")
-    result = build_reconciliation(current_owner_id(), broker=broker, start=start, end=end)
+    result = build_reconciliation(
+        current_owner_id(), broker=broker, currency=currency, start=start, end=end
+    )
     context = {
         "result": result,
         "selected_broker": broker or "",
+        "global_currency": currency,
         "start": start.isoformat() if start else "",
         "end": end.isoformat() if end else "",
     }

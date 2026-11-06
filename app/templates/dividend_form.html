@@ -5,6 +5,7 @@
 {% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_dividend', dividend_id=dividend_id if edit_mode is defined else dividend.id) if editing else url_for('portfolio.create_dividend') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="volta" value="{{ request.form.get('volta') or request.args.get('volta', '') }}">
 
   {% set value = dividend %}
   <label>Corretora<select required name="broker_id">

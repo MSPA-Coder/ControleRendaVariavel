@@ -6,6 +6,7 @@
      data-quote-retry-ms="{{ quote_refresh_retry_seconds * 1000 }}"
      hx-get="{{ url_for('portfolio.index', **request.args) }}" hx-trigger="quote-refresh-due" hx-swap="outerHTML">
   {% include "partials/portfolio_summary.html" %}
+  <p class="form-help portfolio-quote-coverage-note">Os totais de entrada, posição atual, resultado, retorno e concentração consideram somente posições que já têm cotação. Posições sem cotação continuam listadas e mostram o custo médio, mas ficam fora desses totais e dos agregados por corretora e por ativo.</p>
   <div class="trade-section-heading"><h2>Posições em aberto <span>{{ portfolio.positions|length }}</span></h2><p>Selecione um trade para explorar o histórico, as metas e os indicadores.</p></div>
   {% if has_short_positions %}<p class="form-help">Limitação para vendas a descoberto: esta aba mostra a variação de preço, mas não inclui o repasse de proventos ao doador nem encargos do aluguel. A apuração oficial continua no sistema integrado à B3 e na contabilidade.</p>{% endif %}
   {% if group_by_broker %}

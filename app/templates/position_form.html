@@ -5,6 +5,7 @@
 {% block workspace_content %}
 <form class="position-form" method="post" action="{{ url_for('portfolio.update_position', position_id=position_id if edit_mode is defined else position.id) if editing else url_for('portfolio.create_position') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="volta" value="{{ request.form.get('volta') or request.args.get('volta', '') }}">
   {% if not editing %}<input type="hidden" name="submit_token" value="{{ request.form.get('submit_token') or new_submission_token() }}">{% endif %}
   {% if editing %}<input type="hidden" name="edit_version" value="{{ request.form.get('edit_version', '') if edit_mode is defined else position.edit_version }}">{% endif %}
   {% if stale_edit %}

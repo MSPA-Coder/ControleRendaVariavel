@@ -90,7 +90,7 @@ window.addEventListener(
         field.name = "volta";
         form.append(field);
       }
-      field.value = addressNow();
+      if (!field.value) field.value = addressNow();
     },
     true,
   );

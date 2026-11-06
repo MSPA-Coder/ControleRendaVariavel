@@ -416,6 +416,65 @@ def test_tela_de_conferencia_responde_pagina_e_fragmento_e_recusa_post(usuario_h
     assert post.status_code == 405
 
 
+def test_tela_de_conferencia_aplica_moeda_global_aos_pregoes(usuario_http):
+    app, (usuario_id, corretora_id, _, sessao_id) = usuario_http
+    client, _ = client_for(app, sessao_id)
+    with app.app_context():
+        lote = ExecutionImport(
+            owner_id=usuario_id,
+            file_name=None,
+            period_start=date(2026, 1, 27),
+            period_end=date(2026, 1, 28),
+            sha256="f" * 64,
+            row_count=2,
+            rows_created=2,
+            rows_updated=0,
+        )
+        db.session.add(lote)
+        db.session.flush()
+        for day, code, currency in (
+            (date(2026, 1, 27), "BRL", "BRL"),
+            (date(2026, 1, 28), "USD", "USD"),
+        ):
+            db.session.add(
+                Execution(
+                    owner_id=usuario_id,
+                    import_id=lote.id,
+                    broker_id=corretora_id,
+                    institution="GENIAL",
+                    trade_date=day,
+                    document=f"B3_GENIAL_{day:%d%m%Y}_{code}",
+                    document_type=None,
+                    line_order=1,
+                    content_hash=("a" if currency == "BRL" else "b") * 64,
+                    asset="ABCD3",
+                    asset_group="acao",
+                    side="V",
+                    cash_operation="C",
+                    quantity=Decimal("-100"),
+                    price_without_fees=Decimal("10"),
+                    price_with_fees=Decimal("10"),
+                    fees_total=Decimal("0"),
+                    total_without_fees=Decimal("1000"),
+                    total_with_fees=Decimal("1000"),
+                    day_trade=False,
+                    currency=currency,
+                    in_scope=True,
+                )
+            )
+        db.session.flush()
+        db.session.commit()
+
+    usd = client.get("/executions/reconciliation?currency=USD").get_data(as_text=True)
+    all_currencies = client.get("/executions/reconciliation?currency=ALL").get_data(as_text=True)
+
+    assert "B3_GENIAL_28012026_USD" in usd
+    assert "B3_GENIAL_27012026_BRL" not in usd
+    assert 'name="currency" value="USD"' in usd
+    assert "B3_GENIAL_28012026_USD" in all_currencies
+    assert "B3_GENIAL_27012026_BRL" in all_currencies
+
+
 def test_comando_faz_ensaio_por_padrao_grava_com_gravar_e_nao_duplica(usuario_http, tmp_path, monkeypatch):
     app, (usuario_id, _, _, _) = usuario_http
     monkeypatch.setitem(app.config, "PATRIMONIO_OWNER_ID", str(usuario_id))

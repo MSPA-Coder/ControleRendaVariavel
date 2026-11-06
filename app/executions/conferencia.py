@@ -33,6 +33,7 @@ from flask import current_app
 from sqlalchemy import select
 
 from app import db
+from app.core.currency_filter import ALL
 from app.executions.carteira import HoldingCheck, holdings_rows, symbol_key
 from app.models import (
     Broker,
@@ -433,6 +434,7 @@ def build_reconciliation(
     owner_id: int,
     *,
     broker: str | None = None,
+    currency: str = ALL,
     start: date | None = None,
     end: date | None = None,
     fetcher: Fetcher | None = None,
@@ -448,6 +450,8 @@ def build_reconciliation(
     )
     if broker:
         statement = statement.where(Broker.name == broker)
+    if currency != ALL:
+        statement = statement.where(Execution.currency == currency)
     if start:
         statement = statement.where(Execution.trade_date >= start)
     if end:
@@ -477,6 +481,8 @@ def build_reconciliation(
     crv_trades = ledger_trades(
         owner_id, [name for name in ledger if not broker or name == broker], start=ledger_start, end=end
     )
+    if currency != ALL:
+        crv_trades = [trade for trade in crv_trades if trade.currency == currency]
 
     try:
         config = config_factory()
@@ -527,6 +533,8 @@ def build_reconciliation(
     # O extrato traz o código da data dele; o CRV, o vigente.
     former = former_symbol_map()
     for item in settlements.items:
+        if currency != ALL and item.currency != currency:
+            continue
         broker_name = institution_to_broker.get(item.institution)
         pregao = item.pregao_date
         if broker_name is None or pregao is None:
@@ -547,11 +555,25 @@ def build_reconciliation(
         ),
         tolerance=tolerance,
         cb_status="ok",
-        without_pregao=settlements.without_pregao,
-        futures_settlements=len(settlements.futures),
+        without_pregao=[
+            item for item in settlements.without_pregao
+            if currency == ALL or item.currency == currency
+        ],
+        futures_settlements=sum(
+            1 for item in settlements.futures if currency == ALL or item.currency == currency
+        ),
         executions_out_of_scope=out_of_scope,
         holdings=holdings_rows(
-            owner_id, settlements.holdings, institution_to_broker, broker=broker, start=start, end=end
+            owner_id,
+            {
+                key: statements
+                for key, statements in settlements.holdings.items()
+                if currency == ALL or key[1] == currency
+            },
+            institution_to_broker,
+            broker=broker,
+            start=start,
+            end=end,
         ),
     )
 

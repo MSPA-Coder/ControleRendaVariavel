@@ -100,6 +100,96 @@ test('consultas preservam origem, detalhes, filtros e privacidade', { timeout: 4
   });
 });
 
+test('colar data na conferência aplica o recorte dos pregões', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    await page.goto(`${base}/executions/reconciliation?currency=BRL`);
+    await page.getByText('NOTA-DEMO-1', { exact: true }).waitFor({ state: 'attached' });
+    const start = page.locator('input[data-regional-view="date"]').first();
+    await start.click();
+    await page.keyboard.insertText('28/10/2026');
+    await start.press('Tab');
+    await page.waitForURL(url => new URL(url).searchParams.get('start') === '2026-10-28');
+    await page.getByText('NOTA-DEMO-2', { exact: true }).waitFor({ state: 'attached' });
+    assert.equal(await page.getByText('NOTA-DEMO-1', { exact: true }).count(), 0);
+  });
+});
+
+test('requisição lenta de data não substitui filtro digitado depois', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    await page.goto(`${base}/executions/reconciliation?currency=BRL`);
+    const start = page.locator('input[data-regional-view="date"]').first();
+    await page.route('**/executions/reconciliation?*', async route => {
+      if (new URL(route.request().url()).searchParams.get('start') === '2026-10-27') {
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+      await route.continue();
+    });
+    const firstRequest = page.waitForRequest(request =>
+      new URL(request.url()).searchParams.get('start') === '2026-10-27');
+    await start.fill('27/10/2026');
+    await start.press('Tab');
+    await firstRequest;
+    await start.fill('28/10/2026');
+    await start.press('Tab');
+    await page.waitForURL(url => new URL(url).searchParams.get('start') === '2026-10-28');
+    await page.getByText('NOTA-DEMO-2', { exact: true }).waitFor({ state: 'attached' });
+    assert.equal(await page.getByText('NOTA-DEMO-1', { exact: true }).count(), 0);
+  });
+});
+
+test('moeda global acompanha a conferência de pregões', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    await page.goto(`${base}/executions/reconciliation?currency=USD`);
+    await page.getByRole('status').filter({ hasText: 'CB não configurado.' }).waitFor();
+    assert.equal(await page.getByText('NOTA-DEMO-1', { exact: true }).count(), 0);
+    assert.equal(await page.locator('form.filters input[name="currency"]').inputValue(), 'USD');
+    await page.goto(`${base}/executions/reconciliation?currency=ALL`);
+    await page.getByText('NOTA-DEMO-1', { exact: true }).waitFor({ state: 'attached' });
+  });
+});
+
+test('cancelar provento inválido preserva a moeda da lista de origem', { timeout: 45000 }, async () => {
+  await logged('browser-demo', async page => {
+    const origem = '/dividends?currency=USD';
+    await page.goto(`${base}/dividends/new?volta=${encodeURIComponent(origem)}`);
+    await page.locator('select[name="broker_id"]').selectOption({ label: 'Corretora browser' });
+    const ticker = page.locator('select[name="ticker_id"] option').filter({ hasText: /^PETR4 ·/ });
+    await page.locator('select[name="ticker_id"]').selectOption(await ticker.getAttribute('value'));
+    await page.locator('input[data-regional-view="number"]').first().fill('1');
+    await page.locator('input[data-regional-view="date"]').first().fill('01/12/2026');
+    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'data de pagamento' }).waitFor();
+    assert.equal(await page.locator('input[name="volta"]').inputValue(), origem);
+    await page.getByRole('link', { name: 'Cancelar', exact: true }).click();
+    assert.equal(new URL(page.url()).pathname, '/dividends');
+    assert.equal(new URL(page.url()).searchParams.get('currency'), 'USD');
+  });
+});
+
+test('cancelar abertura anterior mantém a moeda da lista de origem', { timeout: 45000 }, async () => {
+  await logged('browser-flow', async page => {
+    const origem = '/?currency=USD';
+    await page.goto(`${base}/positions/new?volta=${encodeURIComponent(origem)}`);
+    await page.locator('select[name="broker_id"]').selectOption({ label: 'Corretora browser' });
+    const ticker = page.locator('select[name="ticker_id"] option').filter({ hasText: /^FLOW3 ·/ });
+    await page.locator('select[name="ticker_id"]').selectOption(await ticker.getAttribute('value'));
+    await page.locator('select[name="portfolio_id"]').selectOption({ label: 'Carteira browser' });
+    await page.getByLabel('Quantidade', { exact: true }).fill('10');
+    await page.getByLabel('Custo médio', { exact: true }).fill('10');
+    await page.getByLabel('Data inicial', { exact: true }).fill('09/06/2026');
+    await page.getByLabel('Multiplicador do target', { exact: true }).fill('1,5');
+    await page.getByLabel('Multiplicador do target', { exact: true }).blur();
+    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Data anterior à abertura registrada' }).waitFor();
+    assert.equal(await page.locator('input[name="volta"]').inputValue(), origem);
+    await page.getByRole('link', { name: 'Cancelar', exact: true }).click();
+    assert.equal(new URL(page.url()).pathname, '/');
+    assert.equal(new URL(page.url()).searchParams.get('currency'), 'USD');
+  });
+});
+
 test('análise, mercado e cadastros permitem consulta e aprofundamento', { timeout: 45000 }, async () => {
   await logged('browser-demo', async page => {
     const errors = [];

@@ -4,10 +4,12 @@
 {% block workspace_controls %}
 <form class="filters" method="get"
       hx-get="{{ url_for('portfolio.execution_reconciliation') }}"
-      hx-trigger="change"
+      hx-trigger="change, input delay:250ms"
       hx-target="#execution-reconciliation"
       hx-swap="outerHTML"
+      hx-sync="this:replace"
       hx-replace-url="true">
+  <input type="hidden" name="currency" value="{{ global_currency }}">
   <label>Corretora
     <select name="broker">
       <option value="">Todas</option>
