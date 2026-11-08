@@ -39,6 +39,8 @@
 </section>
 {% endif %}
 {% endfor %}
+{% elif start and end and start > end %}
+<div class="trade-empty" role="alert"><h2>Período inválido</h2><p>A data inicial é posterior à data final. Corrija o período para ver os pregões.</p></div>
 {% else %}
 <div class="trade-empty"><span aria-hidden="true">✓</span><h2>Nenhum pregão neste filtro</h2><p>Importe os negócios para conferir a liquidação por corretora e data.</p><a class="button" href="{{ url_for('portfolio.import_executions') }}">Importar negócios</a></div>
 {% endif %}

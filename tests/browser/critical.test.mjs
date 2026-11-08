@@ -100,15 +100,23 @@ test('consultas preservam origem, detalhes, filtros e privacidade', { timeout: 4
   });
 });
 
+// Os pregões da demonstração nascem relativos a hoje (`tests/browser_server.py`):
+// NOTA-DEMO-1 há 10 dias e NOTA-DEMO-2 há 9. Data fixa aqui vence sozinha.
+function diasAtras(dias) {
+  const iso = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
+  const [ano, mes, dia] = iso.split('-');
+  return { iso, br: `${dia}/${mes}/${ano}` };
+}
+
 test('colar data na conferência aplica o recorte dos pregões', { timeout: 45000 }, async () => {
   await logged('browser-demo', async page => {
     await page.goto(`${base}/executions/reconciliation?currency=BRL`);
     await page.getByText('NOTA-DEMO-1', { exact: true }).waitFor({ state: 'attached' });
     const start = page.locator('input[data-regional-view="date"]').first();
     await start.click();
-    await page.keyboard.insertText('28/10/2026');
+    await page.keyboard.insertText(diasAtras(9).br);
     await start.press('Tab');
-    await page.waitForURL(url => new URL(url).searchParams.get('start') === '2026-10-28');
+    await page.waitForURL(url => new URL(url).searchParams.get('start') === diasAtras(9).iso);
     await page.getByText('NOTA-DEMO-2', { exact: true }).waitFor({ state: 'attached' });
     assert.equal(await page.getByText('NOTA-DEMO-1', { exact: true }).count(), 0);
   });
@@ -119,19 +127,19 @@ test('requisição lenta de data não substitui filtro digitado depois', { timeo
     await page.goto(`${base}/executions/reconciliation?currency=BRL`);
     const start = page.locator('input[data-regional-view="date"]').first();
     await page.route('**/executions/reconciliation?*', async route => {
-      if (new URL(route.request().url()).searchParams.get('start') === '2026-10-27') {
+      if (new URL(route.request().url()).searchParams.get('start') === diasAtras(10).iso) {
         await new Promise(resolve => setTimeout(resolve, 800));
       }
       await route.continue();
     });
     const firstRequest = page.waitForRequest(request =>
-      new URL(request.url()).searchParams.get('start') === '2026-10-27');
-    await start.fill('27/10/2026');
+      new URL(request.url()).searchParams.get('start') === diasAtras(10).iso);
+    await start.fill(diasAtras(10).br);
     await start.press('Tab');
     await firstRequest;
-    await start.fill('28/10/2026');
+    await start.fill(diasAtras(9).br);
     await start.press('Tab');
-    await page.waitForURL(url => new URL(url).searchParams.get('start') === '2026-10-28');
+    await page.waitForURL(url => new URL(url).searchParams.get('start') === diasAtras(9).iso);
     await page.getByText('NOTA-DEMO-2', { exact: true }).waitFor({ state: 'attached' });
     assert.equal(await page.getByText('NOTA-DEMO-1', { exact: true }).count(), 0);
   });

@@ -381,6 +381,16 @@ def test_fluxo_http_ensaio_nao_grava_e_gravar_exige_o_mesmo_arquivo(usuario_http
     assert "B3_GENIAL_27012026" in tela and "Sem comparação" in tela
 
 
+def test_conferencia_explica_intervalo_invertido_em_vez_de_sugerir_importar(usuario_http):
+    app, (_, _, _, sessao_id) = usuario_http
+    client, _ = client_for(app, sessao_id)
+
+    tela = client.get("/executions/reconciliation?start=2026-11-02&end=2026-11-01").get_data(as_text=True)
+
+    assert "Período inválido" in tela
+    assert "Nenhum pregão neste filtro" not in tela
+
+
 def test_gravar_pelo_http_exige_csrf_e_login(usuario_http):
     app, (usuario_id, _, _, sessao_id) = usuario_http
     client, _ = client_for(app, sessao_id)
