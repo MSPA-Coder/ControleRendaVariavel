@@ -169,6 +169,47 @@ def test_itens_de_conferencia_com_o_cb_em_dia_e_com_pendencias(monkeypatch):
     assert (proventos["estado"], proventos["detalhe"]) == ("pendente", "2 a importar ou atualizar; 1 na fila de revisão")
 
 
+def test_vinculo_quebrado_com_o_cb_aparece_antes_da_contagem(monkeypatch):
+    """Com a instituição renomeada no CB, "só no CRV" não é dinheiro que falta."""
+    from app.routes import fechamento
+
+    contagem = {**_resumo()["contagem"], "so_crv": 9}
+    aviso = "Nenhuma conta do CB corresponde à corretora XP."
+    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes", lambda owner, dia: _resumo(contagem=contagem, avisos=[aviso]))
+
+    pregoes = fechamento._item_dos_pregoes(1, date(2026, 9, 30))
+
+    assert (pregoes["estado"], pregoes["texto"]) == ("pendente", "O vínculo com o CB deixou de casar")
+    assert pregoes["detalhe"] == aviso
+
+
+def test_falha_do_cb_nao_fica_guardada_e_a_resposta_boa_fica(monkeypatch):
+    """Uma falha passageira não pode segurar o painel pelo tempo do cache."""
+    from types import SimpleNamespace
+
+    from app.routes import fechamento
+
+    chamadas = []
+
+    def conferir(owner_id, **kwargs):
+        chamadas.append(owner_id)
+        falhou = len(chamadas) == 1
+        return SimpleNamespace(
+            cb_status="indisponivel" if falhou else "ok", cb_message="Não foi possível alcançar o CB." if falhou else "",
+            warnings=[], counts=_resumo()["contagem"], rows=[], holdings=[],
+        )
+
+    monkeypatch.setattr(fechamento, "build_reconciliation", conferir)
+    monkeypatch.setattr(fechamento, "_resumo_dos_proventos_do_cb", lambda owner, cb: _resumo()["proventos"])
+    monkeypatch.setattr(fechamento, "_pregoes_guardados", {})
+    ate = date(2026, 9, 30)
+
+    assert fechamento._resumo_dos_pregoes(7, ate)["status"] == "indisponivel"
+    assert fechamento._resumo_dos_pregoes(7, ate)["status"] == "ok", "a falha ficou guardada"
+    assert fechamento._resumo_dos_pregoes(7, ate)["status"] == "ok"
+    assert len(chamadas) == 2, "a resposta boa deveria vir do que ficou guardado"
+
+
 # --- com banco ------------------------------------------------------------------
 
 @pytest.fixture

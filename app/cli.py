@@ -499,6 +499,8 @@ def conferir_pregoes(
     )
     if result.cb_status != "ok":
         click.echo(f"{result.cb_message or 'CB indisponível.'} (só as execuções do CRV)", err=True)
+    for warning in result.warnings:
+        click.echo(f"AVISO: {warning}", err=True)
     for row in result.rows:
         cb = f"{row.cb_amount:,.2f}" if row.cb_amount is not None else "-"
         crv = f"{row.crv_amount:,.2f}" if row.crv_amount is not None else "-"

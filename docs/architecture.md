@@ -630,13 +630,20 @@ recusada na reimportação.
 
 `app/patrimonio/cb_client.py` lê o `GET {CB_PATRIMONIO_URL}/snapshot` do contrato
 `patrimonio/v4` com o Bearer `CB_PATRIMONIO_TOKEN` (segredo de arquivo,
-`CB_PATRIMONIO_TOKEN_FILE`), somente leitura, e filtra os lançamentos da
-categoria "Operações em Bolsa". A liquidação de BM&F (`Bm&F` na descrição) fica
-fora, como os futuros. A data do pregão vem de `settlement.pregao_date`, campo
-opcional que o CB está acrescentando ao `cash_entry`; enquanto ele não está em
-produção, `pregao_da_descricao` a extrai de `Operações Bolsa D+2 Pr 27/01/2026
-Nc. 543216` (função pura, isolada e pronta para ser removida). Sem URL e token, a
-tela mostra **"CB não configurado"** e lista só as execuções do CRV.
+`CB_PATRIMONIO_TOKEN_FILE`), somente leitura. Liquidação de pregão é o
+lançamento que o CB marcou com `settlement.pregao_date` (ele lê a data da linha
+do extrato da corretora; o nome da categoria não importa) **ou** o que está na
+categoria "Operações em Bolsa". A categoria continua valendo pelo lançamento
+digitado à mão, que não tem a marca: nele `pregao_da_descricao` lê a data de
+`Operações Bolsa D+2 Pr 27/01/2026 Nc. 543216`. A liquidação de BM&F (`Bm&F` na
+descrição) fica fora, como os futuros. Sem URL e token, a tela mostra **"CB não
+configurado"** e lista só as execuções do CRV.
+
+O vínculo é por nome, e nome se edita no CB. Quando a categoria não existe mais
+lá, ou quando nenhuma conta do CB corresponde a uma corretora com negócio no
+recorte, a conferência devolve um **aviso** (`Reconciliation.warnings`,
+`link_warnings`), mostrado na tela, no comando e no status de fechamento, em vez
+de contar tudo como "só no CRV".
 
 `app/executions/conferencia.py` compara, por **corretora, data do pregão e
 moeda**, a soma assinada da liquidação do CB (conta(s) da corretora) com a soma
@@ -733,8 +740,9 @@ cai depois do corte (D+1 no exterior, D+2 na B3) não segura o mês: entra no
 seguinte. Sem sessão:
 autentica pelo token do vínculo CB ↔ CRV (`CB_PATRIMONIO_TOKEN`, o mesmo com que o
 CRV lê o CB), está em `PUBLIC_ENDPOINTS` e tem o limite de taxa da publicação de
-patrimônio. A conferência por pregão lê o CB de volta; o resultado fica guardado
-dez minutos por processo.
+patrimônio. A conferência por pregão lê o CB de volta, uma vez por pedido
+(`memoized_fetcher`: liquidações e renda saem do mesmo snapshot); o resultado
+fica guardado dez minutos por processo, e só quando o CB respondeu.
 
 ### Proventos do CB (a partir de 01/01/2026)
 

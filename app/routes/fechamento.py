@@ -43,7 +43,12 @@ from app.executions.conferencia import (
     cb_config_from_app,
 )
 from app.models import Execution, MyprofitPosition
-from app.patrimonio.cb_client import CbUnavailableError, read_income_entries
+from app.patrimonio.cb_client import (
+    CbUnavailableError,
+    Fetcher,
+    memoized_fetcher,
+    read_income_entries,
+)
 from app.routes import bp
 from app.routes.patrimonio import _owner_id
 
@@ -178,12 +183,12 @@ def _liquida_depois_do_corte(row, ate: date) -> bool:
     return dia > ate
 
 
-def _resumo_dos_proventos_do_cb(owner_id: int) -> dict:
+def _resumo_dos_proventos_do_cb(owner_id: int, fetcher: Fetcher) -> dict:
     try:
         config = cb_config_from_app()
         if config is None:
             return {"status": "nao_configurado", "mensagem": "CB não configurado"}
-        plano = plan_cb_import(owner_id, read_income_entries(config))
+        plano = plan_cb_import(owner_id, read_income_entries(config, fetcher=fetcher))
     except CbUnavailableError as exc:
         return {"status": "indisponivel", "mensagem": str(exc)}
     return {
@@ -201,11 +206,14 @@ def _resumo_dos_pregoes(owner_id: int, ate: date) -> dict:
     guardado = _pregoes_guardados.get((owner_id, ate))
     if guardado and agora - guardado[0] < CACHE_DOS_PREGOES:
         return guardado[1]
-    resultado = build_reconciliation(owner_id, start=date(ate.year, 1, 1), end=ate)
+    # Liquidações e renda saem do mesmo snapshot: uma leitura do CB, e não duas.
+    cb = memoized_fetcher()
+    resultado = build_reconciliation(owner_id, start=date(ate.year, 1, 1), end=ate, fetcher=cb)
     carteira = resultado.holdings
     resumo = {
         "status": resultado.cb_status,
         "mensagem": resultado.cb_message,
+        "avisos": list(resultado.warnings),
         "contagem": resultado.counts,
         "aguardando_depois_do_corte": sum(
             1 for row in resultado.rows if row.state == AWAITING_STATEMENT and _liquida_depois_do_corte(row, ate)
@@ -219,9 +227,12 @@ def _resumo_dos_pregoes(owner_id: int, ate: date) -> dict:
                 for linha in carteira if not linha.matches
             ],
         },
-        "proventos": _resumo_dos_proventos_do_cb(owner_id),
+        "proventos": _resumo_dos_proventos_do_cb(owner_id, cb),
     }
-    _pregoes_guardados[(owner_id, ate)] = (agora, resumo)
+    # Só a resposta boa fica guardada: uma falha passageira do CB não pode
+    # segurar o painel em "CB indisponível" pelo tempo do cache.
+    if resumo["status"] == "ok" and resumo["proventos"]["status"] == "ok":
+        _pregoes_guardados[(owner_id, ate)] = (agora, resumo)
     return resumo
 
 
@@ -230,6 +241,14 @@ def _item_dos_pregoes(owner_id: int, ate: date) -> dict:
     resumo = _resumo_dos_pregoes(owner_id, ate)
     if resumo["status"] != "ok":
         return _item("pregoes", "conferencias", titulo, "espera", resumo["mensagem"] or "CB indisponível")
+    avisos = resumo.get("avisos") or []
+    if avisos:
+        # Antes dos números: com o vínculo quebrado eles contam "só no CRV" o que
+        # o CB tem, e mandariam procurar dinheiro que não falta.
+        return _item(
+            "pregoes", "conferencias", titulo, "pendente", "O vínculo com o CB deixou de casar",
+            detalhe=" ".join(avisos), acao="Abrir a conferência", url="/executions/reconciliation",
+        )
     contagem = resumo["contagem"]
     problemas = contagem.get(DIFFERENCE, 0) + contagem.get(ONLY_CB, 0) + contagem.get(ONLY_CRV, 0)
     if problemas:

@@ -108,9 +108,9 @@ concorrência novas vão nessa camada.
 - A transação é delimitada no caso de uso que inicia a escrita: nada de commit
   parcial em camada inferior, nem transação aberta durante RTD ou outra chamada
   externa. Invariante concorrente se protege no banco.
-- Proventos em reais das corretoras que o CB cobre (Genial e XP), pagos a
-  partir de 01/01/2026, vêm do CB (`origin = 'cb'`, só leitura, valor líquido
-  do caixa). Planilha e formulário os recusam; a linha de planilha que o CB
+- Proventos das corretoras que o CB cobre (Genial e XP em reais, Avenue em
+  dólar), pagos a partir de 01/01/2026, vêm do CB (`origin = 'cb'`, só leitura,
+  valor líquido do caixa). Planilha e formulário os recusam; a linha de planilha que o CB
   passou a cobrir é marcada como substituída, nunca apagada.
 - Migração: revisão Alembic nova, revisada à mão; não se edita revisão que
   possa ter sido aplicada; banco vazio nasce por `alembic upgrade head`, nunca

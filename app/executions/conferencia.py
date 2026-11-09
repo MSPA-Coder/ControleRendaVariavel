@@ -46,6 +46,7 @@ from app.models import (
     Ticker,
 )
 from app.patrimonio.cb_client import (
+    SETTLEMENT_CATEGORY,
     CbConfig,
     CbSettlement,
     CbUnavailableError,
@@ -421,6 +422,9 @@ class Reconciliation:
     #: A carteira de cada extrato da corretora contra a posição do CRV
     #: (``app.executions.carteira``), lida do mesmo snapshot do CB.
     holdings: list[HoldingCheck] = field(default_factory=list)
+    #: O vínculo com o CB é por nome (categoria e instituição), e nome se edita
+    #: lá. O que deixou de casar aparece aqui, em vez de virar "só no CRV".
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def counts(self) -> dict[str, int]:
@@ -548,6 +552,12 @@ def build_reconciliation(
             )
         else:
             cb.append(Movement(broker_name, pregao, item.currency, item.amount))
+    warnings = link_warnings(
+        {movement.broker for movement in crv} | {trade.broker for trade in crv_trades},
+        broker_institutions(),
+        settlements.institutions,
+        category_found=settlements.category_found,
+    )
     return Reconciliation(
         rows=_in_order(
             compare(cb, crv, tolerance=tolerance, coverage=coverage)
@@ -575,7 +585,42 @@ def build_reconciliation(
             start=start,
             end=end,
         ),
+        warnings=warnings,
     )
+
+
+def link_warnings(
+    brokers: Iterable[str],
+    institutions_by_broker: Mapping[str, tuple[str, ...]],
+    cb_institutions: frozenset[str],
+    *,
+    category_found: bool,
+) -> list[str]:
+    """O que deixou de casar entre os nomes do CRV e os do CB. Função pura.
+
+    ``brokers`` são as corretoras com negócio no CRV no recorte: só elas contam,
+    para a corretora sem movimento não virar aviso.
+    """
+    warnings: list[str] = []
+    if not category_found:
+        warnings.append(
+            f"O CB não tem a categoria “{SETTLEMENT_CATEGORY}”: só entraram as liquidações que o "
+            "extrato da corretora marcou com a data do pregão. Se ela foi renomeada no CB, "
+            "os lançamentos digitados à mão ficaram de fora."
+        )
+    for broker in sorted(set(brokers)):
+        expected = institutions_by_broker.get(broker, ())
+        if any(institution in cb_institutions for institution in expected):
+            continue
+        detail = (
+            f"esperava a instituição {', '.join(expected)}" if expected
+            else "ela não está em CB_CORRESPONDENCIA_CONTAS"
+        )
+        warnings.append(
+            f"Nenhuma conta do CB corresponde à corretora {broker} ({detail}): os pregões dela "
+            "aparecem como “só no CRV”. Ajuste CB_CORRESPONDENCIA_CONTAS ou o nome da instituição no CB."
+        )
+    return warnings
 
 
 def _in_order(rows: list[ReconciliationRow]) -> list[ReconciliationRow]:

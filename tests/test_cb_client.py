@@ -12,8 +12,10 @@ from app.patrimonio.cb_client import (
     CbConfig,
     CbUnavailableError,
     institution_identity,
+    memoized_fetcher,
     parse_config,
     pregao_da_descricao,
+    read_income_entries,
     read_settlements,
 )
 
@@ -112,7 +114,7 @@ def test_categoria_e_comparada_sem_acento_nem_caixa():
 
 
 def test_settlement_oficial_tem_precedencia_sobre_a_descricao():
-    """Quando o CB-1 chegar, `settlement.pregao_date` vale mais que o texto."""
+    """`settlement.pregao_date`, que o CB lê do extrato, vale mais que o texto."""
     itens = [
         _conta(CONTA_GENIAL, "Genial"),
         _categoria(CATEGORIA_BOLSA, "Operações em Bolsa"),
@@ -276,3 +278,64 @@ def test_carteira_de_cada_extrato_vem_da_conta_por_instituicao_moeda_e_data():
             date(2026, 4, 30): {},
         }
     }
+
+
+def test_liquidacao_marcada_pelo_cb_entra_mesmo_com_a_categoria_renomeada():
+    """O nome da categoria se edita no CB; a marca `settlement` não depende dele."""
+    itens = [
+        _conta(CONTA_GENIAL, "Genial"),
+        _categoria(CATEGORIA_BOLSA, "Bolsa (renomeada)"),
+        _lancamento("marcado", CONTA_GENIAL, CATEGORIA_BOLSA, "Operações Bolsa D+2 Pr 27/01/2026 Nc. 1", "5.00",
+                    settlement={"pregao_date": "2026-01-27", "note": "1"}),
+        # Digitado à mão: sem a marca, só a categoria o identificava.
+        _lancamento("a-mao", CONTA_GENIAL, CATEGORIA_BOLSA, "Operações Bolsa D+2 Pr 28/01/2026", "7.00"),
+    ]
+
+    resultado = read_settlements(CbConfig("http://cb.test", "t"), fetcher=_snapshot(*itens))
+
+    assert [s.entry_id for s in resultado.items] == ["marcado"]
+    assert resultado.category_found is False
+
+
+def test_categoria_presente_e_instituicoes_com_conta_sao_informadas():
+    itens = [
+        _conta(CONTA_GENIAL, "Genial"),
+        _conta(CONTA_XP, "SCP XP Investimentos"),
+        _categoria(CATEGORIA_BOLSA, "Operações em Bolsa"),
+    ]
+
+    resultado = read_settlements(CbConfig("http://cb.test", "t"), fetcher=_snapshot(*itens))
+
+    assert resultado.category_found is True
+    assert resultado.institutions == {"genial", "scp-xp-investimentos"}
+
+
+def test_fetcher_memorizado_pede_o_snapshot_uma_vez_para_as_duas_leituras():
+    chamadas = []
+
+    def fetcher(url, token):
+        chamadas.append(url)
+        return {"items": []}
+
+    uma_vez = memoized_fetcher(fetcher)
+    config = CbConfig("http://cb.test/patrimonio/v4", "t")
+    read_settlements(config, fetcher=uma_vez)
+    read_income_entries(config, fetcher=uma_vez)
+
+    assert chamadas == ["http://cb.test/patrimonio/v4/snapshot"]
+
+
+def test_fetcher_memorizado_repete_a_falha_sem_pedir_de_novo():
+    chamadas = []
+
+    def fetcher(url, token):
+        chamadas.append(url)
+        raise CbUnavailableError("Não foi possível alcançar o CB.")
+
+    uma_vez = memoized_fetcher(fetcher)
+    config = CbConfig("http://cb.test", "t")
+    for leitura in (read_settlements, read_income_entries):
+        with pytest.raises(CbUnavailableError, match="alcançar"):
+            leitura(config, fetcher=uma_vez)
+
+    assert len(chamadas) == 1

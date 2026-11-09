@@ -10,18 +10,21 @@ Sem URL e token configurados a função devolve ``None`` e a tela mostra "CB nã
 configurado": a conferência é um recurso opcional e não pode derrubar o resto.
 
 O contrato publica tudo em um snapshot (contas, categorias e lançamentos). Este
-cliente o lê inteiro e filtra: os lançamentos da categoria "Operações em
-Bolsa", em ordem de data de pregão (``read_settlements``), e os lançamentos de
-renda que o CB marcou com ``income_kind``/``income_role`` (``read_income_entries``),
-que alimentam os proventos de 2026 em diante do CRV. Das contas vêm a cobertura do
-extrato importado e a carteira que o extrato da corretora imprime
-(``statement_holdings``), usada na conferência da posição do exterior.
+cliente o lê inteiro e filtra: as liquidações de pregão (``read_settlements``) e
+os lançamentos de renda que o CB marcou com ``income_kind``/``income_role``
+(``read_income_entries``), que alimentam os proventos de 2026 em diante do CRV.
+Das contas vêm a cobertura do extrato importado e a carteira que o extrato da
+corretora imprime (``statement_holdings``), usada na conferência da posição do
+exterior.
 
-TRANSIÇÃO (CB-1): o CB está acrescentando ao ``cash_entry`` o campo opcional
-``settlement`` (``pregao_date`` e ``note``). Enquanto ele não está em produção, o
-pregão sai da descrição do lançamento por :func:`pregao_da_descricao`. Quando o
-campo oficial chegar, ele tem precedência e a função (e o ramo que a chama) pode
-ser removida.
+Liquidação de pregão é o lançamento que o CB marcou com ``settlement.pregao_date``
+(ele lê a data do extrato da corretora e a publica; o nome da categoria não
+importa) **ou** o que está na categoria "Operações em Bolsa". A categoria continua
+valendo porque o CB só marca o lançamento que veio de uma linha de extrato: o
+digitado à mão (corretora sem extrato) não tem a marca, e é para ele que
+:func:`pregao_da_descricao` lê a data do texto. Como o nome da categoria é
+editável no CB, ``CbSettlements.category_found`` diz se ela ainda existe, para a
+conferência avisar em vez de mostrar tudo como "só no CRV".
 """
 
 from __future__ import annotations
@@ -100,6 +103,12 @@ class CbSettlements:
     #: carteira que o extrato da corretora imprime. Data sem ativo fica com
     #: carteira vazia; instituição sem o campo não aparece.
     holdings: dict[tuple[str, str], dict[date, dict[str, Decimal]]] = field(default_factory=dict)
+    #: Existe no CB uma categoria com o nome de ``SETTLEMENT_CATEGORY``. O nome é
+    #: editável lá: sem ela, só entram as liquidações marcadas pelo extrato.
+    category_found: bool = True
+    #: Identidades das instituições que têm conta no CB, para a conferência
+    #: reconhecer a corretora cuja correspondência não acha conta nenhuma.
+    institutions: frozenset[str] = frozenset()
 
 
 _PREGAO_NA_DESCRICAO = re.compile(r"\bPr\s+(\d{2})/(\d{2})/(\d{4})\b")
@@ -111,8 +120,8 @@ def pregao_da_descricao(descricao: str | None) -> date | None:
     ``"Operações Bolsa D+2 Pr 27/01/2026 Nc. 543216"`` -> ``date(2026, 1, 27)``.
     Devolve ``None`` quando a descrição não tem a data ou ela não existe.
 
-    Função pura e isolada de propósito: é o desvio temporário que o campo
-    ``settlement.pregao_date`` do CB-1 torna desnecessário.
+    Só vale para o lançamento sem ``settlement.pregao_date``: o CB preenche o
+    campo a partir da linha de extrato, e o lançamento digitado à mão não o tem.
     """
     achado = _PREGAO_NA_DESCRICAO.search(descricao or "")
     if achado is None:
@@ -214,14 +223,44 @@ def _traded_quantity(payload: dict[str, Any]) -> Decimal | None:
     return abs(quantity) if payload.get("entry_type") == "despesa" else -abs(quantity)
 
 
-def _pregao(payload: dict[str, Any]) -> date | None:
+def _marked_as_settlement(payload: dict[str, Any]) -> bool:
+    """O CB marcou o lançamento como liquidação de pregão (``settlement.pregao_date``)."""
     settlement = payload.get("settlement")
-    if isinstance(settlement, dict) and settlement.get("pregao_date"):
+    return isinstance(settlement, dict) and bool(settlement.get("pregao_date"))
+
+
+def _pregao(payload: dict[str, Any]) -> date | None:
+    if _marked_as_settlement(payload):
         try:
-            return date.fromisoformat(str(settlement["pregao_date"]))
+            return date.fromisoformat(str(payload["settlement"]["pregao_date"]))
         except ValueError:
             return None
     return pregao_da_descricao(payload.get("description"))
+
+
+def memoized_fetcher(fetcher: Fetcher | None = None) -> Fetcher:
+    """Um ``fetcher`` que pede cada endereço uma vez só e repete a resposta.
+
+    Quem precisa das liquidações e da renda no mesmo pedido lê o snapshot uma
+    vez, e não duas. A falha também é guardada: sem isso, o CB fora do ar
+    custaria um tempo limite por leitura.
+    """
+    fetch = fetcher or _fetch_json
+    seen: dict[tuple[str, str], tuple[bool, Any]] = {}
+
+    def fetch_once(url: str, token: str) -> Any:
+        key = (url, token)
+        if key not in seen:
+            try:
+                seen[key] = (True, fetch(url, token))
+            except CbUnavailableError as exc:
+                seen[key] = (False, exc)
+        ok, value = seen[key]
+        if not ok:
+            raise value
+        return value
+
+    return fetch_once
 
 
 def _read_snapshot(
@@ -260,7 +299,8 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
     wanted = _fold(SETTLEMENT_CATEGORY)
     settlements: list[CbSettlement] = []
     for payload in entries:
-        if _fold(categories.get(str(payload.get("category_id")))) != wanted:
+        in_category = _fold(categories.get(str(payload.get("category_id")))) == wanted
+        if not in_category and not _marked_as_settlement(payload):
             continue
         account = accounts.get(str(payload.get("account_id")), {})
         settlements.append(
@@ -285,6 +325,11 @@ def read_settlements(config: CbConfig, *, fetcher: Fetcher | None = None) -> CbS
         futures=futures,
         coverage=statement_coverage(accounts),
         holdings=statement_holdings(accounts),
+        category_found=any(_fold(name) == wanted for name in categories.values()),
+        institutions=frozenset(
+            str(account.get("institution") or institution_identity(account.get("institution_name")))
+            for account in accounts.values()
+        ),
     )
 
 

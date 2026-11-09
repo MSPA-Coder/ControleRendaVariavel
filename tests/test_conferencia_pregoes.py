@@ -21,6 +21,7 @@ from app.executions.conferencia import (
     compare,
     compare_trades,
     ledger_brokers,
+    link_warnings,
     tolerance_from_config,
 )
 
@@ -242,3 +243,31 @@ def test_carteira_do_extrato_contra_a_posicao_do_crv():
         ("BRK.B", D("1.56365"), D("1.56365"), True),
         ("CGC", D("1200"), D("0"), False),
     ]
+
+
+INSTITUICOES = {"Genial": ("genial",), "XP": ("scp-xp-investimentos",), "Avenue": ("avenue",)}
+
+
+def test_vinculo_inteiro_nao_gera_aviso():
+    assert link_warnings({"Genial", "Avenue"}, INSTITUICOES, frozenset({"genial", "avenue"}), category_found=True) == []
+
+
+def test_instituicao_renomeada_no_cb_vira_aviso_e_nao_so_no_crv_calado():
+    """A XP mudou de nome no CB: sem o aviso, todo pregão dela viraria "só no CRV"."""
+    avisos = link_warnings({"Genial", "XP"}, INSTITUICOES, frozenset({"genial", "xp-investimentos"}), category_found=True)
+
+    assert len(avisos) == 1
+    assert "corretora XP" in avisos[0]
+    assert "scp-xp-investimentos" in avisos[0]
+
+
+def test_corretora_sem_negocio_no_recorte_nao_gera_aviso():
+    assert link_warnings({"Genial"}, INSTITUICOES, frozenset({"genial"}), category_found=True) == []
+
+
+def test_corretora_fora_da_correspondencia_e_categoria_sumida_sao_avisadas():
+    avisos = link_warnings({"Clear"}, INSTITUICOES, frozenset({"genial"}), category_found=False)
+
+    assert "Operações em Bolsa" in avisos[0]
+    assert "corretora Clear" in avisos[1]
+    assert "CB_CORRESPONDENCIA_CONTAS" in avisos[1]

@@ -7,6 +7,9 @@
 {% elif result.cb_status == 'indisponivel' %}
 <p class="trade-context-note" role="alert"><strong>CB indisponível:</strong> {{ result.cb_message }} Os pregões abaixo mostram somente o que o CRV importou, sem comparação.</p>
 {% endif %}
+{% for warning in result.warnings %}
+<p class="trade-context-note" role="alert"><strong>Vínculo com o CB:</strong> {{ warning }}</p>
+{% endfor %}
 {% if result.rows %}
 {% if result.cb_status == 'ok' %}
 <section class="summary" aria-label="Situação da conferência">
