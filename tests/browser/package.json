@@ -1,1 +1,1 @@
-{"name":"crv-browser-tests","private":true,"type":"module","dependencies":{"playwright":"1.64.0"}}
+{"name":"crv-browser-tests","private":true,"type":"module","dependencies":{"playwright":"1.65.0"}}
