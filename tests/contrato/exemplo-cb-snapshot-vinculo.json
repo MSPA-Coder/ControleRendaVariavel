@@ -1,0 +1,422 @@
+{
+  "_origem": "Gerado por tests/test_contrato_com_o_crv.py do ControleBancario: o snapshot v4 que o CB responde ao CRV com o token do vinculo. Ids, instantes e data do saldo sao fixos; o resto e a resposta real.",
+  "contrato": "patrimonio/v4",
+  "sistema": "controle-bancario",
+  "scope": {
+    "institution_type": "Corretora",
+    "resources": [
+      "account",
+      "category",
+      "cash_entry"
+    ]
+  },
+  "items": [
+    {
+      "resource": "account",
+      "source_id": "controle-bancario:account:exemplo-1",
+      "payload": {
+        "source_id": "controle-bancario:account:exemplo-1",
+        "name": "Conta 03",
+        "account_type": "conta",
+        "purpose": "pessoal",
+        "currency": "BRL",
+        "owner": "titular",
+        "owner_name": "Titular",
+        "institution": "genial",
+        "institution_name": "Genial",
+        "institution_type": "Corretora",
+        "initial_balance": "0.00",
+        "initial_balance_date": "2025-12-31",
+        "balance": "1023.10",
+        "balance_as_of": "2026-12-31",
+        "deep_link": "/exemplo",
+        "statement_covered_until": "2026-09-30"
+      }
+    },
+    {
+      "resource": "account",
+      "source_id": "controle-bancario:account:exemplo-2",
+      "payload": {
+        "source_id": "controle-bancario:account:exemplo-2",
+        "name": "Conta em dólar",
+        "account_type": "conta",
+        "purpose": "pessoal",
+        "currency": "USD",
+        "owner": "titular",
+        "owner_name": "Titular",
+        "institution": "avenue",
+        "institution_name": "Avenue",
+        "institution_type": "Corretora",
+        "initial_balance": "0.00",
+        "initial_balance_date": "2025-12-31",
+        "balance": "-4710.50",
+        "balance_as_of": "2026-12-31",
+        "deep_link": "/exemplo",
+        "statement_covered_until": "2026-09-30",
+        "statement_holdings": [
+          {
+            "date": "2026-09-30",
+            "positions": [
+              {
+                "instrument": "BRK.B",
+                "quantity": "1.56365"
+              },
+              {
+                "instrument": "CGC",
+                "quantity": "5000"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": "category",
+      "source_id": "controle-bancario:category:exemplo-3",
+      "payload": {
+        "source_id": "controle-bancario:category:exemplo-3",
+        "name": "Variação de mercado",
+        "kind": "gerencial",
+        "valuation": true,
+        "group": null,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "category",
+      "source_id": "controle-bancario:category:exemplo-4",
+      "payload": {
+        "source_id": "controle-bancario:category:exemplo-4",
+        "name": "Operações em Bolsa",
+        "kind": "movimentacao",
+        "group": null,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "category",
+      "source_id": "controle-bancario:category:exemplo-5",
+      "payload": {
+        "source_id": "controle-bancario:category:exemplo-5",
+        "name": "Aluguel de Açoes / Dividendos / JCP",
+        "kind": "gerencial",
+        "group": null,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "category",
+      "source_id": "controle-bancario:category:exemplo-6",
+      "payload": {
+        "source_id": "controle-bancario:category:exemplo-6",
+        "name": "IRRF sobre investimentos",
+        "kind": "gerencial",
+        "group": null,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "category",
+      "source_id": "controle-bancario:category:exemplo-7",
+      "payload": {
+        "source_id": "controle-bancario:category:exemplo-7",
+        "name": "Mercado",
+        "kind": "gerencial",
+        "group": null,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-8",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-8",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-4",
+        "transfer_id": null,
+        "description": "Operações Bolsa D+2 Pr 27/01/2026 Nc. 543216",
+        "entry_type": "receita",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "movimentacao",
+        "currency": "BRL",
+        "planned_amount": "1252.10",
+        "realized_amount": "1252.10",
+        "due_date": "2026-01-29",
+        "realized_date": "2026-01-29",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "settlement": {
+          "pregao_date": "2026-01-27",
+          "note": "543216"
+        }
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-9",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-9",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-4",
+        "transfer_id": null,
+        "description": "Operações Bolsa D+2 Pr 20/03/2026 Nc. *",
+        "entry_type": "despesa",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "movimentacao",
+        "currency": "BRL",
+        "planned_amount": "300.00",
+        "realized_amount": "300.00",
+        "due_date": "2026-03-24",
+        "realized_date": "2026-03-24",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "settlement": {
+          "pregao_date": "2026-03-20"
+        }
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-10",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-10",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-4",
+        "transfer_id": null,
+        "description": "Operações Bm&F Pr 06/01/2026 Nc. 126168",
+        "entry_type": "despesa",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "movimentacao",
+        "currency": "BRL",
+        "planned_amount": "0.50",
+        "realized_amount": "0.50",
+        "due_date": "2026-01-07",
+        "realized_date": "2026-01-07",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-11",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-11",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-4",
+        "transfer_id": null,
+        "description": "Operações Bolsa D+2 Pr 01/04/2026",
+        "entry_type": "receita",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "movimentacao",
+        "currency": "BRL",
+        "planned_amount": "40.00",
+        "realized_amount": "40.00",
+        "due_date": "2026-04-06",
+        "realized_date": "2026-04-06",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-12",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-12",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-5",
+        "transfer_id": null,
+        "description": "Dividendos Brwegeacnor0",
+        "entry_type": "receita",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "gerencial",
+        "currency": "BRL",
+        "planned_amount": "8.00",
+        "realized_amount": "8.00",
+        "due_date": "2026-06-02",
+        "realized_date": "2026-06-02",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "instrument": "WEGE3",
+        "income_kind": "dividendo",
+        "income_role": "credito"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-13",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-13",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-5",
+        "transfer_id": null,
+        "description": "Juros S/ Capital EALT4",
+        "entry_type": "receita",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "gerencial",
+        "currency": "BRL",
+        "planned_amount": "15.00",
+        "realized_amount": "15.00",
+        "due_date": "2026-06-11",
+        "realized_date": "2026-06-11",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "instrument": "EALT4",
+        "income_kind": "jcp",
+        "income_role": "credito"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-14",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-14",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-5",
+        "transfer_id": null,
+        "description": "Taxa de Remuneração Emprestimo Ações Brraizacnpr6",
+        "entry_type": "receita",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "gerencial",
+        "currency": "BRL",
+        "planned_amount": "10.00",
+        "realized_amount": "10.00",
+        "due_date": "2026-07-01",
+        "realized_date": "2026-07-01",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "instrument": "RAIZ4",
+        "income_kind": "aluguel",
+        "income_role": "credito"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-15",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-15",
+        "account_id": "controle-bancario:account:exemplo-1",
+        "category_id": "controle-bancario:category:exemplo-6",
+        "transfer_id": null,
+        "description": "Irrf S/Rendimentos Empréstimos de Ações Brraizacnpr6",
+        "entry_type": "despesa",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "gerencial",
+        "currency": "BRL",
+        "planned_amount": "1.50",
+        "realized_amount": "1.50",
+        "due_date": "2026-07-01",
+        "realized_date": "2026-07-01",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "instrument": "RAIZ4",
+        "income_kind": "aluguel",
+        "income_role": "irrf_aluguel"
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-16",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-16",
+        "account_id": "controle-bancario:account:exemplo-2",
+        "category_id": "controle-bancario:category:exemplo-4",
+        "transfer_id": null,
+        "description": "Compra de CGC na Avenue: 5000 a US$ 0,95, pregão 16/06/2026",
+        "entry_type": "despesa",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "movimentacao",
+        "currency": "USD",
+        "planned_amount": "4750.00",
+        "realized_amount": "4750.00",
+        "due_date": "2026-06-17",
+        "realized_date": "2026-06-17",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "instrument": "CGC",
+        "settlement": {
+          "pregao_date": "2026-06-16",
+          "quantity": "5000"
+        }
+      }
+    },
+    {
+      "resource": "cash_entry",
+      "source_id": "controle-bancario:cash-entry:exemplo-17",
+      "payload": {
+        "source_id": "controle-bancario:cash-entry:exemplo-17",
+        "account_id": "controle-bancario:account:exemplo-2",
+        "category_id": "controle-bancario:category:exemplo-5",
+        "transfer_id": null,
+        "description": "Cupom de ORCL 3.95 25/03/51 na Avenue",
+        "entry_type": "receita",
+        "status": "realizado",
+        "effective_status": "realizado",
+        "category_kind": "gerencial",
+        "currency": "USD",
+        "planned_amount": "39.50",
+        "realized_amount": "39.50",
+        "due_date": "2026-09-25",
+        "realized_date": "2026-09-25",
+        "operation_type": "single",
+        "installment": 1,
+        "installments": 1,
+        "is_recurring": false,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "instrument": "ORCL 3.95 25/03/51",
+        "income_kind": "cupom",
+        "income_role": "credito"
+      }
+    }
+  ]
+}

@@ -354,6 +354,13 @@ def test_status_resume_o_crv_para_o_roteiro_do_cb(sessao, cenario, app_com_banco
     assert resposta.status_code == 200
     corpo = resposta.get_json()
     assert corpo["contrato"] == "crv-fechamento/1"
+    # A resposta real cumpre o schema que o CB também usa (cópia da canônica).
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator
+
+    schema = json.loads((Path(__file__).parent / "contrato" / "crv-fechamento-1.schema.json").read_text(encoding="utf-8"))
+    assert not [erro.message for erro in Draft202012Validator(schema).iter_errors(corpo)]
     itens = {item["chave"]: item for item in corpo["itens"]}
     assert (itens["coleta"]["estado"], itens["coleta"]["texto"]) == ("em_dia", "Importada até 20/10")
     assert itens["negocios"]["estado"] == "falta"

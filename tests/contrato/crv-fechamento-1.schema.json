@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MSPA-Coder/manutencao/blob/main/docs/contratos/crv-fechamento-1.schema.json",
+  "title": "Contrato crv-fechamento/1",
+  "description": "O que o Controle de Renda Variavel (CRV) responde em GET /fechamento/status?ate=AAAA-MM-DD para o Roteiro de fechamento do Controle Bancario (CB): itens ja avaliados pelo CRV, que o CB so mostra. Copia canonica em manutencao/docs/contratos/; as copias no CRV e no CB sao identicas. Para mudar o contrato, mude esta e copie para os dois na mesma mudanca.\n\nO schema exige os campos que o CB usa, com os valores de `estado` e `etapa` que ele conhece: um estado ou uma etapa novos fazem o CB descartar o item, entao entram aqui e nos dois lados juntos. Propriedades a mais sao permitidas.\n\nUso: validar a resposta contra `#/$defs/resposta` e um item contra `#/$defs/item`.",
+  "type": "object",
+  "$ref": "#/$defs/resposta",
+  "$defs": {
+    "data": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "texto": { "type": "string", "minLength": 1 },
+    "estado": {
+      "enum": ["em_dia", "falta", "pendente", "espera", "fora", "depois", "sem_fonte"],
+      "description": "em_dia: nada a fazer. falta: ha um passo a executar. pendente: pede decisao. espera: depende de outro passo ou de outro sistema. fora: nao se aplica. depois: fica para o proximo corte. sem_fonte: nao ha de onde conferir."
+    },
+    "etapa": {
+      "enum": ["myprofit", "conferencias"],
+      "description": "A etapa do Roteiro de fechamento do CB em que o item aparece."
+    },
+    "item": {
+      "type": "object",
+      "required": ["chave", "etapa", "titulo", "estado", "texto"],
+      "properties": {
+        "chave": { "$ref": "#/$defs/texto", "description": "Estavel entre respostas: identifica o item, nao o estado dele." },
+        "etapa": { "$ref": "#/$defs/etapa" },
+        "titulo": { "$ref": "#/$defs/texto" },
+        "subtitulo": { "type": "string" },
+        "estado": { "$ref": "#/$defs/estado" },
+        "texto": { "$ref": "#/$defs/texto" },
+        "detalhe": { "type": "string" },
+        "acao": { "type": "string", "description": "Rotulo do que fazer; vazio quando nao ha o que fazer." },
+        "url": { "type": "string", "description": "Caminho da tela no CRV (comeca por /) ou vazio. O CB o completa com o endereco publico do CRV." },
+        "coberto_ate": { "type": "string" },
+        "passos": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "resposta": {
+      "type": "object",
+      "required": ["contrato", "ate", "itens"],
+      "properties": {
+        "contrato": { "const": "crv-fechamento/1" },
+        "ate": { "$ref": "#/$defs/data" },
+        "itens": { "type": "array", "items": { "$ref": "#/$defs/item" } }
+      }
+    }
+  }
+}
