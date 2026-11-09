@@ -258,3 +258,90 @@ def test_tela_do_cb_sem_integracao_configurada_avisa_e_nao_quebra(caso):
 
 def test_telas_de_proventos_do_cb_exigem_login(app_com_banco):
     assert app_com_banco.test_client().get("/dividends/cb").status_code in {302, 401, 403}
+
+
+# --- "Trazer agora": a tela grava o mesmo que importar-proventos-cb --aplicar ---------
+
+def _cb_com_um_credito(app, ids, monkeypatch, *, valor="12.34"):
+    """Põe um CB de mentira atrás da tela: um dividendo novo do ativo em reais."""
+    import json
+
+    from app.patrimonio.cb_client import CbConfig, CbIncome, CbIncomeEntry
+    from app.routes import dividends as rotas
+
+    with app.app_context():
+        corretora = db.session.get(Broker, ids["corretora"]).name
+    monkeypatch.setitem(app.config, "CB_CORRESPONDENCIA_CONTAS", json.dumps({corretora: ["instituicao-de-teste"]}))
+    credito = CbIncomeEntry(
+        entry_id="55", account_id="conta", institution="instituicao-de-teste", account_name="Conta", currency="BRL",
+        realized_date=date(2026, 3, 5), amount=D(valor), flow="receita", instrument=ids["ticker_reais"],
+        kind="dividendo", role="credito", description="Dividendos",
+    )
+    monkeypatch.setattr(rotas, "cb_config_from_app", lambda: CbConfig("http://cb.test", "t"))
+    monkeypatch.setattr(rotas, "read_income_entries", lambda config: CbIncome(entries=[credito]))
+
+
+def _linhas_do_cb(app, ids):
+    with app.app_context():
+        return sorted(
+            (linha.origin_id, linha.amount)
+            for linha in db.session.scalars(
+                select(Dividend).where(Dividend.owner_id == ids["usuario"], Dividend.origin == "cb")
+            )
+        )
+
+
+def _esperado(html: str) -> str:
+    import re
+
+    achado = re.search(r'name="expected" value="([0-9a-f]{64})"', html)
+    assert achado, "a tela não trouxe o botão de trazer agora"
+    return achado.group(1)
+
+
+def test_trazer_agora_grava_o_que_a_tela_mostrou_e_repetir_nao_duplica(caso, monkeypatch):
+    app, ids = caso
+    _cb_com_um_credito(app, ids, monkeypatch)
+    client, token = _cliente(app, ids["user_id"])
+    antes = _linhas_do_cb(app, ids)
+
+    tela = client.get("/dividends/cb").get_data(as_text=True)
+    assert "Trazer agora: 1 a criar e 0 a atualizar" in tela
+    assert _linhas_do_cb(app, ids) == antes, "abrir a tela não grava"
+
+    resposta = client.post("/dividends/cb", data={"csrf_token": token, "expected": _esperado(tela)})
+
+    assert resposta.status_code == 302
+    assert _linhas_do_cb(app, ids) == sorted([*antes, ("55", D("12.34"))])
+
+    depois = client.get("/dividends/cb").get_data(as_text=True)
+    assert "Trazer agora:" not in depois, "sem nada a gravar, o botão some"
+    repetido = client.post("/dividends/cb", data={"csrf_token": token, "expected": "0" * 64})
+    assert repetido.status_code in (302, 409)
+    assert _linhas_do_cb(app, ids) == sorted([*antes, ("55", D("12.34"))])
+
+
+def test_trazer_agora_recusa_quando_o_cb_mudou_depois_de_a_tela_abrir(caso, monkeypatch):
+    app, ids = caso
+    _cb_com_um_credito(app, ids, monkeypatch)
+    client, token = _cliente(app, ids["user_id"])
+    antes = _linhas_do_cb(app, ids)
+    esperado = _esperado(client.get("/dividends/cb").get_data(as_text=True))
+
+    _cb_com_um_credito(app, ids, monkeypatch, valor="99.99")  # o lançamento foi corrigido no CB
+    resposta = client.post("/dividends/cb", data={"csrf_token": token, "expected": esperado})
+
+    assert resposta.status_code == 409
+    assert _linhas_do_cb(app, ids) == antes
+
+
+def test_trazer_agora_exige_csrf_login_e_cb_configurado(caso, monkeypatch):
+    app, ids = caso
+    client, token = _cliente(app, ids["user_id"])
+    antes = _linhas_do_cb(app, ids)
+
+    assert client.post("/dividends/cb", data={"csrf_token": token, "expected": "0" * 64}).status_code == 503
+    _cb_com_um_credito(app, ids, monkeypatch)
+    assert client.post("/dividends/cb", data={"expected": "0" * 64}).status_code in (400, 403)
+    assert app.test_client().post("/dividends/cb", data={"expected": "0" * 64}).status_code in (302, 400, 401, 403)
+    assert _linhas_do_cb(app, ids) == antes

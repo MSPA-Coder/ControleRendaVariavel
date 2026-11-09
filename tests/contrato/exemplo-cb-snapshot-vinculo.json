@@ -75,9 +75,8 @@
       "source_id": "controle-bancario:category:exemplo-3",
       "payload": {
         "source_id": "controle-bancario:category:exemplo-3",
-        "name": "Variação de mercado",
-        "kind": "gerencial",
-        "valuation": true,
+        "name": "Operações em Bolsa",
+        "kind": "movimentacao",
         "group": null,
         "created_at": "2026-01-01T00:00:00+00:00",
         "updated_at": "2026-01-01T00:00:00+00:00"
@@ -88,8 +87,8 @@
       "source_id": "controle-bancario:category:exemplo-4",
       "payload": {
         "source_id": "controle-bancario:category:exemplo-4",
-        "name": "Operações em Bolsa",
-        "kind": "movimentacao",
+        "name": "Aluguel de Açoes / Dividendos / JCP",
+        "kind": "gerencial",
         "group": null,
         "created_at": "2026-01-01T00:00:00+00:00",
         "updated_at": "2026-01-01T00:00:00+00:00"
@@ -100,7 +99,7 @@
       "source_id": "controle-bancario:category:exemplo-5",
       "payload": {
         "source_id": "controle-bancario:category:exemplo-5",
-        "name": "Aluguel de Açoes / Dividendos / JCP",
+        "name": "IRRF sobre investimentos",
         "kind": "gerencial",
         "group": null,
         "created_at": "2026-01-01T00:00:00+00:00",
@@ -112,18 +111,6 @@
       "source_id": "controle-bancario:category:exemplo-6",
       "payload": {
         "source_id": "controle-bancario:category:exemplo-6",
-        "name": "IRRF sobre investimentos",
-        "kind": "gerencial",
-        "group": null,
-        "created_at": "2026-01-01T00:00:00+00:00",
-        "updated_at": "2026-01-01T00:00:00+00:00"
-      }
-    },
-    {
-      "resource": "category",
-      "source_id": "controle-bancario:category:exemplo-7",
-      "payload": {
-        "source_id": "controle-bancario:category:exemplo-7",
         "name": "Mercado",
         "kind": "gerencial",
         "group": null,
@@ -133,11 +120,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-8",
+      "source_id": "controle-bancario:cash-entry:exemplo-7",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-8",
+        "source_id": "controle-bancario:cash-entry:exemplo-7",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-4",
+        "category_id": "controle-bancario:category:exemplo-3",
         "transfer_id": null,
         "description": "Operações Bolsa D+2 Pr 27/01/2026 Nc. 543216",
         "entry_type": "receita",
@@ -163,11 +150,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-9",
+      "source_id": "controle-bancario:cash-entry:exemplo-8",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-9",
+        "source_id": "controle-bancario:cash-entry:exemplo-8",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-4",
+        "category_id": "controle-bancario:category:exemplo-3",
         "transfer_id": null,
         "description": "Operações Bolsa D+2 Pr 20/03/2026 Nc. *",
         "entry_type": "despesa",
@@ -192,11 +179,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-10",
+      "source_id": "controle-bancario:cash-entry:exemplo-9",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-10",
+        "source_id": "controle-bancario:cash-entry:exemplo-9",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-4",
+        "category_id": "controle-bancario:category:exemplo-3",
         "transfer_id": null,
         "description": "Operações Bm&F Pr 06/01/2026 Nc. 126168",
         "entry_type": "despesa",
@@ -218,11 +205,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-11",
+      "source_id": "controle-bancario:cash-entry:exemplo-10",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-11",
+        "source_id": "controle-bancario:cash-entry:exemplo-10",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-4",
+        "category_id": "controle-bancario:category:exemplo-3",
         "transfer_id": null,
         "description": "Operações Bolsa D+2 Pr 01/04/2026",
         "entry_type": "receita",
@@ -244,11 +231,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-12",
+      "source_id": "controle-bancario:cash-entry:exemplo-11",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-12",
+        "source_id": "controle-bancario:cash-entry:exemplo-11",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-5",
+        "category_id": "controle-bancario:category:exemplo-4",
         "transfer_id": null,
         "description": "Dividendos Brwegeacnor0",
         "entry_type": "receita",
@@ -273,11 +260,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-13",
+      "source_id": "controle-bancario:cash-entry:exemplo-12",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-13",
+        "source_id": "controle-bancario:cash-entry:exemplo-12",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-5",
+        "category_id": "controle-bancario:category:exemplo-4",
         "transfer_id": null,
         "description": "Juros S/ Capital EALT4",
         "entry_type": "receita",
@@ -302,11 +289,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-14",
+      "source_id": "controle-bancario:cash-entry:exemplo-13",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-14",
+        "source_id": "controle-bancario:cash-entry:exemplo-13",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-5",
+        "category_id": "controle-bancario:category:exemplo-4",
         "transfer_id": null,
         "description": "Taxa de Remuneração Emprestimo Ações Brraizacnpr6",
         "entry_type": "receita",
@@ -331,11 +318,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-15",
+      "source_id": "controle-bancario:cash-entry:exemplo-14",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-15",
+        "source_id": "controle-bancario:cash-entry:exemplo-14",
         "account_id": "controle-bancario:account:exemplo-1",
-        "category_id": "controle-bancario:category:exemplo-6",
+        "category_id": "controle-bancario:category:exemplo-5",
         "transfer_id": null,
         "description": "Irrf S/Rendimentos Empréstimos de Ações Brraizacnpr6",
         "entry_type": "despesa",
@@ -360,11 +347,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-16",
+      "source_id": "controle-bancario:cash-entry:exemplo-15",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-16",
+        "source_id": "controle-bancario:cash-entry:exemplo-15",
         "account_id": "controle-bancario:account:exemplo-2",
-        "category_id": "controle-bancario:category:exemplo-4",
+        "category_id": "controle-bancario:category:exemplo-3",
         "transfer_id": null,
         "description": "Compra de CGC na Avenue: 5000 a US$ 0,95, pregão 16/06/2026",
         "entry_type": "despesa",
@@ -391,11 +378,11 @@
     },
     {
       "resource": "cash_entry",
-      "source_id": "controle-bancario:cash-entry:exemplo-17",
+      "source_id": "controle-bancario:cash-entry:exemplo-16",
       "payload": {
-        "source_id": "controle-bancario:cash-entry:exemplo-17",
+        "source_id": "controle-bancario:cash-entry:exemplo-16",
         "account_id": "controle-bancario:account:exemplo-2",
-        "category_id": "controle-bancario:category:exemplo-5",
+        "category_id": "controle-bancario:category:exemplo-4",
         "transfer_id": null,
         "description": "Cupom de ORCL 3.95 25/03/51 na Avenue",
         "entry_type": "receita",

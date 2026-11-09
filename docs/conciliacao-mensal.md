@@ -35,12 +35,14 @@ fechamento do CB mostra, a qualquer data de corte, o que falta dos dois lados
    do formulário passa, e nada vai na URL.
 3. **CB**: Roteiro de fechamento › Coleta do myProfit (prévia e gravação), ou
    `manage.py importar_coleta_myprofit <arquivo> --usuario U [--gravar]`.
-4. **CRV**: leve o arquivo ao contêiner (como no passo 3 abaixo) e rode
-   `flask --app app:create_app importar-coleta-myprofit /tmp/coleta.json` (ensaio)
-   e de novo com `--gravar`. Os negócios entram em `executions` (repetido é
+4. **CRV**: Conferência › Coleta do myProfit (`/executions/collection`): envie
+   o mesmo pacote, ensaie e grave. Os negócios entram em `executions` (repetido é
    reconhecido), cada data de posição substitui a mesma data em
    `myprofit_positions`, e a conferência de proventos fica em `myprofit_coletas`.
-   Depois, `aplicar-execucoes` como no passo 5.
+   Depois, Conferência › Aplicar negócios (`/executions/apply`): ensaie, confira
+   o que abre, reforça ou fecha, e grave. As pendências são as do passo 5.
+   O comando `importar-coleta-myprofit` (com o arquivo levado ao contêiner, como
+   no passo 3 abaixo) e o `aplicar-execucoes` fazem o mesmo, pelo mesmo código.
 
 **Proventos.** A coleta confere, por ativo e mês de pagamento, os proventos do
 myProfit contra os do CRV (que vêm do CB), nas corretoras que o CB cobre e a
@@ -65,8 +67,9 @@ o lançamento lá é manual) aparece como diferença e se reconhece com
 
 Todo primeiro dia útil, para o mês que fechou. A rotina exige o titular logado
 no myProfit, no navegador embutido do Claude Code (nenhuma senha é guardada em
-lugar algum), e acesso SSH ao VPS1. O lembrete agendado abre a sessão que a
-executa.
+lugar algum). Pela coleta única, o resto se faz nas telas do CB e do CRV; o
+acesso SSH ao VPS1 só é preciso no caminho antigo, por relatório (passos 2 a 4
+abaixo). O lembrete agendado abre a sessão que a executa.
 
 ## Passos
 
@@ -74,7 +77,8 @@ executa.
    da Genial e da XP. Sem eles, o `conferir-pregoes` mostra os últimos pregões
    como "aguardando extrato" (o CB publica até que dia cada extrato foi
    importado). Os proventos do CB entram no CRV sozinhos, na manhã seguinte à
-   importação (`importar-proventos-cb --rotina`, no VPS, de terça a sábado).
+   importação (`importar-proventos-cb --rotina`, no VPS, de terça a sábado);
+   para não esperar, Proventos › Proventos do CB › "Trazer agora".
 2. **Emitir os relatórios** (aba `https://myprofitweb.com/App/...` já logada):
    carregue `scripts/myprofit/ler-relatorio.js` no console e rode, com as datas do
    mês (a posição usa o último dia):

@@ -3,14 +3,14 @@
 {% block workspace_actions %}
 <a class="button" href="{{ url_for('portfolio.dividends') }}">Proventos</a>
 {% endblock %}
-{% block description %}Confira a origem dos recebimentos e as pendências antes de qualquer importação.{% endblock %}
+{% block description %}Confira a origem dos recebimentos e as pendências, e traga para o CRV o que o Controle Bancário já tem.{% endblock %}
 {% block workspace_content %}
 {# Ensaio ao vivo da importação dos proventos do Controle Bancário e fila de revisão.
-   Somente leitura: nada é gravado aqui. Quem grava é o comando
-   `importar-proventos-cb --aplicar`, e nada da fila é gravado até o mantenedor
-   corrigir o lançamento no CB ou cadastrar o ticker no CRV. #}
+   "Trazer agora" grava o mesmo que `importar-proventos-cb --aplicar` (e que a
+   rotina diária do VPS). Nada da fila é gravado até o mantenedor corrigir o
+   lançamento no CB ou cadastrar o ticker no CRV. #}
 
-<p class="form-help">Nas corretoras {{ brokers|join(', ') }} (em reais; a Avenue em dólar), a partir de {{ cutoff|udate }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. Esta tela só mostra o que o comando <code>importar-proventos-cb</code> faria; ela não grava.</p>
+<p class="form-help">Nas corretoras {{ brokers|join(', ') }} (em reais; a Avenue em dólar), a partir de {{ cutoff|udate }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. A rotina do servidor os traz toda manhã, de terça a sábado; “Trazer agora” faz o mesmo na hora, sem tocar nas linhas de planilha.</p>
 {% if status == 'nao_configurado' %}
 <p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p>
 {% elif status == 'indisponivel' %}
@@ -24,6 +24,15 @@
 </section>
 <p class="form-help">{{ plan.create|length }} a criar · {{ plan.update|length }} a atualizar · {{ plan.unchanged }} já iguais · {{ plan.income.review|length }} na fila de revisão · {{ plan.absent_from_cb|length }} gravada(s) que o CB não tem mais.</p>
 {% for problem in plan.problems %}<p class="form-help" role="alert">{{ problem }}</p>{% endfor %}
+{% if plan.can_write and not plan.problems %}
+<form class="position-form" method="post" action="{{ url_for('portfolio.apply_dividends_cb') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="expected" value="{{ fingerprint }}">
+  <div class="form-actions">
+    <button class="button button-primary" type="submit">Trazer agora: {{ plan.create|length }} a criar e {{ plan.update|length }} a atualizar</button>
+  </div>
+</form>
+{% endif %}
 
 <section class="exposure" aria-label="Fila de revisão">
   <div class="exposure-table">

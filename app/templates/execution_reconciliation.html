@@ -24,6 +24,8 @@
 </form>
 {% endblock %}
 {% block workspace_actions %}
+<a class="button" href="{{ url_for('portfolio.import_collection') }}">Coleta do myProfit</a>
+<a class="button" href="{{ url_for('portfolio.apply_pending_executions') }}">Aplicar negócios</a>
 <a class="button button-primary" href="{{ url_for('portfolio.import_executions') }}">Importar negócios</a>
 {% endblock %}
 {% block workspace_content %}

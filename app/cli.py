@@ -591,27 +591,14 @@ def importar_coleta_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -
     """
     from sqlalchemy.exc import IntegrityError
 
-    from app.executions import coleta
-    from app.executions.conciliacao import save_position_snapshot
-    from app.executions.myprofit import ExecutionReportError
-    from app.executions.service import InstitutionMapError, apply_import, plan_import
+    from app.executions import coleta_importacao
 
     owner_id = _owner_for_command(usuario)
-    if arquivo.stat().st_size > coleta.LIMITE_DE_BYTES:
-        raise click.ClickException("O pacote passa de 4 MB.")
     try:
-        pacote = coleta.ler(arquivo.read_bytes())
-        retratos = coleta.retratos(pacote)
-        report = coleta.negocios(pacote)
-        plan = plan_import(owner_id, report) if report is not None else None
-    except (coleta.ColetaError, ExecutionReportError, InstitutionMapError) as exc:
+        plano = coleta_importacao.planejar(owner_id, arquivo.read_bytes())
+    except coleta_importacao.ColetaRecusadaError as exc:
         raise click.ClickException(str(exc)) from exc
-    corte = str(current_app.config.get("PROVENTOS_CB_CORTE") or "").strip()
-    try:
-        corte_do_cb = date.fromisoformat(corte) if corte else None
-    except ValueError as exc:
-        raise click.ClickException("PROVENTOS_CB_CORTE deve usar AAAA-MM-DD.") from exc
-    conferencia = coleta.conferir_proventos(owner_id, pacote, corte_do_cb)
+    pacote, plan, conferencia = plano.pacote, plano.negocios, plano.proventos
 
     click.echo(f"Pacote de {pacote.de:%d/%m/%Y} a {pacote.ate:%d/%m/%Y}; sha256 {pacote.sha256[:12]}.")
     if plan is None:
@@ -623,7 +610,7 @@ def importar_coleta_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -
         )
         for problem in plan.problems:
             click.echo(f"PENDÊNCIA: {problem}", err=True)
-    for retrato in retratos:
+    for retrato in plano.retratos:
         dentro = sum(1 for row in retrato.rows if row.in_scope)
         click.echo(f"Posição de {retrato.as_of:%d/%m/%Y}: {len(retrato.rows)} linha(s), {dentro} da B3.")
     if conferencia.inicio and conferencia.fim and conferencia.fim >= conferencia.inicio:
@@ -633,19 +620,13 @@ def importar_coleta_myprofit(arquivo: Path, usuario: str | None, gravar: bool) -
         )
         for texto in conferencia.divergencias:
             click.echo(f"  diferença: {texto}")
-    if plan is not None and plan.problems:
-        raise click.ClickException("Os negócios têm pendências; nada foi gravado.")
-    if any(retrato.as_of > date.today() for retrato in retratos):
-        raise click.ClickException("O pacote traz posição com data futura; refaça a coleta.")
+    if not plano.pode_gravar:
+        raise click.ClickException(plano.impedimentos[0])
     if not gravar:
         click.echo("Ensaio: nada foi gravado. Use --gravar para confirmar.")
         return
     try:
-        if plan is not None and plan.can_write:
-            apply_import(owner_id, plan, file_name=arquivo.name)
-        for retrato in retratos:
-            save_position_snapshot(owner_id, retrato)
-        coleta.registrar(owner_id, pacote, conferencia)
+        coleta_importacao.gravar(owner_id, plano, file_name=arquivo.name)
         db.session.commit()
     except (IntegrityError, ValueError) as exc:
         db.session.rollback()

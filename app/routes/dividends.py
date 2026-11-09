@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -16,6 +17,8 @@ from app import db
 from app.core.currency_filter import ALL
 from app.core.validation import parse_finite_decimal
 from app.dividends.cb_sync import (
+    ImportPlan,
+    apply_cb_import,
     cb_brokers,
     comes_from_cb,
     cutoff_date,
@@ -306,31 +309,82 @@ def dividends() -> str:
     )
 
 
-@bp.get("/dividends/cb")
-def dividends_cb() -> str:
-    """Ensaio ao vivo dos proventos do CB e a fila de revisão (só leitura).
-
-    Nada é gravado aqui: quem grava é o comando ``importar-proventos-cb
-    --aplicar``. A fila lista o que o CRV não consegue importar sozinho (crédito
-    sem ativo ou com ticker que o CRV não cadastra), sem criar ticker.
-    """
-    status, message, plan = "ok", "", None
+def _cb_plan() -> tuple[str, str, ImportPlan | None]:
+    """``(status, mensagem, plano)`` da leitura do CB para o dono da sessão."""
     try:
         config = cb_config_from_app()
         if config is None:
-            status = "nao_configurado"
-        else:
-            plan = plan_cb_import(current_owner_id(), read_income_entries(config))
+            return "nao_configurado", "", None
+        return "ok", "", plan_cb_import(current_owner_id(), read_income_entries(config))
     except CbUnavailableError as exc:
-        status, message = "indisponivel", str(exc)
-    return render_template(
-        "dividends_cb.html",
-        status=status,
-        message=message,
-        plan=plan,
-        cutoff=cutoff_date(),
-        brokers=cb_brokers(),
+        return "indisponivel", str(exc), None
+
+
+def _cb_plan_fingerprint(plan: ImportPlan) -> str:
+    """O que a tela mostrou que seria gravado, para "Trazer agora" só valer se for o mesmo."""
+    lines = sorted(
+        f"{verb}|{prepared.provento.origin_id}|{prepared.provento.gross}|{prepared.provento.withheld}"
+        for verb, rows in (("criar", plan.create), ("atualizar", plan.update))
+        for prepared in rows
     )
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+def _render_dividends_cb(status: str, message: str, plan: ImportPlan | None, code: int = 200) -> ResponseReturnValue:
+    return (
+        render_template(
+            "dividends_cb.html",
+            status=status,
+            message=message,
+            plan=plan,
+            fingerprint=_cb_plan_fingerprint(plan) if plan is not None else "",
+            cutoff=cutoff_date(),
+            brokers=cb_brokers(),
+        ),
+        code,
+    )
+
+
+@bp.get("/dividends/cb")
+def dividends_cb() -> ResponseReturnValue:
+    """Ensaio ao vivo dos proventos do CB e a fila de revisão.
+
+    A leitura não grava nada. A fila lista o que o CRV não consegue importar
+    sozinho (crédito sem ativo ou com ticker que o CRV não cadastra), sem criar
+    ticker.
+    """
+    return _render_dividends_cb(*_cb_plan())
+
+
+@bp.post("/dividends/cb")
+def apply_dividends_cb() -> ResponseReturnValue:
+    """"Trazer agora": grava o mesmo que ``importar-proventos-cb --aplicar``.
+
+    Só linhas ``origin = 'cb'``, de forma idempotente; a planilha não é tocada.
+    O plano é refeito aqui e só é gravado se for o que a tela mostrou.
+    """
+    status, message, plan = _cb_plan()
+    if plan is None:
+        flash(message or "CB não configurado.", "error")
+        return _render_dividends_cb(status, message, plan, 503)
+    if plan.problems:
+        flash("O ensaio tem pendências; nada foi gravado.", "error")
+        return _render_dividends_cb(status, message, plan, 422)
+    if request.form.get("expected") != _cb_plan_fingerprint(plan):
+        flash("Os proventos do CB mudaram desde que a tela foi aberta; confira e traga de novo.", "error")
+        return _render_dividends_cb(status, message, plan, 409)
+    if not plan.can_write:
+        flash("Nada a gravar: as linhas do CB já estão no CRV.", "info")
+        return redirect(url_for("portfolio.dividends_cb"))
+    try:
+        created, updated = apply_cb_import(current_owner_id(), plan)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash("Os proventos mudaram durante a gravação; abra a tela de novo.", "error")
+        return redirect(url_for("portfolio.dividends_cb"))
+    flash(f"Proventos do CB gravados: {created} criado(s), {updated} atualizado(s). A planilha não foi alterada.", "success")
+    return redirect(url_for("portfolio.dividends_cb"))
 
 
 @bp.get("/dividends/new")

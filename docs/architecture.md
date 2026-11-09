@@ -621,7 +621,10 @@ pendentes, sem gravar nada, o ativo sem cadastro, a opção sem contrato, o
 exercício (`...E`), a venda sem posição comprada que a cubra e a carteira
 ambígua. Cada negócio roda num ponto de salvamento; `apply_executions` não faz
 commit, e o comando `aplicar-execucoes [--ate] [--gravar]` grava ou desfaz (o
-ensaio é a execução real desfeita) e sai com código 1 se sobrar pendência.
+ensaio é a execução real desfeita) e sai com código 1 se sobrar pendência. A
+tela `/executions/apply` chama o mesmo `apply_executions`: "Ensaiar" aplica e
+desfaz, e "Gravar" só vale se o resultado for o que o ensaio mostrou (a tela
+manda de volta um resumo dele; se algo mudou no meio, nada é gravado).
 `marcar-execucoes-aplicadas --ate D [--ativo A] --nota N [--gravar]` registra a
 linha de base, sem mexer em posição. Linha já aplicada que muda no myProfit é
 recusada na reimportação.
@@ -728,8 +731,11 @@ nas URLs `http`.
 `plan_import`/`apply_import`, cada data de posição vira um retrato em
 `myprofit_positions` e os proventos são conferidos contra os do CRV; o pacote fica
 em `myprofit_coletas` (revisão `20261021_0036`), com o resumo da conferência.
-Comando: `importar-coleta-myprofit <pacote> [--gravar]` (ensaio por padrão, uma
-transação na gravação).
+O caso de uso é `app/executions/coleta_importacao.py` (`planejar` e `gravar`,
+sem commit), com duas entradas: a tela `/executions/collection` (login, CSRF,
+dono da sessão; grava só com o `sha256` do pacote que o ensaio mostrou) e o
+comando `importar-coleta-myprofit <pacote> [--gravar]`. Ensaio por padrão, uma
+transação na gravação.
 
 `GET /fechamento/status?ate=AAAA-MM-DD` (`app/routes/fechamento.py`, contrato
 `crv-fechamento/1`) é lido pelo Roteiro de fechamento do CB pela rede interna. Devolve
@@ -782,7 +788,7 @@ espaço nem barra: `symbol_for_instrument` troca os dois por hífen
   e estornos maiores que as cobranças do dia vão para a fila de revisão.
 * **Fila de revisão**: crédito sem `instrument`, sem tipo, ou com ticker que o
   CRV não cadastra (o comando **nunca cria ticker**) não é gravado. Aparece na
-  tela `/dividends/cb` (ensaio ao vivo, somente leitura) e na saída do comando,
+  tela `/dividends/cb` (ensaio ao vivo) e na saída do comando,
   com o que fazer.
 * **Importação**: `flask --app app:create_app importar-proventos-cb [--usuario U]
   [--corte AAAA-MM-DD] [--aplicar | --rotina]`. O padrão é o **ensaio**; `--aplicar` grava só
@@ -806,6 +812,9 @@ espaço nem barra: `symbol_for_instrument` troca os dois por hífen
   ativa e listada como **divergência**. Nada é apagado e `--desfazer` reverte.
   Roda depois de `importar-proventos-cb --aplicar` e, em produção, só com backup
   validado e autorização do mantenedor.
+* **Trazer agora**: `POST /dividends/cb` grava o mesmo que `--aplicar`, pela
+  tela, sem esperar a rotina da manhã. O plano é refeito no servidor e só é
+  gravado se for o que a tela mostrou.
 * **Telas**: cada linha mostra a origem; a do CB é **somente leitura** (editar e
   excluir respondem 403: a correção é no CB), a substituída não aparece nem se
   edita; o valor mostra líquido, bruto e retenções; formulário e importação por

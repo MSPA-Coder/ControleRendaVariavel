@@ -1,0 +1,68 @@
+{% extends "workspace.html" %}
+{% block title %}Coleta do myProfit · Controle de Renda Variável{% endblock %}
+{% block workspace_title %}Coleta do myProfit{% endblock %}
+{% block workspace_content %}
+<form class="position-form" method="post" enctype="multipart/form-data" action="{{ url_for('portfolio.import_collection') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <p class="form-help">Selecione o pacote <strong>myprofit-coleta/1</strong> (JSON, até {{ limite_mb }} MB), o mesmo que o Controle Bancário importa. Ele traz os negócios do período, a posição por corretora em cada data e os proventos. O pacote não carrega nome, CPF, e-mail nem telefone.</p>
+  <p class="form-help">O padrão é o <strong>ensaio</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”. Posições, transações e proventos não mudam aqui: os negócios novos vão às posições em “Aplicar negócios”.</p>
+  {% if ultima %}<p class="form-help" role="status">Última coleta gravada: até {{ ultima.ate|udate }}.</p>{% endif %}
+  <label>Pacote JSON<input required type="file" name="pacote" accept=".json,application/json"></label>
+  {% if plano %}<input type="hidden" name="expected_sha256" value="{{ plano.pacote.sha256 }}">{% endif %}
+  <div class="form-actions">
+    <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Conferência</a>
+    <a class="button" href="{{ url_for('portfolio.apply_pending_executions') }}">Aplicar negócios</a>
+    <button class="button" type="submit" name="action" value="ensaio">Ensaiar</button>
+    {% if plano and plano.pode_gravar %}
+    <button class="button button-primary" type="submit" name="action" value="gravar">Gravar a coleta</button>
+    {% endif %}
+  </div>
+</form>
+
+{% if plano %}
+<section class="exposure" aria-label="Resultado do ensaio">
+  <div class="exposure-table">
+    <h2>Ensaio: pacote de {{ plano.pacote.de|ushort }} a {{ plano.pacote.ate|ushort }}</h2>
+    {% for impedimento in plano.impedimentos %}<p class="form-help" role="alert"><strong>Impede a gravação:</strong> {{ impedimento }}</p>{% endfor %}
+
+    <h3>Negócios</h3>
+    {% if plano.negocios %}
+    <table>
+      <tbody>
+        <tr><th>Novos</th><td class="number">{{ plano.negocios.new_rows|length }}</td></tr>
+        <tr><th>Repetidos</th><td class="number">{{ plano.negocios.repeated }}</td></tr>
+        <tr><th>Alterados</th><td class="number">{{ plano.negocios.changed|length }}</td></tr>
+        <tr><th>Fora de escopo (futuros, Tesouro, exterior, aluguel)</th><td class="number">{{ plano.negocios.out_of_scope }}</td></tr>
+      </tbody>
+    </table>
+    {% if plano.negocios.problems %}
+    <ul>{% for problem in plano.negocios.problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% else %}
+    <p class="empty">O pacote não traz o histórico de investimentos.</p>
+    {% endif %}
+
+    <h3>Posições</h3>
+    <table>
+      <thead><tr><th>Data</th><th>Linhas</th><th>Da B3</th></tr></thead>
+      <tbody>
+        {% for retrato in plano.retratos %}
+        <tr><td>{{ retrato.as_of|ushort }}</td><td class="number">{{ retrato.rows|length }}</td><td class="number">{{ retrato.rows|selectattr('in_scope')|list|length }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Proventos × CRV</h3>
+    {% if plano.proventos.inicio and plano.proventos.fim and plano.proventos.fim >= plano.proventos.inicio %}
+    <p class="form-help">De {{ plano.proventos.inicio|ushort }} a {{ plano.proventos.fim|ushort }}: {{ plano.proventos.conferem }} conferem, {{ plano.proventos.divergencias|length }} com diferença.</p>
+    {% if plano.proventos.divergencias %}
+    <ul>{% for texto in plano.proventos.divergencias %}<li data-sensitive-value="true">{{ texto }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% else %}
+    <p class="empty">Nenhum período de proventos a conferir neste pacote.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

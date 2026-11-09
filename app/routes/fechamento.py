@@ -82,15 +82,13 @@ def _item(chave, etapa, titulo, estado, texto, *, detalhe="", acao="", url="", p
 
 def _item_da_coleta(coleta, ate: date) -> dict:
     passos = [
-        "Envie o pacote ao contêiner do CRV no VPS: "
-        "ssh ubuntu@VPS1 'docker exec -i controle-renda-variavel-web-1 sh -c \"cat > /tmp/coleta.json\"' < coleta.json",
-        "Ensaio: flask --app app:create_app importar-coleta-myprofit /tmp/coleta.json",
-        "Gravar: o mesmo comando com --gravar. Reimportar é seguro: negócio repetido é reconhecido.",
+        "No CRV, abra Conferência > Coleta do myProfit e envie o mesmo pacote que o CB importou.",
+        "Ensaie, confira o resumo e grave. Reimportar é seguro: negócio repetido é reconhecido.",
     ]
     if coleta is None or coleta.ate < ate:
         detalhe = f"Última no CRV até {coleta.ate:%d/%m/%Y}." if coleta else "Nenhuma coleta importada no CRV."
         return _item("coleta", "myprofit", "Coleta no CRV", "falta", f"Importar a coleta até {_dia(ate)}",
-                     detalhe=detalhe, acao="Importar no CRV", passos=passos)
+                     detalhe=detalhe, acao="Importar no CRV", url="/executions/collection", passos=passos)
     return _item("coleta", "myprofit", "Coleta no CRV", "em_dia", f"Importada até {_dia(coleta.ate)}")
 
 
@@ -102,10 +100,10 @@ def _item_dos_negocios(owner_id: int, ate: date) -> dict:
             "negocios", "myprofit", "Negócios da B3", "falta",
             f"{n} negócio{'s' if n > 1 else ''} para aplicar às posições",
             detalhe=f"O mais antigo é de {pendentes[0].trade_date:%d/%m/%Y}.",
-            acao="Aplicar no CRV",
+            acao="Aplicar no CRV", url="/executions/apply",
             passos=[
-                "Ensaio: flask --app app:create_app aplicar-execucoes (mostra o que abre, reforça ou fecha).",
-                "Gravar: o mesmo comando com --gravar. O que ele não resolver sozinho fica listado como pendência.",
+                "No CRV, abra Conferência > Aplicar negócios e ensaie: a tela mostra o que abre, reforça ou fecha.",
+                "Grave. O que a aplicação não resolver sozinha fica listado como pendência.",
             ],
         )
     ultima = db.session.scalar(
@@ -313,7 +311,7 @@ def _item_dos_proventos_do_cb(owner_id: int, ate: date) -> dict:
         return _item(
             "proventos-cb", "conferencias", titulo, "pendente", "O CRV não está igual ao CB",
             detalhe="; ".join(parte for parte in partes if parte), acao="Ver a fila", url="/dividends/cb",
-            passos=["Ensaio: flask --app app:create_app importar-proventos-cb (o VPS grava todo dia com --rotina).",
+            passos=["No CRV, abra Proventos > Proventos do CB e use “Trazer agora” (o VPS também grava toda manhã).",
                     "Fila de revisão: corrija o lançamento no CB ou cadastre o ticker no CRV."],
         )
     return _item("proventos-cb", "conferencias", titulo, "em_dia", f"{proventos['iguais']} iguais ao CB",
