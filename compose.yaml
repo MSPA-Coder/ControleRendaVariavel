@@ -108,6 +108,10 @@ services:
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
       POSTGRES_USER: investimentos_app
+      # Papel restrito (só DML), provisionado pelo `db-provision`; a aplicação
+      # recusa uma conexão superusuária (`app/papel_do_banco.py`). Só aqui: o
+      # `migrate` e o `db-provision` usam o administrativo de propósito.
+      DB_EXIGIR_PAPEL_RESTRITO: "1"
       RENDA_VARIAVEL_SESSION_COOKIE_NAME: ${RENDA_VARIAVEL_SESSION_COOKIE_NAME:-controle_renda_variavel_session}
       RTD_STALE_AFTER_SECONDS: ${RTD_STALE_AFTER_SECONDS:-30}
       FORCE_HTTPS: ${FORCE_HTTPS:-false}

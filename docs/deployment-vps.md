@@ -119,7 +119,9 @@ falha (fila de revisão, CB indisponível) dispara o alerta da unidade.
 O Compose é a mesma fonte de verdade no local e no VPS: `db-provision` cria ou
 atualiza `investimentos_app` de forma idempotente antes do `migrate`, concede
 apenas DML e uso de sequências e recusa DDL. O papel administrativo
-`investimentos` não é montado no contêiner `web`. Bancos novos recebem
+`investimentos` não é montado no contêiner `web`, e o `web` (com
+`DB_EXIGIR_PAPEL_RESTRITO=1`) recusa conexão de papel superusuário
+(`app/papel_do_banco.py`). Bancos novos recebem
 checksums por `POSTGRES_INITDB_ARGS=--data-checksums`; um volume existente só é
 habilitado em janela controlada, depois de backup e ensaio de restauração.
 

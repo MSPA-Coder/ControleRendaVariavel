@@ -92,3 +92,15 @@ def test_imagem_do_postgres_recebe_revisao_e_run_da_ci() -> None:
     assert construidos
     for nome, build in construidos.items():
         assert set(build["args"]) == {"ARTIFACT_REVISION", "ARTIFACT_RUN"}, nome
+
+
+def test_so_o_web_exige_o_papel_restrito() -> None:
+    """A trava de `app/papel_do_banco.py` só vale com a variável ligada. Sem ela
+    no `web`, a trava nunca roda; ligada no `migrate` ou no `db-provision`, que
+    usam o superusuário de propósito, derrubaria a migração."""
+    exigem = sorted(
+        nome
+        for nome, servico in _servicos().items()
+        if str((servico.get("environment") or {}).get("DB_EXIGIR_PAPEL_RESTRITO", "")) == "1"
+    )
+    assert exigem == ["web"]

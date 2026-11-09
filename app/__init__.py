@@ -323,6 +323,11 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         )
 
     db.init_app(app)
+    # Criar o engine não conecta: `create_app()` continua sem consultar o banco.
+    from .papel_do_banco import instalar as instalar_trava_de_papel
+
+    with app.app_context():
+        instalar_trava_de_papel(db.engine)
     migrate.init_app(app, db)
     csrf = iniciar_csrf(app)
     login_manager.init_app(app)
