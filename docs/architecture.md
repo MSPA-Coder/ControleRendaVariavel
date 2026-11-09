@@ -237,7 +237,7 @@ problema porque nada armazena: o Nginx do VPS faz proxy sem `proxy_cache`.
 O único cache é o do navegador, e só para estáticos: `url_for` acrescenta
 `?v=<hash do conteúdo>` a cada arquivo de `static/` (do app e dos blueprints),
 e a resposta cuja versão bate com o arquivo sai com um ano de `max-age` e
-`immutable` (`app/core/estaticos.py`). Sem `v`, ou com um `v` antigo, o arquivo
+`immutable` (`sharedauth.estaticos`). Sem `v`, ou com um `v` antigo, o arquivo
 continua revalidando. Por isso nenhum template monta caminho de estático à mão.
 
 ### JavaScript próprio

@@ -10,6 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sharedauth.access import requer_login, requer_troca_de_senha
 from sharedauth.config import ler_flag, montar_url_postgres
 from sharedauth.csrf import iniciar_csrf
+from sharedauth.estaticos import instalar_versao_de_estaticos
 from sharedauth.messages import registrar_mensagens
 from sharedauth.ratelimit import LIMITE_LOGIN_PADRAO, aplicar_limite, iniciar_limiter
 from sharedauth.secrets import resolver_segredo
@@ -25,7 +26,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import IntegerConverter
 
 from app.core.currency_filter import parse_currency_filter
-from app.core.estaticos import instalar_versao_de_estaticos
 from app.core.privacy import values_hidden
 
 if TYPE_CHECKING:

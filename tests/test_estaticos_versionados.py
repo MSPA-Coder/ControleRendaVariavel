@@ -1,6 +1,7 @@
 """Estáticos com a versão na URL ficam um ano em cache; os demais revalidam.
 
-Ver `app/core/estaticos.py` para o porquê.
+O mecanismo é `sharedauth.estaticos`, que tem os testes de contrato; estes
+conferem que este app o instalou.
 """
 from __future__ import annotations
 
@@ -10,8 +11,7 @@ from pathlib import Path
 
 import pytest
 from flask import url_for
-
-from app.core.estaticos import UM_ANO_EM_SEGUNDOS
+from sharedauth.ui import UM_ANO_EM_SEGUNDOS
 
 ROOT = Path(__file__).resolve().parents[1]
 
