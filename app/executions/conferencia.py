@@ -527,10 +527,11 @@ def build_reconciliation(
         for institution in institutions:
             institution_to_broker[institution] = broker_name
     coverage: dict[tuple[str, str], date] = {}
-    for (institution, currency), covered in settlements.coverage.items():
+    # Nome próprio para a moeda da cobertura: ``currency`` é o filtro do pedido.
+    for (institution, covered_currency), covered in settlements.coverage.items():
         broker_name = institution_to_broker.get(institution)
         if broker_name is not None:
-            key = (broker_name, currency)
+            key = (broker_name, covered_currency)
             coverage[key] = max(covered, coverage.get(key, covered))
     cb: list[Movement] = []
     cb_trades: list[Trade] = []

@@ -155,6 +155,30 @@ def test_cada_negocio_da_avenue_e_conferido_pelo_extrato_de_posicao(sessao, cena
     assert date(2025, 7, 31) not in exterior
 
 
+def test_conta_em_reais_com_extrato_nao_esconde_as_liquidacoes_em_dolar(sessao, cenario):
+    """A cobertura de uma conta em reais, vindo por último, não pode virar filtro de moeda."""
+    dono, corretora, cgc, brk = cenario
+    fetcher = _cb(cgc, brk)
+
+    def com_conta_em_reais(url, token):
+        documento = fetcher(url, token)
+        documento["items"].append({
+            "resource": "account", "source_id": "controle-bancario:account:brl",
+            "payload": {
+                "source_id": "controle-bancario:account:brl", "name": "Conta em reais", "institution": "avenue",
+                "institution_name": "Avenue", "currency": "BRL", "statement_covered_until": "2026-10-31",
+            },
+        })
+        return documento
+
+    resultado = _conferir(dono, com_conta_em_reais)
+
+    exterior = {linha.pregao: linha for linha in resultado.rows if linha.broker == corretora.name}
+    assert exterior[date(2026, 6, 16)].state == MATCH
+    assert exterior[date(2026, 8, 5)].state == ONLY_CB
+    assert resultado.holdings, "a carteira do extrato em dólar sumiu junto"
+
+
 def test_quantidade_errada_no_crv_aparece_como_diferenca(sessao, cenario):
     dono, corretora, cgc, brk = cenario
 
