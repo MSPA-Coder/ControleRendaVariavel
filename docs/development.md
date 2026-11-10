@@ -1,5 +1,9 @@
 # Desenvolvimento e validação
 
+O que validar em cada tipo de mudança está na seção "Validação" do
+[`AGENTS.md`](../AGENTS.md).
+Diante de teste vermelho: [`TESTES.md`](TESTES.md).
+
 O projeto usa Docker para aplicação, PostgreSQL, migrações, lint e testes. No
 host são necessários apenas Docker Desktop, Git e um editor; o venv do laço
 rápido, descrito no `AGENTS.md`, é opcional. A exceção obrigatória é o agente
@@ -61,10 +65,11 @@ relatório da implantação.
 O comando oficial executa Ruff, o piloto mypy e toda a suíte pytest na imagem `quality`:
 
 ```powershell
-docker compose --profile quality run --build --rm quality
+.\scripts\quality.ps1
 ```
 
-A imagem `quality` instala exatamente o que a imagem servida instala, mais as
+O script roda `docker compose --profile quality run --build --rm quality`, uma
+execução por vez. A imagem `quality` instala exatamente o que a imagem servida instala, mais as
 ferramentas de teste — o que se valida é o ambiente que roda, não um arquivo de
 requisitos.
 
@@ -156,33 +161,6 @@ permite indicar outra localização. Em Linux, dê escrita ao diretório
 Falhas salvam capturas apenas dos dados fictícios nesse diretório ignorado.
 Cada execução começa com banco vazio em tmpfs. A CI `Navegador` repete o
 mesmo comando sem instalar Node ou navegadores no host.
-
-### Diante de um teste vermelho
-
-Decida primeiro de quem é o defeito, e diga isso em voz alta:
-
-- **do código** → corrija o código, nunca a asserção;
-- **da asserção** → corrija a asserção, e a nova precisa ser mais forte ou mais
-  precisa que a antiga, nunca mais permissiva;
-- **do ambiente** → prove, comparando o mesmo comando contra o commit anterior,
-  antes de descartar.
-
-## Validação proporcional
-
-Além do comando automatizado:
-
-| Mudança | Validação adicional |
-|---|---|
-| documentação | links, caminhos, comandos, buscas residuais, `git diff --check` e `docker compose config --quiet` |
-| rota, template ou HTMX | percorrer o fluxo afetado no navegador, com cenário real |
-| cálculo financeiro | conferir contra os exemplos normativos de [`planilha-acoes.md`](planilha-acoes.md) ou [`planilha-opcoes.md`](planilha-opcoes.md) |
-| autenticação, autorização, sessão ou CSRF | exercitar login, logout, uma operação mutante e a negação anônima |
-| schema ou migração | backup validado, cadeia completa em PostgreSQL vazio, `upgrade` e `downgrade` da revisão alterada, health check |
-| dependência, Dockerfile ou Compose | build sem cache quando pertinente, subida completa da pilha e `/health` |
-| RTD | provedor determinístico e, quando disponível, um ticker conhecido, sem dado sensível no log |
-
-Registre o que foi executado **e o que foi omitido**. Uma validação que não
-aconteceu e não foi dita vira, na leitura seguinte, uma que aconteceu.
 
 ## Schema
 

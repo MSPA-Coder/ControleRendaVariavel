@@ -88,8 +88,10 @@ o sistema faz Y"), e as frases novas aparecem no resumo da entrega.
 ## Diante de vermelho
 
 Decida de quem é o defeito antes de mexer. Teste que mede texto literal reprova
-mudança legítima, e então quem se corrige é a asserção. Se o teste estava
-certo, o código está errado, mesmo que a mudança pareça inocente. Nunca
+mudança legítima, e então quem se corrige é a asserção, e a nova fica mais
+precisa, nunca mais permissiva. Se o teste estava certo, o código está errado,
+mesmo que a mudança pareça inocente. Se parecer defeito do ambiente, prove
+antes de descartar: rode o mesmo comando sobre o commit anterior. Nunca
 escreva código de produção para um teste passar, nem desmarque a camada com
 banco para a suíte ficar mais rápida.
 
