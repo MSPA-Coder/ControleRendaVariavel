@@ -1,1 +1,2 @@
---profile quality run --build --rm quality
+prefixo: --profile quality
+run --build --rm quality

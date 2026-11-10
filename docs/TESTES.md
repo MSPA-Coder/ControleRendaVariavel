@@ -2,8 +2,9 @@
 
 Cópia de `_manutencao/docs/TESTES.md`: mude lá e rode
 `compartilhados/sincronizar.py --aplicar`. O que é próprio de um projeto
-(camadas, marcadores, comando) fica no `AGENTS.md` dele. A numeração T1–T13 é
-citada em testes e documentos: não renumere.
+(camadas, marcadores, comando) fica no `AGENTS.md` dele. A numeração T1–T16 é
+citada em testes e documentos: regra nova ganha o número seguinte e nenhuma
+muda de número.
 
 ## O que merece teste
 
@@ -56,7 +57,7 @@ o sistema faz Y"), e as frases novas aparecem no resumo da entrega.
   SQLite não substitui o PostgreSQL. Trava de banco (`select_for_update`,
   `with_for_update`, `pg_advisory_xact_lock`) em fluxo de dinheiro, saldo,
   posição ou acesso nasce com um teste de disputa que falha sem ela, ou com uma
-  linha na documentação dizendo qual outra garantia a cobre (como conferir: T11).
+  linha na documentação dizendo qual outra garantia a cobre (como conferir: T14).
 - **T8. Migração que transforma ou apaga dado** ganha teste com o antes e o
   depois, e com o aborto se ela puder abortar. Mudança só de schema já é
   coberta pela cadeia inteira aplicada a um banco vazio.
@@ -70,16 +71,16 @@ o sistema faz Y"), e as frases novas aparecem no resumo da entrega.
   incidente em poucas frases. Antes do commit, rode o teste com a correção
   desfeita: ele precisa falhar. Teste de tumba (algo removido não volta) só
   quando a volta seria perigosa.
-- **T11. Trava de banco:** para saber se um teste a protege, retire a chamada
+- **T14. Trava de banco:** para saber se um teste a protege, retire a chamada
   numa cópia e rode o arquivo de disputa algumas vezes e a suíte inteira com
   `-x`: saída 0 quer dizer que nada a protege. Teste que só procura a palavra
   da trava no SQL não protege nada (T2).
-- **T11. Mutação** é sob demanda, sem portão: `mutmut` 3.x e `pytest-cov` rodam
+- **T15. Mutação** é sob demanda, sem portão: `mutmut` 3.x e `pytest-cov` rodam
   na imagem `quality`. Configuração que funciona: `source_paths` com os módulos
   alvo, `pytest_add_cli_args_test_selection` só com os testes que os exercitam
   e `also_copy` com o que o `conftest` precisa. Rode pelo menos 3 vezes; lacuna
   é só o que sobrevive em todas.
-- **T11. Cobertura:** meta vem com o escopo e os módulos não executados. Nunca
+- **T16. Cobertura:** meta vem com o escopo e os módulos não executados. Nunca
   diminua o denominador, exclua código de produto ou escreva asserção vazia
   para atingi-la.
 - **Ao remover um teste,** confira que outro ainda pega o defeito que ele

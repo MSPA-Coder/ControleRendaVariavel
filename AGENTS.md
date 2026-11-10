@@ -40,8 +40,9 @@ rode `python compartilhados/sincronizar.py --aplicar` no `_manutencao`.
 **Este arquivo.** Guarde aqui só o que o código não diz: limites, decisões com
 o motivo, armadilhas e comandos. Cada regra mora num lugar só: o que este bloco
 ou `docs/` já dizem não se repete. História fica no `git log`; decisão com
-alternativas vira ADR, e ADR superado ganha a linha "Substituído por"; detalhe
-de implementação fica no código. Para acrescentar uma regra, retire ou funda
+alternativas vira ADR, que abre com a linha `Estado:` (vigente, ou substituído
+por qual); detalhe de implementação fica no código. Para acrescentar uma
+regra, retire ou funda
 outra: `sincronizar.py` reprova este arquivo acima de 900 palavras fora deste
 bloco.
 

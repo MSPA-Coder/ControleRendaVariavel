@@ -33,7 +33,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: write
     env:
       ARTIFACT_REVISION: ${{ github.sha }}
       ARTIFACT_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -196,29 +195,6 @@ jobs:
           docker compose -f compose.browser.yaml build browser-tests
           trap 'docker compose -f compose.browser.yaml down --remove-orphans' EXIT
           docker compose -f compose.browser.yaml up --no-build --pull never --abort-on-container-exit --exit-code-from browser-tests
-
-      - name: Publicar as imagens validadas, sem reconstruir
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        env:
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          registry="ghcr.io/${GITHUB_REPOSITORY,,}"
-          test "$(docker image inspect --format '{{.Id}}' controle-renda-variavel:local)" = "$DELIVERY_APP_ID"
-          test "$(docker image inspect --format '{{.Id}}' mspa-postgres:17-alpine)" = "$DELIVERY_POSTGRES_ID"
-          tag="run-$ARTIFACT_RUN"
-          auth_dir="$RUNNER_TEMP/registry-auth"
-          install -d -m 700 "$auth_dir"
-          trap 'docker --config "$auth_dir" logout ghcr.io >/dev/null' EXIT
-          printf '%s' "$REGISTRY_TOKEN" | docker --config "$auth_dir" login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          for pair in "controle-renda-variavel:local $registry" "mspa-postgres:17-alpine $registry-postgres"; do
-            read -r local_image destination <<<"$pair"
-            image_id="$(docker image inspect --format '{{.Id}}' "$local_image")"
-            docker tag "$image_id" "$destination:$tag"
-            docker --config "$auth_dir" push "$destination:$tag"
-            test "$(docker image inspect --format '{{.Id}}' "$destination:$tag")" = "$image_id"
-            printf '%s\n' "$destination:$tag" >> "$GITHUB_STEP_SUMMARY"
-          done
 
   runtime-contracts:
     name: Contratos de runtime
