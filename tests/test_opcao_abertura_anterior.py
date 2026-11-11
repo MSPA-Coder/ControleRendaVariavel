@@ -15,7 +15,8 @@ import pytest
 from app import db
 from app.models import OptionPosition, PositionMovementKind
 from app.options.closure import create_or_merge_position
-from tests.test_ciclo_opcoes_banco import aporte, cenario as cenario  # noqa: F401
+from tests.test_ciclo_opcoes_banco import aporte
+from tests.test_ciclo_opcoes_banco import cenario as cenario
 from tests.test_financial_isolation_http import client_for
 from tests.test_financial_isolation_http import review_case as review_case
 

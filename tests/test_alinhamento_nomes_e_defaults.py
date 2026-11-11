@@ -195,9 +195,11 @@ def test_revisao_falha_e_desfaz_se_sobrar_check_com_prefixo_duplicado(app_com_ba
                 "ALTER TABLE public.positions ADD CONSTRAINT ck_positions_ck_positions_intruso "
                 "CHECK (quantity IS NOT NULL)"
             ))
-            with pytest.raises(Exception, match="prefixo duplicado"):
-                with Operations.context(MigrationContext.configure(conexao)):
-                    revisao.upgrade()
+            with (
+                pytest.raises(Exception, match="prefixo duplicado"),
+                Operations.context(MigrationContext.configure(conexao)),
+            ):
+                revisao.upgrade()
             conexao.rollback()
     finally:
         engine.dispose()

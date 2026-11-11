@@ -68,7 +68,9 @@ def caso(app_com_banco, monkeypatch):
             for tabela in reversed(db.metadata.sorted_tables):
                 if "owner_id" in tabela.c:
                     db.session.execute(delete(tabela).where(tabela.c.owner_id == ids["usuario"]))
-                elif "user_id" in tabela.c:
+                elif "user_id" in tabela.c and tabela.name != "audit_log":
+                    # A trilha só aceita inserção (gatilho): apagar o usuário,
+                    # no fim, anula `user_id` nas linhas dela.
                     db.session.execute(delete(tabela).where(tabela.c.user_id == ids["usuario"]))
             db.session.execute(delete(Ticker).where(Ticker.id == ids["acao"]))
             db.session.execute(delete(Broker).where(Broker.id == ids["corretora"]))

@@ -38,9 +38,8 @@ def _registro(sessao, usuario_id: int | None) -> int:
 
 
 def _recusado(sessao, sql: str, **params) -> None:
-    with pytest.raises(DBAPIError, match="apenas insercao") as erro:
-        with sessao.begin_nested():
-            sessao.execute(text(sql), params)
+    with pytest.raises(DBAPIError, match="apenas insercao") as erro, sessao.begin_nested():
+        sessao.execute(text(sql), params)
     assert getattr(erro.value.orig, "sqlstate", None) == "42501"
 
 
