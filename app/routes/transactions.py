@@ -455,7 +455,18 @@ def delete_transaction(transaction_id: int) -> ResponseReturnValue:
         return redirect(url_for("portfolio.transactions"))
     reverted = _partial_close_source(transaction) is not None
     if reverted:
-        _revert_partial_close(transaction)
+        try:
+            _revert_partial_close(transaction)
+        except ValueError:
+            # Posição anterior ao extrato (sem lançamento de abertura): o saldo
+            # não pode ser recomposto. Nada é gravado.
+            db.session.rollback()
+            flash(
+                "Não foi possível desfazer: esta posição é anterior ao extrato e não tem "
+                "lançamento de abertura. Para corrigir, edite a posição pela tela.",
+                "error",
+            )
+            return redirect(url_for("portfolio.transactions"))
     db.session.delete(transaction)
     db.session.commit()
     if reverted:

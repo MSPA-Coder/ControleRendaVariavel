@@ -468,13 +468,21 @@ def test_divergencia_mensagem_do_aporte_retroativo_sem_abertura(review_case):
     )
 
 
+def _desfazer_baixa(cliente, token, transacao_id) -> tuple[int, bool]:
+    """Exclui a baixa em Transações: (status, a tela mostrou a recusa de posição sem extrato)."""
+    resposta = cliente.post(f"/transactions/{transacao_id}/delete", data={"csrf_token": token})
+    pagina = cliente.get(resposta.headers["Location"]).get_data(as_text=True)
+    return resposta.status_code, "anterior ao extrato" in pagina  # trecho ASCII: `tojson` escapa acentos
+
+
 def test_desfazer_baixa_com_extrato_sem_abertura_recusa_e_nada_grava_igual(review_case):
     """Extrato legado sem abertura e exclusão da baixa em Transações.
 
     A opção retornava em silêncio do `replay_movements`, apagava a transação e
     deixava a quantidade sem a devolução do encerrado (dinheiro errado, sem aviso).
-    Agora, como a ação, levanta "O extrato precisa começar por uma abertura." e
-    nada é gravado: a baixa continua e a quantidade não muda.
+    Agora, como a ação, o `replay_movements` recusa; a rota desfaz a transação do
+    banco, avisa na tela (redirecionamento com aviso, não erro 500) e nada é
+    gravado: a baixa continua e a quantidade não muda.
     """
     app, dados = review_case
 
@@ -492,21 +500,14 @@ def test_desfazer_baixa_com_extrato_sem_abertura_recusa_e_nada_grava_igual(revie
     cliente, token = client_for(app, dados["ids"][0])
     resultado: dict[str, Any] = {}
     for nome in LADOS:
-        try:
-            resposta = cliente.post(
-                f"/transactions/{ids[nome]['tid']}/delete", data={"csrf_token": token}
-            ).status_code
-        except ValueError as exc:
-            resposta = str(exc)
+        resposta = _desfazer_baixa(cliente, token, ids[nome]["tid"])
         with app.app_context():
             db.session.expire_all()
             posicao = db.session.get(LADOS[nome].modelo, ids[nome]["pid"])
             baixa_existe = db.session.get(Transaction, ids[nome]["tid"]) is not None
             resultado[nome] = (resposta, posicao.quantity, baixa_existe)
 
-    assert resultado["stock"] == resultado["option"] == (
-        "O extrato precisa começar por uma abertura.", Decimal("60"), True
-    )
+    assert resultado["stock"] == resultado["option"] == ((302, True), Decimal("60"), True)
 
 
 def test_divergencia_edicao_e_exclusao_de_movimento_do_extrato(review_case):
@@ -711,20 +712,13 @@ def test_sem_extrato_desfazer_a_baixa_parcial_e_recusado_e_nada_grava(review_cas
     cliente, token = client_for(app, dados["ids"][0])
     resultado = {}
     for nome, lado in LADOS.items():
-        try:
-            resposta = cliente.post(
-                f"/transactions/{ids[nome]['tid']}/delete", data={"csrf_token": token}
-            ).status_code
-        except ValueError as exc:
-            resposta = str(exc)
+        resposta = _desfazer_baixa(cliente, token, ids[nome]["tid"])
         with app.app_context():
             db.session.expire_all()
             posicao = db.session.get(lado.modelo, ids[nome]["pid"])
             resultado[nome] = (resposta, posicao.quantity, db.session.get(Transaction, ids[nome]["tid"]) is not None)
 
-    assert resultado["stock"] == resultado["option"] == (
-        "O extrato precisa começar por uma abertura.", Decimal("60"), True
-    )
+    assert resultado["stock"] == resultado["option"] == ((302, True), Decimal("60"), True)
 
 
 def test_sem_extrato_editar_pela_tela_funciona_e_grava_a_abertura(review_case):
