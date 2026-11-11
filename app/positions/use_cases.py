@@ -95,7 +95,8 @@ def register_stock(
 
 
 def register_option(
-    data: OptionPositionInput, *, owner_id: int, token: str, confirm_duplicate: bool = False,
+    data: OptionPositionInput, *, owner_id: int, token: str,
+    confirm_duplicate: bool = False, confirm_prior_opening: bool = False,
 ) -> SubmissionResult[OptionPosition]:
     with _transaction():
         lock_executions(owner_id)
@@ -104,11 +105,17 @@ def register_option(
             return SubmissionResult(None)
         candidate = OptionPosition(owner_id=owner_id, **asdict(data))
         options._mergeable_position(candidate)
+        earlier = options.prior_opening(candidate)
+        earlier_date = earlier.opened_on if earlier is not None else None
+        if earlier_date is not None and not confirm_prior_opening:
+            raise ConfirmationRequiredError(prior_opening_date=earlier_date)
         if not confirm_duplicate and options.duplicate_entry(candidate) is not None:
             raise ConfirmationRequiredError()
-        position, merged = options.create_or_merge_position(candidate)
+        position, merged = options.create_or_merge_position(
+            candidate, confirm_prior_opening=confirm_prior_opening
+        )
         grant_ticker_entitlement(user_id=owner_id, ticker_id=position.contract.ticker_id, held_on=position.opened_on)
-        result = SubmissionResult(position, merged)
+        result = SubmissionResult(position, merged, earlier_date)
     return result
 
 

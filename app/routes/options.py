@@ -267,10 +267,11 @@ def create_position() -> ResponseReturnValue:
         result = register_option(
             data, owner_id=current_owner_id(), token=request.form.get("submit_token", ""),
             confirm_duplicate=request.form.get("confirm_duplicate") == "1",
+            confirm_prior_opening=request.form.get("confirm_prior_opening") == "1",
         )
     except SubmissionConflictError as exc:
         abort(409, description=str(exc))
-    except ConfirmationRequiredError:
+    except ConfirmationRequiredError as exc:
         return render_template(
             "option_form.html",
             position=request.form,
@@ -278,7 +279,9 @@ def create_position() -> ResponseReturnValue:
             contracts=_contracts(somente_vigentes=True),
             sides=Side,
             portfolios=portfolio_records(),
-            duplicate_warning=True,
+            prior_opening_warning=exc.prior_opening_date is not None,
+            prior_opening_date=exc.prior_opening_date,
+            duplicate_warning=exc.prior_opening_date is None,
         ), 409
     except ValueError as exc:
         flash(str(exc), "error")
@@ -294,7 +297,14 @@ def create_position() -> ResponseReturnValue:
         flash("Este aporte já foi registrado; o reenvio não alterou a posição.", "success")
         return redirect(url_for("options.index"))
     position = result.position
-    if result.merged:
+    if result.merged and result.prior_opening_date is not None:
+        flash(
+            f"Lançamento anterior confirmado para {position.contract.ticker_ref.symbol} · "
+            f"{position.broker}: ele passou a ser a abertura e o extrato foi recalculado "
+            "em ordem cronológica.",
+            "success",
+        )
+    elif result.merged:
         flash(
             f"Aporte unificado à posição já existente em "
             f"{position.contract.ticker_ref.symbol} · {position.broker}: quantidade "

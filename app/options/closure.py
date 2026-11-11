@@ -333,7 +333,23 @@ def duplicate_entry(candidate: OptionPosition) -> OptionPositionMovement | None:
     return None
 
 
-def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition, bool]:
+def prior_opening(candidate: OptionPosition) -> OptionPosition | None:
+    """Posição de opção que o candidato passaria a abrir, se confirmado.
+
+    Mesmo mecanismo das ações (``position_closure.prior_opening``): um aporte
+    com data anterior à abertura troca qual lançamento abre o extrato e
+    reaplica os saldos, então não pode ser fundido sem confirmação.
+    """
+
+    existing = db.session.scalar(_mergeable_statement(candidate))
+    if existing is not None and candidate.opened_on < existing.opened_on:
+        return existing
+    return None
+
+
+def create_or_merge_position(
+    candidate: OptionPosition, *, confirm_prior_opening: bool = False
+) -> tuple[OptionPosition, bool]:
     """Registra um aporte, abrindo uma posição de opção nova ou reforçando a
     existente.
 
@@ -342,6 +358,9 @@ def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition,
     ser a média ponderada dos dois (ver ``domain.weighted_average_cost``). A
     data inicial recua para a mais antiga das duas, e o target da posição
     existente é preservado, já que um aporte não é motivo para redefini-lo.
+    Um aporte com data anterior à abertura só é aceito com
+    ``confirm_prior_opening``: ele passa a ser a abertura e o extrato é
+    reaplicado.
 
     Não faz ``commit``: quem inicia a operação de escrita é dono do limite
     transacional.
@@ -364,6 +383,10 @@ def create_or_merge_position(candidate: OptionPosition) -> tuple[OptionPosition,
     movements = existing.movements
     retroativo = any(m.occurred_on > candidate.opened_on for m in movements)
     if candidate.opened_on < existing.opened_on:
+        if not confirm_prior_opening:
+            raise ValueError(
+                "Este lançamento antecede a abertura da posição e exige confirmação."
+            )
         if not movements:
             raise ValueError("O extrato anterior está ausente; revise a posição antes de registrar este aporte.")
         if not any(m.kind is PositionMovementKind.OPEN for m in movements):

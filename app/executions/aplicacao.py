@@ -331,7 +331,7 @@ def _apply_buy(owner_id: int, trade: Trade, instrument: _Instrument) -> str:
             quantity=trade.quantity, average_cost=trade.price, target_price=None, side=Side.BUY,
             opened_on=trade.trade_date, portfolio_id=portfolio_id,
         )
-        option_position, merged = options.create_or_merge_position(option_candidate)
+        option_position, merged = options.create_or_merge_position(option_candidate, confirm_prior_opening=True)
         position_id = option_position.id
     else:
         candidate = Position(
