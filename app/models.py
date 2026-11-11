@@ -108,7 +108,7 @@ class User(Base, UserMixin):  # type: ignore[misc]
     role: Mapped[str] = mapped_column(
         String(20), default=ROLE_OPERADOR, server_default=ROLE_OPERADOR
     )
-    is_active_user: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active_user: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     #: Ligada por quem redefine a senha de outra pessoa (e pela criação de
     #: conta), desligada só pela troca feita pelo próprio dono. Enquanto está
     #: ligada, `requer_troca_de_senha` prende a sessão na tela de troca: uma
@@ -216,7 +216,7 @@ class AppSetting(Base):
     O coletor le esta linha pela origem que estiver ativa: da tabela local
     quando grava aqui, e do payload do VPS quando entrega la. Assim o botao
     de cada tela pausa a coleta que aquela instancia esta dirigindo."""
-    poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=2)
+    poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=2, server_default=text("2"))
     agent_check_interval_seconds: Mapped[int] = mapped_column(Integer, default=30)
     """Intervalo do agente Windows para consultar alterações e pedidos no VPS."""
     collector_schedule_weekdays: Mapped[str] = mapped_column(String(13), default="0,1,2,3,4")
@@ -224,7 +224,9 @@ class AppSetting(Base):
     collector_schedule_start_time: Mapped[time] = mapped_column(Time, default=time(9, 45))
     collector_schedule_end_time: Mapped[time] = mapped_column(Time, default=time(18, 10))
     risk_free_rate_annual: Mapped[Decimal] = mapped_column(
-        Numeric(5, 4), default=DEFAULT_RISK_FREE_RATE_ANNUAL
+        Numeric(5, 4),
+        default=DEFAULT_RISK_FREE_RATE_ANNUAL,
+        server_default=text(str(DEFAULT_RISK_FREE_RATE_ANNUAL)),
     )
     """Taxa livre de risco anual usada nas gregas de opções (Black-Scholes).
     Editável em Configurações; não é obtida automaticamente."""
@@ -297,7 +299,7 @@ class Ticker(Base):
     market: Mapped[Market] = mapped_column(Enum(Market, name="market"))
     rtd_market_code: Mapped[str] = mapped_column(String(1))
     currency: Mapped[str] = mapped_column(String(3))
-    is_benchmark: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_benchmark: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
@@ -1197,7 +1199,9 @@ class Transaction(Base):
     depois, pois é um fato histórico. ``None`` enquanto a transação estiver
     aberta (``status == TransactionStatus.OPEN``)."""
     status: Mapped[TransactionStatus] = mapped_column(
-        Enum(TransactionStatus, name="transaction_status"), default=TransactionStatus.CLOSED
+        Enum(TransactionStatus, name="transaction_status"),
+        default=TransactionStatus.CLOSED,
+        server_default=text("'CLOSED'"),
     )
     portfolio_id: Mapped[int] = mapped_column(
         ForeignKey("portfolios.id", ondelete="RESTRICT"), index=True
