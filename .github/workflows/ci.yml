@@ -27,8 +27,9 @@ concurrency:
 jobs:
   quality:
     name: Qualidade
-    # Produção é linux/arm64. Testar e publicar o mesmo artefato nativo,
-    # sem QEMU nem uma segunda imagem não exercitada no VPS.
+    # Produção é linux/arm64. Testar em runner nativo, sem QEMU: o deploy monta a
+    # imagem no VPS (a CI não publica imagem), e aqui se exercita a mesma
+    # arquitetura.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     permissions:
@@ -41,7 +42,7 @@ jobs:
       # O contrato patrimonio/v4 tem uma cópia canônica em
       # manutencao/docs/contratos/, e a daqui (tests/contrato/) tem de ser
       # idêntica. Só na rodada semanal: depende da rede, e uma indisponibilidade do
-      # GitHub não deve travar um PR nem o portão do deploy (que usa o dispatch).
+      # GitHub não deve travar um PR (o deploy não consulta a CI).
       - name: Conferir que o schema do v4 é igual ao canônico
         if: github.event_name == 'schedule'
         run: |
@@ -136,8 +137,8 @@ jobs:
       # o socket do Docker e dar root na pratica, que foi exatamente o motivo
       # de o `autoheal` ter sido recusado no VPS. Nao vale reabrir aqui.
       #
-      # Imagem fixada por digest do indice multi-arquitetura, pelo mesmo motivo
-      # que as actions sao fixadas por SHA.
+      # A imagem do Trivy vai por versao exata (`.github/docker-compose.yml`), e
+      # o Dependabot propoe a troca; as actions, por SHA.
       #
       # `--ignore-unfixed` de proposito: CVE de pacote de sistema sem correcao
       # publicada nao e acionavel. Reprovar por ele travaria PR sem relacao

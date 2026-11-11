@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# A tag da série 3.15 acompanha correções de segurança. A CI semanal reconstrói
-# com `--pull`, testa a imagem e barra CVEs corrigíveis antes da adoção.
+# A base vai por tag (decisão: não por digest). A tag da série 3.15 acompanha
+# correções de segurança; a CI semanal reconstrói com `--pull`, testa a imagem
+# e barra CVEs corrigíveis antes da adoção. O deploy monta a imagem no VPS e só
+# traz base nova com `--refresh`.
 FROM python:3.15-slim AS base
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -29,8 +31,8 @@ RUN apt-get update \
 #
 # POR QUE `uv` E NAO `pip install .`: o `pip` resolvia as faixas do
 # `pyproject.toml` no instante do build, entao dois builds do MESMO commit
-# podiam produzir imagens diferentes. O deploy agora recebe a imagem testada
-# por digest; o lock também mantém a coerência entre quality e runtime. O
+# podiam produzir imagens diferentes. O deploy monta a imagem no servidor a
+# partir do mesmo commit; o lock mantém a coerência entre quality e runtime. O
 # `uv.lock` fixa versao e hash SHA-256 de cada dependencia.
 #
 # O FLAG E `--locked`, E A DIFERENCA IMPORTA. `--frozen` apenas usa o lock sem
