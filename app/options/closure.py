@@ -166,8 +166,9 @@ def replay_movements(position: OptionPosition) -> None:
         ]
     )
     if replayed is None:
-        # Sem abertura, o histórico legado não permite reconstruir o estado.
-        return
+        # Sem abertura, o histórico legado não permite reconstruir o estado:
+        # recusar (como na ação) em vez de seguir e gravar quantidade errada.
+        raise ValueError("O extrato precisa começar por uma abertura.")
     for movement, result in zip(movements, replayed, strict=True):
         movement.resulting_quantity = result.resulting_quantity
         movement.resulting_average_cost = result.resulting_average_cost

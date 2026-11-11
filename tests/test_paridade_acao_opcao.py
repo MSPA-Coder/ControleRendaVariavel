@@ -468,14 +468,13 @@ def test_divergencia_mensagem_do_aporte_retroativo_sem_abertura(review_case):
     )
 
 
-def test_divergencia_desfazer_baixa_com_extrato_sem_abertura(review_case):
-    """DIVERGE (ARQ-L1): extrato legado sem abertura e exclusão da baixa em Transações.
+def test_desfazer_baixa_com_extrato_sem_abertura_recusa_e_nada_grava_igual(review_case):
+    """Extrato legado sem abertura e exclusão da baixa em Transações.
 
-    A ação levanta no `replay_movements` ("O extrato precisa começar por uma
-    abertura.") e nada é gravado; a opção retorna em silêncio, apaga a transação e
-    deixa a quantidade da posição sem a devolução do encerrado. Hoje é um caso só
-    de dado legado (as duas gravam sempre uma abertura), mas é a divergência de
-    maior dano do par: o lado da opção perde quantidade sem avisar.
+    A opção retornava em silêncio do `replay_movements`, apagava a transação e
+    deixava a quantidade sem a devolução do encerrado (dinheiro errado, sem aviso).
+    Agora, como a ação, levanta "O extrato precisa começar por uma abertura." e
+    nada é gravado: a baixa continua e a quantidade não muda.
     """
     app, dados = review_case
 
@@ -505,8 +504,9 @@ def test_divergencia_desfazer_baixa_com_extrato_sem_abertura(review_case):
             baixa_existe = db.session.get(Transaction, ids[nome]["tid"]) is not None
             resultado[nome] = (resposta, posicao.quantity, baixa_existe)
 
-    assert resultado["stock"] == ("O extrato precisa começar por uma abertura.", Decimal("60"), True)
-    assert resultado["option"] == (302, Decimal("60"), False)
+    assert resultado["stock"] == resultado["option"] == (
+        "O extrato precisa começar por uma abertura.", Decimal("60"), True
+    )
 
 
 def test_divergencia_edicao_e_exclusao_de_movimento_do_extrato(review_case):
