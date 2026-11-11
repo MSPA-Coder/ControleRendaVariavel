@@ -837,7 +837,7 @@ class PatrimonioV4Outbox(Base):
     )
 
     cursor: Mapped[int] = mapped_column(primary_key=True)
-    owner_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resource: Mapped[str] = mapped_column(String(32))
     source_record_id: Mapped[int] = mapped_column(Integer)
     operation: Mapped[str] = mapped_column(String(8))
