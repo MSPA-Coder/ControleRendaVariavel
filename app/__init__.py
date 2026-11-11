@@ -202,6 +202,37 @@ def _load_user(identificador: str) -> User | None:
     return user if marcas_conferem(marca, user.marca_da_sessao()) else None
 
 
+#: (parâmetro do PostgreSQL, variável de ambiente, padrão em milissegundos).
+#: 0 desliga. Medido em 11/11/2026 sobre a suíte com banco (22 mil comandos): o
+#: comando mais lento que não é espera deliberada de trava dura menos de 1 s, e
+#: as operações longas (importação do myProfit, coleta) são muitos comandos
+#: curtos, e o limite vale por comando.
+LIMITES_DE_SESSAO_DO_BANCO = (
+    ("statement_timeout", "DB_STATEMENT_TIMEOUT_MS", "55000"),
+    ("lock_timeout", "DB_LOCK_TIMEOUT_MS", "10000"),
+    ("idle_in_transaction_session_timeout", "DB_IDLE_IN_TRANSACTION_TIMEOUT_MS", "300000"),
+)
+
+
+def opcoes_de_conexao_do_banco() -> str:
+    """Limites de tempo que toda sessão do app aplica no PostgreSQL.
+
+    O Gunicorn mata a requisição aos 60 s, mas sem isto o servidor seguia
+    rodando o comando ou esperando a trava (`with_for_update`, trava
+    consultiva) e segurava quem viesse atrás. Ficam no engine do app, e não no
+    papel do banco, para não mexer no script de provisionamento. O `migrate`
+    desliga o de comando (`DB_STATEMENT_TIMEOUT_MS=0` no `compose.yaml`): uma
+    migração pode demorar de verdade.
+    """
+    partes = []
+    for parametro, variavel, padrao in LIMITES_DE_SESSAO_DO_BANCO:
+        valor = os.environ.get(variavel, padrao).strip()
+        if not valor.isdigit():
+            raise RuntimeError(f"{variavel} deve ser um inteiro em milissegundos (0 desliga).")
+        partes.append(f"-c {parametro}={int(valor)}")
+    return " ".join(partes)
+
+
 def create_app(config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
     from app.core.submissions import new_submission_token
@@ -238,7 +269,10 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # pegou essa conexao leva 500 ate o pool reciclar sozinho. Com o ping,
         # o SQLAlchemy testa a conexao antes de emprestar do pool e troca por
         # uma nova em silencio. Mesma chave usada no MegaSena.
-        SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
+        SQLALCHEMY_ENGINE_OPTIONS={
+            "pool_pre_ping": True,
+            "connect_args": {"options": opcoes_de_conexao_do_banco()},
+        },
         RTD_PROG_ID=os.getenv("RTD_PROG_ID", "rtdtrading.rtdserver"),
         RTD_REFRESH_SECONDS=float(os.getenv("RTD_REFRESH_SECONDS", "2")),
         RTD_TIMEOUT_SECONDS=float(os.getenv("RTD_TIMEOUT_SECONDS", "10")),

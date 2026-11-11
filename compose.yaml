@@ -180,6 +180,9 @@ services:
       POSTGRES_PORT: "5432"
       POSTGRES_DB: investimentos
       POSTGRES_USER: investimentos
+      # Uma migração pode demorar de verdade; o limite de comando da sessão do
+      # app (55 s) não vale aqui. Os de trava e de transação parada continuam.
+      DB_STATEMENT_TIMEOUT_MS: "0"
     secrets:
       - secret_key
       - postgres_password

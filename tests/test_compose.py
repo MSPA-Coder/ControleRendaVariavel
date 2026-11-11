@@ -104,3 +104,12 @@ def test_so_o_web_exige_o_papel_restrito() -> None:
         if str((servico.get("environment") or {}).get("DB_EXIGIR_PAPEL_RESTRITO", "")) == "1"
     )
     assert exigem == ["web"]
+
+
+def test_so_o_migrate_desliga_o_limite_de_comando_do_banco() -> None:
+    """O `web` usa o limite padrão da sessão (55 s); a migração pode demorar de
+    verdade e o desliga. Sem isto, uma migração longa seria cancelada."""
+    servicos = _servicos()
+
+    assert servicos["migrate"]["environment"]["DB_STATEMENT_TIMEOUT_MS"] == "0"
+    assert "DB_STATEMENT_TIMEOUT_MS" not in servicos["web"]["environment"]

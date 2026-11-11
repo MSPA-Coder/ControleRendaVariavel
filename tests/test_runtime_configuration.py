@@ -102,4 +102,4 @@ def test_engine_usa_pool_pre_ping() -> None:
     o pool reciclar sozinho -- ver comentário em `app/__init__.py`."""
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL})
 
-    assert app.config["SQLALCHEMY_ENGINE_OPTIONS"] == {"pool_pre_ping": True}
+    assert app.config["SQLALCHEMY_ENGINE_OPTIONS"]["pool_pre_ping"] is True
