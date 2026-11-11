@@ -72,6 +72,27 @@ def test_publicacao_de_patrimonio_tambem_limita_quem_tem_o_token(app) -> None:
     assert cliente.get(ROTA_DE_PATRIMONIO, headers=certo).status_code == 429
 
 
+@pytest.mark.parametrize(
+    "caminho",
+    (
+        "/patrimonio/v4/metadata",
+        "/patrimonio/v4/snapshot",
+        "/patrimonio/v4/changes",
+        "/patrimonio/v4/ledger",
+    ),
+)
+def test_toda_rota_de_integracao_limita_quem_erra_o_token(app, caminho) -> None:
+    """`metadata` e `snapshot` (a rota mais pesada) ficavam fora do limite, e
+    tentativas de token contra elas não tinham freio."""
+    app.config["PATRIMONIO_INTEGRATION_TOKEN"] = TOKEN_DE_PATRIMONIO
+    cliente = app.test_client()
+    errado = {"Authorization": "Bearer outro"}
+
+    for _ in range(60):
+        assert cliente.get(caminho, headers=errado).status_code == 401, caminho
+    assert cliente.get(caminho, headers=errado).status_code == 429, caminho
+
+
 def test_agente_nao_compartilha_orcamento_com_outra_rota(client) -> None:
     """Um limite por endpoint, não um balde único para os três.
 

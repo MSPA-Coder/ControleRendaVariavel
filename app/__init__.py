@@ -448,6 +448,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     # todas as chamadas; integrações que precisam de mais volume devem agrupar
     # pedidos ou usar uma fila de exportação, não ganhar um caminho ilimitado.
     for endpoint in (
+        "portfolio.patrimonio_metadata_v4",
+        "portfolio.patrimonio_snapshot_v4",
         "portfolio.patrimonio_activities_v4",
         "portfolio.patrimonio_changes_v4",
         "portfolio.patrimonio_ledger_v4",
