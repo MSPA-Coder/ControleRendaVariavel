@@ -616,3 +616,133 @@ def test_tela_pede_confirmacao_para_lote_anterior_e_para_duplicado_igual(review_
         )
 
     assert resultado["stock"] == resultado["option"] == (302, 409, True, 409, 302)
+
+
+# --- posição legada sem nenhuma linha de extrato ------------------------------
+#
+# Em produção há opções abertas anteriores ao extrato (nenhuma linha em
+# `option_position_movements`). Estes casos fixam o que cada fluxo normal faz com
+# elas, nos dois instrumentos: encerrar (parcial e total), aportar hoje e editar
+# funcionam e gravam números certos; desfazer a baixa parcial é recusado.
+
+
+def _posicao_sem_extrato(lado: Lado, dados) -> int:
+    from dataclasses import asdict
+
+    from app.options import closure as opcoes
+    from app.positions import closure as acoes
+
+    posicao = lado.modelo(owner_id=_dono(dados), **asdict(lado.comando(dados)))
+    db.session.add(posicao)
+    db.session.flush()
+    (acoes if lado.nome == "stock" else opcoes).create_open_transaction_for_position(posicao)
+    db.session.commit()
+    assert not posicao.movements
+    return posicao.id
+
+
+def _com_posicao_sem_extrato(app, dados, fluxo):
+    with app.app_context():
+        return {nome: fluxo(lado, _posicao_sem_extrato(lado, dados)) for nome, lado in LADOS.items()}
+
+
+def test_sem_extrato_baixa_parcial_de_hoje_funciona_com_resultado_e_custo_certos(review_case):
+    app, dados = review_case
+
+    def fluxo(lado, pid):
+        baixa = _encerrar(lado, dados, pid, "25", date.today(), "40")
+        return {"baixa": (baixa.result, baixa.average_cost, baixa.quantity), "estado": _observar(lado, dados, pid)}
+
+    observado = _com_posicao_sem_extrato(app, dados, fluxo)
+
+    assert observado["stock"] == observado["option"]
+    assert observado["stock"]["baixa"] == (Decimal("600"), Decimal("10"), Decimal("40"))
+    assert observado["stock"]["estado"]["posicao"][:3] == (ABERTURA, Decimal("60"), Decimal("10"))
+    assert [t[0] for t in observado["stock"]["estado"]["transacoes"]] == ["open", "closed"]
+
+
+def test_sem_extrato_encerramento_total_funciona_com_resultado_certo(review_case):
+    app, dados = review_case
+
+    def fluxo(lado, pid):
+        total = _encerrar(lado, dados, pid, "25", date.today())
+        return {"total": (total.status.value, total.result, total.average_cost, total.quantity),
+                "estado": _observar(lado, dados, pid)}
+
+    observado = _com_posicao_sem_extrato(app, dados, fluxo)
+
+    assert observado["stock"] == observado["option"]
+    assert observado["stock"]["total"] == ("closed", Decimal("1500"), Decimal("10"), Decimal("100"))
+    assert observado["stock"]["estado"]["posicao"] is None
+    assert [t[0] for t in observado["stock"]["estado"]["transacoes"]] == ["closed"]
+
+
+def test_sem_extrato_aporte_de_hoje_soma_com_custo_medio_ponderado(review_case):
+    app, dados = review_case
+
+    def fluxo(lado, pid):
+        resultado = lado.registrar(
+            lado.comando(dados, opened_on=date.today(), quantity=Decimal("50"), average_cost=Decimal("20")),
+            owner_id=_dono(dados), token=uuid4().hex,
+        )
+        return {"merged": resultado.merged, "estado": _observar(lado, dados, pid)}
+
+    observado = _com_posicao_sem_extrato(app, dados, fluxo)
+
+    assert observado["stock"] == observado["option"]
+    assert observado["stock"]["merged"] is True
+    assert observado["stock"]["estado"]["posicao"][:3] == (ABERTURA, Decimal("150"), Decimal("13.33333333"))
+    assert [e[0] for e in observado["stock"]["estado"]["extrato"]] == ["increase"]
+
+
+def test_sem_extrato_desfazer_a_baixa_parcial_e_recusado_e_nada_grava(review_case):
+    """Depois de a baixa parcial (agora com linha de extrato `decrease`, sem abertura),
+    excluí-la em Transações é recusado. Antes de `ca4692a` a opção apagava a
+    transação e deixava a quantidade em 60 (devia voltar a 100): 40 de quantidade
+    e R$ 600 de resultado sumiam da posição sem aviso. A ação sempre recusou."""
+    app, dados = review_case
+
+    def fluxo(lado, pid):
+        baixa = _encerrar(lado, dados, pid, "25", date.today(), "40")
+        return {"pid": pid, "tid": baixa.id}
+
+    with app.app_context():
+        ids = {nome: fluxo(lado, _posicao_sem_extrato(lado, dados)) for nome, lado in LADOS.items()}
+    cliente, token = client_for(app, dados["ids"][0])
+    resultado = {}
+    for nome, lado in LADOS.items():
+        try:
+            resposta = cliente.post(
+                f"/transactions/{ids[nome]['tid']}/delete", data={"csrf_token": token}
+            ).status_code
+        except ValueError as exc:
+            resposta = str(exc)
+        with app.app_context():
+            db.session.expire_all()
+            posicao = db.session.get(lado.modelo, ids[nome]["pid"])
+            resultado[nome] = (resposta, posicao.quantity, db.session.get(Transaction, ids[nome]["tid"]) is not None)
+
+    assert resultado["stock"] == resultado["option"] == (
+        "O extrato precisa começar por uma abertura.", Decimal("60"), True
+    )
+
+
+def test_sem_extrato_editar_pela_tela_funciona_e_grava_a_abertura(review_case):
+    app, dados = review_case
+    with app.app_context():
+        ids = {nome: _posicao_sem_extrato(lado, dados) for nome, lado in LADOS.items()}
+    cliente, token = client_for(app, dados["ids"][0])
+    resultado = {}
+    for nome, lado in LADOS.items():
+        with app.app_context():
+            versao = db.session.get(lado.modelo, ids[nome]).edit_version
+        resposta = cliente.post(f"{lado.base}/{ids[nome]}", data={
+            **lado.formulario(dados, average_cost="11"), "edit_version": str(versao), "csrf_token": token,
+        })
+        with app.app_context():
+            estado = _observar(lado, dados, ids[nome])
+        resultado[nome] = (resposta.status_code, estado["posicao"][:3], [e[0] for e in estado["extrato"]],
+                           [t[1:3] for t in estado["transacoes"]])
+
+    assert resultado["stock"] == resultado["option"]
+    assert resultado["stock"][:3] == (302, (ABERTURA, Decimal("100"), Decimal("11")), ["open"])
