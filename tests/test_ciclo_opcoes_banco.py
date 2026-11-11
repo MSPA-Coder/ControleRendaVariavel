@@ -222,7 +222,7 @@ def test_aporte_retroativo_recalcula_encerramento_posterior(sessao, cenario, ins
     reforco.opened_on = date(2026, 1, 1) if antes_abertura else date(2026, 1, 5)
     posicao, _ = registrar(abertura)
     venda = encerrar(posicao.id, Decimal("8"), date(2026, 1, 10), Decimal("50"), owner_id=cenario.dono.id)
-    if instrumento == "acao" and antes_abertura:
+    if antes_abertura:
         registrar(reforco, confirm_prior_opening=True)
     else:
         registrar(reforco)
@@ -252,10 +252,7 @@ def test_aporte_anterior_recusa_posicao_legada_sem_extrato(sessao, cenario, inst
     posicao.movements.clear()
     sessao.flush()
     with pytest.raises(ValueError, match="extrato anterior está ausente"):
-        if instrumento == "acao":
-            registrar(reforco, confirm_prior_opening=True)
-        else:
-            registrar(reforco)
+        registrar(reforco, confirm_prior_opening=True)
     sessao.flush()
     sessao.expire_all()
     atual = sessao.get(type(posicao), posicao.id)
