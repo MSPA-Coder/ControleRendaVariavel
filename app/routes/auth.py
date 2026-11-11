@@ -9,6 +9,7 @@ from flask_login import (  # type: ignore[import-untyped]
     logout_user,
 )
 from sharedauth.access import url_proximo_seguro
+from sharedauth.passwords import conferir_login
 from sqlalchemy import select
 from werkzeug.wrappers import Response
 
@@ -28,7 +29,15 @@ def login() -> ResponseReturnValue:
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = db.session.scalar(select(User).where(User.username == username))
-        if user is None or not user.is_active_user or not user.check_password(password):
+        # `conferir_login` calcula o hash em todos os caminhos (inexistente,
+        # inativo, senha errada): com o curto-circuito, o scrypt (dezenas de ms)
+        # só rodava para conta ativa e o tempo da resposta dizia quais logins
+        # existem.
+        if not conferir_login(
+            user.password_hash if user else None,
+            password,
+            ativo=bool(user and user.is_active_user),
+        ):
             # O motivo fica na trilha, mas NAO na tela: a mensagem e identica
             # para "usuario nao existe" e "senha errada" de proposito, senao
             # ela vira um oraculo de quais logins existem.
