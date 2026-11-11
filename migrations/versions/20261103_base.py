@@ -11,6 +11,9 @@ as linhas que a cadeia semeava (`app_settings`, vencimentos de opções,
 contador do patrimônio). As migrações de dados daquela cadeia não têm efeito
 num banco vazio e ficaram de fora. Prova: um banco montado pela cadeia antiga
 e outro por esta base deram `pg_dump --schema-only` e `--data-only` idênticos.
+Isso vale entre a cadeia antiga e esta base, e não para produção: medido em
+10/11/2026, produção diferia da base em 51 nomes de CHECK (prefixo duplicado) e
+5 defaults de coluna. A revisão `20261111_0043` alinhou os dois.
 
 O `SELECT` do usuário `mcp_leitura` nas views não está aqui: quem o concede é
 o FinancasMCP (`python -m financas_mcp.usuario_leitura`). Revisão nova que
