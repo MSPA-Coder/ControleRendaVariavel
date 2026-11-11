@@ -44,6 +44,10 @@ Encerramentos parciais retroativos também reaplicam o extrato; são recusados s
 deixarem saldo histórico zerado ou negativo. Encerramentos totais anteriores a
 outros movimentos são recusados. Aportes anteriores a movimentos registrados
 também reaplicam o extrato e os resultados posteriores.
+Um aporte com data anterior à abertura registrada não é fundido em silêncio:
+o cadastro mostra um aviso e exige confirmação, como em ações. Confirmado, o
+novo lançamento passa a ser a abertura. A aplicação de uma compra do myProfit
+é a confirmação explícita desse caso.
 Um aporte anterior à abertura de uma posição legada sem extrato é recusado
 para revisão, pois não há histórico suficiente para reconstruí-lo com segurança.
 
