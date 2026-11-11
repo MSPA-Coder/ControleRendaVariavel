@@ -22,11 +22,13 @@ documento nem relatório.
 
 **Dependências.** Alargue o teto e preserve o piso já verificado: elevar o piso
 afirma uma incompatibilidade, e isso exige prova. Vulnerabilidade se corrige
-atualizando; exceção só explícita, com motivo e data. Enquanto o Dependabot não
-aceitar Python 3.15, ele não propõe atualização de `uv` e o grafo do GitHub fica
-parado no lock de 13/10/2026: confira alerta pela versão travada no repositório
-e atualize à mão (`uv lock --upgrade-package <pacote>`, onde há `uv.lock`)
-quando o `pip-audit` ou o Trivy apontarem.
+atualizando; exceção só explícita, com motivo e data. O Dependabot propõe
+atualização do `uv.lock` por PR (PRs de 08 e 09/11/2026), mas não se confirmou
+que o grafo de dependências do GitHub acompanha o lock (última conferência:
+parado no lock de 13/10/2026): não conte só com o alerta do GitHub, confira
+pela versão travada no repositório e atualize à mão
+(`uv lock --upgrade-package <pacote>`, onde há `uv.lock`) quando o `pip-audit`
+ou o Trivy apontarem.
 
 **Testes.** `docs/TESTES.md`, onde existe, diz o que testar e como. Diante de
 vermelho, decida de quem é o defeito; nunca escreva código para um teste
