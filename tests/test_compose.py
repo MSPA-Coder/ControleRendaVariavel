@@ -113,3 +113,21 @@ def test_so_o_migrate_desliga_o_limite_de_comando_do_banco() -> None:
 
     assert servicos["migrate"]["environment"]["DB_STATEMENT_TIMEOUT_MS"] == "0"
     assert "DB_STATEMENT_TIMEOUT_MS" not in servicos["web"]["environment"]
+
+
+def test_todo_tmpfs_tem_limite_de_tamanho_e_nao_executa_nada() -> None:
+    """`/tmp` sem opções é RAM sem teto, com permissão de executar: gravação
+    desenfreada consumiria o contêiner até o OOM. Vale para todo ponto de
+    montagem tmpfs, de qualquer serviço (o do PGDATA do banco de teste incluso, que só não leva noexec)."""
+    sem_opcoes = []
+    for nome, servico in _servicos().items():
+        for montagem in servico.get("tmpfs", []):
+            caminho, _, opcoes = str(montagem).partition(":")
+            marcas = set(opcoes.split(","))
+            if not any(m.startswith("size=") for m in marcas):
+                sem_opcoes.append((nome, caminho, "size"))
+            if not {"nosuid", "nodev"} <= marcas:
+                sem_opcoes.append((nome, caminho, "nosuid/nodev"))
+            if caminho != "/var/lib/postgresql/data" and "noexec" not in marcas:
+                sem_opcoes.append((nome, caminho, "noexec"))
+    assert not sem_opcoes, sem_opcoes
