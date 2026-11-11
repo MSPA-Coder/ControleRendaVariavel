@@ -57,6 +57,41 @@ def test_acao_fora_do_vocabulario_avisa_mas_registra(app) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Origem: requisição ou fora dela
+# ---------------------------------------------------------------------------
+
+
+def _detalhes_gravados(app, *, com_requisicao: bool, **detalhes):
+    with mock.patch("app.accounts.auditoria.db.session.add") as add:
+        if com_requisicao:
+            with app.test_request_context("/"):
+                registrar("Dividend", "criar", entidade_id=1, detalhes=detalhes or None)
+        else:
+            with app.app_context():
+                registrar("Dividend", "criar", entidade_id=1, detalhes=detalhes or None)
+    return add.call_args.args[0].details
+
+
+def test_registro_fora_de_requisicao_marca_a_origem_cli(app) -> None:
+    """CLI, rotina e shell não têm IP: sem a marca, a trilha não separava a web
+    deles ("quem apagou isto?")."""
+    assert _detalhes_gravados(app, com_requisicao=False) == {"origem": "cli"}
+    assert _detalhes_gravados(app, com_requisicao=False, arquivo="x.xlsx") == {
+        "origem": "cli",
+        "arquivo": "x.xlsx",
+    }
+
+
+def test_registro_de_requisicao_nao_leva_origem(app) -> None:
+    assert _detalhes_gravados(app, com_requisicao=True) is None
+    assert _detalhes_gravados(app, com_requisicao=True, arquivo="x.xlsx") == {"arquivo": "x.xlsx"}
+
+
+def test_origem_informada_pelo_chamador_nao_e_trocada(app) -> None:
+    assert _detalhes_gravados(app, com_requisicao=False, origem="rotina") == {"origem": "rotina"}
+
+
+# ---------------------------------------------------------------------------
 # Texto de terceiro
 # ---------------------------------------------------------------------------
 

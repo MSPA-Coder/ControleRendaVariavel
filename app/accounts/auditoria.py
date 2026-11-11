@@ -90,7 +90,7 @@ def registrar(
                 entity=entidade[:80],
                 entity_id=str(entidade_id)[:80] if entidade_id is not None else None,
                 action=acao[:40],
-                details=_limpar(detalhes),
+                details=_limpar(_com_origem(detalhes)),
                 ip=_endereco(),
             )
         )
@@ -115,6 +115,22 @@ def _endereco() -> str | None:
     if not has_request_context():
         return None
     return (request.remote_addr or "")[:45] or None
+
+
+#: Valor de `details.origem` quando a escrita não vem de uma requisição.
+ORIGEM_CLI = "cli"
+
+
+def _com_origem(detalhes: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Marca `origem: "cli"` quando não há requisição (CLI, rotina, shell).
+
+    Linha de requisição traz o IP do cliente; as outras ficavam com `ip` nulo e
+    indistinguíveis ("quem apagou isto" não separava a web da rotina). Uma
+    origem já informada pelo chamador não é trocada.
+    """
+    if has_request_context():
+        return detalhes
+    return {"origem": ORIGEM_CLI, **(detalhes or {})}
 
 
 def _limpar(detalhes: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -227,7 +243,7 @@ def registrar_escritas_financeiras(_db: Any = None) -> None:
                         "entity": type(entidade).__name__[:80],
                         "entity_id": str(entidade.id)[:80] if entidade.id is not None else None,
                         "action": acao,
-                        "details": resumo,
+                        "details": _com_origem(resumo),
                         "ip": _endereco(),
                     }
                     for entidade, acao, resumo in pendentes
