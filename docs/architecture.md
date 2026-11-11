@@ -693,8 +693,10 @@ chega com dias de atraso.
 Rede e token no VPS1 (em produção desde 18/10/2026): o `web` do CRV entra na rede
 interna `patrimonio-internal` e o `web` do CB responde nela como `cb-api:8000`,
 então `CB_PATRIMONIO_URL=http://cb-api:8000/patrimonio/v4` é alcançável sem sair do
-host. O token é uma cópia do `PATRIMONIO_INTEGRATION_TOKEN` do CB em
-`.secrets/cb_patrimonio_token` (`CB_PATRIMONIO_TOKEN_FILE`, só no `web`). O CB
+host. O token é uma cópia do `crv_link_token` do CB (`CRV_LINK_TOKEN` lá, escopo
+Corretora) em `.secrets/cb_patrimonio_token` (`CB_PATRIMONIO_TOKEN_FILE`, só no
+`web`); o CB usa o mesmo valor ao chamar `/fechamento/status`, e trocar um lado
+exige trocar o outro. O CB
 redireciona http para https (`USE_HTTPS`) e confia no cabeçalho do proxy; o salto
 interno não passa pelo Nginx, então o cliente declara `X-Forwarded-Proto: https`
 nas URLs `http`.

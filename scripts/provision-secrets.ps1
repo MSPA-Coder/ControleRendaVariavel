@@ -196,7 +196,8 @@ Ensure-SecretFile -Path $patrimonioIntegrationTokenPath -Value (New-ControlToken
 $patrimonioIntegrationTokenQualityPath = Join-Path $secretsDir "patrimonio_integration_token_quality"
 Ensure-SecretFile -Path $patrimonioIntegrationTokenQualityPath -Value (New-ControlToken)
 # Local: um valor aleatorio basta (sem CB_PATRIMONIO_URL o CRV nao chama o CB).
-# No VPS o arquivo e uma copia do PATRIMONIO_INTEGRATION_TOKEN do Controle Bancario.
+# No VPS o arquivo e uma copia do crv_link_token do Controle Bancario (token do
+# vinculo CB <-> CRV, escopo Corretora), nunca do patrimonio_integration_token.
 $cbPatrimonioTokenPath = Join-Path $secretsDir "cb_patrimonio_token"
 Ensure-SecretFile -Path $cbPatrimonioTokenPath -Value (New-ControlToken)
 Migrate-DotEnvSecretPaths

@@ -130,8 +130,9 @@ concorrência novas vão nessa camada.
   possa ter sido aplicada; banco vazio nasce por `alembic upgrade head`, nunca
   por `create_all()` ou `stamp`. Colunas lidas pelo esquema `leitura` não são
   removidas nem mudam de tipo sem recriar a view na mesma revisão.
-- Autenticação é padrão: só login, health, estáticos e a API do agente coletor
-  (que exige Bearer token próprio) dispensam sessão. Sessão, CSRF, limite de
+- Autenticação é padrão: só login, health, estáticos, a API do agente coletor e
+  as rotas de integração `/patrimonio/v4/*` e `/fechamento/status` (todas com
+  Bearer token conferido na própria view) dispensam sessão. Sessão, CSRF, limite de
   login, senhas, cabeçalhos, CSP, formatação pt-BR e health vêm do SharedAuth;
   `_number` em `app/core/presentation.py` é só adaptador de apresentação.
 

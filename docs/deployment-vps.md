@@ -48,8 +48,9 @@ git clone git@github-renda:MSPA-Coder/ControleRendaVariavel.git ~/apps/controle-
    `.secrets/postgres_password`, `.secrets/postgres_app_password`,
    `.secrets/collector_agent_read_token`,
    `.secrets/collector_agent_write_token`,
-   `.secrets/patrimonio_integration_token` e o
-   material de `.certs/` exigido pelo build.
+   `.secrets/patrimonio_integration_token`, `.secrets/cb_patrimonio_token`
+   (cópia do `crv_link_token` do CB) e o material de `.certs/` exigido pelo
+   build.
    Nunca registre ou exiba seus conteúdos. No Docker Compose não-Swarm, use modo
    `700` no diretório `.secrets` e `644` nos arquivos, pois PostgreSQL e Flask
    usam usuários Linux diferentes. `postgres_password` fica reservado ao banco
@@ -97,9 +98,15 @@ lerem o Controle Bancário, o `web` precisa de `CB_PATRIMONIO_URL` no `.env` do
 VPS (`http://cb-api:8000/patrimonio/v4`, pela rede interna `patrimonio-internal`
 em que o CRV já entra com o alias `crv-api`) e do segredo
 `.secrets/cb_patrimonio_token`, declarado no `compose.yaml` como
-`CB_PATRIMONIO_TOKEN_FILE`. O arquivo é uma cópia do `PATRIMONIO_INTEGRATION_TOKEN`
-do CB (o CB tem um token só, e ele lê todas as contas: trate-o como senha de
-banco, nunca o imprima). **Crie o arquivo antes de subir a pilha**: sem ele o
+`CB_PATRIMONIO_TOKEN_FILE`. O arquivo é uma cópia do `crv_link_token` do CB
+(`CRV_LINK_TOKEN` lá), o token do vínculo CB <-> CRV: com ele o CRV lê só o
+snapshot, recortado às contas de corretora (`RECORTE_DO_VINCULO`, instituição do
+tipo Corretora), e é o mesmo valor que o CB apresenta ao pedir
+`/fechamento/status` ao CRV. **Não** copie para cá o `patrimonio_integration_token`
+do CB, que lê todas as contas (inclusive o gasto da casa) e quebraria o
+fechamento (o CRV recusaria o token do vínculo que o CB envia). Trocar um lado
+exige trocar o outro (ver "Rotação de segredos"). Nunca imprima o valor.
+**Crie o arquivo antes de subir a pilha**: sem ele o
 Docker cria um diretório no lugar e o `web` não sobe. O `cb-api` já está em
 `ALLOWED_HOSTS` do CB (conferido em 18/10/2026). Sem `CB_PATRIMONIO_URL` a tela
 diz "CB não configurado" e nada mais é afetado.
@@ -129,6 +136,25 @@ habilitado em janela controlada, depois de backup e ensaio de restauração.
 -- a aplicação recusa subir com a segunda ligada e a primeira desligada:
 confiar em `X-Forwarded-*` só faz sentido atrás de um proxy que
 termina TLS, e sem `FORCE_HTTPS` o cookie de sessão sairia sem `Secure`.
+
+## Rotação de segredos
+
+Cada arquivo de `.secrets/` (no VPS, em `~/apps/controle-renda-variavel`), quem o
+lê e o que fazer ao trocá-lo. Gere o valor novo sem exibi-lo, grave com modo
+`644` e confira `/health` depois. Cada `~/deploy.sh renda` abaixo precisa do "sim"
+do mantenedor.
+
+| Arquivo | Quem lê | Ao trocar |
+| --- | --- | --- |
+| `secret_key` | `web`, `migrate` | Derruba todas as sessões (a marca de sessão do usuário deriva dela): todos entram de novo. Grave e `~/deploy.sh renda`. |
+| `postgres_app_password` | `db-provision` (aplica no papel `investimentos_app`), `web` | Grave e `~/deploy.sh renda`: o `db-provision` reaplica a senha do papel e o `web` sobe com a nova. |
+| `postgres_password` | `db` (primeira criação), `db-provision`, `migrate` | O arquivo só vale na criação do volume. Troque antes a senha no banco (`ALTER ROLE investimentos PASSWORD ...` pelo `psql` do contêiner `db`), depois o arquivo e `~/deploy.sh renda`. |
+| `collector_agent_read_token`, `collector_agent_write_token` | `web` (confere) e o agente RTD no Windows (apresenta) | Troque no VPS e no `.secrets` do Windows, `~/deploy.sh renda` e reinicie a tarefa do agente (`scripts/rtd-agent.ps1`). Entre um passo e outro o agente recebe 401: a coleta pausa, sem perda de dado. |
+| `patrimonio_integration_token` | `web` (confere); o consolidador de patrimônio apresenta | Grave, entregue o valor ao consumidor por canal seguro e `~/deploy.sh renda`. Independente do vínculo com o CB. |
+| `cb_patrimonio_token` | `web`: lê o CB e confere o `/fechamento/status` do CB | É cópia do `crv_link_token` do CB. Grave o mesmo valor nos dois (`.secrets/crv_link_token` no CB e este), depois `~/deploy.sh renda` e `~/deploy.sh bancario`. Entre um passo e outro o Roteiro de fechamento do CB mostra "o CRV recusou a consulta". |
+
+Vazamento de um segredo: rotacione na ordem da tabela e confira o `audit_log`
+(`flask auditoria`) de login recusado e de escrita no período.
 
 ## Topologia e rate limiting
 

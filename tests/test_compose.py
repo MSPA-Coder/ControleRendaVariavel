@@ -47,7 +47,7 @@ def test_tokens_patrimoniais_separados_no_runtime_e_no_quality() -> None:
 
 
 def test_leitura_do_cb_vem_de_segredo_de_arquivo_so_no_web() -> None:
-    """O token do CB (cópia do PATRIMONIO_INTEGRATION_TOKEN dele) é segredo de
+    """O token do CB (cópia do `crv_link_token` dele, o do vínculo) é segredo de
     arquivo e só o `web` o recebe; a URL é opcional e vazia por padrão."""
     servicos = _servicos()
     web = servicos["web"]
