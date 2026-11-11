@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from io import BytesIO
+from itertools import islice
 from typing import Any
 
 from openpyxl import load_workbook
@@ -47,6 +48,10 @@ REQUIRED_COLUMNS = (
     "Obs",
 )
 MAX_WORKBOOK_BYTES = 2 * 1024 * 1024
+#: Teto de linhas por aba. O limite em bytes vale para o arquivo comprimido; um
+#: XLSX de poucos KB pode descomprimir em milhões de linhas e esgotar a memória
+#: do contêiner. Um histórico real tem alguns milhares.
+MAX_SHEET_ROWS = 200_000
 
 #: O Excel conta dias a partir de 30/12/1899 (a época já embute o erro do ano
 #: 1900 bissexto): 46028 é 06/01/2026.
@@ -316,9 +321,17 @@ def load_sheets(content: bytes) -> list[list[tuple[Any, ...]]]:
         return [lines]
     try:
         workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
-        return [list(worksheet.iter_rows(values_only=True)) for worksheet in workbook.worksheets]
+        sheets = [
+            list(islice(worksheet.iter_rows(values_only=True), MAX_SHEET_ROWS + 1))
+            for worksheet in workbook.worksheets
+        ]
     except (InvalidFileException, zipfile.BadZipFile, OSError, ValueError, KeyError) as exc:
         raise ExecutionReportError("Não foi possível ler o relatório XLSX.") from exc
+    if any(len(rows) > MAX_SHEET_ROWS for rows in sheets):
+        raise ExecutionReportError(
+            f"O relatório tem linhas demais (o limite é {MAX_SHEET_ROWS} por aba)."
+        )
+    return sheets
 
 
 def read_execution_report(content: bytes) -> ExecutionReport:

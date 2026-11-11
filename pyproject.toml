@@ -24,6 +24,9 @@ dependencies = [
   "psycopg[binary]>=3.2.13,<4",
   "pydantic>=2.13.4,<3",
   "openpyxl>=3.1.5,<4",
+  # O openpyxl usa o defusedxml sozinho quando ele está instalado: sem ele, a
+  # planilha enviada é lida pelo parser XML padrão (entidades, expansão).
+  "defusedxml>=0.7.1,<1",
   # Sessão, CSRF, rate-limit no login, controle de acesso, hash de senha,
   # cabeçalhos de segurança, formatação em pt-BR e rota de saúde
   # compartilhados com os outros apps do mantenedor. Tag fixada manualmente;

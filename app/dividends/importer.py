@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -29,6 +30,9 @@ REQUIRED_COLUMNS = (
     "Valor por Cota",
 )
 MAX_WORKBOOK_BYTES = 5 * 1024 * 1024
+#: Teto de linhas por aba, contra planilha que descomprime muito além do
+#: tamanho enviado (ver `MAX_SHEET_ROWS` em `executions/myprofit.py`).
+MAX_SHEET_ROWS = 200_000
 
 
 class DividendWorkbookError(ValueError):
@@ -169,6 +173,18 @@ def _parse_row(values: tuple[Any, ...], headers: dict[str, int], source_row: int
     )
 
 
+def _bounded_rows(worksheet: Any, first_row: int) -> Iterator[tuple[int, tuple[Any, ...]]]:
+    """Linhas da aba a partir de `first_row`, recusando a que passa do teto."""
+    for row_number, values in enumerate(
+        worksheet.iter_rows(min_row=first_row, values_only=True), start=first_row
+    ):
+        if row_number > MAX_SHEET_ROWS:
+            raise DividendWorkbookError(
+                f"A planilha tem linhas demais (o limite é {MAX_SHEET_ROWS} por aba)."
+            )
+        yield row_number, values
+
+
 def read_dividend_workbook(content: bytes) -> DividendWorkbook:
     """Lê uma planilha XLSX, localizando a aba pelos cabeçalhos obrigatórios."""
     if not content:
@@ -184,7 +200,7 @@ def read_dividend_workbook(content: bytes) -> DividendWorkbook:
     closest_matches = -1
     required_headers = {_normalized_header(column) for column in REQUIRED_COLUMNS}
     for worksheet in workbook.worksheets:
-        for source_row, values in enumerate(worksheet.iter_rows(values_only=True), start=1):
+        for source_row, values in _bounded_rows(worksheet, 1):
             matches = len(required_headers & {_normalized_header(value) for value in values})
             if matches > closest_matches:
                 closest_headers = values
@@ -194,9 +210,7 @@ def read_dividend_workbook(content: bytes) -> DividendWorkbook:
                 continue
             rows: list[DividendImportRow] = []
             rejected: list[str] = []
-            for row_number, row_values in enumerate(
-                worksheet.iter_rows(min_row=source_row + 1, values_only=True), start=source_row + 1
-            ):
+            for row_number, row_values in _bounded_rows(worksheet, source_row + 1):
                 if not any(value is not None and str(value).strip() for value in row_values):
                     continue
                 try:
