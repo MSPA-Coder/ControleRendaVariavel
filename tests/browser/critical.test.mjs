@@ -102,8 +102,11 @@ test('consultas preservam origem, detalhes, filtros e privacidade', { timeout: 4
 
 // Os pregões da demonstração nascem relativos a hoje (`tests/browser_server.py`):
 // NOTA-DEMO-1 há 10 dias e NOTA-DEMO-2 há 9. Data fixa aqui vence sozinha.
+// "Hoje" é o dia civil de São Paulo, como no servidor (`date.today()` com
+// TZ=America/Sao_Paulo): pelo dia UTC, o teste erra das 21h à meia-noite.
 function diasAtras(dias) {
-  const iso = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
+  const iso = new Date(Date.now() - dias * 86400000)
+    .toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const [ano, mes, dia] = iso.split('-');
   return { iso, br: `${dia}/${mes}/${ano}` };
 }
