@@ -166,9 +166,28 @@ posição. Por isso, em Transações:
 - excluí-la **desfaz** o encerramento: a quantidade volta para a posição, a
   baixa sai do extrato e os saldos dos movimentos seguintes são reaplicados.
 
-Uma transação cuja posição de origem já não existe (encerramento total, ou
-posição excluída depois) volta a ser um registro histórico comum, editável e
-excluível sem efeito colateral.
+Excluir a transação de um encerramento **total** também o desfaz (ação e
+opção; `app/positions/reopen.py`):
+
+- com o arquivo completo do extrato (`position_movement_archive` para ações,
+  `option_movement_archive` para opções), a posição e o extrato voltam ao estado
+  de antes do encerramento, com os mesmos ids, datas, quantidade e custo médio, e
+  a transação volta a ser a linha aberta; as linhas dos dois arquivos
+  (`position_movement_archive`/`option_movement_archive` e
+  `position_ledger_archive`) saem na mesma transação. O alvo (`target_multiplier`
+  ou `target_price`) não é arquivado e volta ao padrão;
+- se já existir posição viva com a mesma carteira, corretora, ativo e lado
+  (reaberta ou reforçada depois), a exclusão é recusada com aviso: nada se funde;
+- sem o arquivo completo (encerramentos anteriores a 28/09/2026 em ações e a
+  12/11/2026 em opções), não há de onde reabrir: com confirmação, a transação é
+  apagada e as linhas da posição saem de `position_ledger_archive`, para o
+  desempenho não contar uma posição que não volta;
+- a trilha de auditoria registra a ação `desfazer`.
+
+Uma transação cuja posição de origem já não existe por outro motivo (baixa
+parcial de uma posição depois encerrada, posição excluída, lançamento à mão)
+continua sendo um registro histórico comum, editável e excluível sem efeito
+colateral.
 
 ## Comparação de cotações
 

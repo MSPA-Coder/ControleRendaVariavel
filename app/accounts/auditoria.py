@@ -47,6 +47,9 @@ ACOES: frozenset[str] = frozenset(
         "atualizar",
         "excluir",
         "encerrar",
+        # Desfazer o encerramento total de uma posição (reabre ou, sem extrato
+        # guardado, só tira da série de desempenho).
+        "desfazer",
         "ativar",
         "desativar",
         "arquivar",

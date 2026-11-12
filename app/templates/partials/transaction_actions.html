@@ -13,6 +13,29 @@
                       data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error"
                       title="Desfaz esta transação e apaga o registro">desfazer</button>
             </form>
+          {% elif tx.id in total_undo_ids %}
+            {# Encerramento total com o arquivo do extrato: desfazer reabre a posição. #}
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
+                  data-sa-titulo="Desfazer encerramento" data-sa-severidade="error">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-button" type="submit"
+                      data-sa-confirmar="Desfazer este encerramento? A posição e o extrato voltam para a Carteira, com a quantidade, o custo médio e as datas de antes, e esta transação volta a ser a linha aberta. O alvo volta ao padrão."
+                      data-sa-titulo="Desfazer encerramento" data-sa-severidade="error"
+                      title="Reabre a posição encerrada">desfazer</button>
+            </form>
+          {% elif tx.id in total_legacy_ids %}
+            {# Encerramento total sem o arquivo do extrato: não há como reabrir. #}
+            {% if not tx.option_contract_id %}<a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>{% endif %}
+            <form class="inline-form" method="post"
+                  action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
+                  data-sa-titulo="Excluir encerramento" data-sa-severidade="error">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="confirm_sem_extrato" value="1">
+              <button class="link-button" type="submit"
+                      data-sa-confirmar="O extrato deste encerramento não foi guardado: a posição NÃO será reaberta. Excluir a transação e tirar a posição do histórico de desempenho?"
+                      data-sa-titulo="Excluir encerramento" data-sa-severidade="error">excluir</button>
+            </form>
           {% elif tx.option_contract_id %}
             {# Transação de opção fechada sem posição viva: registro histórico
                independente. Continua excluível (link genérico abaixo cobre

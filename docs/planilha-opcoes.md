@@ -36,6 +36,11 @@ Quando há encerramentos parciais, a edição não permite trocar contrato,
 corretora, carteira ou lado; os lançamentos históricos devem ser corrigidos
 separadamente.
 
+Excluir a transação de um encerramento total reabre a posição a partir de
+`option_movement_archive` (encerramentos desde 12/11/2026) ou, sem o arquivo,
+só a tira do histórico de desempenho, com confirmação; as regras são as de
+ações (ver `planilha-acoes.md`).
+
 Ao excluir a transação de um encerramento parcial de posição ainda aberta,
 o encerramento é desfeito e os movimentos seguintes são reaplicados. Custos
 médios e resultados das transações de encerramento posteriores são recalculados

@@ -31,6 +31,7 @@ from app.options.closure import (
     revert_partial_close as option_revert_partial_close,
 )
 from app.positions.closure import partial_close_of_open_position, revert_partial_close
+from app.positions.reopen import SemExtratoSemConfirmacaoError, classify, undo_total_closure
 from app.routes import bp
 from app.routes.helpers import (
     broker_records,
@@ -61,6 +62,13 @@ def _revert_partial_close(transaction: Transaction) -> Position | OptionPosition
     if transaction.option_contract_id is not None:
         return option_revert_partial_close(transaction)
     return revert_partial_close(transaction)
+
+
+def _total_closure(transaction: Transaction) -> bool | None:
+    """``True``: encerramento total que reabre; ``False``: sem extrato guardado; ``None``: não é um."""
+    if transaction.source_position_id is None:
+        return None
+    return classify([transaction]).get(transaction.id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,9 +282,15 @@ def transactions_results_context() -> dict[str, object]:
     # escolhido acima (que afeta só o que aparece na tabela). Cada resumo é
     # separado por moeda: BRL e USD não são somáveis sem uma taxa de câmbio.
     performance_by_currency = _transaction_performance_by_currency(records)
+    # Encerramentos TOTAIS (a posição não existe mais): excluir desfaz o
+    # encerramento. `total_undo_ids` têm o arquivo do extrato e reabrem a
+    # posição; `total_legacy_ids` não têm, e a exclusão só tira a posição da série.
+    total_kinds = classify([t for t in records if t.id not in partial_close_ids])
     return {
         "transactions": records,
         "partial_close_ids": partial_close_ids,
+        "total_undo_ids": {i for i, completo in total_kinds.items() if completo},
+        "total_legacy_ids": {i for i, completo in total_kinds.items() if not completo},
         "selected_broker": broker or "",
         "selected_portfolio_id": selected_portfolio_id,
         "portfolios": portfolio_records(),
@@ -397,6 +411,7 @@ def edit_transaction(transaction_id: int) -> ResponseReturnValue:
     return render_template(
         "transaction_form.html",
         transaction=transaction,
+        total_closure=_total_closure(transaction),
         brokers=broker_records(),
         tickers=investable_ticker_records(),
         sides=Side,
@@ -420,6 +435,7 @@ def update_transaction(transaction_id: int) -> ResponseReturnValue:
         return render_template(
             "transaction_form.html",
             transaction=request.form,
+            total_closure=_total_closure(transaction),
             edit_mode=True,
             transaction_id=transaction_id,
             brokers=broker_records(),
@@ -466,6 +482,42 @@ def delete_transaction(transaction_id: int) -> ResponseReturnValue:
                 "lançamento de abertura. Para corrigir, edite a posição pela tela.",
                 "error",
             )
+            return redirect(url_for("portfolio.transactions"))
+    if not reverted:
+        # Encerramento TOTAL: a posição não existe mais, e excluir a transação é
+        # desfazer o encerramento (reabrir pelo arquivo do extrato) ou, sem ele,
+        # tirar a posição da série de desempenho. Ver `app.positions.reopen`.
+        try:
+            desfeito = undo_total_closure(
+                transaction, accept_without_extract=request.form.get("confirm_sem_extrato") == "1"
+            )
+        except SemExtratoSemConfirmacaoError as exc:
+            db.session.rollback()
+            flash(
+                f"{exc} Para excluir mesmo assim, confirme a exclusão: a transação é apagada e a "
+                "posição sai do histórico de desempenho.",
+                "error",
+            )
+            return redirect(url_for("portfolio.transactions"))
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "error")
+            return redirect(url_for("portfolio.transactions"))
+        if desfeito is not None:
+            db.session.commit()
+            if desfeito.reopened:
+                flash(
+                    "Encerramento desfeito: a posição e o extrato voltaram para a Carteira, com a "
+                    "quantidade, o custo médio e as datas de antes. O alvo da posição voltou ao padrão; "
+                    "confira-o.",
+                    "success",
+                )
+            else:
+                flash(
+                    "Transação excluída. A posição não foi reaberta porque o extrato dela não foi "
+                    "guardado; ela saiu do histórico de desempenho.",
+                    "success",
+                )
             return redirect(url_for("portfolio.transactions"))
     db.session.delete(transaction)
     db.session.commit()

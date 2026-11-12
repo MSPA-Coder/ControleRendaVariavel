@@ -49,9 +49,20 @@
 <form class="delete-form" method="post" action="{{ url_for('portfolio.delete_transaction', transaction_id=transaction_id if edit_mode is defined else transaction.id) }}"
       data-sa-titulo="Excluir transação" data-sa-severidade="error">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if total_closure is none %}
   <button class="button button-danger" type="submit"
           data-sa-confirmar="Excluir esta transação?"
           data-sa-titulo="Excluir transação" data-sa-severidade="error">Excluir transação</button>
+  {% elif total_closure %}
+  <button class="button button-danger" type="submit"
+          data-sa-confirmar="Desfazer o encerramento? A posição e o extrato voltam para a Carteira, com a quantidade, o custo médio e as datas de antes, e esta transação volta a ser a linha aberta. O alvo volta ao padrão."
+          data-sa-titulo="Desfazer encerramento" data-sa-severidade="error">Desfazer encerramento</button>
+  {% else %}
+  <input type="hidden" name="confirm_sem_extrato" value="1">
+  <button class="button button-danger" type="submit"
+          data-sa-confirmar="O extrato deste encerramento não foi guardado: a posição NÃO será reaberta. Excluir a transação e tirar a posição do histórico de desempenho?"
+          data-sa-titulo="Excluir encerramento" data-sa-severidade="error">Excluir transação</button>
+  {% endif %}
 </form>
 {% endif %}
 {% endblock %}

@@ -25,6 +25,7 @@ passar por `use_cases`. Retirar as duas camadas juntas derruba os testes (ensaio
 | `positions/closure.py` chave consultiva da posição + linha candidata à mesclagem | dois aportes na mesma chave não criam duas posições nem perdem quantidade | `test_mesclagem_espera_a_trava_da_chave_da_posicao[stock]` e `test_mesclagem_espera_a_linha_da_posicao_e_soma_sobre_a_quantidade_nova[stock]` (detectadas) |
 | `options/closure.py` chave consultiva + linha candidata | idem, opções | idem `[option]` (detectadas) |
 | `positions/closure.py`, `options/closure.py` linha da posição na reversão do encerramento parcial | reverter sobre a quantidade vigente | `test_reverter_encerramento_parcial_espera_a_linha_da_posicao[stock/option]` (detectadas) |
+| `positions/reopen.py` chave consultiva da posição (`_mergeable_position`) | desfazer o encerramento total não cria duas posições com a mesma chave | **Sem teste de concorrência próprio**: a recusa por posição viva é testada em `test_desfazer_encerramento_total.py`; a garantia contra a corrida é o índice único `uq_positions_chave`/`uq_option_positions_chave` |
 | `accounts/users.py` `_lock_admin_mutations` (advisory) | nunca ficar sem administrador ativo | `test_rebaixar_o_ultimo_administrador_espera_e_e_recusado` e `test_desativar_o_ultimo_administrador_espera_e_e_recusado` (detectada) |
 | `accounts/users.py` `_locked_user` (linha do usuário) | alterar o usuário lido | **Coberta por** `_lock_admin_mutations`: os três chamadores (`update_user`, `reset_password`, `set_active`) tomam a trava consultiva antes. Retirada sozinha, nenhum teste falha (0/3), e não há caminho que mude usuário sem a trava consultiva. |
 | `accounts/users.py` linha do usuário em `upsert_from_cli` | idem, no comando de linha | **Coberta por** `_lock_admin_mutations` (primeira instrução do método); o comentário no código diz o mesmo. |
@@ -33,6 +34,6 @@ passar por `use_cases`. Retirar as duas camadas juntas derruba os testes (ensaio
 
 ## Sem proteção de teste
 
-Nenhuma trava deste repositório está sem teste **e** sem garantia que a cubra. As quatro últimas linhas da tabela
+Só a trava de `positions/reopen.py` (primeira linha da tabela acima sobre ela) não tem teste de concorrência: o índice único do banco a cobre. Nenhuma outra está sem teste **e** sem garantia que a cubra. As quatro últimas linhas da tabela
 dependem do raciocínio acima, não de um teste que falhe; se um chamador novo passar a usar essas funções sem
 `lock_executions` nem a linha da posição, o raciocínio deixa de valer e a linha pede teste.

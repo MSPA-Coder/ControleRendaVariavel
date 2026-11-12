@@ -516,7 +516,7 @@ exibido vem do pulso persistido, não de uma sondagem do host.
 | `quote_history` | série diária de preço |
 | `position_ledger_archive` | extrato preservado de posição encerrada |
 | `position_movement_archive` | cópia integral dos movimentos de ações encerradas após a revisão `20260928_0024` |
-| `option_movement_archive` | o mesmo para opções encerradas por inteiro, após a revisão `20261111_0046`; o ativo é `option_contract_id`; sem backfill; fora do feed v4 (`/patrimonio/v4/ledger` publica só ações) e sem leitura em `leitura` |
+| `option_movement_archive` | o mesmo para opções encerradas por inteiro, após a revisão `20261111_0046`; o ativo é `option_contract_id`; sem backfill; fora do feed v4 (`/patrimonio/v4/ledger` publica só ações) e sem leitura em `leitura`. Os dois arquivos e `position_ledger_archive` perdem as linhas da posição quando o encerramento total é desfeito pela exclusão da transação (`positions/reopen.py`); o gatilho do outbox de `position_movement_archive` anuncia cada linha como `delete` de `position_ledger`, e o consumidor, que reconcilia pelo snapshot, deixa de ver o evento `close` |
 | `execution_imports`, `executions` | negócios importados do myProfit e os lotes que os trouxeram; não são posição nem transação |
 | `myprofit_positions`, `reconciliation_notes` | a "Posição detalhada" do myProfit por data e as diferenças da conciliação que o mantenedor explicou; só a conciliação mensal lê |
 | `myprofit_coletas` | cada pacote da coleta do myProfit importado, com o resumo da conferência de proventos; o status de fechamento lê |
