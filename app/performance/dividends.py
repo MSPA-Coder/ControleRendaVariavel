@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.core.domain import safe_div
+from app.core.domain import hoje_no_mercado, safe_div
 from app.models import Dividend
 
 
@@ -74,7 +74,7 @@ def build_dividend_report(
     vieram sem elas, as do CB (ver ``app.dividends.yields``): sem isso o DY e o
     YOC de 12 meses ignorariam o provento recebido do CB.
     """
-    reference_date = reference_date or date.today()
+    reference_date = reference_date or hoje_no_mercado()
     trailing_start = reference_date - timedelta(days=365)
     ticker_totals: dict[tuple[str, str], Decimal] = {}
     ticker_ids: dict[tuple[str, str], int] = {}

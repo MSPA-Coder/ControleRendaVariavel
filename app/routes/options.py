@@ -21,6 +21,7 @@ from sqlalchemy.orm import joinedload
 
 from app import db
 from app.accounts.authorization import requer_admin
+from app.core.domain import hoje_no_mercado
 from app.core.pricing_settings import DEFAULT_RISK_FREE_RATE_ANNUAL
 from app.core.validation import parse_finite_decimal
 from app.models import (
@@ -129,7 +130,7 @@ def _contracts(*, somente_vigentes: bool = False, manter: int | None = None) -> 
         .join(OptionContract.expiration)
     )
     if somente_vigentes:
-        vigente = OptionExpiration.exercise_date >= date.today()
+        vigente = OptionExpiration.exercise_date >= hoje_no_mercado()
         statement = statement.where(
             or_(vigente, OptionContract.id == manter) if manter is not None else vigente
         )
@@ -160,7 +161,7 @@ def _parse_position(*, permitir_contrato_vencido: bool = False) -> OptionPositio
         raise ValueError("Selecione um contrato de opção cadastrado.")
     if (
         not permitir_contrato_vencido
-        and contract.expiration.exercise_date < date.today()
+        and contract.expiration.exercise_date < hoje_no_mercado()
     ):
         raise ValueError("Não é possível abrir uma posição em um contrato já vencido.")
     if db.session.scalar(select(Portfolio.id).where(Portfolio.id == portfolio_id, Portfolio.owner_id == current_owner_id())) is None:
@@ -214,7 +215,7 @@ def index() -> str:
         "selected_broker": broker or "",
         "portfolios": portfolio_records(),
         "brokers": brokers(),
-        "today": date.today(),
+        "today": hoje_no_mercado(),
     }
     if is_htmx_request():
         return render_template("partials/options_results.html", **context)
@@ -410,7 +411,7 @@ def close_position_form(position_id: int) -> ResponseReturnValue:
         "close_option_form.html",
         position=position,
         default_price=default_price,
-        default_date=date.today().isoformat(),
+        default_date=hoje_no_mercado().isoformat(),
         movements=position.movements,
     )
 

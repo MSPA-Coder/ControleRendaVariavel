@@ -21,7 +21,7 @@ from app.collector.profit_detector import WindowsProfitDetector
 from app.collector.providers import CollectorProviderManager, ManagedQuoteProvider
 from app.collector.rtd import Instrument
 from app.collector.rtd_direct import DirectRtdQuoteProvider
-from app.core.domain import MARKET_TIMEZONE
+from app.core.domain import MARKET_TIMEZONE, hoje_no_mercado
 from app.models import (
     ROLE_ADMIN,
     VALID_ROLES,
@@ -224,7 +224,7 @@ def import_position_history(estrito: bool) -> None:
     started = perf_counter()
     targets = quote_update_targets()
     db.session.rollback()
-    today = date.today()
+    today = hoje_no_mercado()
 
     imported: list[tuple[int, DailyQuote]] = []
     failures: list[str] = []
@@ -560,7 +560,7 @@ def importar_posicao_myprofit(arquivo: Path, usuario: str | None, gravar: bool) 
         click.echo(f"PENDÊNCIA: {problem}", err=True)
     if report.rejected_rows:
         raise click.ClickException("O relatório tem linhas recusadas; nada foi gravado.")
-    if report.as_of > date.today():
+    if report.as_of > hoje_no_mercado():
         # Pedida com data futura, o myProfit devolve a posição de hoje com o
         # rótulo da data pedida: gravá-la faria a conciliação comparar o CRV
         # daquela data com uma posição que não é dela.
@@ -665,7 +665,7 @@ def conciliar_myprofit(
     """
     from app.executions.conciliacao import STATE_LABELS, build_conciliation
 
-    today = date.today()
+    today = hoje_no_mercado()
     result = build_conciliation(
         _owner_for_command(usuario),
         start=inicio.date() if inicio else date(today.year, 1, 1),

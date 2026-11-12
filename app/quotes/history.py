@@ -16,6 +16,7 @@ from sqlalchemy import Date, and_, func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app import db
+from app.core.domain import hoje_no_mercado
 from app.models import (
     OptionContract,
     OptionPosition,
@@ -100,7 +101,7 @@ def quote_update_targets() -> list[tuple[TickerImportTarget, date, date]]:
     ``quote_history``. O ativo-objeto da opção continua na lista quando é
     detido ou de referência por conta própria.
     """
-    today = date.today()
+    today = hoje_no_mercado()
     periods = _held_periods(today)
     benchmark_start = min(
         (start for start, _ in periods.values()),
@@ -141,7 +142,7 @@ def quote_update_target_tickers() -> list[TickerImportTarget]:
     os ainda detidos e os de referência. Um ticker já encerrado não recebe
     cotação posterior ao encerramento -- a carteira não precisa dela.
     """
-    today = date.today()
+    today = hoje_no_mercado()
     return [target for target, _start, end in quote_update_targets() if end == today]
 
 

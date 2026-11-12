@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+from app.core.domain import hoje_no_mercado
 from app.core.instrument_status import instrument_status_class, instrument_status_letter
 from app.models import OptionPosition
 from app.options.greeks import OptionGreeks, calculate_greeks
@@ -76,7 +77,7 @@ def build_option_portfolio(
     today: date | None = None,
     now: datetime | None = None,
 ) -> OptionPortfolio:
-    current_date = today or date.today()
+    current_date = today or hoje_no_mercado()
     observed_now = now or datetime.now(UTC)
     views: list[OptionView] = []
     for position in positions:

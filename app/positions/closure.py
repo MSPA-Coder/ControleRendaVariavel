@@ -20,6 +20,7 @@ from sqlalchemy import Select, select, text
 from app import db
 from app.core.domain import (
     StatementEntry,
+    hoje_no_mercado,
     is_duplicate_entry,
     operation_result,
     plan_position_closure,
@@ -484,7 +485,7 @@ def record_position_adjustment(
         PositionMovementKind.ADJUSTMENT,
         quantity_delta=position.quantity - previous_quantity,
         price=position.average_cost,
-        occurred_on=date.today(),
+        occurred_on=hoje_no_mercado(),
     )
 
 

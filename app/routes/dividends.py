@@ -15,6 +15,7 @@ from werkzeug.exceptions import HTTPException
 
 from app import db
 from app.core.currency_filter import ALL
+from app.core.domain import hoje_no_mercado
 from app.core.validation import parse_finite_decimal
 from app.dividends.cb_sync import (
     ImportPlan,
@@ -91,7 +92,7 @@ def _parse_form() -> DividendInput:
         raise ValueError("Esse ticker está marcado como referência de comparação.")
     if amount <= 0:
         raise ValueError("O valor do provento deve ser positivo.")
-    if payment_date > date.today():
+    if payment_date > hoje_no_mercado():
         raise ValueError("A data de pagamento de um provento recebido não pode estar no futuro.")
     if comes_from_cb(currency=ticker.currency, broker_name=broker.name, payment_date=payment_date):
         raise ValueError(refusal_message(broker.name))

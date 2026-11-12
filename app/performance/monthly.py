@@ -118,7 +118,7 @@ def select_performance_period(
     """Recorta a série diária de fluxo pelo período solicitado, no backend.
 
     A referência é a última data observada na série
-    (``points[-1].observed_date``), e não ``date.today()``. Isso mantém
+    (``points[-1].observed_date``), e não o dia do relógio. Isso mantém
     relatórios históricos reproduzíveis e permite navegar por dados que
     ainda não tenham sido atualizados até o dia corrente.
     """

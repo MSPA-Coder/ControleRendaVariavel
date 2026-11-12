@@ -11,7 +11,7 @@ from sqlalchemy.orm import contains_eager, joinedload
 
 from app import db
 from app.core.currency_filter import ALL
-from app.core.domain import operation_result
+from app.core.domain import hoje_no_mercado, operation_result
 from app.core.validation import limitar_texto, parse_finite_decimal
 from app.models import (
     Broker,
@@ -169,7 +169,7 @@ def _parse_form() -> TransactionInput:
         )
     if closed_on < opened_on:
         raise ValueError("A data de encerramento não pode ser anterior à data de abertura.")
-    today = date.today()
+    today = hoje_no_mercado()
     if opened_on > today or closed_on > today:
         raise ValueError(
             "As datas de uma transação realizada não podem estar no futuro."

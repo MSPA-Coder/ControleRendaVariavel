@@ -18,6 +18,7 @@ from app.collector.settings import (
 )
 from app.core.currency import TaxaDeCambio
 from app.core.currency_filter import parse_currency_filter
+from app.core.domain import hoje_no_mercado
 from app.executions.locking import lock_executions
 from app.models import (
     AppSetting,
@@ -121,7 +122,7 @@ def require_currency_match(ticker: Ticker, portfolio_id: int) -> None:
 
 def require_not_future(*dates: date, what: str) -> None:
     """Recusa data posterior a hoje em fato que já aconteceu."""
-    today = date.today()
+    today = hoje_no_mercado()
     if any(value > today for value in dates):
         raise ValueError(f"{what} não pode estar no futuro.")
 

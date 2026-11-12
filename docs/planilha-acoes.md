@@ -365,7 +365,7 @@ por carteira (`app/performance/risk.py`,
   fechar em outro é ganho real que o índice não registra, consequência
   direta de avaliar o fluxo a preço de fechamento em vez de preço de
   negócio.
-- **`ADJUSTMENT` é datado com `date.today()`** — a data em que a correção
+- **`ADJUSTMENT` é datado com `hoje_no_mercado()` (o dia de São Paulo)** — a data em que a correção
   foi feita, não a do fato corrigido. Corrigir hoje um erro antigo move a
   quantidade histórica só a partir de hoje; o patrimônio dos meses
   intermediários continua refletindo o valor anterior à correção.

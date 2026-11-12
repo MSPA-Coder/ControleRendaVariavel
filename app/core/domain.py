@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from zoneinfo import ZoneInfo
@@ -15,6 +15,18 @@ class Side(StrEnum):
 MARKET_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 """Fuso de referência do mercado. Define o "dia" de um snapshot de cotação
 e a formatação de horários de leitura exibidos na interface."""
+
+
+
+def hoje_no_mercado() -> date:
+    """O dia civil de hoje no fuso do mercado, não o do processo.
+
+    O ``today`` da biblioteca padrão segue o ``TZ`` do contêiner: num ``docker run`` sem ele, o
+    dia vira UTC e um lançamento entre 21h e 24h sairia datado de amanhã. Todo
+    "hoje" do domínio passa por aqui.
+    """
+    return datetime.now(MARKET_TIMEZONE).date()
+
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
@@ -136,7 +148,7 @@ def calculate_position(
     result = operation_result(side, quantity, average_cost, current)
     invested = quantity * average_cost
     return_pct = safe_div(result, invested)
-    days = ((today or date.today()) - opened_on).days
+    days = ((today or hoje_no_mercado()) - opened_on).days
     stop_gain = stop_gain_price(side, average_cost, target_multiplier)
     distance_to_target = safe_div(stop_gain, current)
     if distance_to_target is not None:

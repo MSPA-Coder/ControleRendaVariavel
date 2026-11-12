@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app import db
 from app.core import regional
 from app.core.currency import converter_totais
+from app.core.domain import hoje_no_mercado
 from app.core.validation import parse_finite_decimal
 from app.models import (
     Broker,
@@ -348,7 +349,7 @@ def portfolio_results_context() -> dict[str, object]:
         result_mode=selected_result_mode,
         dividends_by_position=dividends_by_position,
     )
-    data_da_tela = date.today()
+    data_da_tela = hoje_no_mercado()
     conversao = converter_totais(
         [(total.currency, total.current_total) for total in portfolio.currency_totals],
         referencia=data_da_tela,
@@ -415,7 +416,7 @@ def data_status() -> str:
         positions_query(),
         stale_after_seconds=quote_stale_after_seconds(),
     )
-    referencia = date.today()
+    referencia = hoje_no_mercado()
     conversao = converter_totais(
         [(total.currency, total.current_total) for total in portfolio.currency_totals],
         referencia=referencia,
@@ -773,7 +774,7 @@ def close_position_form(position_id: int) -> ResponseReturnValue:
         "close_position_form.html",
         position=position,
         default_price=default_price,
-        default_date=date.today().isoformat(),
+        default_date=hoje_no_mercado().isoformat(),
         movements=position.movements,
     )
 

@@ -11,6 +11,7 @@ from sqlalchemy import delete
 
 from app import db
 from app.accounts.authorization import requer_admin
+from app.core.domain import hoje_no_mercado
 from app.core.validation import parse_finite_decimal
 from app.models import QuoteHistory, Ticker
 from app.positions.average_cost_line import linhas_de_custo_medio_do_ticker
@@ -143,9 +144,9 @@ def _quote_history_context(
             if chart_comparison_start_date is not None
             else None
         ),
-        "today": date.today().isoformat(),
-        "default_import_start": (date.today() - timedelta(days=59)).isoformat(),
-        "default_import_end": date.today().isoformat(),
+        "today": hoje_no_mercado().isoformat(),
+        "default_import_start": (hoje_no_mercado() - timedelta(days=59)).isoformat(),
+        "default_import_end": hoje_no_mercado().isoformat(),
         "quote_management_open": management_open,
     }
 
@@ -214,7 +215,7 @@ def create_quote_history_entry() -> ResponseReturnValue:
     if price <= 0:
         flash("O preço da cotação deve ser positivo.", "error")
         return _quote_management_response(ticker_id)
-    if recorded_date > date.today():
+    if recorded_date > hoje_no_mercado():
         flash("A data da cotação não pode estar no futuro.", "error")
         return _quote_management_response(ticker_id)
     if db.session.get(Ticker, ticker_id) is None:
@@ -245,7 +246,7 @@ def import_quote_history() -> ResponseReturnValue:
     except (KeyError, ValueError):
         flash("Informe um periodo valido para a atualizacao.", "error")
         return _quote_management_response(None)
-    if start_date > end_date or end_date > date.today():
+    if start_date > end_date or end_date > hoje_no_mercado():
         flash("O periodo deve terminar hoje ou antes e possuir data inicial valida.", "error")
         return _quote_management_response(None)
 

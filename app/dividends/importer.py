@@ -10,6 +10,7 @@ from typing import Any
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
+from app.core.domain import hoje_no_mercado
 from app.core.validation import parse_finite_decimal
 from app.models import IncomeKind
 
@@ -135,7 +136,7 @@ def _parse_row(values: tuple[Any, ...], headers: dict[str, int], source_row: int
     payment_date = _as_date(cell("Data Pgto."), field_name="a data de pagamento")
     if amount <= 0:
         raise ValueError("O valor recebido deve ser positivo.")
-    if payment_date > date.today():
+    if payment_date > hoje_no_mercado():
         raise ValueError("A data de pagamento não pode estar no futuro.")
     financial_values = (
         source_yoc,

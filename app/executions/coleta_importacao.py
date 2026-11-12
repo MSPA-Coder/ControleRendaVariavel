@@ -13,6 +13,7 @@ from datetime import date
 
 from flask import current_app
 
+from app.core.domain import hoje_no_mercado
 from app.executions import coleta
 from app.executions.conciliacao import save_position_snapshot
 from app.executions.myprofit import ExecutionReportError
@@ -66,7 +67,7 @@ def planejar(owner_id: int, conteudo: bytes, *, hoje: date | None = None) -> Pla
     )
     if negocios is not None and negocios.problems:
         plano.impedimentos.append("Os negócios têm pendências; nada foi gravado.")
-    if any(retrato.as_of > (hoje or date.today()) for retrato in retratos):
+    if any(retrato.as_of > (hoje or hoje_no_mercado()) for retrato in retratos):
         plano.impedimentos.append("O pacote traz posição com data futura; refaça a coleta.")
     return plano
 
