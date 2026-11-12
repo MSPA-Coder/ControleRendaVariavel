@@ -71,7 +71,12 @@ def registrar(
     detalhes: dict[str, Any] | None = None,
     usuario_id: int | None = None,
 ) -> None:
-    """Grava uma linha na trilha, sem nunca interromper quem a chamou.
+    """Põe uma linha na trilha, sem interromper quem a chamou por erro de montagem.
+
+    O ``try`` abaixo só cobre ``session.add``, que não envia o INSERT: uma falha
+    real da gravação (coluna estourada, ``user_id`` inexistente) aparece no
+    ``flush``/``commit`` do caso de uso e o derruba junto, o que é o desejado,
+    pois a trilha não pode faltar a uma operação que se confirmou.
 
     ``usuario_id`` explícito serve ao login recusado, em que não há sessão — e
     ao caso simétrico do login aceito, registrado antes de a sessão existir.
