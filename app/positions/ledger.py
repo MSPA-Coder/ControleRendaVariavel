@@ -19,6 +19,8 @@ from decimal import Decimal
 
 from app import db
 from app.models import (
+    OptionMovementArchive,
+    OptionPositionMovement,
     PositionLedgerArchive,
     PositionMovement,
     PositionMovementArchive,
@@ -133,6 +135,66 @@ def archive_closed_stock_movements(
         PositionMovementArchive(
             owner_id=owner_id,
             ticker_id=ticker_id,
+            portfolio_id=portfolio_id,
+            broker_id=broker_id,
+            side=side.value,
+            source_position_id=position_id,
+            source_movement_id=None,
+            kind="close",
+            quantity_delta=-closing_transaction.quantity,
+            price=closing_transaction.exit_price,
+            occurred_on=closing_transaction.closed_on,
+            result=closing_transaction.result,
+            source_transaction_id=closing_transaction.id,
+            resulting_quantity=Decimal("0"),
+            resulting_average_cost=closing_transaction.average_cost,
+            source_created_at=None,
+        )
+    )
+
+
+def archive_closed_option_movements(
+    *,
+    position_id: int,
+    option_contract_id: int,
+    portfolio_id: int,
+    broker_id: int,
+    owner_id: int,
+    side: Side,
+    movements: Sequence[OptionPositionMovement],
+    closing_transaction: Transaction,
+) -> None:
+    """Par de ``archive_closed_stock_movements`` para posições de opção.
+
+    Copia cada movimento e acrescenta a linha ``close`` derivada da transação
+    final, com a mesma forma do lado das ações; muda só a coluna do ativo
+    (``option_contract_id``, o contrato, não o ativo-objeto).
+    """
+    for movement in movements:
+        db.session.add(
+            OptionMovementArchive(
+                owner_id=owner_id,
+                option_contract_id=option_contract_id,
+                portfolio_id=portfolio_id,
+                broker_id=broker_id,
+                side=side.value,
+                source_position_id=position_id,
+                source_movement_id=movement.id,
+                kind=movement.kind.value,
+                quantity_delta=movement.quantity_delta,
+                price=movement.price,
+                occurred_on=movement.occurred_on,
+                result=movement.result,
+                source_transaction_id=movement.transaction_id,
+                resulting_quantity=movement.resulting_quantity,
+                resulting_average_cost=movement.resulting_average_cost,
+                source_created_at=movement.created_at,
+            )
+        )
+    db.session.add(
+        OptionMovementArchive(
+            owner_id=owner_id,
+            option_contract_id=option_contract_id,
             portfolio_id=portfolio_id,
             broker_id=broker_id,
             side=side.value,

@@ -800,6 +800,103 @@ class PositionMovementArchive(Base):
     owner_ref: Mapped[User] = relationship()
 
 
+class OptionMovementArchive(Base):
+    """Cópia integral do extrato de uma posição de OPÇÃO encerrada por inteiro.
+
+    Par de ``PositionMovementArchive``: a das ações não comporta opções
+    (``ticker_id`` obrigatório e ``source_position_id`` sem o instrumento, com
+    sequências de id independentes), então a coluna do ativo aqui é
+    ``option_contract_id``. Mesmas regras: sem FK para a posição nem para a
+    transação, que deixam de existir; só recebe encerramentos totais feitos
+    depois da revisão ``20261111_0046``, sem backfill (o extrato antigo foi
+    apagado em cascata).
+    """
+
+    __tablename__ = "option_movement_archive"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id", "source_position_id", "source_movement_id",
+            name="uq_option_movement_archive_source",
+        ),
+        ForeignKeyConstraint(
+            ["portfolio_id", "owner_id"], ["portfolios.id", "portfolios.owner_id"],
+            name="fk_option_movement_archive_portfolio_owner", ondelete="RESTRICT",
+        ),
+        CheckConstraint("kind IN ('open', 'increase', 'decrease', 'adjustment', 'close')", name="kind_valid"),
+        CheckConstraint("side IN ('C', 'V')", name="side_valid"),
+        CheckConstraint("price >= 0", name="price_non_negative"),
+        CheckConstraint("resulting_quantity >= 0", name="resulting_quantity_non_negative"),
+        CheckConstraint("resulting_average_cost >= 0", name="resulting_average_cost_non_negative"),
+        CheckConstraint(
+            "quantity_delta NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="quantity_delta_finite",
+        ),
+        CheckConstraint(
+            "price NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="price_finite",
+        ),
+        CheckConstraint(
+            "resulting_quantity NOT IN ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="resulting_quantity_finite",
+        ),
+        CheckConstraint(
+            "resulting_average_cost NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="resulting_average_cost_finite",
+        ),
+        CheckConstraint(
+            "result IS NULL OR result NOT IN "
+            "('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)",
+            name="result_finite",
+        ),
+        CheckConstraint(
+            "(kind IN ('decrease', 'close')) = (result IS NOT NULL)",
+            name="result_only_on_reduction_or_close",
+        ),
+        CheckConstraint(
+            "(kind IN ('open', 'increase') AND quantity_delta > 0) OR "
+            "(kind IN ('decrease', 'close') AND quantity_delta < 0) OR "
+            "(kind = 'adjustment')",
+            name="quantity_delta_sign_matches_kind",
+        ),
+        CheckConstraint(
+            "source_transaction_id IS NULL OR kind IN ('decrease', 'close')",
+            name="transaction_only_on_reduction",
+        ),
+        CheckConstraint(
+            "kind != 'close' OR "
+            "(source_transaction_id IS NOT NULL AND source_movement_id IS NULL "
+            "AND resulting_quantity = 0)",
+            name="close_event_matches_final_tx",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    option_contract_id: Mapped[int] = mapped_column(
+        ForeignKey("option_contracts.id", ondelete="RESTRICT"), index=True
+    )
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id", ondelete="RESTRICT"), index=True)
+    broker_id: Mapped[int] = mapped_column(ForeignKey("brokers.id", ondelete="RESTRICT"), index=True)
+    side: Mapped[str] = mapped_column(String(4))
+    source_position_id: Mapped[int] = mapped_column(Integer)
+    source_movement_id: Mapped[int | None] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))
+    quantity_delta: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    price: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    occurred_on: Mapped[date] = mapped_column(Date, index=True)
+    result: Mapped[Decimal | None] = mapped_column(Numeric(24, 8))
+    source_transaction_id: Mapped[int | None] = mapped_column(Integer)
+    resulting_quantity: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    resulting_average_cost: Mapped[Decimal] = mapped_column(Numeric(24, 8))
+    source_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    owner_ref: Mapped[User] = relationship()
+
+
 class PatrimonioV4ChangeCounter(Base):
     """Relógio transacional único do feed público de patrimônio.
 

@@ -43,7 +43,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
-from app.positions.ledger import archive_closed_position
+from app.positions.ledger import archive_closed_option_movements, archive_closed_position
 
 
 def create_open_transaction_for_position(position: OptionPosition) -> Transaction:
@@ -555,7 +555,19 @@ def _close_entirely(
     transaction.notes = f"Encerrada a partir da posição de opção #{position.id}."
     # Mesma preservação da posição de ações (ver `app.positions.ledger`). O
     # ticker é o do CONTRATO, nunca o do ativo-objeto: é ele que tem preço e
-    # é o que a série de performance soma.
+    # é o que a série de performance soma. A transação precisa de id antes de
+    # entrar na linha `close` do arquivo do extrato.
+    db.session.flush()
+    archive_closed_option_movements(
+        position_id=position.id,
+        option_contract_id=position.contract_id,
+        portfolio_id=position.portfolio_id,
+        broker_id=position.broker_id,
+        owner_id=position.owner_id,
+        side=position.side,
+        movements=position.movements,
+        closing_transaction=transaction,
+    )
     archive_closed_position(
         instrument="option",
         position_id=position.id,

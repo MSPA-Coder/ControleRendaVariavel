@@ -15,6 +15,7 @@ from app.models import (
     Market,
     OptionContract,
     OptionExpiration,
+    OptionMovementArchive,
     OptionPosition,
     OptionPositionMovement,
     OptionType,
@@ -93,7 +94,7 @@ def review_case(app_com_banco):
         with app.app_context():
             db.session.rollback()
             for model in (PositionMovement, OptionPositionMovement, PositionLedgerArchive,
-                          Transaction, Position, OptionPosition, Dividend, Portfolio):
+                          OptionMovementArchive, Transaction, Position, OptionPosition, Dividend, Portfolio):
                 db.session.execute(delete(model).where(model.owner_id.in_(result['user_ids'])))
             for model in (UserPreference, UserTickerEntitlement):
                 db.session.execute(delete(model).where(model.user_id.in_(result['user_ids'])))

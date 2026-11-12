@@ -41,6 +41,7 @@ from sqlalchemy import delete, select
 
 from app import db
 from app.models import (
+    OptionMovementArchive,
     OptionPosition,
     OptionPositionMovement,
     Position,
@@ -66,18 +67,18 @@ pytestmark = pytest.mark.banco
 
 @pytest.fixture(autouse=True)
 def _limpar_arquivo_do_extrato(review_case):
-    """Acompanha o `review_case` e apaga, antes dele, o arquivo de extrato de ações.
+    """Acompanha o `review_case` e apaga, antes dele, o arquivo de extrato de ações e de opções.
 
-    O encerramento total de uma ação grava `PositionMovementArchive`, que a
-    limpeza do fixture comum não conhece e cuja FK impede apagar a carteira.
+    O encerramento total grava `PositionMovementArchive` (ação) ou
+    `OptionMovementArchive` (opção), que a limpeza do fixture comum não conhece
+    e cujas FK impedem apagar a carteira.
     """
     app, dados = review_case
     yield
     with app.app_context():
         db.session.rollback()
-        db.session.execute(
-            delete(PositionMovementArchive).where(PositionMovementArchive.owner_id.in_(dados["user_ids"]))
-        )
+        for modelo in (PositionMovementArchive, OptionMovementArchive):
+            db.session.execute(delete(modelo).where(modelo.owner_id.in_(dados["user_ids"])))
         db.session.commit()
 
 ABERTURA = date(2026, 6, 10)
@@ -91,6 +92,7 @@ class Lado:
     nome: str
     modelo: type
     modelo_movimento: type
+    modelo_arquivo: type
     registrar: Callable[..., Any]
     encerrar: Callable[..., Any]
     base: str  # prefixo das rotas da posição
@@ -113,10 +115,10 @@ class Lado:
 
 
 LADOS = {
-    "stock": Lado("stock", Position, PositionMovement, register_stock, close_stock,
-                  "/positions", "ticker_id"),
-    "option": Lado("option", OptionPosition, OptionPositionMovement, register_option,
-                   close_option, "/options/positions", "option_contract_id"),
+    "stock": Lado("stock", Position, PositionMovement, PositionMovementArchive, register_stock,
+                  close_stock, "/positions", "ticker_id"),
+    "option": Lado("option", OptionPosition, OptionPositionMovement, OptionMovementArchive,
+                   register_option, close_option, "/options/positions", "option_contract_id"),
 }
 
 
@@ -282,7 +284,8 @@ def test_lote_duplicado_sem_confirmacao_pede_confirmacao_e_com_confirmacao_soma(
 
 
 def _ciclo_de_encerramento(lado: Lado, dados) -> dict[str, Any]:
-    ultimo_do_arquivo = db.session.scalar(select(db.func.max(PositionMovementArchive.id))) or 0
+    arquivo = lado.modelo_arquivo
+    ultimo_do_arquivo = db.session.scalar(select(db.func.max(arquivo.id))) or 0
     pid = _registrar(lado, dados).position.id
     _registrar(lado, dados, opened_on=REFORCO, average_cost=Decimal("20"))
     parcial = _encerrar(lado, dados, pid, "25", date(2026, 6, 30), "40")
@@ -303,12 +306,15 @@ def _ciclo_de_encerramento(lado: Lado, dados) -> dict[str, Any]:
         "apos_total": _observar(lado, dados, pid),
         "posicao_apagada": db.session.get(lado.modelo, pid) is None,
         "serie_de_performance": sorted((s.occurred_on, s.resulting_signed_quantity) for s in serie),
-        "arquivo_do_extrato": db.session.scalars(
-            select(PositionMovementArchive.kind).where(
-                PositionMovementArchive.owner_id == _dono(dados),
-                PositionMovementArchive.id > ultimo_do_arquivo,
-            ).order_by(PositionMovementArchive.id)
-        ).all(),
+        "arquivo_do_extrato": [
+            (a.kind, a.side, a.quantity_delta, a.price, a.occurred_on, a.result,
+             a.resulting_quantity, a.resulting_average_cost,
+             a.source_movement_id is None, a.source_transaction_id is not None)
+            for a in db.session.scalars(
+                select(arquivo).where(arquivo.owner_id == _dono(dados), arquivo.id > ultimo_do_arquivo)
+                .order_by(arquivo.id)
+            )
+        ],
         "encerrar_de_novo": _encerrar(lado, dados, pid, "18", date(2026, 7, 11)),
     }
 
@@ -318,8 +324,6 @@ def test_encerramento_parcial_e_total_realizam_o_mesmo_resultado_e_a_mesma_serie
 
     observado = _ambos(app, dados, _ciclo_de_encerramento)
 
-    for lado in observado.values():
-        lado.pop("arquivo_do_extrato")  # diverge: ver test_divergencia_arquivo_do_extrato
     assert observado["stock"] == observado["option"]
     stock = observado["stock"]
     assert stock["parcial"] == (Decimal("400"), Decimal("15"), Decimal("40"))
@@ -330,20 +334,30 @@ def test_encerramento_parcial_e_total_realizam_o_mesmo_resultado_e_a_mesma_serie
     assert stock["serie_de_performance"][-1] == (date(2026, 7, 10), Decimal("0"))
 
 
-def test_divergencia_arquivo_do_extrato_no_encerramento_total(review_case):
-    """DIVERGE (ARQ-L1): só a ação preserva o extrato completo no encerramento total.
+def test_arquivo_do_extrato_no_encerramento_total_e_igual(review_case):
+    """O encerramento total preserva o extrato completo nos dois lados.
 
-    `_close_entirely` de `positions/closure.py` chama `archive_closed_stock_movements`
-    (copia cada movimento e acrescenta uma linha `close`) para integrações futuras;
-    o de `options/closure.py` só alimenta a série de performance
-    (`PositionLedgerArchive`, igual nos dois). Quem uniformizar troca esta asserção.
+    Antes só a ação o fazia (`position_movement_archive`); a opção só alimentava
+    a série (`PositionLedgerArchive`). Agora a opção grava em
+    `option_movement_archive`: cada movimento copiado e uma linha `close` com
+    quantidade, preço, resultado e custo médio da transação final. As linhas são
+    iguais, campo a campo, às da ação.
     """
     app, dados = review_case
 
     observado = _ambos(app, dados, _ciclo_de_encerramento)
 
-    assert observado["stock"]["arquivo_do_extrato"] == ["open", "increase", "decrease", "close"]
-    assert observado["option"]["arquivo_do_extrato"] == []
+    assert observado["stock"]["arquivo_do_extrato"] == observado["option"]["arquivo_do_extrato"]
+    # (kind, side, quantity_delta, price, occurred_on, result, resulting_quantity,
+    #  resulting_average_cost, sem movimento de origem, com transação de origem)
+    assert observado["option"]["arquivo_do_extrato"] == [
+        ("open", "C", Decimal("100"), Decimal("10"), ABERTURA, None, Decimal("100"), Decimal("10"), False, False),
+        ("increase", "C", Decimal("100"), Decimal("20"), REFORCO, None, Decimal("200"), Decimal("15"), False, False),
+        ("decrease", "C", Decimal("-40"), Decimal("25"), date(2026, 6, 30), Decimal("400"),
+         Decimal("160"), Decimal("15"), False, True),
+        ("close", "C", Decimal("-160"), Decimal("18"), date(2026, 7, 10), Decimal("480"),
+         Decimal("0"), Decimal("15"), True, True),
+    ]
 
 
 # --- retroatividade ---------------------------------------------------------

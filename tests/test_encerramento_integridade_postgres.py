@@ -15,6 +15,7 @@ from test_position_use_cases import _command
 
 from app import db
 from app.models import (
+    OptionMovementArchive,
     OptionPosition,
     Position,
     PositionLedgerArchive,
@@ -34,7 +35,8 @@ def caso(review_case):
     yield app, dados
     with app.app_context():
         db.session.rollback()
-        db.session.execute(delete(PositionMovementArchive).where(PositionMovementArchive.owner_id.in_(dados["user_ids"])))
+        for modelo in (PositionMovementArchive, OptionMovementArchive):
+            db.session.execute(delete(modelo).where(modelo.owner_id.in_(dados["user_ids"])))
         db.session.commit()
 
 
@@ -102,6 +104,7 @@ def test_erro_postgres_ao_arquivar_desfaz_encerramento_inteiro_e_permite_retry(c
             assert len(posicao.movements) == 1
             assert not db.session.scalar(select(PositionLedgerArchive.id).where(PositionLedgerArchive.owner_id == dono))
             assert not db.session.scalar(select(PositionMovementArchive.id).where(PositionMovementArchive.owner_id == dono))
+            assert not db.session.scalar(select(OptionMovementArchive.id).where(OptionMovementArchive.owner_id == dono))
         finally:
             db.session.rollback()
             with engine.begin() as conn:
