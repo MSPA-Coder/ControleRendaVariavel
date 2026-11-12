@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from flask_migrate import upgrade
+from sqlalchemy import delete
 
 from app import create_app, db
 from app.models import (
@@ -21,6 +22,7 @@ from app.models import (
     OptionType,
     Portfolio,
     Position,
+    PositionMovementArchive,
     Quote,
     QuoteHistory,
     Side,
@@ -31,7 +33,7 @@ from app.models import (
     UserTickerEntitlement,
 )
 from app.options.closure import create_or_merge_position as create_or_merge_option
-from app.positions.closure import create_or_merge_position
+from app.positions.closure import apply_position_closure, create_or_merge_position
 
 
 def seed_interface_demo():
@@ -169,7 +171,7 @@ def seed_browser_scenario():
     db.session.add(admin)
     broker = Broker(name="Corretora browser", acronym="BROWSER")
     tickers = [Ticker(symbol=symbol, trading_name=symbol, market=Market.B3, currency="BRL", rtd_market_code="B")
-               for symbol in ("BROWSE3", "RETRY3", "FLOW3")]
+               for symbol in ("BROWSE3", "RETRY3", "FLOW3", "UNDO3", "SEMEX3")]
     db.session.add_all([broker, *tickers])
     db.session.flush()
     for region in ("br", "us", "flow"):
@@ -187,6 +189,19 @@ def seed_browser_scenario():
                 side=Side.BUY, opened_on=date(2026, 6, 10), target_multiplier=Decimal("1.5"),
             ))
             db.session.add(UserTickerEntitlement(user_id=user.id, ticker_id=tickers[2].id, first_held_on=date(2026, 6, 10)))
+            # UNDO3: o teste encerra por inteiro e desfaz pela tela. SEMEX3: já nasce
+            # encerrada, sem o arquivo completo do extrato (encerramento antigo).
+            for ticker in tickers[3:]:
+                posicao, _ = create_or_merge_position(Position(
+                    owner_id=user.id, broker_id=broker.id, ticker_id=ticker.id,
+                    portfolio_id=portfolio.id, quantity=Decimal("30"), average_cost=Decimal("10"),
+                    side=Side.BUY, opened_on=date(2026, 6, 10), target_multiplier=Decimal("1.5"),
+                ))
+                db.session.add(UserTickerEntitlement(user_id=user.id, ticker_id=ticker.id, first_held_on=date(2026, 6, 10)))
+                if ticker.symbol == "SEMEX3":
+                    apply_position_closure(posicao.id, Decimal("12"), date(2026, 7, 10), owner_id=user.id)
+                    db.session.flush()
+                    db.session.execute(delete(PositionMovementArchive).where(PositionMovementArchive.owner_id == user.id))
     for ticker in tickers:
         db.session.add(Quote(ticker_id=ticker.id, last_price=Decimal("22.50"), previous_close=Decimal("22"), observed_at=datetime.now(UTC)))
     seed_interface_demo()

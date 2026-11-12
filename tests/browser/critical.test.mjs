@@ -296,6 +296,66 @@ test('cancelar e confirmar encerramento parcial mantém o saldo correto', { time
   });
 });
 
+async function quantidadeEmCarteira(page, ticker) {
+  await page.goto(`${base}/`);
+  await editFor(page, ticker);
+  return {
+    quantidade: Number(await page.locator('[name="quantity"]').inputValue()),
+    custo: Number(await page.locator('[name="average_cost"]').inputValue()),
+  };
+}
+
+test('desfazer o encerramento total devolve a posição à Carteira e a transação a aberta', { timeout: 60000 }, async () => {
+  await logged('browser-flow', async page => {
+    const antes = await quantidadeEmCarteira(page, 'UNDO3');
+    assert.deepEqual(antes, { quantidade: 30, custo: 10 });
+    // Encerra por inteiro pela tela; a data de saída é a do formulário (hoje, dia de São Paulo).
+    await page.goto(`${base}/transactions?status=open`);
+    const href = await page.getByRole('row').filter({ hasText: 'UNDO3' }).locator('a[href$="/close"]').getAttribute('href');
+    await page.goto(`${base}${href}`);
+    await page.getByLabel('Quantidade a encerrar', { exact: true }).fill('30');
+    await page.getByLabel('Preço de saída', { exact: true }).fill('12,50');
+    await page.getByRole('button', { name: 'Encerrar posição', exact: true }).click();
+    await page.waitForURL(`${base}/transactions`);
+    await page.goto(`${base}/`);
+    assert.equal(await page.getByRole('link', { name: 'UNDO3', exact: true }).count(), 0);
+    // Em Transações: "desfazer", confirmar no diálogo.
+    await page.goto(`${base}/transactions?status=closed`);
+    const linha = page.getByRole('row').filter({ hasText: 'UNDO3' });
+    await linha.getByRole('button', { name: 'desfazer', exact: true }).click();
+    const dialogo = page.getByRole('dialog');
+    await dialogo.getByText('A posição e o extrato voltam para a Carteira', { exact: false }).waitFor();
+    await dialogo.getByRole('button', { name: 'Confirmar', exact: true }).click();
+    await linha.waitFor({ state: 'detached' });
+    // A posição voltou com a mesma quantidade e o mesmo custo médio...
+    assert.deepEqual(await quantidadeEmCarteira(page, 'UNDO3'), antes);
+    // ...e a transação voltou a aberta (com o link "encerrar"), sem linha fechada.
+    await page.goto(`${base}/transactions?status=open`);
+    await page.getByRole('row').filter({ hasText: 'UNDO3' }).locator('a[href$="/close"]').waitFor();
+    await page.goto(`${base}/transactions?status=closed`);
+    assert.equal(await page.getByRole('row').filter({ hasText: 'UNDO3' }).count(), 0);
+  });
+});
+
+test('encerramento total sem extrato guardado só se exclui com a confirmação do aviso', { timeout: 60000 }, async () => {
+  await logged('browser-flow', async page => {
+    await page.goto(`${base}/transactions?status=closed`);
+    const linha = page.getByRole('row').filter({ hasText: 'SEMEX3' })
+      .filter({ has: page.getByRole('button', { name: 'excluir', exact: true }) });
+    await linha.getByRole('button', { name: 'excluir', exact: true }).click();
+    const dialogo = page.getByRole('dialog');
+    await dialogo.getByText('a posição NÃO será reaberta', { exact: false }).waitFor();
+    await dialogo.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    assert.equal(await linha.count(), 1);
+    await linha.getByRole('button', { name: 'excluir', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click();
+    await linha.waitFor({ state: 'detached' });
+    // Não reaberta: segue sem posição em Carteira.
+    await page.goto(`${base}/`);
+    assert.equal(await page.getByRole('link', { name: 'SEMEX3', exact: true }).count(), 0);
+  });
+});
+
 test('modo discreto preserva filtro HTMX e mascara o detalhe do trade', { timeout: 45000 }, async () => {
   await logged('browser-demo', async page => {
     await page.getByLabel('Agrupar por corretora', { exact: true }).check();

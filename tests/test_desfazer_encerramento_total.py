@@ -51,9 +51,9 @@ PARCIAL = date(2026, 6, 30)
 TOTAL = date(2026, 7, 10)
 
 
-def _abrir_reforcar_baixar(lado, dados) -> int:
-    pid = _registrar(lado, dados).position.id
-    _registrar(lado, dados, opened_on=REFORCO, average_cost=Decimal("20"))
+def _abrir_reforcar_baixar(lado, dados, side: Side = Side.BUY) -> int:
+    pid = _registrar(lado, dados, side=side).position.id
+    _registrar(lado, dados, side=side, opened_on=REFORCO, average_cost=Decimal("20"))
     _encerrar(lado, dados, pid, "25", PARCIAL, "40")
     return pid
 
@@ -102,13 +102,23 @@ def _ambos(app, dados, cenario) -> dict[str, Any]:
     return resultado
 
 
-def test_ciclo_abrir_reforcar_baixar_encerrar_e_desfazer_volta_identico(review_case):
+@pytest.mark.parametrize("side", [Side.BUY, Side.SELL], ids=["comprada", "vendida"])
+def test_ciclo_abrir_reforcar_baixar_encerrar_e_desfazer_volta_identico(review_case, side):
+    """Também para a posição VENDIDA (opção vendida é o caso comum na carteira real).
+
+    Convenção de sinal do arquivo: a quantidade do movimento (`quantity_delta`,
+    `resulting_quantity`) nunca leva o sinal do lado; o sinal só descreve a
+    direção do movimento (positivo abre ou aumenta, negativo reduz). A linha
+    `close` tem `quantity_delta = -transaction.quantity`, sempre negativa, e
+    `_nova_posicao` a inverte para a quantidade positiva da posição. O lado
+    vendido vai em `side` ("V"); só `position_ledger_archive` aplica o sinal do lado.
+    """
     app, dados = review_case
     corretora = None
 
     def preparar(lado, dados):
         nonlocal corretora
-        pid = _abrir_reforcar_baixar(lado, dados)
+        pid = _abrir_reforcar_baixar(lado, dados, side)
         corretora = db.session.get(Broker, dados["broker"]).name
         antes = _estado(lado, dados, pid)
         serie_antes = _serie(dados, lado.nome)
@@ -182,7 +192,7 @@ def test_ciclo_abrir_reforcar_baixar_encerrar_e_desfazer_volta_identico(review_c
                for n, lado in observado.items()}
     assert visivel["stock"] == visivel["option"]
     depois = observado["stock"]["depois"]
-    assert depois["posicao"] == (ABERTURA, Decimal("160"), Decimal("15"), "C")
+    assert depois["posicao"] == (ABERTURA, Decimal("160"), Decimal("15"), side.value)
     assert [e[0] for e in depois["extrato"]] == ["open", "increase", "decrease"]
 
 
