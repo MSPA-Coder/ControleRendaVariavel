@@ -9,6 +9,7 @@ from sqlalchemy import delete
 from app import db
 from app.collector.database import persist_readings
 from app.collector.rtd import QuoteValue
+from app.core.domain import MARKET_TIMEZONE
 from app.models import Broker, Market, Portfolio, Position, Quote, QuoteHistory, Side, Ticker, User
 from app.positions.portfolio import effective_position_quote
 
@@ -19,6 +20,11 @@ def test_shared_ticker_keeps_latest_market_and_each_side_quote(app_com_banco):
     suffix = uuid4().hex[:8]
     newer = datetime.now(UTC).replace(microsecond=0)
     older = newer - timedelta(minutes=5)
+    # O histórico guarda uma linha por dia do mercado (São Paulo): nos cinco
+    # minutos depois da meia-noite de lá as duas leituras cairiam em dias
+    # diferentes e o teste acharia duas linhas. Recua o par para o mesmo dia.
+    if older.astimezone(MARKET_TIMEZONE).date() != newer.astimezone(MARKET_TIMEZONE).date():
+        newer, older = older, older - timedelta(minutes=5)
     with app_com_banco.app_context():
         users = [User(username=f"collector-{suffix}-{i}", role="operador", is_active_user=True) for i in range(2)]
         for user in users:
