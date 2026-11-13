@@ -19,7 +19,8 @@
         hx-target="#portfolios-results" hx-swap="outerHTML" hx-confirm="Criar esta carteira?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="portfolios_management_open" value="1">
-    <label>Nome<input required maxlength="80" name="name"></label>
+    <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+    <label>Nome <span class="required-mark" aria-hidden="true">*</span><input required maxlength="80" name="name"></label>
     <label>Moeda<select name="currency">
       <option value="">Nenhuma</option>
       {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}">{{ currency }}</option>{% endfor %}
@@ -50,7 +51,8 @@
           <td>{{ 'Ativa' if portfolio.is_active else 'Arquivada' }}</td>
           <td><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}></td>
           <td class="catalog-actions">
-            <button class="button" type="submit" form="portfolio-{{ portfolio.id }}" {{ 'disabled' if not portfolio.is_active }}>Salvar</button>
+            <button class="button" type="submit" form="portfolio-{{ portfolio.id }}" {{ 'disabled' if not portfolio.is_active }}
+                    aria-label="Salvar carteira {{ portfolio.name }}">Salvar</button>
             {% if portfolio.is_active %}<form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
                   hx-target="#portfolios-results" hx-swap="outerHTML"
@@ -58,14 +60,14 @@
                   data-sa-titulo="Excluir carteira" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="portfolios_management_open" value="1">
-              <button class="button button-danger" type="submit">Remover</button>
+              <button class="button button-danger" type="submit" aria-label="Remover carteira {{ portfolio.name }}">Remover</button>
             </form>{% else %}
             <form method="post" action="{{ url_for('portfolio.activate_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.activate_portfolio', portfolio_id=portfolio.id) }}"
                   hx-target="#portfolios-results" hx-swap="outerHTML">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="portfolios_management_open" value="1">
-              <button class="button" type="submit">Reativar</button>
+              <button class="button" type="submit" aria-label="Reativar carteira {{ portfolio.name }}">Reativar</button>
             </form>{% endif %}
           </td>
         </tr>
@@ -81,7 +83,7 @@
   <div class="portfolio-ticker-card-heading">
     <h2>Tickers por carteira</h2>
     <button class="button button-primary" type="button" data-portfolios-toggle
-            aria-controls="portfolios-management-card" aria-expanded="false">Adicionar carteira</button>
+            aria-controls="portfolios-management-card" aria-expanded="{{ 'true' if portfolios_management_open else 'false' }}">Adicionar carteira</button>
   </div>
   <p class="form-help">
     Tickers associados podem ser incluídos ou removidos individualmente. Um
@@ -138,7 +140,7 @@
               <option value="">Selecione</option>
               {% for ticker in available %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
             </select></label>
-            <button class="button button-primary" type="submit">Adicionar</button>
+            <button class="button button-primary" type="submit" aria-label="Adicionar ticker a {{ portfolio.name }}">Adicionar</button>
           </form>
           {% else %}
           <p class="form-help portfolio-ticker-add-empty">Todos os tickers elegíveis já estão associados.</p>
@@ -146,6 +148,8 @@
         </details>
       </div>
     </section>
+    {% else %}
+    <p class="form-help empty-state">Nenhuma carteira cadastrada.</p>
     {% endfor %}
   </div>
 </section>

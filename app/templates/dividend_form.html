@@ -8,13 +8,14 @@
   <input type="hidden" name="volta" value="{{ request.form.get('volta') or request.args.get('volta', '') }}">
 
   {% set value = dividend %}
-  <label>Corretora<select required name="broker_id">
+  <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+  <label>Corretora <span class="required-mark" aria-hidden="true">*</span><select required name="broker_id">
     <option value="">Selecione</option>
     {% for broker in brokers %}
       <option value="{{ broker.id }}" {{ 'selected' if value and value.broker_id|int == broker.id }}>{{ broker.name }}</option>
     {% endfor %}
   </select></label>
-  <label>Ticker<select required name="ticker_id">
+  <label>Ticker <span class="required-mark" aria-hidden="true">*</span><select required name="ticker_id">
     <option value="">Selecione</option>
     {% for ticker in tickers %}
       <option value="{{ ticker.id }}" {{ 'selected' if value and value.ticker_id|int == ticker.id }}>{{ ticker.symbol }} · {{ ticker.currency }}</option>
@@ -22,13 +23,13 @@
   </select></label>
   {# O tipo nao e classificacao fiscal: e o que separa a renda no relatorio de
      performance, para se ver quanto cada uma rendeu. #}
-  <label>Tipo de provento<select required name="kind">
+  <label>Tipo de provento <span class="required-mark" aria-hidden="true">*</span><select required name="kind">
     {% for kind in income_kinds %}
       <option value="{{ kind.value }}" {{ 'selected' if value and (value.kind or '') == kind.value }}>{{ kind|income_kind_label }}</option>
     {% endfor %}
   </select></label>
-  <label>Valor recebido<input required type="number" min="0" step="any" name="amount" value="{{ value.amount if value else '' }}" data-sensitive-input="true"></label>
-  <label>Data de pagamento<input required type="date" name="payment_date" value="{{ value.payment_date.isoformat() if editing and value.payment_date is defined and value.payment_date is not string else value.payment_date|default('', true) if value else '' }}"></label>
+  <label>Valor recebido <span class="required-mark" aria-hidden="true">*</span><input required type="number" min="0" step="any" name="amount" value="{{ value.amount if value else '' }}" data-sensitive-input="true"></label>
+  <label>Data de pagamento <span class="required-mark" aria-hidden="true">*</span><input required type="date" name="payment_date" value="{{ value.payment_date.isoformat() if editing and value.payment_date is defined and value.payment_date is not string else value.payment_date|default('', true) if value else '' }}"></label>
   <label>Data com<input type="date" name="com_date" value="{{ value.com_date.isoformat() if editing and value.com_date is defined and value.com_date else '' }}"></label>
   <label>Evento/custo (%)<input type="number" min="0" step="any" name="yield_on_cost" value="{{ value.yield_on_cost if value and value.yield_on_cost is not none else '' }}" data-sensitive-input="true"></label>
   <label>DY informado (%)<input type="number" min="0" step="any" name="dividend_yield" value="{{ value.dividend_yield if value and value.dividend_yield is not none else '' }}" data-sensitive-input="true"></label>

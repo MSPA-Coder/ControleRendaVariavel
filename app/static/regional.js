@@ -23,8 +23,8 @@
         number: 'Informe um valor numérico válido.',
         required: 'Preencha este campo.',
         requiredDate: 'Informe uma data.',
-        min: 'Informe um valor igual ou maior que o mínimo permitido.',
-        max: 'Informe um valor igual ou menor que o máximo permitido.',
+        min: 'Informe um valor igual ou maior que o mínimo permitido',
+        max: 'Informe um valor igual ou menor que o máximo permitido',
         step: 'Informe um valor válido para este campo.'
     };
 
@@ -63,6 +63,16 @@
         var year = parseInt(parts[2], 10);
         if (!validDay(year, month, day)) return null;
         return pad(year, 4) + '-' + pad(month, 2) + '-' + pad(day, 2);
+    }
+
+    /* 31-jan-27 no Brasil, Jan-31-27 nos EUA (mesmo padrão do filtro `ushort`). */
+    var MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    var MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function formatShortDate(iso) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+        if (!m || +m[2] < 1 || +m[2] > 12) return String(iso == null ? '' : iso);
+        var yy = m[1].slice(2);
+        return US ? MONTHS_EN[+m[2] - 1] + '-' + m[3] + '-' + yy : m[3] + '-' + MONTHS_PT[+m[2] - 1] + '-' + yy;
     }
 
     /* ---------- mês ---------- */
@@ -266,8 +276,8 @@
                 var n = parseFloat(canon);
                 var casas = stepDecimals(step);
                 if (casas !== null && decimalPlaces(canon) > casas) return MSG.step;
-                if (min !== null && n < parseFloat(min)) return MSG.min;
-                if (max !== null && n > parseFloat(max)) return MSG.max;
+                if (min !== null && n < parseFloat(min)) return MSG.min + ' (' + canonToDisplayNumber(min) + ').';
+                if (max !== null && n > parseFloat(max)) return MSG.max + ' (' + canonToDisplayNumber(max) + ').';
                 return '';
             }
             if (min && canon < min.slice(0, canon.length)) {
@@ -434,6 +444,15 @@
         locale: LOCALE,
         formatNumber: function (value, digits) {
             return Number(value || 0).toLocaleString(LOCALE, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        },
+        // Para gráficos: aceitam AAAA-MM-DD (ou AAAA-MM) e devolvem o texto regional.
+        formatarData: function (iso) { return isoToDisplayDate(iso) || String(iso == null ? '' : iso); },
+        formatarMes: function (iso) { return isoToDisplayMonth(iso) || String(iso == null ? '' : iso); },
+        formatarDataCurta: formatShortDate,
+        formatarMoeda: function (value, currency, digits) {
+            var casas = digits == null ? 2 : digits;
+            var prefix = currency === 'USD' ? 'US$ ' : 'R$ ';
+            return prefix + Number(value || 0).toLocaleString(LOCALE, { minimumFractionDigits: casas, maximumFractionDigits: casas });
         },
         isoToDisplayDate: isoToDisplayDate,
         displayToIsoDate: displayToIsoDate,

@@ -253,18 +253,20 @@ window.addEventListener(
   }
 
   if (megaWraps.length && navScrim) {
+    const closeGroup = (wrap) => {
+      const button = wrap.querySelector(".grp-btn");
+      const mega = wrap.querySelector(".mega");
+      if (button) {
+        button.classList.remove("open");
+        button.setAttribute("aria-expanded", "false");
+      }
+      if (mega) mega.classList.remove("show");
+    };
     const closeNavigation = () => {
-      megaWraps.forEach((wrap) => {
-        const button = wrap.querySelector(".grp-btn");
-        const mega = wrap.querySelector(".mega");
-        if (button) {
-          button.classList.remove("open");
-          button.setAttribute("aria-expanded", "false");
-        }
-        if (mega) mega.classList.remove("show");
-      });
+      megaWraps.forEach(closeGroup);
       navScrim.hidden = true;
     };
+    megaWraps.forEach(closeGroup);
     const openNavigation = (wrap) => {
       const button = wrap.querySelector(".grp-btn");
       const mega = wrap.querySelector(".mega");
@@ -284,10 +286,22 @@ window.addEventListener(
         closeNavigation();
         if (!isOpen) openNavigation(wrap);
       });
+      // Tab que leva o foco para fora do grupo fecha o painel. Só vale com
+      // destino conhecido: clique no painel ou no fundo (relatedTarget nulo,
+      // inclusive no toque) não fecha aqui; o fundo tem o seu próprio clique.
+      wrap.addEventListener("focusout", (event) => {
+        const next = event.relatedTarget;
+        if (!next || wrap.contains(next) || !button.classList.contains("open")) return;
+        closeGroup(wrap);
+        if (!megaWraps.some((other) => other.querySelector(".grp-btn.open"))) navScrim.hidden = true;
+      });
     });
     navScrim.addEventListener("click", closeNavigation);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !navScrim.hidden) closeNavigation();
+      if (event.key !== "Escape" || navScrim.hidden) return;
+      const openButton = document.querySelector(".mega-wrap .grp-btn.open");
+      closeNavigation();
+      if (openButton) openButton.focus({ preventScroll: true });
     });
   }
 
@@ -447,6 +461,44 @@ window.addEventListener(
     schedulePortfolioRefresh();
   });
 
+  // Foco depois de expandir/recolher (`.row-toggle` + outerHTML): o botão que
+  // disparou sai do DOM e o foco cairia no <body>. Antes da troca anota qual
+  // botão era (posição entre os toggles do alvo, ou o aria-controls); depois,
+  // devolve o foco ao equivalente no conteúdo novo. Só age se o foco estava nele.
+  let pendingToggleFocus = null;
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    pendingToggleFocus = null;
+    const requester = event.detail && event.detail.elt;
+    if (!requester || !requester.matches || !requester.matches(".row-toggle")) return;
+    if (document.activeElement !== requester) return;
+    const selector = requester.getAttribute("hx-target");
+    if (!selector) return;
+    try {
+      const container = document.querySelector(selector);
+      if (!container) return;
+      pendingToggleFocus = {
+        selector,
+        index: [...container.querySelectorAll(".row-toggle")].indexOf(requester),
+        controls: requester.getAttribute("aria-controls"),
+      };
+    } catch (_) {
+      pendingToggleFocus = null;
+    }
+  });
+  document.addEventListener("htmx:afterSwap", () => {
+    const pending = pendingToggleFocus;
+    pendingToggleFocus = null;
+    if (!pending || (document.activeElement && document.activeElement !== document.body)) return;
+    const container = document.querySelector(pending.selector);
+    if (!container) return;
+    const toggles = [...container.querySelectorAll(".row-toggle")];
+    const next =
+      (pending.controls && toggles.find((item) => item.getAttribute("aria-controls") === pending.controls)) ||
+      toggles[pending.index] ||
+      toggles[0];
+    if (next) next.focus({ preventScroll: true });
+  });
+
   document.addEventListener("DOMContentLoaded", schedulePortfolioRefresh);
   document.addEventListener("htmx:afterSwap", (event) => {
     const target = event.detail && event.detail.target;
@@ -458,6 +510,9 @@ window.addEventListener(
       schedulePortfolioRefresh();
     }
   });
+
+  const scrollBehavior = () =>
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
   document.addEventListener("click", (event) => {
     // Preview instantaneo do tema: aplica o data-theme na hora, sem esperar o
@@ -478,7 +533,7 @@ window.addEventListener(
       portfoliosCard.hidden = !isOpen;
       portfoliosToggle.setAttribute("aria-expanded", String(isOpen));
       if (isOpen) {
-        portfoliosCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        portfoliosCard.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
       }
       return;
     }
@@ -490,8 +545,42 @@ window.addEventListener(
     quoteManagementCard.hidden = !isOpen;
     quoteManagementToggle.setAttribute("aria-expanded", String(isOpen));
     if (isOpen) {
-      quoteManagementCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      quoteManagementCard.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
       quoteManagementCard.focus({ preventScroll: true });
     }
+  });
+
+  // Esc fecha o painel aberto pelo botão "Adicionar carteira" / "Gerenciar
+  // Cotações" e devolve o foco a ele; o <details> "Adicionar ticker" também
+  // fecha com Esc (foco volta ao <summary>) e com clique fora. Esc só age
+  // quando o foco está no controle ou dentro do painel, para não roubar a
+  // tecla de outro componente.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const active = document.activeElement;
+    const openDetails = [...document.querySelectorAll(".portfolio-ticker-add-details[open]")]
+      .find((details) => details.contains(active));
+    if (openDetails) {
+      openDetails.open = false;
+      const summary = openDetails.querySelector("summary");
+      if (summary) summary.focus({ preventScroll: true });
+      return;
+    }
+    [
+      ["[data-portfolios-toggle]", "portfolios-management-card"],
+      ["[data-quote-management-toggle]", "quote-management-card"],
+    ].forEach(([toggleSelector, cardId]) => {
+      const card = document.getElementById(cardId);
+      const toggle = document.querySelector(toggleSelector);
+      if (!card || !toggle || card.hidden || !(card.contains(active) || toggle === active)) return;
+      card.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.focus({ preventScroll: true });
+    });
+  });
+  document.addEventListener("click", (event) => {
+    document.querySelectorAll(".portfolio-ticker-add-details[open]").forEach((details) => {
+      if (!details.contains(event.target)) details.open = false;
+    });
   });
 })();

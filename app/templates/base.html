@@ -58,8 +58,9 @@
           <span class="logo-text">Renda Variável</span>
         </div>
 
+        <nav class="navbar-nav" aria-label="Menu principal">
         <div class="mega-wrap" data-group="carteira">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.index', 'options.index', 'portfolio.transactions', 'portfolio.dividends', 'portfolio.execution_reconciliation', 'portfolio.import_executions', 'portfolio.import_collection', 'portfolio.apply_pending_executions'] }}" type="button" data-nav-group="carteira" aria-controls="mega-carteira" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.index', 'options.index', 'portfolio.transactions', 'portfolio.dividends', 'portfolio.execution_reconciliation', 'portfolio.import_executions', 'portfolio.import_collection', 'portfolio.apply_pending_executions'] }}" type="button" aria-haspopup="true" data-nav-group="carteira" aria-controls="mega-carteira" aria-expanded="false">
             Carteira <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-carteira" data-mega="carteira">
@@ -94,7 +95,7 @@
         </div>
 
         <div class="mega-wrap" data-group="analise">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market'] }}" type="button" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.risk_report', 'portfolio.monthly_performance', 'portfolio.exposure_asset', 'portfolio.exposure_broker', 'portfolio.exposure_market'] }}" type="button" aria-haspopup="true" data-nav-group="analise" aria-controls="mega-analise" aria-expanded="false">
             Análise <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-analise" data-mega="analise">
@@ -129,7 +130,7 @@
         </div>
 
         <div class="mega-wrap" data-group="mercado">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.quote_history', 'portfolio.data_status'] }}" type="button" data-nav-group="mercado" aria-controls="mega-mercado" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.quote_history', 'portfolio.data_status'] }}" type="button" aria-haspopup="true" data-nav-group="mercado" aria-controls="mega-mercado" aria-expanded="false">
             Mercado <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-mercado" data-mega="mercado">
@@ -149,7 +150,7 @@
         </div>
 
         <div class="mega-wrap" data-group="cadastros">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.table_portfolios', 'portfolio.table_brokers', 'portfolio.table_tickers', 'options.table_expirations', 'options.table_contracts'] }}" type="button" data-nav-group="cadastros" aria-controls="mega-cadastros" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.table_portfolios', 'portfolio.table_brokers', 'portfolio.table_tickers', 'options.table_expirations', 'options.table_contracts'] }}" type="button" aria-haspopup="true" data-nav-group="cadastros" aria-controls="mega-cadastros" aria-expanded="false">
             Cadastros <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-cadastros" data-mega="cadastros">
@@ -184,7 +185,7 @@
         </div>
 
         <div class="mega-wrap" data-group="configuracoes">
-          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.preferences', 'account.change_password', 'portfolio.settings', 'users.index'] }}" type="button" data-nav-group="configuracoes" aria-controls="mega-configuracoes" aria-expanded="false">
+          <button class="grp-btn {{ 'group-active' if request.endpoint in ['portfolio.preferences', 'account.change_password', 'portfolio.settings', 'users.index'] }}" type="button" aria-haspopup="true" data-nav-group="configuracoes" aria-controls="mega-configuracoes" aria-expanded="false">
             Configurações <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="mega" id="mega-configuracoes" data-mega="configuracoes">
@@ -214,6 +215,7 @@
             </div>
           </div>
         </div>
+        </nav>
 
         {% if current_user.is_authenticated %}
         <div class="navbar-right">
@@ -271,7 +273,7 @@
               </form>
             </div>
           </div>
-          <span class="avatar" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
+          <span class="avatar" role="img" aria-label="Usuário {{ current_user.username }}" title="{{ current_user.username }}">{{ current_user.username[:2]|upper }}</span>
           <form class="logout-form" method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-primary" type="submit">Sair</button></form>
         </div>
         {% endif %}

@@ -62,6 +62,8 @@
     <ul class="allocation-list" aria-label="Dados da exposição por {{ subject }}">
       {% for label in chart.labels %}
       <li><span>{{ label }}</span><strong data-sensitive-value="true">{{ chart["value_values"][loop.index0]|currency(chart.currency) }}</strong><strong data-sensitive-value="true">{{ chart.weight_values[loop.index0]|percent }}</strong></li>
+      {% else %}
+      <li class="empty-state">Nenhum dado para exibir.</li>
       {% endfor %}
     </ul>
   </div>

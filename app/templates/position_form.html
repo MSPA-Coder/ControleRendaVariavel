@@ -39,26 +39,27 @@
   </p>
   {% endif %}
   {% set value = position %}
-  <label>Corretora<select required name="broker_id">
+  <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+  <label>Corretora <span class="required-mark" aria-hidden="true">*</span><select required name="broker_id">
     <option value="">Selecione</option>
     {% for broker in brokers %}
       <option value="{{ broker.id }}" {{ 'selected' if value and value.broker_id|int == broker.id }}>{{ broker.name }}</option>
     {% endfor %}
   </select></label>
-  <label>Ticker<select required name="ticker_id">
+  <label>Ticker <span class="required-mark" aria-hidden="true">*</span><select required name="ticker_id">
     <option value="">Selecione</option>
     {% for ticker in tickers %}
       <option value="{{ ticker.id }}" {{ 'selected' if value and value.ticker_id|int == ticker.id }}>{{ ticker.symbol }} · {{ ticker.market.value }} · {{ ticker.currency }}</option>
     {% endfor %}
   </select></label>
-  <label>Quantidade<input required type="number" min="0" step="any" name="quantity" value="{{ value.quantity if value else '' }}" data-sensitive-input="true"></label>
-  <label>Custo médio<input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}" data-sensitive-input="true"></label>
+  <label>Quantidade <span class="required-mark" aria-hidden="true">*</span><input required type="number" min="0" step="any" name="quantity" value="{{ value.quantity if value else '' }}" data-sensitive-input="true"></label>
+  <label>Custo médio <span class="required-mark" aria-hidden="true">*</span><input required type="number" min="0" step="any" name="average_cost" value="{{ value.average_cost if value else '' }}" data-sensitive-input="true"></label>
   <label>Tipo<select name="side">
-    {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ side.value }}</option>{% endfor %}
+    {% for side in sides %}<option value="{{ side.value }}" {{ 'selected' if value and value.side|string == side.value }}>{{ 'Compra' if side.value == 'C' else 'Venda' }}</option>{% endfor %}
   </select></label>
-  <label>Data inicial<input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
-  <label>Multiplicador do target<input required type="number" min="0.00000001" step="any" name="target_multiplier" value="{{ value.target_multiplier if value else '1.5' }}" data-sensitive-input="true"></label>
-  <label>Carteira<select required name="portfolio_id">
+  <label>Data inicial <span class="required-mark" aria-hidden="true">*</span><input required type="date" name="opened_on" value="{{ value.opened_on.isoformat() if editing and value.opened_on is defined and value.opened_on is not string else value.opened_on|default('', true) if value else '' }}"></label>
+  <label>Multiplicador do target <span class="required-mark" aria-hidden="true">*</span><input required type="number" min="0.00000001" step="any" name="target_multiplier" value="{{ value.target_multiplier if value else '1.5' }}" data-sensitive-input="true"></label>
+  <label>Carteira <span class="required-mark" aria-hidden="true">*</span><select required name="portfolio_id">
     <option value="">Selecione</option>
     {% for portfolio in portfolios %}
       <option value="{{ portfolio.id }}" {{ 'selected' if value and value.portfolio_id|int == portfolio.id }}>{{ portfolio.name }}</option>

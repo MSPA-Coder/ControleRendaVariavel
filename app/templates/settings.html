@@ -7,6 +7,7 @@
 {% block workspace_content %}
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
   <fieldset class="collector-settings-card collector-cycle-card">
     <legend>Ciclo de cotações</legend>
     <p class="settings-card-intro">Define quando o agente lê o ProfitChart, envia as cotações e permite que Ações recalcule a carteira.</p>
@@ -31,7 +32,7 @@
     <p class="form-help">O coletor lê o RTD direto do servidor COM do ProfitPro (<code>IRtdServer</code>), sem abrir o Excel. Exige o ProfitChart aberto nesta máquina.</p>
     <div class="collector-settings-details">
       <div class="collector-field">
-        <label>Intervalo entre leituras (segundos)
+        <label>Intervalo entre leituras (segundos) <span class="required-mark" aria-hidden="true">*</span>
           <input type="number" name="poll_interval_seconds" data-sensitive-input="true"
                  min="{{ min_interval }}" max="{{ max_interval }}" step="1"
                  value="{{ settings.poll_interval_seconds }}" required>
@@ -52,7 +53,7 @@
   <fieldset class="agent-sync-card">
     <legend>Sincronização com o agente Windows</legend>
     <p class="settings-card-intro">Define só a frequência de consulta de pedidos e configurações no servidor.</p>
-    <label>Intervalo para verificar pedidos e configurações (segundos)
+    <label>Intervalo para verificar pedidos e configurações (segundos) <span class="required-mark" aria-hidden="true">*</span>
       <input type="number" name="agent_check_interval_seconds" data-sensitive-input="true"
              min="{{ min_agent_check_interval }}" max="{{ max_agent_check_interval }}" step="1"
              value="{{ settings.agent_check_interval_seconds }}" required>
@@ -62,8 +63,8 @@
   <fieldset class="collector-schedule-card">
       <legend>Agenda da coleta</legend>
       <p class="settings-card-intro">Fora desta janela não há leitura do ProfitChart; a sincronização de configurações continua independente.</p>
-      <div class="schedule-section">
-        <span class="schedule-section-label">Dias da semana</span>
+      <fieldset class="form-group schedule-section">
+        <legend class="schedule-section-label">Dias da semana</legend>
         <div class="schedule-days">
           {% for day, label in weekday_options %}
           <label class="checkbox-option">
@@ -73,25 +74,25 @@
           </label>
           {% endfor %}
         </div>
-      </div>
-      <div class="schedule-section">
-        <span class="schedule-section-label">Horário da coleta</span>
+      </fieldset>
+      <fieldset class="form-group schedule-section">
+        <legend class="schedule-section-label">Horário da coleta</legend>
         <div class="schedule-hours">
-        <label>Início
+        <label>Início <span class="required-mark" aria-hidden="true">*</span>
           <input type="time" name="collector_schedule_start_time"
                  value="{{ settings.collector_schedule_start_time.strftime('%H:%M') }}" required>
         </label>
-        <label>Fim
+        <label>Fim <span class="required-mark" aria-hidden="true">*</span>
           <input type="time" name="collector_schedule_end_time"
                  value="{{ settings.collector_schedule_end_time.strftime('%H:%M') }}" required>
         </label>
         </div>
-      </div>
+      </fieldset>
     </fieldset>
 
   <fieldset>
     <legend>Precificação de opções</legend>
-    <label>Taxa livre de risco anual (ex.: 0.1075 para 10,75%)
+    <label>Taxa livre de risco anual (ex.: 0.1075 para 10,75%) <span class="required-mark" aria-hidden="true">*</span>
       <input type="number" name="risk_free_rate_annual" data-sensitive-input="true" min="0" max="1" step="0.0001"
              value="{{ settings.risk_free_rate_annual }}" required>
     </label>

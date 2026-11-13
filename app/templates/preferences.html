@@ -5,9 +5,12 @@
 {% block workspace_content %}
 <form class="settings-form" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
   <fieldset>
     <legend>Minhas preferências</legend>
     <p class="form-help">Estas escolhas afetam a apresentação e os cálculos da sua conta.</p>
+    <fieldset class="form-group">
+    <legend>Tema</legend>
     <div class="theme-grid">
       {% for theme_value, theme_label in theme_options.items() %}
       <label class="theme-option">
@@ -19,6 +22,9 @@
       {% endfor %}
     </div>
     <p class="form-help">A paleta é aplicada ao menu, formulários, tabelas, indicadores e gráficos.</p>
+    </fieldset>
+    <fieldset class="form-group">
+    <legend>Formato regional</legend>
     <div class="theme-grid">
       {% for value, label, example in regional_options %}
       <label class="theme-option">
@@ -29,7 +35,8 @@
       {% endfor %}
     </div>
     <p class="form-help">Muda só como datas e valores aparecem e são digitados. Não altera o que está gravado, nem importações.</p>
-    <label>Taxa livre de risco anual
+    </fieldset>
+    <label>Taxa livre de risco anual <span class="required-mark" aria-hidden="true">*</span>
       <input name="risk_free_rate_annual" type="number" data-sensitive-input="true" min="0" max="1" step="0.0001" required value="{{ values.risk_free_rate_annual }}">
     </label>
     <p class="form-help">Informe em decimal: 0,10 corresponde a 10% ao ano.</p>

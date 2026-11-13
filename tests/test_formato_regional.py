@@ -169,3 +169,41 @@ def test_portador_regional_nao_dispara_validacao_nativa_de_step() -> None:
     inicio = fonte.index("input.setAttribute('data-regional-original-type', original);")
     trecho = fonte[inicio : inicio + 500]
     assert "input.type = 'hidden';" in trecho
+
+
+def test_nome_do_mes_sai_em_portugues_de_uma_data_ou_do_numero(app, contexto):
+    nome = _filtro(app, "nome_do_mes")
+    assert nome(date(2026, 11, 13)) == "Novembro"
+    assert nome(datetime(2026, 3, 1)) == "Março"
+    assert nome(1) == "Janeiro"
+    assert nome(12) == "Dezembro"
+    assert nome(13) == ""
+    assert nome(None) == ""
+
+
+def test_mes_ano_tem_a_mesma_ordem_nos_dois_formatos(app, contexto, eua):
+    assert _filtro(app, "umonth")(date(2026, 11, 13)) == "11/2026"
+    assert _filtro(app, "umonth")(None) == ""
+    assert regional.formatar_mes_ano(date(2026, 1, 5)) == "01/2026"
+
+
+def test_valor_que_arredonda_para_zero_nao_leva_sinal(app, contexto):
+    numero = _filtro(app, "number")
+    assert numero(Decimal("-0.001"), 2) == "0,00"
+    assert numero(Decimal("-0.001"), 2, True) == "0,00"
+    assert numero(Decimal("-0.4"), 0) == "0"
+    assert numero(Decimal("-0.004")) == "0,00"
+    assert numero(Decimal("-0.01")) == "-0,01"
+    assert numero(Decimal("-12.5")) == "-12,50"
+    assert _filtro(app, "currency")(Decimal("-0.001"), "BRL") == "R$ 0,00"
+
+
+def test_valor_que_arredonda_para_zero_nao_leva_sinal_nos_eua(app, contexto, eua):
+    assert _filtro(app, "number")(Decimal("-0.001"), 2) == "0.00"
+
+
+def test_papel_do_usuario_tem_rotulo_legivel(app):
+    rotulo = _filtro(app, "role_label")
+    assert rotulo("admin") == "Administrador"
+    assert rotulo("operador") == "Operador"
+    assert rotulo("outro") == "Outro"

@@ -10,7 +10,8 @@
    duplicado. #}
 {% include "partials/flash_toast.html" %}
 {% if selected_ticker %}
-  <section class="quote-history-card">
+  <section class="quote-history-card" aria-labelledby="quote-history-title">
+    <h2 id="quote-history-title" class="sr-only">Histórico de cotações de {{ selected_ticker.symbol }}</h2>
     <div class="quote-history-controls">
       <form class="quote-ticker-filter" method="get">
         <label for="quote-ticker">Ticker</label>
@@ -64,7 +65,7 @@
       </form>
       <button class="button button-primary" type="button" data-quote-management-toggle
               aria-controls="quote-management-card"
-              aria-expanded="{{ 'true' if quote_management_open else 'false' }}">Gerenciar Cotações</button>
+              aria-expanded="{{ 'true' if quote_management_open else 'false' }}">Gerenciar cotações</button>
     </div>
 
     {% if selected_benchmark and not chart_comparison_start_date %}
@@ -94,7 +95,7 @@
           <div class="quote-history-months">
           {% for month, month_entries in year_entries|groupby('recorded_date.month') %}
             <details class="quote-history-month">
-              <summary>{{ month_entries[0].recorded_date.strftime('%B') }}</summary>
+              <summary>{{ month_entries[0].recorded_date|nome_do_mes }}</summary>
               <ul class="quote-history-values">
                 {% for entry in month_entries|reverse %}
                   <li>
@@ -114,7 +115,7 @@
     {% endif %}
   </section>
 {% else %}
-  <p class="form-help">Cadastre um ticker em Tabelas para começar a registrar cotações históricas.</p>
+  <p class="form-help">Cadastre um ticker em Cadastros para começar a registrar cotações históricas.</p>
 {% endif %}
 
 {% if tickers %}
@@ -126,6 +127,7 @@
   <div class="quote-management-grid">
     <article class="catalog-card">
       <h2>Atualizar cotações diárias</h2>
+      <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
       {# `method`/`action` seguem ali para o caso sem JavaScript, onde o POST
          normal e o redirect continuam funcionando. Com o HTMX, so esta regiao
          e trocada — o painel nao fecha e o grafico nao se perde. #}
@@ -145,12 +147,12 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="ticker_id" value="{{ selected_ticker.id if selected_ticker else '' }}">
             <input type="hidden" name="benchmark_ticker_id" value="{{ selected_benchmark.id if selected_benchmark else '' }}">
-            <label>Data inicial<input type="date" name="start_date" value="{{ default_import_start }}" max="{{ today }}" required></label>
-            <label>Data final<input type="date" name="end_date" value="{{ default_import_end }}" max="{{ today }}" required></label>
+            <label>Data inicial <span class="required-mark" aria-hidden="true">*</span><input type="date" name="start_date" value="{{ default_import_start }}" max="{{ today }}" required></label>
+            <label>Data final <span class="required-mark" aria-hidden="true">*</span><input type="date" name="end_date" value="{{ default_import_end }}" max="{{ today }}" required></label>
           </form>
         </div>
         <div class="quote-card-zone quote-card-actions">
-          <button id="quote-period-submit" class="button button-primary" type="submit" form="quote-import-form">Atualizar Cotações do Período</button>
+          <button id="quote-period-submit" class="button button-primary" type="submit" form="quote-import-form">Atualizar cotações do período</button>
           <form method="post" action="{{ url_for('portfolio.import_position_quote_history') }}"
                 hx-post="{{ url_for('portfolio.import_position_quote_history') }}"
                 hx-target="#quotes-results" hx-swap="outerHTML" hx-disabled-elt="find button"
@@ -159,7 +161,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="ticker_id" value="{{ selected_ticker.id if selected_ticker else '' }}">
             <input type="hidden" name="benchmark_ticker_id" value="{{ selected_benchmark.id if selected_benchmark else '' }}">
-            <button class="button button-primary" type="submit">Atualizar Cotações desde a abertura da posição</button>
+            <button class="button button-primary" type="submit">Atualizar cotações desde a abertura da posição</button>
           </form>
         </div>
       </div>
@@ -167,31 +169,32 @@
 
     <article class="catalog-card">
       <h2>Gerenciar cotação manual</h2>
+      <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
       <form class="quote-manual-form" method="post"
             action="{{ url_for('portfolio.create_quote_history_entry') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="benchmark_ticker_id" value="{{ selected_benchmark.id if selected_benchmark else '' }}">
         <div class="quote-card-zone quote-manual-fields">
-          <label>Ticker
+          <label>Ticker <span class="required-mark" aria-hidden="true">*</span>
             <select name="ticker_id" required>
               {% for ticker in tickers %}
                 <option value="{{ ticker.id }}" {{ 'selected' if selected_ticker and ticker.id == selected_ticker.id }}>{{ ticker.symbol }}</option>
               {% endfor %}
             </select>
           </label>
-          <label>Data da cotação<input type="date" name="recorded_date" max="{{ today }}" required></label>
-          <label>Preço<input type="number" name="price" min="0.00000001" step="0.00000001" required data-sensitive-input="true"></label>
+          <label>Data da cotação <span class="required-mark" aria-hidden="true">*</span><input type="date" name="recorded_date" max="{{ today }}" required></label>
+          <label>Preço <span class="required-mark" aria-hidden="true">*</span><input type="number" name="price" min="0.00000001" step="0.00000001" required data-sensitive-input="true"></label>
         </div>
         <div class="quote-card-zone quote-card-actions">
           <button class="button button-primary" type="submit"
                   hx-post="{{ url_for('portfolio.create_quote_history_entry') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this" hx-confirm="Incluir ou alterar a cotação desta data?">Incluir / Alterar Cotação</button>
+                  hx-disabled-elt="this" hx-confirm="Incluir ou alterar a cotação desta data?">Incluir / alterar cotação</button>
           <button class="button button-danger" type="submit"
                   formaction="{{ url_for('portfolio.delete_quote_history_by_date') }}" formnovalidate
                   hx-post="{{ url_for('portfolio.delete_quote_history_by_date') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?">Excluir Cotação</button>
+                  hx-disabled-elt="this" hx-confirm="Excluir a cotação desta data?">Excluir cotação</button>
         </div>
       </form>
     </article>

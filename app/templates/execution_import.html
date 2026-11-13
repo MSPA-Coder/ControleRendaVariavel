@@ -42,13 +42,13 @@
       <thead><tr><th>Pregão</th><th>Instituição</th><th>Documento</th><th>Ativo</th><th>Lado</th><th>Quantidade</th><th>Total com taxas</th><th>Situação</th></tr></thead>
       <tbody>
         {% for row in plan.new_rows[:preview_rows] %}
-        <tr><td>{{ row.trade_date|ushort }}</td><td>{{ row.institution }}</td><td>{{ row.document }}</td><td>{{ row.asset }}</td><td>{{ row.side }}</td>
+        <tr><td>{{ row.trade_date|ushort }}</td><td>{{ row.institution }}</td><td>{{ row.document }}</td><td>{{ row.asset }}</td><td>{{ 'Compra' if row.side == 'C' else 'Venda' if row.side == 'V' else row.side }}</td>
             <td class="number" data-sensitive-value="true">{{ row.quantity|quantity(row.currency) }}</td>
             <td class="number" data-sensitive-value="true">{{ row.total_with_fees|currency(row.currency) }}</td>
             <td>Nova{% if not row.in_scope %} (fora de escopo){% endif %}</td></tr>
         {% endfor %}
         {% for record, row in plan.changed[:preview_rows] %}
-        <tr><td>{{ row.trade_date|ushort }}</td><td>{{ row.institution }}</td><td>{{ row.document }}</td><td>{{ row.asset }}</td><td>{{ row.side }}</td>
+        <tr><td>{{ row.trade_date|ushort }}</td><td>{{ row.institution }}</td><td>{{ row.document }}</td><td>{{ row.asset }}</td><td>{{ 'Compra' if row.side == 'C' else 'Venda' if row.side == 'V' else row.side }}</td>
             <td class="number" data-sensitive-value="true">{{ row.quantity|quantity(row.currency) }}</td>
             <td class="number" data-sensitive-value="true">{{ row.total_with_fees|currency(row.currency) }}</td>
             <td>Alterada (antes {{ record.total_with_fees|currency(record.currency) }})</td></tr>

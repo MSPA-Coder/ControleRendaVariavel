@@ -4,12 +4,13 @@
 {% block description %}Mantenha as instituições usadas nas operações. Cadastros com histórico são arquivados quando removidos.{% endblock %}
 {% block workspace_content %}
 <section class="catalog-card" id="catalog-results" hx-boost="true" hx-target="#catalog-results" hx-select="[data-sa-avisos], #catalog-results" hx-swap="outerHTML show:none" hx-push-url="false">
-  <h2>Registros cadastrados</h2>
+  <h2>Corretoras cadastradas</h2>
   <details class="workspace-create"><summary>Adicionar corretora</summary>
 <form class="catalog-create broker-fields" method="post" action="{{ url_for('portfolio.create_broker') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Nome<input required maxlength="40" name="name"></label>
-    <label>Sigla<input required maxlength="40" name="acronym"></label>
+    <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+    <label>Nome <span class="required-mark" aria-hidden="true">*</span><input required maxlength="40" name="name"></label>
+    <label>Sigla <span class="required-mark" aria-hidden="true">*</span><input required maxlength="40" name="acronym"></label>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Adicionar esta corretora?"
             data-sa-titulo="Adicionar corretora" data-sa-severidade="warning">Adicionar</button>
@@ -31,18 +32,19 @@
           <td>{{ 'Ativa' if broker.is_active else 'Arquivada' }}</td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="broker-{{ broker.id }}" {{ 'disabled' if not broker.is_active }}
+                    aria-label="Salvar corretora {{ broker.name }}"
                     data-sa-confirmar="Salvar as alterações da corretora {{ broker.name }}?"
                     data-sa-titulo="Salvar corretora" data-sa-severidade="warning">Salvar</button>
             {% if broker.is_active %}<form method="post" action="{{ url_for('portfolio.delete_broker', broker_id=broker.id) }}"
-                  data-sa-titulo="Excluir corretora" data-sa-severidade="error">
+                  data-sa-titulo="Remover corretora" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="button button-danger" type="submit"
-                      data-sa-confirmar="Excluir a corretora {{ broker.name }}? Se ela possuir histórico, será arquivada."
+              <button class="button button-danger" type="submit" aria-label="Remover corretora {{ broker.name }}"
+                      data-sa-confirmar="Remover a corretora {{ broker.name }}? Se ela possuir histórico, será arquivada."
                       data-sa-titulo="Remover corretora" data-sa-severidade="error">Remover</button>
             </form>{% else %}
             <form method="post" action="{{ url_for('portfolio.activate_broker', broker_id=broker.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="button" type="submit">Reativar</button>
+              <button class="button" type="submit" aria-label="Reativar corretora {{ broker.name }}">Reativar</button>
             </form>{% endif %}
           </td>
         </tr>

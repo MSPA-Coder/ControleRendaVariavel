@@ -1,7 +1,22 @@
 (function () {
   "use strict";
   function parseData(container, attr) { try { return JSON.parse(container.dataset[attr] || "[]"); } catch (_) { return []; } }
-  function formatCurrency(value, currency) { return (currency === "USD" ? "US$ " : "R$ ") + value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function formatCurrency(value, currency) { return window.regional.formatarMoeda(value, currency); }
+  // Rótulos de período chegam em ISO (dia, AAAA-MM ou AAAA): mostra no formato regional.
+  function formatLabel(label, period) {
+    if (period === "monthly") return window.regional.formatarMes(label);
+    if (period === "yearly") return label;
+    return window.regional.formatarData(label);
+  }
+  function themeColors() {
+    var style = getComputedStyle(document.documentElement);
+    return {
+      ink: style.getPropertyValue("--ink").trim() || "#142b3c",
+      muted: style.getPropertyValue("--muted").trim() || "#5c7180",
+      line: style.getPropertyValue("--line").trim() || "#c9d8e2",
+      accent: style.getPropertyValue("--accent").trim() || "#0b6e4f",
+    };
+  }
   function formatPercent(value) { return (value >= 0 ? "+" : "") + value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%"; }
   function periodKey(dateString, period) {
     if (period === "daily") return dateString;
@@ -133,9 +148,10 @@
     container.replaceChildren();
     var canvas = document.createElement("canvas"), ratio = window.devicePixelRatio || 1, width = 900, height = 300;
     canvas.width = width * ratio; canvas.height = height * ratio; canvas.style.width = "100%"; canvas.style.height = "100%";
-    canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Candles de cotacoes");
+    canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Candles de cotações");
     container.appendChild(canvas);
     var ctx = canvas.getContext("2d"); ctx.scale(ratio, ratio);
+    var colors = themeColors();
     var visibleLines = visibleCostLines(lines, rows.map(function (row) { return row.label; }), period);
     var values = rows.flatMap(function (row) { return [row.low, row.high]; }).concat(
       visibleLines.flatMap(function (item) { return item.values.filter(function (value) { return value !== null; }); })
@@ -149,7 +165,7 @@
     var spanLog = maxLog - minLog;
     var left = 54, right = 16, top = 16, bottom = 38, plotWidth = width - left - right, plotHeight = height - top - bottom;
     function y(value) { return top + (maxLog - Math.log10(value)) / spanLog * plotHeight; }
-    ctx.strokeStyle = "#c9d8e2"; ctx.fillStyle = "#5c7180"; ctx.font = "12px sans-serif";
+    ctx.strokeStyle = colors.line; ctx.fillStyle = colors.muted; ctx.font = "12px sans-serif";
     for (var tick = 0; tick <= 4; tick += 1) { var yy = top + plotHeight * tick / 4, value = 10 ** (maxLog - spanLog * tick / 4); ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke(); ctx.fillText(formatCurrency(value, currency), 2, yy + 4); }
     var step = plotWidth / rows.length, body = Math.max(2, Math.min(16, step * .62));
     rows.forEach(function (row, index) {
@@ -158,7 +174,7 @@
       ctx.beginPath(); ctx.moveTo(x, y(row.high)); ctx.lineTo(x, y(row.low)); ctx.stroke();
       var yOpen = y(row.open), yClose = y(row.close), bodyTop = Math.min(yOpen, yClose), bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
       ctx.fillRect(x - body / 2, bodyTop, body, bodyHeight);
-      if (rows.length <= 18 || index % Math.ceil(rows.length / 8) === 0) { ctx.fillStyle = "#5c7180"; ctx.fillText(row.label, x - body, height - 14); }
+      if (rows.length <= 18 || index % Math.ceil(rows.length / 8) === 0) { ctx.fillStyle = colors.muted; ctx.fillText(formatLabel(row.label, period), x - body, height - 14); }
     });
     // Cada período ativo é um trecho horizontal na largura do candle; a
     // troca de nível vira um trecho vertical na divisa entre dois candles.
@@ -179,7 +195,7 @@
   // referência), ambas em evolução percentual desde o primeiro ponto em
   // comum, no mesmo eixo. Substitui o candlestick porque OHLC não tem um
   // equivalente comparável para duas séries sobrepostas.
-  function drawComparison(container, primaryLabel, primaryRows, benchmarkLabel, benchmarkRows) {
+  function drawComparison(container, primaryLabel, primaryRows, benchmarkLabel, benchmarkRows, period) {
     var primaryCloses = closesByLabel(primaryRows), benchmarkCloses = closesByLabel(benchmarkRows);
     var commonLabels = Array.from(primaryCloses.keys()).filter(function (label) {
       return benchmarkCloses.has(label);
@@ -199,22 +215,27 @@
     canvas.setAttribute("role", "img");
     canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Comparação de evolução percentual");
     container.appendChild(canvas);
+    var colors = themeColors();
+    var xTicks = { color: colors.ink, callback: function (value) { return formatLabel(this.getLabelForValue(value), period); } };
     new Chart(canvas.getContext("2d"), {
       type: "line",
       data: {
         labels: labels,
         datasets: [
-          { label: primaryLabel, data: primarySeries, borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: true },
+          { label: primaryLabel, data: primarySeries, borderColor: colors.accent, backgroundColor: colors.accent, pointRadius: 2, tension: .15, spanGaps: true },
           { label: benchmarkLabel, data: benchmarkSeries, borderColor: "#b45309", backgroundColor: "#b45309", pointRadius: 2, tension: .15, spanGaps: true, borderDash: [6, 3] },
         ],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { display: true },
-          tooltip: { callbacks: { label: function (item) { return item.dataset.label + ": " + (item.parsed.y === null ? "sem dado" : formatPercent(item.parsed.y)); } } },
+          legend: { display: true, labels: { color: colors.ink } },
+          tooltip: { callbacks: { title: function (items) { return items.length ? formatLabel(items[0].label, period) : ""; }, label: function (item) { return item.dataset.label + ": " + (item.parsed.y === null ? "sem dado" : formatPercent(item.parsed.y)); } } },
         },
-        scales: { y: { ticks: { callback: function (value) { return formatPercent(value); } } } },
+        scales: {
+          x: { ticks: xTicks, grid: { color: colors.line } },
+          y: { ticks: { color: colors.ink, callback: function (value) { return formatPercent(value); } }, grid: { color: colors.line } },
+        },
       },
     });
     return true;
@@ -240,7 +261,7 @@
       benchmarkDates = benchmark.dates; benchmarkPrices = benchmark.prices;
       var benchmarkRows = aggregate(benchmarkDates, benchmarkPrices, period);
       if (!primaryRows.length || !benchmarkRows.length) { container.replaceChildren(); return; }
-      drawComparison(container, container.dataset.label || "Selecionado", primaryRows, benchmarkLabel, benchmarkRows);
+      drawComparison(container, container.dataset.label || "Selecionado", primaryRows, benchmarkLabel, benchmarkRows, period);
       return;
     }
     var primary = zoomedSeries(primaryDates, primaryPrices, zoom);
@@ -252,9 +273,11 @@
     var labels = chartLabels(rows, positionLines);
     var costLines = averageCostDatasets(labels, positionLines);
     container.replaceChildren(); var canvas = document.createElement("canvas"); container.appendChild(canvas);
+    canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Gráfico de linha da cotação");
+    var colors = themeColors();
     // spanGaps na cotação: os únicos rótulos sem preço são as datas de troca
     // de custo médio injetadas acima, e elas não devem cortar a série.
-    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: "#0a2a43", backgroundColor: "#0a2a43", pointRadius: 2, tension: .15, spanGaps: true }, ...costLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: costLines.length > 0 }, tooltip: { callbacks: { label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { y: { type: "logarithmic", ticks: { callback: function (value) { return formatCurrency(value, currency); } } } } } });
+    new Chart(canvas.getContext("2d"), { type: chartType, data: { labels: labels, datasets: [{ label: container.dataset.label || "Cotação", data: labels.map(function (label) { var row = rows.find(function (item) { return item.label === label; }); return row ? row.close : null; }), borderColor: colors.accent, backgroundColor: colors.accent, pointRadius: 2, tension: .15, spanGaps: true }, ...costLines] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: costLines.length > 0, labels: { color: colors.ink } }, tooltip: { callbacks: { title: function (items) { return items.length ? formatLabel(items[0].label, "daily") : ""; }, label: function (item) { return formatCurrency(item.parsed.y, currency); } } } }, scales: { x: { ticks: { color: colors.ink, callback: function (value) { return formatLabel(this.getLabelForValue(value), "daily"); } }, grid: { color: colors.line } }, y: { type: "logarithmic", ticks: { color: colors.ink, callback: function (value) { return formatCurrency(value, currency); } }, grid: { color: colors.line } } } } });
   }
   function init() {
     var type = document.querySelector("[data-quote-chart-type]"), period = document.querySelector("[data-quote-chart-period]"), zoom = document.querySelector("[data-quote-chart-zoom]");

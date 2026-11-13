@@ -1,3 +1,4 @@
+{% if portfolio.totals or portfolio.moneyness_totals %}
 <section class="summary portfolio-summary" aria-label="Resumo de opções">
 {% for total in portfolio.totals %}
   {% set symbol = total.currencies|map('currency_symbol')|join('/') %}
@@ -37,3 +38,4 @@
   </article>
 {% endif %}
 </section>
+{% endif %}

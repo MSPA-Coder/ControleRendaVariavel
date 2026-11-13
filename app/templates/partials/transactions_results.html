@@ -28,7 +28,7 @@
               {{ trades.metric('Corretora', tx.broker) }}
               {{ trades.metric('Moeda', tx.currency) }}
             </dl>
-            <h3 class="trade-label">Observações</h3><p class="workspace-notes" data-sensitive-value="true">{{ tx.notes or 'Nenhuma observação registrada.' }}</p>
+            <h3 class="trade-label">Observações <span class="sr-only">de {{ tx.ticker }}</span></h3><p class="workspace-notes" data-sensitive-value="true">{{ tx.notes or 'Nenhuma observação registrada.' }}</p>
             {% if tx.status.value == 'open' or tx.id in partial_close_ids %}
               <p><a href="{{ url_for('options.edit_position' if tx.option_contract_id else 'portfolio.edit_position', position_id=tx.source_position_id) }}">Editar posição de origem</a></p>
             {% endif %}

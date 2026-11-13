@@ -4,26 +4,27 @@
 {% block description %}Consulte o ativo-objeto, tipo, strike e vencimento de cada opção.{% endblock %}
 {% block workspace_content %}
 <section class="catalog-card" id="catalog-results" hx-boost="true" hx-target="#catalog-results" hx-select="[data-sa-avisos], #catalog-results" hx-swap="outerHTML show:none" hx-push-url="false">
-  <h2>Registros cadastrados</h2>
+  <h2>Contratos cadastrados</h2>
   <details class="workspace-create"><summary>Adicionar contrato</summary>
 <form class="catalog-create contract-fields" method="post" action="{{ url_for('options.create_contract') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Ticker da opção<select required name="ticker_id">
+    <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+    <label>Ticker da opção <span class="required-mark" aria-hidden="true">*</span><select required name="ticker_id">
       <option value="">Selecione</option>
       {% for ticker in tickers %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
     </select></label>
-    <label>Ativo-objeto<select required name="underlying_ticker_id">
+    <label>Ativo-objeto <span class="required-mark" aria-hidden="true">*</span><select required name="underlying_ticker_id">
       <option value="">Selecione</option>
       {% for ticker in tickers %}<option value="{{ ticker.id }}">{{ ticker.symbol }}</option>{% endfor %}
     </select></label>
     <label>Tipo<select name="option_type">
       {% for option_type in option_types %}<option value="{{ option_type.value }}">{{ option_type.value|upper }}</option>{% endfor %}
     </select></label>
-    <label>Vencimento<select required name="expiration_id">
+    <label>Vencimento <span class="required-mark" aria-hidden="true">*</span><select required name="expiration_id">
       <option value="">Selecione</option>
       {% for expiration in expirations %}<option value="{{ expiration.id }}">{{ expiration.call_code }}/{{ expiration.put_code }} · {{ expiration.exercise_date|udate }}</option>{% endfor %}
     </select></label>
-    <label>Strike<input required type="number" min="0" step="any" name="strike" data-sensitive-input="true"></label>
+    <label>Strike <span class="required-mark" aria-hidden="true">*</span><input required type="number" min="0" step="any" name="strike" data-sensitive-input="true"></label>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Adicionar este contrato de opção?"
             data-sa-titulo="Adicionar contrato" data-sa-severidade="warning">Adicionar</button>
@@ -55,12 +56,13 @@
           <td><input required type="number" min="0" step="any" name="strike" value="{{ contract.strike }}" form="contract-{{ contract.id }}" aria-label="Strike de {{ contract.ticker_ref.symbol }}" data-sensitive-input="true"></td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="contract-{{ contract.id }}"
+                    aria-label="Salvar contrato de {{ contract.ticker_ref.symbol }}"
                     data-sa-confirmar="Salvar as alterações do contrato de {{ contract.ticker_ref.symbol }}?"
                     data-sa-titulo="Salvar contrato" data-sa-severidade="warning">Salvar</button>
             <form method="post" action="{{ url_for('options.delete_contract', contract_id=contract.id) }}"
                   data-sa-titulo="Excluir contrato" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="button button-danger" type="submit"
+              <button class="button button-danger" type="submit" aria-label="Excluir contrato de {{ contract.ticker_ref.symbol }}"
                       data-sa-confirmar="Excluir este contrato de {{ contract.ticker_ref.symbol }}?"
                       data-sa-titulo="Excluir contrato" data-sa-severidade="error">Excluir</button>
             </form>

@@ -12,18 +12,18 @@
         {% for user in users %}
           <tr>
             <td>{{ user.username }}</td>
-            <td>{{ user.role|capitalize }}</td>
+            <td>{{ user.role|role_label }}</td>
             <td>{{ 'Ativo' if user.is_active_user else 'Desativado' }}</td>
             <td>
               <form method="post" action="{{ url_for('users.edit', user_id=user.id) }}"
                     hx-post="{{ url_for('users.edit', user_id=user.id) }}" hx-target="#users-results" hx-swap="outerHTML"
                     hx-confirm="Salvar as alterações deste usuário?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input required maxlength="80" name="username" value="{{ user.username }}" aria-label="Usuário">
-                <select name="role" aria-label="Papel">
-                  {% for role in valid_roles %}<option value="{{ role }}" {{ 'selected' if user.role == role }}>{{ role|capitalize }}</option>{% endfor %}
+                <input required maxlength="80" name="username" value="{{ user.username }}" aria-label="Usuário de {{ user.username }}">
+                <select name="role" aria-label="Papel de {{ user.username }}">
+                  {% for role in valid_roles %}<option value="{{ role }}" {{ 'selected' if user.role == role }}>{{ role|role_label }}</option>{% endfor %}
                 </select>
-                <button class="button" type="submit">Salvar</button>
+                <button class="button" type="submit" aria-label="Salvar {{ user.username }}">Salvar</button>
               </form>
             </td>
             <td>
@@ -34,7 +34,7 @@
                 {#- Sem campo de senha: quem administra nao escolhe mais a senha
                     de outra pessoa. O sistema sorteia, mostra uma vez, e o dono
                     e obrigado a trocar no primeiro acesso. -#}
-                <button class="button" type="submit">Redefinir</button>
+                <button class="button" type="submit" aria-label="Redefinir senha de {{ user.username }}">Redefinir</button>
               </form>
             </td>
             <td>
@@ -43,7 +43,8 @@
                     hx-confirm="{{ 'Ativar este usuário?' if not user.is_active_user else 'Desativar este usuário?' }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="active" value="{{ '1' if not user.is_active_user else '0' }}">
-                <button class="button {{ 'button-primary' if not user.is_active_user else 'button-danger' }}" type="submit">
+                <button class="button {{ 'button-primary' if not user.is_active_user else 'button-danger' }}" type="submit"
+                        aria-label="{{ 'Ativar' if not user.is_active_user else 'Desativar' }} {{ user.username }}">
                   {{ 'Ativar' if not user.is_active_user else 'Desativar' }}
                 </button>
               </form>

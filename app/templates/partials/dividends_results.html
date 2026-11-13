@@ -28,7 +28,7 @@
     </dl></details>
     <button type="button" class="row-toggle"
             hx-get="{{ ticker_toggle_urls[total.ticker_id] }}" hx-target="#dividends-results" hx-swap="outerHTML"
-            aria-controls="dividend-events-{{ total.ticker_id }}" aria-expanded="{{ 'true' if expanded else 'false' }}"
+            {% if expanded %}aria-controls="dividend-events-{{ total.ticker_id }}" {% endif %}aria-expanded="{{ 'true' if expanded else 'false' }}"
             aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os proventos de {{ total.ticker }}">{{ '− Ocultar recebimentos' if expanded else '+ Ver recebimentos' }} →</button>
   </article>
   {% if expanded %}

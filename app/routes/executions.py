@@ -206,6 +206,7 @@ def _render_application(
             "execution_application.html",
             pendentes=len(pending_executions(current_owner_id(), until=until)),
             until=until.isoformat() if until else "",
+            until_date=until,
             report=report,
             fingerprint=_application_fingerprint(report) if report is not None else "",
             gravado=gravado,

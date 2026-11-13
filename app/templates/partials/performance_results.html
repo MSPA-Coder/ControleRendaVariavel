@@ -42,7 +42,7 @@
       {% if report.points %}
       {% set latest = report.points[-1] %}
       <section class="summary" aria-label="Último mês exibido em {{ report.currency }}">
-        <article class="workspace-highlight"><span>Exposição líquida · {{ latest.month.strftime('%m/%Y') }}</span><strong data-sensitive-value="true">{{ latest.ending_value|currency(report.currency) }}</strong><small>{{ report.currency }} · até os dados disponíveis</small></article>
+        <article class="workspace-highlight"><span>Exposição líquida · {{ latest.month|umonth }}</span><strong data-sensitive-value="true">{{ latest.ending_value|currency(report.currency) }}</strong><small>{{ report.currency }} · até os dados disponíveis</small></article>
         <article><span>Retorno do mês exibido</span><strong class="{{ latest.return_pct|sign_class }}" data-sensitive-value="true">{{ latest.return_pct|percent(2) if latest.return_pct is not none else '—' }}</strong><small>Com aportes e retiradas neutralizados</small></article>
         <article><span>Aporte líquido no mês exibido</span><strong data-sensitive-value="true">{{ latest.net_flow|currency(report.currency) }}</strong><small>Entrada ou retirada de capital</small></article>
       </section>
@@ -73,7 +73,7 @@
             <tbody>
               {% for point in report.points|reverse %}
               <tr>
-                <td>{{ point.month.strftime('%m/%Y') }}</td>
+                <td>{{ point.month|umonth }}</td>
                 <td class="number" data-sensitive-value="true">{{ point.ending_value|currency(report.currency) }}</td>
                 {# Aporte e provento explicam por que o patrimonio se moveu sem
                    o retorno acompanhar: os dois sao neutralizados/creditados no

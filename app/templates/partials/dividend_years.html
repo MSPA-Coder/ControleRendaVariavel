@@ -12,7 +12,7 @@
             <button type="button" class="row-toggle"
                     hx-get="{{ year_toggle_urls[token] }}"
                     hx-target="#dividends-results" hx-swap="outerHTML"
-                    aria-expanded="{{ 'true' if expanded else 'false' }}"
+                    {% if expanded %}aria-controls="dividend-months-{{ token }}" {% endif %}aria-expanded="{{ 'true' if expanded else 'false' }}"
                     title="{{ total.months|length }} mês(es) com provento"
                     aria-label="{{ 'Ocultar' if expanded else 'Mostrar' }} os meses de {{ total.year }}">{{ '−' if expanded else '+' }}</button>
             {{ total.year }}{{ ' · ' + total.currency if total.currency != 'BRL' }}
@@ -20,7 +20,7 @@
           <td class="number" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</td>
         </tr>
         {% if expanded %}
-        <tr class="movement-detail">
+        <tr class="movement-detail" id="dividend-months-{{ token }}">
           <td colspan="2">
             {# `movements-table-narrow`: só 2 colunas (Mês, Recebido) não
                precisam do min-width de 42rem de `.movements-table` — nesse
@@ -32,7 +32,7 @@
               <tbody>
                 {% for month in total.months %}
                 <tr>
-                  <td>{{ month.month.strftime('%m/%Y') }}</td>
+                  <td>{{ month.month|umonth }}</td>
                   <td class="number" data-sensitive-value="true">{{ month.total_amount|currency(month.currency) }}</td>
                 </tr>
                 {% endfor %}

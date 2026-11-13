@@ -7,7 +7,7 @@
 .trade-heading-actions { display: flex; align-items: center; gap: .85rem; flex-shrink: 0; }
 .trade-switch { display: inline-flex; background: var(--surface-muted); border: 1px solid var(--line); border-radius: .55rem; padding: .25rem; }
 .trade-switch a { display: block; color: var(--muted); font-size: .875rem; padding: .6rem 1.2rem; text-decoration: none; border-radius: .35rem; }
-.trade-switch a[aria-current] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px #00000008; }
+.trade-switch a[aria-current] { background: var(--surface); color: var(--accent-dark); box-shadow: 0 1px 4px #00000008; }
 .trade-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .65rem; padding: .85rem 1.1rem; margin: 0 0 1.5rem; }
 .trade-toolbar label { display: inline-flex; align-items: center; gap: .6rem; font-size: .875rem; color: var(--muted); }
 .trade-toolbar select { min-height: 2.4rem; padding: .4rem .6rem; max-width: 14rem; font-size: .875rem; }
@@ -33,11 +33,11 @@
 .trade-card { background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; overflow: hidden; min-width: 0; transition: border-color .15s, box-shadow .15s; }
 .trade-card:hover { border-color: var(--accent-line); box-shadow: 0 5px 20px #00000005; }
 .trade-card-heading { display: flex; gap: .8rem; padding: 1.4rem 1.4rem 0; align-items: center; }
-.trade-avatar { flex-shrink: 0; width: 2.8rem; height: 2.8rem; display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent); border-radius: .7rem; font: 500 .875rem 'Space Grotesk', Inter, sans-serif; }
+.trade-avatar { flex-shrink: 0; width: 2.8rem; height: 2.8rem; display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent-dark); border-radius: .7rem; font: 500 .875rem 'Space Grotesk', Inter, sans-serif; }
 .trade-identity { min-width: 0; }
-.trade-identity h2 { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: -.03em; }
-.trade-identity h2 a { color: var(--ink); text-decoration: none; }
-.trade-identity h2 a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: .2rem; }
+.trade-identity :is(h2, h3, h4) { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: -.03em; }
+.trade-identity :is(h2, h3, h4) a { color: var(--ink); text-decoration: none; }
+.trade-identity :is(h2, h3, h4) a:hover { color: var(--accent-dark); text-decoration: underline; text-underline-offset: .2rem; }
 .trade-identity p { font-size: .875rem; color: var(--muted); margin: .3rem 0 0; overflow-wrap: anywhere; line-height: 1.5; }
 .trade-badge { font-size: .875rem; margin-left: auto; flex-shrink: 0; padding: .35rem .45rem; border-radius: .3rem; background: var(--surface-muted); color: var(--muted); }
 .trade-quote { padding: 1.5rem 1.4rem 1.3rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
@@ -74,7 +74,7 @@
 .trade-group-totals { display: flex; flex-wrap: wrap; gap: 1rem 2rem; padding: 0 1.3rem; margin: -.2rem 0 1.2rem; }
 .trade-group-totals dt { font-size: .875rem; color: var(--muted); }
 .trade-group-totals dd { font: 500 1.1rem 'Space Grotesk', Inter, sans-serif; margin: .3rem 0 0; }
-.trade-calendar { width: 3.2rem; height: 3.2rem; display: inline-grid; place-items: center; font: 500 1.5rem 'Space Grotesk', Inter, sans-serif; color: var(--accent); background: var(--accent-soft); border-radius: .6rem; }
+.trade-calendar { width: 3.2rem; height: 3.2rem; display: inline-grid; place-items: center; font: 500 1.5rem 'Space Grotesk', Inter, sans-serif; color: var(--ink-strong); background: var(--accent-soft); border-radius: .6rem; }
 .trade-expiry-note { margin-left: auto; text-align: right; font-size: .875rem; }
 .trade-expiry-note b { display: block; font-weight: 500; }
 .trade-expiry-note span { display: block; margin-top: .4rem; font-size: .875rem; color: var(--muted); }
@@ -87,7 +87,7 @@
 .trade-empty h2 { font-weight: 500; font-size: 1.6rem; }
 .trade-empty p { color: var(--muted); font-size: .875rem; line-height: 1.8; margin: .8rem 0 1.4rem; }
 .trade-detail { max-width: 1100px; }
-.trade-back { display: inline-flex; gap: .6rem; font-size: .875rem; color: var(--muted); margin-bottom: 1.7rem; text-decoration: none; }
+.trade-back { align-items: center; display: inline-flex; gap: .6rem; min-height: var(--target-min); font-size: .875rem; color: var(--muted); margin-bottom: 1.7rem; text-decoration: none; }
 .trade-detail-heading { border: 1px solid var(--line); border-radius: .9rem; background: var(--surface); padding: 2rem; margin-bottom: 1.3rem; }
 .trade-detail-heading .trade-heading { margin: 0 0 1.7rem; }
 .trade-detail-heading .trade-identity h1 { font-size: 2.6rem; }
@@ -181,18 +181,18 @@
    sem mudar o tamanho do texto. */
 .trade-clear,
 .trade-card-footer a,
-.trade-identity h2 a {
+.trade-identity :is(h2, h3, h4) a {
   align-items: center;
   display: inline-flex;
-  min-height: 27px;
-  min-width: 27px;
+  min-height: var(--target-min);
+  min-width: var(--target-min);
 }
-.trade-expand.row-toggle { min-height: 27px; }
+.trade-expand.row-toggle { min-height: var(--target-min); }
 .trade-group-toggle input[type="checkbox"] { height: 1.3rem; width: 1.3rem; }
 
 /* A seta acompanha a variação do dia: verde em alta, vermelha em queda e neutra
    sem variação. O tom claro de antes (`--accent-line` sobre branco) ficava em
    1,4:1 de contraste. */
 .trade-direction { color: var(--muted); }
-.trade-direction.positive { color: var(--positive); }
-.trade-direction.negative { color: var(--negative); }
+.trade-direction.positive { color: var(--positive-text); }
+.trade-direction.negative { color: var(--negative-text); }

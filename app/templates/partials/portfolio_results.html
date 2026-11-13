@@ -7,14 +7,14 @@
      hx-get="{{ url_for('portfolio.index', **request.args) }}" hx-trigger="quote-refresh-due" hx-swap="outerHTML">
   {% include "partials/portfolio_summary.html" %}
   <p class="form-help portfolio-quote-coverage-note">Os totais de entrada, posição atual, resultado, retorno e concentração consideram somente posições que já têm cotação. Posições sem cotação continuam listadas e mostram o custo médio, mas ficam fora desses totais e dos agregados por corretora e por ativo.</p>
-  <div class="trade-section-heading"><h2>Posições em aberto <span>{{ portfolio.positions|length }}</span></h2><p>Selecione um trade para explorar o histórico, as metas e os indicadores.</p></div>
+  <div class="trade-section-heading"><h2>Posições em aberto <span>{{ portfolio.positions|length }}</span></h2><p>Selecione uma posição para explorar o histórico, as metas e os indicadores.</p></div>
   {% if has_short_positions %}<p class="form-help">Limitação para vendas a descoberto: esta aba mostra a variação de preço, mas não inclui o repasse de proventos ao doador nem encargos do aluguel. A apuração oficial continua no sistema integrado à B3 e na contabilidade.</p>{% endif %}
   {% if group_by_broker %}
     {% for group in portfolio.broker_groups %}
     <section class="trade-broker-group">
       <header class="trade-group-heading"><div><p class="trade-eyebrow">{{ group.currency }}</p><h3>{{ group.broker }}</h3></div><span>{{ group.positions|length }} posição(ões)</span></header>
       <dl class="trade-group-totals">{{ trades.metric('Custo de entrada', group.cost_total|currency(group.currency, 0)) }}{{ trades.metric('Valor atual', group.current_total|currency(group.currency, 0)) }}{{ trades.metric('Resultado · ' ~ selected_result_label, group.result_total|currency(group.currency, 0), group.result_total|sign_class) }}</dl>
-      <div class="trade-card-grid">{% for item in group.positions %}{{ trades.card(item) }}{{ trades.movements(item) }}{% endfor %}</div>
+      <div class="trade-card-grid">{% for item in group.positions %}{{ trades.card(item, nivel=4) }}{{ trades.movements(item) }}{% endfor %}</div>
     </section>
     {% endfor %}
   {% else %}

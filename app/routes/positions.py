@@ -877,7 +877,7 @@ def exposure_asset() -> str:
             "converted_chart": converted_allocation_chart_data(
                 portfolio.positions, latest_usd_brl_quote()
             ),
-            "heading": "Alocacao por ativo",
+            "heading": "Alocação por ativo",
             "subject": "ativo",
         }
     )
@@ -896,7 +896,7 @@ def exposure_broker() -> str:
                 portfolio.broker_groups, lambda group: group.broker
             ),
             "group_heading": "Corretora",
-            "heading": "Exposicao por corretora",
+            "heading": "Exposição por corretora",
             "subject": "corretora",
         }
     )
@@ -915,7 +915,7 @@ def exposure_market() -> str:
                 portfolio.market_groups, lambda group: group.market.value
             ),
             "group_heading": "Mercado",
-            "heading": "Exposicao por mercado",
+            "heading": "Exposição por mercado",
             "subject": "mercado",
         }
     )

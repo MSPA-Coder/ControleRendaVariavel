@@ -9,6 +9,6 @@
       <a href="{{ url_for('portfolio.index') }}"{{ ' aria-current="page"'|safe if not is_option }}>Ações</a>
       <a href="{{ url_for('options.index') }}"{{ ' aria-current="page"'|safe if is_option }}>Opções</a>
     </nav>
-    <a class="button button-primary" href="{{ url_for('options.new_position' if is_option else 'portfolio.new_position') }}">＋ Nova posição</a>
+    <a class="button button-primary" href="{{ url_for('options.new_position' if is_option else 'portfolio.new_position') }}"><span aria-hidden="true">+</span> Nova posição</a>
   </div>
 </header>

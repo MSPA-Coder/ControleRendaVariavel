@@ -244,10 +244,10 @@ def import_quote_history() -> ResponseReturnValue:
         start_date = date.fromisoformat(raw["start_date"])
         end_date = date.fromisoformat(raw["end_date"])
     except (KeyError, ValueError):
-        flash("Informe um periodo valido para a atualizacao.", "error")
+        flash("Informe um período válido para a atualização.", "error")
         return _quote_management_response(None)
     if start_date > end_date or end_date > hoje_no_mercado():
-        flash("O periodo deve terminar hoje ou antes e possuir data inicial valida.", "error")
+        flash("O período deve terminar hoje ou antes e ter uma data inicial válida.", "error")
         return _quote_management_response(None)
 
     targets = quote_update_target_tickers()
@@ -269,11 +269,11 @@ def import_quote_history() -> ResponseReturnValue:
                 (ticker_id, quote.price, quote.recorded_date, quote.recorded_at)
                 for ticker_id, quote in imported
             )
-        flash(f"{len(imported)} daily quotes updated through Yahoo Finance.", "success")
+        flash(f"{len(imported)} cotações diárias atualizadas pelo Yahoo Finance.", "success")
     if failures:
-        flash(f"No Yahoo Finance history for: {', '.join(failures)}.", "error")
+        flash(f"Sem histórico no Yahoo Finance para: {', '.join(failures)}.", "error")
     if not imported and not failures:
-        flash("No registered tickers to update.", "error")
+        flash("Não há tickers cadastrados para atualizar.", "error")
     logging.getLogger(__name__).info(
         "quote_history_batch entrypoint=web_period targets=%d failures=%d records=%d duration_ms=%.1f",
         len(targets), len(failures), len(imported), (perf_counter() - started) * 1000,
@@ -307,11 +307,11 @@ def import_position_quote_history() -> ResponseReturnValue:
                 for ticker_id, quote in imported
             )
     flash(
-        f"{len(imported)} historical quotes refreshed for {len(targets) - len(failures)} tickers.",
+        f"{len(imported)} cotações históricas atualizadas para {len(targets) - len(failures)} tickers.",
         "success",
     )
     if failures:
-        flash("No Yahoo Finance history for: " + ", ".join(failures), "error")
+        flash("Sem histórico no Yahoo Finance para: " + ", ".join(failures), "error")
     logging.getLogger(__name__).info(
         "quote_history_batch entrypoint=web_positions targets=%d failures=%d records=%d duration_ms=%.1f",
         len(targets), len(failures), len(imported), (perf_counter() - started) * 1000,
@@ -327,7 +327,7 @@ def delete_quote_history_by_date() -> ResponseReturnValue:
         ticker_id = parse_positive_id(raw["ticker_id"])
         recorded_date = date.fromisoformat(raw["recorded_date"])
     except (KeyError, ValueError):
-        flash("Informe um ticker e uma data de cotacao validos.", "error")
+        flash("Informe um ticker e uma data de cotação válidos.", "error")
         return _quote_management_response(None)
 
     deleted_ticker_id = db.session.scalar(
@@ -338,7 +338,7 @@ def delete_quote_history_by_date() -> ResponseReturnValue:
     )
     db.session.commit()
     if deleted_ticker_id is not None:
-        flash("Cotacao historica excluida.", "success")
+        flash("Cotação histórica excluída.", "success")
     else:
-        flash("Nao ha cotacao registrada para a data informada.", "error")
+        flash("Não há cotação registrada para a data informada.", "error")
     return _quote_management_response(ticker_id)

@@ -9,9 +9,9 @@
     <header class="trade-group-heading">
       <span class="trade-calendar" aria-hidden="true">{{ group.grouper.day }}</span>
       <div><p class="trade-eyebrow">Vencimento</p><h3>{{ group.grouper|udate }}</h3></div>
-      <div class="trade-expiry-note"><b>{{ 'Vencido' if days < 0 else 'Vence hoje' if days == 0 else days|string ~ ' dias restantes' }}</b><span>{{ group.list|length }} contrato(s)</span></div>
+      <div class="trade-expiry-note"><b>{% if days < 0 %}Vencido há {{ -days }} {{ 'dia' if days == -1 else 'dias' }}{% elif days == 0 %}Vence hoje{% else %}{{ days }} {{ 'dia restante' if days == 1 else 'dias restantes' }}{% endif %}</b><span>{{ group.list|length }} contrato(s)</span></div>
     </header>
-    <div class="trade-card-grid">{% for item in group.list %}{{ trades.card(item, true) }}{{ trades.movements(item, true) }}{% endfor %}</div>
+    <div class="trade-card-grid">{% for item in group.list %}{{ trades.card(item, true, nivel=4) }}{{ trades.movements(item, true) }}{% endfor %}</div>
   </section>
   {% else %}<section class="trade-empty"><span aria-hidden="true">◷</span><h2>Espaço para a próxima estratégia.</h2><p>Nenhuma posição de opção encontrada para os filtros.</p><a class="button" href="{{ url_for('options.new_position') }}">Nova posição</a></section>{% endfor %}
   <details class="trade-secondary"><summary>Exposição consolidada por vencimento</summary>{% include "partials/expiration_summary.html" %}</details>

@@ -4,13 +4,14 @@
 {% block description %}Organize os códigos de calls e puts e as datas de exercício dos contratos.{% endblock %}
 {% block workspace_content %}
 <section class="catalog-card" id="catalog-results" hx-boost="true" hx-target="#catalog-results" hx-select="[data-sa-avisos], #catalog-results" hx-swap="outerHTML show:none" hx-push-url="false">
-  <h2>Registros cadastrados</h2>
+  <h2>Vencimentos cadastrados</h2>
   <details class="workspace-create"><summary>Adicionar vencimento</summary>
 <form class="catalog-create expiration-fields" method="post" action="{{ url_for('options.create_expiration') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Call<input required maxlength="5" name="call_code" placeholder="2027A"></label>
-    <label>Put<input required maxlength="5" name="put_code" placeholder="2027M"></label>
-    <label>Exercício<input required type="date" name="exercise_date"></label>
+    <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+    <label>Call <span class="required-mark" aria-hidden="true">*</span><input required maxlength="5" name="call_code" placeholder="2027A"></label>
+    <label>Put <span class="required-mark" aria-hidden="true">*</span><input required maxlength="5" name="put_code" placeholder="2027M"></label>
+    <label>Exercício <span class="required-mark" aria-hidden="true">*</span><input required type="date" name="exercise_date"></label>
     <button class="button button-primary" type="submit"
             data-sa-confirmar="Adicionar este vencimento?"
             data-sa-titulo="Adicionar vencimento" data-sa-severidade="warning">Adicionar</button>
@@ -32,12 +33,13 @@
           <td><input required type="date" name="exercise_date" value="{{ expiration.exercise_date.isoformat() }}" form="expiration-{{ expiration.id }}" aria-label="Exercício {{ expiration.call_code }}"></td>
           <td class="catalog-actions">
             <button class="button" type="submit" form="expiration-{{ expiration.id }}"
+                    aria-label="Salvar vencimento {{ expiration.call_code }}"
                     data-sa-confirmar="Salvar as alterações do vencimento {{ expiration.call_code }}?"
                     data-sa-titulo="Salvar vencimento" data-sa-severidade="warning">Salvar</button>
             <form method="post" action="{{ url_for('options.delete_expiration', expiration_id=expiration.id) }}"
                   data-sa-titulo="Excluir vencimento" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="button button-danger" type="submit"
+              <button class="button button-danger" type="submit" aria-label="Excluir vencimento {{ expiration.call_code }}"
                       data-sa-confirmar="Excluir o vencimento {{ expiration.call_code }}?"
                       data-sa-titulo="Excluir vencimento" data-sa-severidade="error">Excluir</button>
             </form>

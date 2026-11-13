@@ -9,7 +9,7 @@
   </span>
 {%- endmacro %}
 
-{% macro card(item, is_option=false) -%}
+{% macro card(item, is_option=false, nivel=3) -%}
 {% set p = item.position %}
 {% set m = item.metrics %}
 {% set currency = p.currency %}
@@ -21,7 +21,7 @@
   <header class="trade-card-heading">
     <span class="trade-avatar" aria-hidden="true">{{ (p.contract.underlying_ticker_ref.symbol if is_option else ticker)[:2] }}</span>
     <div class="trade-identity">
-      <h2><a href="{{ detail_url }}">{{ ticker }}</a></h2>
+      <h{{ nivel }}><a href="{{ detail_url }}">{{ ticker }}</a></h{{ nivel }}>
       <p>{{ p.broker }} · {{ p.portfolio_ref.name }}</p>
     </div>
     <span class="trade-badge">{{ 'Compra' if p.side.value == 'C' else 'Venda' }}{{ ' · ' ~ p.contract.option_type.value|upper if is_option }}</span>
@@ -51,13 +51,13 @@
   </div>
   <footer class="trade-card-footer">
     {{ quote_state(item) }}
-    <a href="{{ detail_url }}">Explorar trade <span aria-hidden="true">↗</span></a>
+    <a href="{{ detail_url }}" aria-label="Ver detalhes de {{ ticker }}">Ver detalhes <span aria-hidden="true">↗</span></a>
   </footer>
   {% if p.movements|length > 1 %}
   <div class="trade-movement-toggle">
     <button type="button" class="row-toggle trade-expand" hx-get="{{ expand_urls[p.id] }}"
             hx-target="{{ '#options-results' if is_option else '#portfolio-results' }}" hx-swap="outerHTML"
-            aria-expanded="{{ 'true' if p.id in expanded_positions else 'false' }}">
+            {% if p.id in expanded_positions %}aria-controls="trade-movements-{{ p.id }}" {% endif %}aria-expanded="{{ 'true' if p.id in expanded_positions else 'false' }}">
       {{ '−' if p.id in expanded_positions else '+' }} Movimentos ({{ p.movements|length }})
     </button>
   </div>
@@ -68,7 +68,7 @@
 {% macro movements(item, is_option=false) -%}
 {% set p = item.position %}
 {% if p.id in expanded_positions and p.movements|length > 1 %}
-<section class="trade-expanded-history" aria-label="Movimentos de {{ p.contract.ticker_ref.symbol if is_option else p.ticker }}">
+<section id="trade-movements-{{ p.id }}" class="trade-expanded-history" aria-label="Movimentos de {{ p.contract.ticker_ref.symbol if is_option else p.ticker }}">
   <h3>Movimentos · {{ p.contract.ticker_ref.symbol if is_option else p.ticker }}</h3>
   <div class="table-wrap">
     {% with position=p, movements=p.movements, movement_actions=not is_option %}

@@ -10,12 +10,13 @@
         hx-post="{{ url_for('users.create') }}" hx-target="#users-results" hx-swap="outerHTML"
         hx-confirm="Criar este usuário?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Usuário<input required maxlength="80" name="username" autocomplete="username"></label>
-    <label>Papel<select name="role" required>
-      {% for role in valid_roles %}<option value="{{ role }}">{{ role|capitalize }}</option>{% endfor %}
+    <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
+    <label>Usuário <span class="required-mark" aria-hidden="true">*</span><input required maxlength="80" name="username" autocomplete="username"></label>
+    <label>Papel <span class="required-mark" aria-hidden="true">*</span><select name="role" required>
+      {% for role in valid_roles %}<option value="{{ role }}">{{ role|role_label }}</option>{% endfor %}
     </select></label>
-    <label>Senha<input required minlength="10" type="password" name="password" autocomplete="new-password" aria-describedby="user-password-help"></label>
-    <label>Confirmar senha<input required minlength="10" type="password" name="password_confirmation" autocomplete="new-password" aria-describedby="user-password-help"></label>
+    <label>Senha <span class="required-mark" aria-hidden="true">*</span><input required minlength="10" type="password" name="password" autocomplete="new-password" aria-describedby="user-password-help"></label>
+    <label>Confirmar senha <span class="required-mark" aria-hidden="true">*</span><input required minlength="10" type="password" name="password_confirmation" autocomplete="new-password" aria-describedby="user-password-help"></label>
     <button class="button button-primary" type="submit">Criar</button>
     <p class="form-help user-create-password-help" id="user-password-help">Use ao menos 10 caracteres, que não sejam só números nem o nome de usuário, e repita a mesma senha na confirmação.</p>
   </form>

@@ -84,6 +84,33 @@ def formatar_dia_mes(valor: date | datetime | None, *, ausente: str = "") -> str
     return valor.strftime(_PADRAO_DIA_MES[_formato.get()])
 
 
+def formatar_mes_ano(valor: date | datetime | None, *, ausente: str = "") -> str:
+    """11/2026: mês e ano têm a mesma ordem no Brasil e nos EUA."""
+    if not valor:
+        return ausente
+    return valor.strftime("%m/%Y")
+
+
+NOMES_DOS_MESES: Final = (
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+)  # fmt: skip
+
+
+def nome_do_mes(valor: date | datetime | int | None, *, ausente: str = "") -> str:
+    """Nome do mês em português a partir de uma data ou do número 1-12.
+
+    Não depende do ``locale`` do processo (que no contêiner é o do C/inglês):
+    ``strftime('%B')`` devolveria "November".
+    """
+    if valor is None or isinstance(valor, bool):
+        return ausente
+    mes = valor if isinstance(valor, int) else valor.month
+    if not 1 <= mes <= 12:
+        return ausente
+    return NOMES_DOS_MESES[mes - 1]
+
+
 def formatar_dia_mes_ano2(valor: date | datetime | None, *, ausente: str = "") -> str:
     if not valor:
         return ausente

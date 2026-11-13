@@ -44,6 +44,7 @@
     {% endif %}
 
     <h3>Posições</h3>
+    {% if plano.retratos %}
     <table>
       <thead><tr><th>Data</th><th>Linhas</th><th>Da B3</th></tr></thead>
       <tbody>
@@ -52,6 +53,9 @@
         {% endfor %}
       </tbody>
     </table>
+    {% else %}
+    <p class="empty">O pacote não traz posições.</p>
+    {% endif %}
 
     <h3>Proventos × CRV</h3>
     {% if plano.proventos.inicio and plano.proventos.fim and plano.proventos.fim >= plano.proventos.inicio %}

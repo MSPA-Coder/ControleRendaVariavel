@@ -1,6 +1,6 @@
 {% if tx.status.value == 'open' %}
             {% set close_endpoint = 'options.close_position_form' if tx.option_contract_id else 'portfolio.close_position_form' %}
-            <a href="{{ url_for(close_endpoint, position_id=tx.source_position_id) }}">encerrar</a>
+            <a href="{{ url_for(close_endpoint, position_id=tx.source_position_id) }}" aria-label="encerrar {{ tx.ticker }}">encerrar</a>
           {% elif tx.id in partial_close_ids %}
             {# Encerramento parcial: os campos espelham um movimento da posição e
                não se editam soltos. Desfazer devolve a quantidade e apaga a linha. #}
@@ -8,7 +8,7 @@
                   action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
                   data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="link-button" type="submit"
+              <button class="link-button link-danger" type="submit" aria-label="desfazer encerramento parcial de {{ tx.ticker }}"
                       data-sa-confirmar="Desfazer este encerramento parcial? A quantidade volta para a posição e esta transação é apagada."
                       data-sa-titulo="Desfazer encerramento parcial" data-sa-severidade="error"
                       title="Desfaz esta transação e apaga o registro">desfazer</button>
@@ -19,20 +19,20 @@
                   action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
                   data-sa-titulo="Desfazer encerramento" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="link-button" type="submit"
+              <button class="link-button link-danger" type="submit" aria-label="desfazer encerramento de {{ tx.ticker }}"
                       data-sa-confirmar="Desfazer este encerramento? A posição e o extrato voltam para a Carteira, com a quantidade, o custo médio e as datas de antes, e esta transação volta a ser a linha aberta. O alvo volta ao padrão."
                       data-sa-titulo="Desfazer encerramento" data-sa-severidade="error"
                       title="Reabre a posição encerrada">desfazer</button>
             </form>
           {% elif tx.id in total_legacy_ids %}
             {# Encerramento total sem o arquivo do extrato: não há como reabrir. #}
-            {% if not tx.option_contract_id %}<a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>{% endif %}
+            {% if not tx.option_contract_id %}<a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}" aria-label="editar {{ tx.ticker }}">editar</a>{% endif %}
             <form class="inline-form" method="post"
                   action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
                   data-sa-titulo="Excluir encerramento" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="confirm_sem_extrato" value="1">
-              <button class="link-button" type="submit"
+              <button class="link-button link-danger" type="submit" aria-label="excluir encerramento de {{ tx.ticker }}"
                       data-sa-confirmar="O extrato deste encerramento não foi guardado: a posição NÃO será reaberta. Excluir a transação e tirar a posição do histórico de desempenho?"
                       data-sa-titulo="Excluir encerramento" data-sa-severidade="error">excluir</button>
             </form>
@@ -44,10 +44,10 @@
                   action="{{ url_for('portfolio.delete_transaction', transaction_id=tx.id) }}"
                   data-sa-titulo="Excluir transação" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="link-button" type="submit"
+              <button class="link-button link-danger" type="submit" aria-label="excluir transação de {{ tx.ticker }}"
                       data-sa-confirmar="Excluir esta transação?"
                       data-sa-titulo="Excluir transação" data-sa-severidade="error">excluir</button>
             </form>
           {% else %}
-            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}">editar</a>
+            <a href="{{ url_for('portfolio.edit_transaction', transaction_id=tx.id) }}" aria-label="editar {{ tx.ticker }}">editar</a>
           {% endif %}

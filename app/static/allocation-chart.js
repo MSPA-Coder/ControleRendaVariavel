@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  var PALETTE = ["#0a2a43", "#0f766e", "#2d8b9a", "#5aa6b5", "#9ccbd3", "#007f5f", "#51a77b", "#9bcdb0", "#d6a63b", "#bd6a45"];
+  var PALETTE = ["#0a2a43", "#0f766e", "#2d8b9a", "#5aa6b5", "#9ccbd3", "#007f5f", "#51a77b", "#9bcdb0", "#d6a63b", "#bd6a45",
+    "#7c3aed", "#be123c", "#1d4ed8", "#a16207", "#4d7c0f", "#c026d3"];
 
   function parseData(container, attr) {
     try { return JSON.parse(container.dataset[attr] || "[]"); } catch (_) { return []; }
@@ -10,8 +11,7 @@
     return (value * 100).toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { maximumFractionDigits: 1 }) + "%";
   }
   function formatCurrency(value, currency) {
-    var prefix = currency === "USD" ? "US$ " : "R$ ";
-    return prefix + Number(value).toLocaleString((window.regional ? window.regional.locale : "pt-BR"), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return window.regional.formatarMoeda(value, currency);
   }
   function render(container, chartType) {
     var labels = parseData(container, "labels");
@@ -19,17 +19,17 @@
     var values = parseData(container, "values").map(Number);
     var currency = container.dataset.currency || "BRL";
     if (!labels.length || !weights.some(function (weight) { return weight > 0; })) {
-      container.textContent = "Sem dados de alocacao para exibir.";
+      container.textContent = "Sem dados de alocação para exibir.";
       return;
     }
     if (typeof Chart === "undefined") {
-      container.textContent = "Biblioteca do grafico nao foi carregada.";
+      container.textContent = "Biblioteca do gráfico não foi carregada.";
       return;
     }
     container.replaceChildren();
     var canvas = document.createElement("canvas");
     canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Alocacao por ativo");
+    canvas.setAttribute("aria-label", container.getAttribute("aria-label") || "Alocação por ativo");
     container.appendChild(canvas);
     var ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#142b3c";
     new Chart(canvas.getContext("2d"), {

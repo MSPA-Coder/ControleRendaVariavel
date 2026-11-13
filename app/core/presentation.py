@@ -21,6 +21,11 @@ COLLECTOR_STATUS_LABELS = {
     "waiting": "Coletor aguardando leitura",
 }
 
+ROLE_LABELS = {
+    "admin": "Administrador",
+    "operador": "Operador",
+}
+
 POSITION_MOVEMENT_LABELS = {
     "open": "Abertura",
     "increase": "Aumento",
@@ -54,7 +59,11 @@ def _number(value: Decimal, decimals: int, trim: bool = False) -> str:
     alinhamento de casas decimais importa mais que a largura continuam sem
     ele.
     """
-    return regional.adaptar_numero(numero(value, casas=decimals, remover_decimal_zero=trim))
+    texto = numero(value, casas=decimals, remover_decimal_zero=trim)
+    if texto.startswith("-") and not any(c in "123456789" for c in texto):
+        # -0,00: o valor arredondou para zero e o sinal não diz mais nada.
+        texto = texto[1:]
+    return regional.adaptar_numero(texto)
 
 
 def register_filters(app: Flask) -> None:
@@ -165,6 +174,22 @@ def register_filters(app: Flask) -> None:
     def uday_month(value: date | datetime | None) -> str:
         """31/12 no Brasil, 12/31 nos EUA."""
         return regional.formatar_dia_mes(value)
+
+    @app.template_filter("umonth")
+    def umonth(value: date | datetime | None) -> str:
+        """12/2026 (mês/ano), igual no Brasil e nos EUA."""
+        return regional.formatar_mes_ano(value)
+
+    @app.template_filter("nome_do_mes")
+    def nome_do_mes(value: date | datetime | int | None) -> str:
+        """Nome do mês em português ("Novembro"), de uma data ou do número."""
+        return regional.nome_do_mes(value)
+
+    @app.template_filter("role_label")
+    def role_label(value: object) -> str:
+        """Rótulo do papel de usuário (``admin`` -> "Administrador")."""
+        texto = str(getattr(value, "value", value))
+        return ROLE_LABELS.get(texto, texto.capitalize())
 
     @app.template_filter("collector_status_label")
     def collector_status_label(status: str | None) -> str:

@@ -10,18 +10,11 @@
   }
 
   function formatShortDate(isoDate) {
-    var parts = isoDate.split("-");
-    if (parts.length !== 3) return isoDate;
-    var months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-    return parts[2] + "-" + months[parseInt(parts[1], 10) - 1] + "-" + parts[0].slice(2);
+    return window.regional.formatarDataCurta(isoDate);
   }
 
   function formatCurrencyBRL(value) {
-    return value.toLocaleString((window.regional ? window.regional.locale : "pt-BR"), {
-      style: "currency",
-      currency: "BRL",
-      maximumFractionDigits: 0,
-    });
+    return window.regional.formatarMoeda(value, "BRL", 0);
   }
 
   function renderExpirationChart() {
@@ -44,7 +37,8 @@
     container.appendChild(canvas);
 
     var style = getComputedStyle(document.documentElement);
-    var navy = style.getPropertyValue("--navy").trim() || "#0a2a43";
+    var navy = style.getPropertyValue("--accent").trim() || "#0b6e4f";
+    var secondary = style.getPropertyValue("--muted-2").trim() || "#8a968e";
     var line = style.getPropertyValue("--line").trim() || "#c9d8e2";
     var ink = style.getPropertyValue("--ink").trim() || "#142b3c";
 
@@ -61,7 +55,7 @@
           {
             label: "Desmontar (valor atual)",
             data: unwind,
-            backgroundColor: line,
+            backgroundColor: secondary,
           },
         ],
       },
