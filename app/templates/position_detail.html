@@ -8,9 +8,9 @@
 {% include "partials/stock_history_chart.html" %}
 {% endblock %}
 {% block risk %}
-<dl class="trade-data-grid">{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Distância até o alvo', m.distance_to_target|percent(2) if m else '—') }}{{ trades.metric('Breakeven', m.breakeven|percent(2) if m else '—') }}{{ trades.metric('Peso pelo valor atual', item.current_weight|percent(2)) }}{{ trades.metric('Peso pelo custo', item.cost_weight|percent(2)) }}</dl>
+<dl class="trade-data-grid">{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Distância até o alvo', m.distance_to_target|percent(2) if m else '—') }}{{ trades.metric('Distância ao ponto de equilíbrio', m.breakeven|percent(2) if m else '—') }}{{ trades.metric('Peso pelo valor atual', item.current_weight|percent(2)) }}{{ trades.metric('Peso pelo custo', item.cost_weight|percent(2)) }}</dl>
 <p class="trade-context-note">Os pesos desta página usam as posições da carteira {{ position.portfolio_ref.name }} na mesma moeda ({{ currency }}). A lista principal acompanha os filtros escolhidos.</p>
 {% endblock %}
 {% block all_data %}
-<h2>Metas e alocação</h2><dl class="trade-data-grid trade-data-complete">{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Distância até o alvo', m.distance_to_target|percent(2) if m else '—') }}{{ trades.metric('Breakeven', m.breakeven|percent(2) if m else '—') }}{{ trades.metric('Peso pelo valor atual', item.current_weight|percent(2)) }}{{ trades.metric('Peso pelo custo', item.cost_weight|percent(2)) }}{{ trades.metric('Dias em carteira', m.days|number(0) if m else '—') }}</dl>
+<h2>Metas e alocação</h2><dl class="trade-data-grid trade-data-complete">{{ trades.metric('Stop gain', m.stop_gain|currency(currency, trim=true) if m else '—') }}{{ trades.metric('Distância até o alvo', m.distance_to_target|percent(2) if m else '—') }}{{ trades.metric('Distância ao ponto de equilíbrio', m.breakeven|percent(2) if m else '—') }}{{ trades.metric('Peso pelo valor atual', item.current_weight|percent(2)) }}{{ trades.metric('Peso pelo custo', item.cost_weight|percent(2)) }}{{ trades.metric('Dias em carteira', m.days|number(0) if m else '—') }}</dl>
 {% endblock %}

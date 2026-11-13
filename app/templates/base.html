@@ -30,7 +30,7 @@
     'portfolio.transactions': ('Carteira', 'Transações'),
     'portfolio.dividends': ('Carteira', 'Proventos'),
     'portfolio.quote_history': ('Mercado', 'Cotações'),
-    'portfolio.data_status': ('Mercado', 'Status dos dados'),
+    'portfolio.data_status': ('Mercado', 'Situação dos dados'),
     'portfolio.risk_report': ('Análise', 'Risco'),
     'portfolio.monthly_performance': ('Análise', 'Performance'),
     'portfolio.exposure_asset': ('Análise', 'Alocação por Ativo'),
@@ -108,7 +108,7 @@
               <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.monthly_performance' }}" href="{{ url_for('portfolio.monthly_performance') }}">
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="12" width="3.4" height="8"/><rect x="10.3" y="7" width="3.4" height="13"/><rect x="16.6" y="3" width="3.4" height="17"/></svg></span>
                 <span class="t">Performance</span>
-                <span class="d">Resultado mensal frente ao benchmark.</span>
+                <span class="d">Resultado mensal frente ao índice de referência.</span>
               </a>
               <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.exposure_asset' }}" href="{{ url_for('portfolio.exposure_asset') }}">
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg></span>
@@ -142,7 +142,7 @@
               </a>
               <a class="mega-card {{ 'is-current' if request.endpoint == 'portfolio.data_status' }}" href="{{ url_for('portfolio.data_status') }}">
                 <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 7v5l3 2"/></svg></span>
-                <span class="t">Status dos dados</span>
+                <span class="t">Situação dos dados</span>
                 <span class="d">Cotações, lacunas e conversão da carteira.</span>
               </a>
             </div>

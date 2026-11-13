@@ -6,18 +6,17 @@
   <section class="catalog-card">
     <h2>Contas cadastradas</h2>
     <div class="table-wrap">
-      <table class="catalog-table">
-        <thead><tr><th>Usuário</th><th>Papel</th><th>Status</th><th>Atualizar conta</th><th>Redefinir senha</th><th>Ação</th></tr></thead>
+      <table class="catalog-table table-cards">
+        <thead><tr><th>Usuário</th><th>Papel</th><th>Situação</th><th>Atualizar conta</th><th>Redefinir senha</th><th>Ações</th></tr></thead>
         <tbody>
         {% for user in users %}
           <tr>
-            <td>{{ user.username }}</td>
-            <td>{{ user.role|role_label }}</td>
-            <td>{{ 'Ativo' if user.is_active_user else 'Desativado' }}</td>
-            <td>
+            <td class="cell-title" data-label="Usuário">{{ user.username }}</td>
+            <td data-label="Papel">{{ user.role|role_label }}</td>
+            <td data-label="Situação">{{ 'Ativo' if user.is_active_user else 'Desativado' }}</td>
+            <td class="cell-wide" data-label="Atualizar conta">
               <form method="post" action="{{ url_for('users.edit', user_id=user.id) }}"
-                    hx-post="{{ url_for('users.edit', user_id=user.id) }}" hx-target="#users-results" hx-swap="outerHTML"
-                    hx-confirm="Salvar as alterações deste usuário?">
+                    hx-post="{{ url_for('users.edit', user_id=user.id) }}" hx-target="#users-results" hx-swap="outerHTML">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input required maxlength="80" name="username" value="{{ user.username }}" aria-label="Usuário de {{ user.username }}">
                 <select name="role" aria-label="Papel de {{ user.username }}">
@@ -26,7 +25,7 @@
                 <button class="button" type="submit" aria-label="Salvar {{ user.username }}">Salvar</button>
               </form>
             </td>
-            <td>
+            <td class="cell-actions" data-label="Redefinir senha">
               <form method="post" action="{{ url_for('users.reset_user_password', user_id=user.id) }}"
                     hx-post="{{ url_for('users.reset_user_password', user_id=user.id) }}" hx-target="#users-results" hx-swap="outerHTML"
                     hx-confirm="Redefinir a senha deste usuário? O sistema vai gerar uma senha temporária, mostrada uma única vez.">
@@ -37,10 +36,10 @@
                 <button class="button" type="submit" aria-label="Redefinir senha de {{ user.username }}">Redefinir</button>
               </form>
             </td>
-            <td>
+            <td class="cell-actions" data-label="Ações">
               <form method="post" action="{{ url_for('users.change_active', user_id=user.id) }}"
                     hx-post="{{ url_for('users.change_active', user_id=user.id) }}" hx-target="#users-results" hx-swap="outerHTML"
-                    hx-confirm="{{ 'Ativar este usuário?' if not user.is_active_user else 'Desativar este usuário?' }}">
+                    {% if user.is_active_user %}hx-confirm="Desativar este usuário?"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="active" value="{{ '1' if not user.is_active_user else '0' }}">
                 <button class="button {{ 'button-primary' if not user.is_active_user else 'button-danger' }}" type="submit"
@@ -51,7 +50,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="6">Nenhum usuário cadastrado. Crie o primeiro administrador pela CLI.</td></tr>
+          <tr><td colspan="6" class="empty">Nenhum usuário cadastrado. O primeiro administrador é criado pelo administrador do sistema.</td></tr>
         {% endfor %}
         </tbody>
       </table>

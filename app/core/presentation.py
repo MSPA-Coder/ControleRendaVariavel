@@ -26,6 +26,14 @@ ROLE_LABELS = {
     "operador": "Operador",
 }
 
+MONEYNESS_LABELS = {
+    "ITM": "Dentro do dinheiro",
+    "ATM": "No dinheiro",
+    "OTM": "Fora do dinheiro",
+}
+"""Rótulos da classificação de ``app.options.greeks.classify_moneyness``. A
+sigla continua sendo o valor calculado e gravado em memória; só a tela troca."""
+
 POSITION_MOVEMENT_LABELS = {
     "open": "Abertura",
     "increase": "Aumento",
@@ -66,6 +74,18 @@ def _number(value: Decimal, decimals: int, trim: bool = False) -> str:
     return regional.adaptar_numero(texto)
 
 
+def _moeda(prefixo: str, value: Decimal, decimals: int, trim: bool = False) -> str:
+    """Símbolo e valor, com o sinal antes do símbolo: ``-R$ 343,20``.
+
+    ``_number`` devolve o sinal colado ao número; sem este ajuste a tela
+    mostraria ``R$ -343,20``, que não é como se escreve dinheiro negativo.
+    """
+    texto = _number(value, decimals, trim)
+    if texto.startswith(("-", "+")):
+        return f"{texto[0]}{prefixo} {texto[1:]}"
+    return f"{prefixo} {texto}"
+
+
 def register_filters(app: Flask) -> None:
     @app.template_filter("privacy_text")
     def privacy_text(value: str) -> str:
@@ -73,7 +93,7 @@ def register_filters(app: Flask) -> None:
 
     @app.template_filter("money")
     def money(value: Decimal | None) -> str:
-        return "-" if value is None else mask_value(f"R$ {_number(value, 2)}")
+        return "-" if value is None else mask_value(_moeda("R$", value, 2))
 
     @app.template_filter("currency")
     def currency(
@@ -82,7 +102,7 @@ def register_filters(app: Flask) -> None:
         if value is None:
             return "-"
         prefix = "R$" if code == "BRL" else "US$"
-        return mask_value(f"{prefix} {_number(value, decimals, trim)}")
+        return mask_value(_moeda(prefix, value, decimals, trim))
 
     @app.template_filter("currency_symbol")
     def currency_symbol(code: str) -> str:
@@ -140,6 +160,11 @@ def register_filters(app: Flask) -> None:
         return INSTRUMENT_STATUS_DESCRIPTIONS.get(
             status or "", "Estado de negociação não informado pelo RTD"
         )
+
+    @app.template_filter("moneyness_label")
+    def moneyness_label(value: str | None) -> str:
+        """Nome por extenso de ITM/ATM/OTM (``Indisponível`` fica como veio)."""
+        return MONEYNESS_LABELS.get(value or "", value or "")
 
     @app.template_filter("movement_label")
     def movement_label(kind: str) -> str:

@@ -5,9 +5,9 @@
 {% import "partials/trade_cards.html" as trades with context %}
 <p class="trade-context-note">Para posições vendidas, o app não desconta o repasse de proventos ao doador nem encargos do aluguel. Os indicadores ficam incompletos e não substituem a apuração oficial integrada à B3 e à contabilidade.</p>
 {% if portfolio_drawdowns %}
-<section class="summary" aria-label="Drawdown máximo por carteira">
+<section class="summary" aria-label="Queda máxima por carteira">
   {% for drawdown in portfolio_drawdowns %}
-  <article><span>Máx. drawdown da carteira · {{ drawdown.currency }}</span><strong class="negative" data-sensitive-value="true">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '—' }}</strong><small>Aproximação: posições atuais constantes no histórico simulado.{{ ' Amostra insuficiente.' if not drawdown.has_enough_observations }}</small></article>
+  <article><span>Queda máxima da carteira · {{ drawdown.currency }}</span><strong class="negative" data-sensitive-value="true">{{ drawdown.max_drawdown|percent(2) if drawdown.max_drawdown is not none else '—' }}</strong><small>Aproximação: posições atuais constantes no histórico simulado.{{ ' Amostra insuficiente.' if not drawdown.has_enough_observations }}</small></article>
   {% endfor %}
 </section>
 {% endif %}
@@ -20,7 +20,7 @@
     <div class="workspace-income-total"><span class="trade-label">Volatilidade anualizada</span><strong data-sensitive-value="true">{{ metrics.volatility_annualized|percent(2) if metrics.volatility_annualized is not none else '—' }}</strong></div>
     <dl class="trade-card-metrics">
       {{ trades.metric('Retorno anualizado', metrics.annualized_return|percent(2) if metrics.annualized_return is not none else '—', metrics.annualized_return|sign_class) }}
-      {{ trades.metric('Máx. drawdown', metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '—', 'negative') }}
+      {{ trades.metric('Queda máxima', metrics.max_drawdown|percent(2) if metrics.max_drawdown is not none else '—', 'negative') }}
     </dl>
     <details class="workspace-disclosure"><summary>Sharpe, Sortino, VaR e Beta</summary>
       <dl class="trade-data-grid">

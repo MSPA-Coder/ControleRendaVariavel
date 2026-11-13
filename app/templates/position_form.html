@@ -76,8 +76,7 @@
     {% endif %}
     <a class="button" href="{{ voltar_ou(url_for('portfolio.index')) }}">Cancelar</a>
     <button class="button button-primary" type="submit" {{ 'disabled' if stale_edit else '' }}
-            data-sa-confirmar="Salvar as alterações desta posição?"
-            data-sa-titulo="Salvar posição" data-sa-severidade="warning">
+            {% if editing %}data-sa-confirmar="Salvar as alterações desta posição? Se ela já tem aportes ou encerramentos no extrato, a diferença de quantidade ou de custo médio entra como um movimento de ajuste; mudar a data inicial também muda a abertura no extrato." data-sa-titulo="Salvar posição" data-sa-severidade="warning"{% endif %}>
       {{ "Confirmar mesmo assim" if duplicate_warning or prior_opening_warning else "Salvar" }}
     </button>
   </div>

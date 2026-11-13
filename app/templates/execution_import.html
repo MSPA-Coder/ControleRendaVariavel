@@ -6,12 +6,12 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <p class="form-help">Selecione o relatório <strong>Histórico de investimentos</strong> do myProfit em XLSX (até 2 MB). O nome e o CPF do cabeçalho são descartados e nunca gravados. Esta importação não altera posições, transações nem proventos: ela só registra os negócios para a conferência com o CB.</p>
-  <p class="form-help">O padrão é o <strong>ensaio</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”.</p>
+  <p class="form-help">O padrão é a <strong>simulação</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”.</p>
   <label>Relatório XLSX<input required type="file" name="report" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
   {% if plan %}<input type="hidden" name="expected_sha256" value="{{ plan.report.sha256 }}">{% endif %}
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Conferência</a>
-    <button class="button" type="submit" name="action" value="ensaio">Ensaiar</button>
+    <button class="button" type="submit" name="action" value="ensaio">Simular</button>
     {% if plan and plan.can_write %}
     <button class="button button-primary" type="submit" name="action" value="gravar">Gravar {{ plan.new_rows|length }} nova(s) e {{ plan.changed|length }} alterada(s)</button>
     {% endif %}
@@ -19,9 +19,9 @@
 </form>
 
 {% if plan %}
-<section class="exposure" aria-label="Resultado do ensaio">
+<section class="exposure" aria-label="Resultado da simulação">
   <div class="exposure-table">
-    <h2>Ensaio: período {{ plan.report.period_start|ushort }} a {{ plan.report.period_end|ushort }}</h2>
+    <h2>Simulação: período {{ plan.report.period_start|ushort }} a {{ plan.report.period_end|ushort }}</h2>
     <table>
       <tbody>
         <tr><th>Linhas lidas</th><td class="number">{{ plan.report.rows|length }}</td></tr>

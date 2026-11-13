@@ -265,9 +265,12 @@ def test_corretora_sem_negocio_no_recorte_nao_gera_aviso():
     assert link_warnings({"Genial"}, INSTITUICOES, frozenset({"genial"}), category_found=True) == []
 
 
-def test_corretora_fora_da_correspondencia_e_categoria_sumida_sao_avisadas():
-    avisos = link_warnings({"Clear"}, INSTITUICOES, frozenset({"genial"}), category_found=False)
+def test_corretora_fora_da_correspondencia_e_categoria_sumida_sao_avisadas(caplog):
+    with caplog.at_level("WARNING", logger="app.executions.conferencia"):
+        avisos = link_warnings({"Clear"}, INSTITUICOES, frozenset({"genial"}), category_found=False)
 
     assert "Operações em Bolsa" in avisos[0]
     assert "corretora Clear" in avisos[1]
-    assert "CB_CORRESPONDENCIA_CONTAS" in avisos[1]
+    assert "CB_CORRESPONDENCIA_CONTAS" not in avisos[1]
+    assert "não tem instituição correspondente cadastrada" in avisos[1]
+    assert "CB_CORRESPONDENCIA_CONTAS" in caplog.text

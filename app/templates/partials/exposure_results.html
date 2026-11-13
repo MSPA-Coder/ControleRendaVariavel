@@ -14,17 +14,17 @@
 {% if group_rows %}
 <details class="trade-secondary"><summary>Detalhamento por {{ group_heading|lower }}</summary>
 <div class="exposure-table">
-  <table>
+  <table class="table-cards">
     <thead>
       <tr><th>{{ group_heading }}</th><th>Moeda</th><th>Valor bruto</th><th>%</th></tr>
     </thead>
     <tbody>
       {% for row in group_rows %}
       <tr>
-        <td>{{ row.label }}</td>
-        <td>{{ row.currency }}</td>
-        <td class="number" data-sensitive-value="true">{{ row.current_total|currency(row.currency) }}</td>
-        <td class="number" data-sensitive-value="true">{{ row.current_weight|percent }}</td>
+        <td class="cell-title" data-label="{{ group_heading }}">{{ row.label }}</td>
+        <td data-label="Moeda">{{ row.currency }}</td>
+        <td class="number" data-label="Valor bruto" data-sensitive-value="true">{{ row.current_total|currency(row.currency) }}</td>
+        <td class="number" data-label="%" data-sensitive-value="true">{{ row.current_weight|percent }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -36,16 +36,16 @@
 {% if missing_quote_rows %}
 <section class="exposure-table" aria-label="Posições aguardando cotação">
   <h2>Posições sem cotação atual</h2>
-  <table>
+  <table class="table-cards">
     <thead>
       <tr><th>Ativo</th><th>Corretora</th><th>Mercado</th><th>Carteira</th><th>Moeda</th><th>Situação</th></tr>
     </thead>
     <tbody>
       {% for row in missing_quote_rows %}
       <tr>
-        <td>{{ row.ticker }}</td><td>{{ row.broker }}</td><td>{{ row.market }}</td>
-        <td>{{ row.portfolio }}</td><td>{{ row.currency }}</td>
-        <td class="missing">Aguardando primeira cotação RTD</td>
+        <td class="cell-title" data-label="Ativo">{{ row.ticker }}</td><td data-label="Corretora">{{ row.broker }}</td><td data-label="Mercado">{{ row.market }}</td>
+        <td data-label="Carteira">{{ row.portfolio }}</td><td data-label="Moeda">{{ row.currency }}</td>
+        <td class="missing" data-label="Situação">Aguardando primeira cotação RTD</td>
       </tr>
       {% endfor %}
     </tbody>

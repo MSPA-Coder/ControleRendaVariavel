@@ -11,30 +11,26 @@
     <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
     <label>Nome <span class="required-mark" aria-hidden="true">*</span><input required maxlength="40" name="name"></label>
     <label>Sigla <span class="required-mark" aria-hidden="true">*</span><input required maxlength="40" name="acronym"></label>
-    <button class="button button-primary" type="submit"
-            data-sa-confirmar="Adicionar esta corretora?"
-            data-sa-titulo="Adicionar corretora" data-sa-severidade="warning">Adicionar</button>
+    <button class="button button-primary" type="submit">Adicionar</button>
   </form>
 </details>
   <div class="table-wrap">
-    <table class="catalog-table">
+    <table class="catalog-table table-cards">
       <thead><tr><th>Nome</th><th>Sigla</th><th>Estado</th><th>Ações</th></tr></thead>
       <tbody>
       {% for broker in brokers %}
         <tr>
-          <td>
+          <td data-label="Nome">
             <form id="broker-{{ broker.id }}" method="post" action="{{ url_for('portfolio.update_broker', broker_id=broker.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input required maxlength="40" name="name" value="{{ broker.name }}" aria-label="Nome da corretora {{ broker.name }}" {{ 'disabled' if not broker.is_active }}>
             </form>
           </td>
-          <td><input required maxlength="40" name="acronym" value="{{ broker.acronym }}" form="broker-{{ broker.id }}" aria-label="Sigla da corretora {{ broker.name }}" {{ 'disabled' if not broker.is_active }}></td>
-          <td>{{ 'Ativa' if broker.is_active else 'Arquivada' }}</td>
-          <td class="catalog-actions">
+          <td data-label="Sigla"><input required maxlength="40" name="acronym" value="{{ broker.acronym }}" form="broker-{{ broker.id }}" aria-label="Sigla da corretora {{ broker.name }}" {{ 'disabled' if not broker.is_active }}></td>
+          <td data-label="Estado">{{ 'Ativa' if broker.is_active else 'Arquivada' }}</td>
+          <td class="catalog-actions cell-actions" data-label="Ações">
             <button class="button" type="submit" form="broker-{{ broker.id }}" {{ 'disabled' if not broker.is_active }}
-                    aria-label="Salvar corretora {{ broker.name }}"
-                    data-sa-confirmar="Salvar as alterações da corretora {{ broker.name }}?"
-                    data-sa-titulo="Salvar corretora" data-sa-severidade="warning">Salvar</button>
+                    aria-label="Salvar corretora {{ broker.name }}">Salvar</button>
             {% if broker.is_active %}<form method="post" action="{{ url_for('portfolio.delete_broker', broker_id=broker.id) }}"
                   data-sa-titulo="Remover corretora" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

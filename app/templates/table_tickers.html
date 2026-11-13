@@ -15,7 +15,7 @@
       {% for market in markets %}<option value="{{ market.value }}">{{ market.value }}</option>{% endfor %}
     </select></label>
     <label>Código RTD<select name="rtd_market_code">
-      {% for code, rotulo in [('B', 'B'), ('Y', 'Y'), ('N', 'N')] %}<option value="{{ code }}">{{ rotulo }}</option>{% endfor %}
+      {% for code, rotulo in [('B', 'B3 (B)'), ('Y', 'NYSE (Y)'), ('N', 'Nasdaq (N)')] %}<option value="{{ code }}">{{ rotulo }}</option>{% endfor %}
     </select></label>
     <label>Moeda<select name="currency">
       {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}">{{ currency }}</option>{% endfor %}
@@ -23,11 +23,9 @@
     <label>Fator de cotação<input type="number" min="1" max="1000" step="1" name="quote_factor" value="1"></label>
     <label class="ticker-benchmark-field">
       <input type="checkbox" name="is_benchmark" value="1">
-      Referência (benchmark)
+      Referência de comparação
     </label>
-    <button class="button button-primary" type="submit"
-            data-sa-confirmar="Adicionar este ticker?"
-            data-sa-titulo="Adicionar ticker" data-sa-severidade="warning">Adicionar</button>
+    <button class="button button-primary" type="submit">Adicionar</button>
   </form>
 </details>
   <p class="form-help">
@@ -41,44 +39,43 @@
     O fator de cotação é quantas unidades o preço da bolsa representa: 1 na
     maioria dos ativos, 100 quando a B3 cota por lote de 100 (RAIZ55). O CRV
     guarda tudo por unidade e divide por ele a cotação que chega do RTD e do
-    Yahoo; quantidades e custos continuam por unidade. A troca de código feita
-    pela bolsa não se faz aqui, e sim com <code>flask trocar-codigo</code>, que
-    guarda o código anterior.
+    Yahoo; quantidades e custos continuam por unidade. A troca de código de um
+    ticker com histórico, feita pela bolsa, não se faz nesta tela: é feita pelo
+    administrador do sistema, com o comando <code>flask trocar-codigo</code>,
+    que guarda o código anterior.
   </p>
   <div class="table-wrap">
-    <table class="catalog-table ticker-table">
+    <table class="catalog-table ticker-table table-cards">
       <thead><tr><th>Ticker</th><th>Nome de pregão</th><th>Mercado</th><th>Código RTD</th><th>Moeda</th><th>Fator</th><th>Referência</th><th>Estado</th><th>Ações</th></tr></thead>
       <tbody>
       {% for ticker in tickers %}
         <tr>
-          <td>
+          <td data-label="Ticker">
             <form id="ticker-{{ ticker.id }}" method="post" action="{{ url_for('portfolio.update_ticker', ticker_id=ticker.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input required maxlength="24" name="symbol" value="{{ ticker.symbol }}" aria-label="Ticker {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
             </form>
             {% if former_symbols.get(ticker.id) %}<small class="form-help">antes: {{ former_symbols[ticker.id] | join(', ') }}</small>{% endif %}
           </td>
-          <td><input required maxlength="80" name="trading_name" value="{{ ticker.trading_name }}" form="ticker-{{ ticker.id }}" aria-label="Nome de pregão {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}></td>
-          <td><select name="market" form="ticker-{{ ticker.id }}" aria-label="Mercado de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
+          <td data-label="Nome de pregão"><input required maxlength="80" name="trading_name" value="{{ ticker.trading_name }}" form="ticker-{{ ticker.id }}" aria-label="Nome de pregão {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}></td>
+          <td data-label="Mercado"><select name="market" form="ticker-{{ ticker.id }}" aria-label="Mercado de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
             {% for market in markets %}<option value="{{ market.value }}" {{ 'selected' if ticker.market == market }}>{{ market.value }}</option>{% endfor %}
           </select></td>
-          <td><select name="rtd_market_code" form="ticker-{{ ticker.id }}" aria-label="Código RTD de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
-            {% for code, rotulo in [('B', 'B'), ('Y', 'Y'), ('N', 'N')] %}<option value="{{ code }}" {{ 'selected' if ticker.rtd_market_code == code }}>{{ rotulo }}</option>{% endfor %}
+          <td data-label="Código RTD"><select name="rtd_market_code" form="ticker-{{ ticker.id }}" aria-label="Código RTD de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
+            {% for code, rotulo in [('B', 'B3 (B)'), ('Y', 'NYSE (Y)'), ('N', 'Nasdaq (N)')] %}<option value="{{ code }}" {{ 'selected' if ticker.rtd_market_code == code }}>{{ rotulo }}</option>{% endfor %}
           </select></td>
-          <td><select name="currency" form="ticker-{{ ticker.id }}" aria-label="Moeda de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
+          <td data-label="Moeda"><select name="currency" form="ticker-{{ ticker.id }}" aria-label="Moeda de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}>
             {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if ticker.currency == currency }}>{{ currency }}</option>{% endfor %}
           </select></td>
-          <td><input class="ticker-factor-input" type="number" min="1" max="1000" step="1" name="quote_factor" value="{{ ticker.quote_factor }}" form="ticker-{{ ticker.id }}" aria-label="Fator de cotação de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}></td>
-          <td class="ticker-benchmark-cell">
+          <td data-label="Fator"><input class="ticker-factor-input" type="number" min="1" max="1000" step="1" name="quote_factor" value="{{ ticker.quote_factor }}" form="ticker-{{ ticker.id }}" aria-label="Fator de cotação de {{ ticker.symbol }}" {{ 'disabled' if not ticker.is_active }}></td>
+          <td class="ticker-benchmark-cell" data-label="Referência">
             <input type="checkbox" name="is_benchmark" value="1" form="ticker-{{ ticker.id }}" {{ 'disabled' if not ticker.is_active }}
                    aria-label="{{ ticker.symbol }} é referência de comparação" {{ 'checked' if ticker.is_benchmark }}>
           </td>
-          <td>{{ 'Ativo' if ticker.is_active else 'Arquivado' }}</td>
-          <td class="catalog-actions">
+          <td data-label="Estado">{{ 'Ativo' if ticker.is_active else 'Arquivado' }}</td>
+          <td class="catalog-actions cell-actions" data-label="Ações">
             <button class="button" type="submit" form="ticker-{{ ticker.id }}" {{ 'disabled' if not ticker.is_active }}
-                    aria-label="Salvar ticker {{ ticker.symbol }}"
-                    data-sa-confirmar="Salvar as alterações do ticker {{ ticker.symbol }}?"
-                    data-sa-titulo="Salvar ticker" data-sa-severidade="warning">Salvar</button>
+                    aria-label="Salvar ticker {{ ticker.symbol }}">Salvar</button>
             {% if ticker.is_active %}<form method="post" action="{{ url_for('portfolio.delete_ticker', ticker_id=ticker.id) }}"
                   data-sa-titulo="Remover ticker" data-sa-severidade="error">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

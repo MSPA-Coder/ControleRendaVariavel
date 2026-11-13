@@ -36,9 +36,7 @@
   <label>Cotas<input type="number" min="0" step="any" name="quotas" value="{{ value.quotas if value and value.quotas is not none else '' }}" data-sensitive-input="true"></label>
   <div class="form-actions">
     <a class="button" href="{{ voltar_ou(url_for('portfolio.dividends')) }}">Cancelar</a>
-    <button class="button button-primary" type="submit"
-            data-sa-confirmar="Salvar este provento?"
-            data-sa-titulo="Salvar provento" data-sa-severidade="warning">Salvar</button>
+    <button class="button button-primary" type="submit">Salvar</button>
   </div>
 </form>
 {% if editing %}

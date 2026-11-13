@@ -1,8 +1,8 @@
 <header class="trade-heading">
   <div>
-    <p class="trade-eyebrow">Carteira / {{ 'Opções' if is_option else 'Ações' }}</p>
-    <h1>{{ 'Cada contrato, no seu tempo.' if is_option else 'Sua carteira, em perspectiva.' }}</h1>
-    <p class="trade-description">{{ 'Acompanhe resultado, prazo e exposição. Abra o contrato para explorar os detalhes.' if is_option else 'O essencial de cada posição, com histórico, metas e indicadores ao seu alcance.' }}</p>
+    <p class="trade-eyebrow">Carteira</p>
+    <h1>{{ 'Opções' if is_option else 'Ações' }}</h1>
+    <p class="trade-description">{{ 'Cada contrato, no seu tempo.' if is_option else 'Sua carteira, em perspectiva.' }} {{ 'Acompanhe resultado, prazo e exposição. Abra o contrato para explorar os detalhes.' if is_option else 'O essencial de cada posição, com histórico, metas e indicadores ao seu alcance.' }}</p>
   </div>
   <div class="trade-heading-actions">
     <nav class="trade-switch" aria-label="Tipo de posição">

@@ -8,7 +8,7 @@
       hx-target="#transactions-results"
       hx-swap="outerHTML"
       hx-replace-url="true">
-  <label>Status
+  <label>Situação
     <select name="status">
       <option value="all" {{ 'selected' if selected_status == 'all' }}>Todas</option>
       {% for status in transaction_statuses %}

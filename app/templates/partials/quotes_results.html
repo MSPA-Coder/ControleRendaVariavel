@@ -38,13 +38,13 @@
           <option value="line">Linhas</option>
           <option value="bar">Colunas</option>
         </select>
-        <label for="quote-zoom">Zoom</label>
+        <label for="quote-zoom">Janela</label>
         <select id="quote-zoom" data-quote-chart-zoom>
           <option value="1m">1 mês</option>
           <option value="3m">3 meses</option>
           <option value="6m" selected>6 meses</option>
           <option value="1y">1 ano</option>
-          <option value="ytd">YTD</option>
+          <option value="ytd">No ano</option>
           <option value="all">Todo o período</option>
         </select>
         {% if benchmark_candidates %}
@@ -189,7 +189,7 @@
           <button class="button button-primary" type="submit"
                   hx-post="{{ url_for('portfolio.create_quote_history_entry') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this" hx-confirm="Incluir ou alterar a cotação desta data?">Incluir / alterar cotação</button>
+                  hx-disabled-elt="this">Incluir / alterar cotação</button>
           <button class="button button-danger" type="submit"
                   formaction="{{ url_for('portfolio.delete_quote_history_by_date') }}" formnovalidate
                   hx-post="{{ url_for('portfolio.delete_quote_history_by_date') }}"

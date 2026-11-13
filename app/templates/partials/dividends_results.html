@@ -15,14 +15,14 @@
 </details>
 {% endif %}
 {% if report.by_ticker %}
-<div class="workspace-section-heading"><h2>Recebimentos por ativo</h2><p>Do total recebido aos eventos individuais. DY e YOC consideram os últimos 12 meses.</p></div>
+<div class="workspace-section-heading"><h2>Recebimentos por ativo</h2><p>Do total recebido aos eventos individuais. O rendimento (DY) e o rendimento sobre o custo (YOC) consideram os últimos 12 meses.</p></div>
 <section class="trade-card-grid" aria-label="Proventos por ativo">
   {% for total in report.by_ticker %}
   {% set expanded = total.ticker_id in expanded_tickers %}
   <article class="trade-card workspace-dividend-card">
     <header><span class="trade-avatar" aria-hidden="true">{{ total.ticker[:2] }}</span><div><h3>{{ total.ticker }}</h3><p>{{ total.currency }} · {{ total.entries|length }} recebimento(s)</p></div></header>
     <div class="workspace-income-total"><span class="trade-label">Total recebido</span><strong class="positive" data-sensitive-value="true">{{ total.total_amount|currency(total.currency) }}</strong></div>
-    <dl class="trade-card-metrics">{{ trades.metric('DY 12m', total.dividend_yield_12m|percent(2) if total.dividend_yield_12m is not none else '—') }}{{ trades.metric('YOC 12m', total.yield_on_cost_current|percent(2) if total.yield_on_cost_current is not none else '—') }}</dl>
+    <dl class="trade-card-metrics">{{ trades.metric('Rendimento 12m (DY)', total.dividend_yield_12m|percent(2) if total.dividend_yield_12m is not none else '—') }}{{ trades.metric('Rendimento sobre o custo 12m (YOC)', total.yield_on_cost_current|percent(2) if total.yield_on_cost_current is not none else '—') }}</dl>
     <details class="workspace-disclosure"><summary>Composição por tipo</summary><dl class="trade-data-grid">
       {% for kind in income_kinds %}{% set received = total.amount_by_kind.get(kind.value) %}{{ trades.metric(kind|income_kind_label, received|currency(total.currency) if received is not none else '—') }}{% endfor %}
     </dl></details>

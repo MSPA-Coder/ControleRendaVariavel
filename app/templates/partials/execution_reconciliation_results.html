@@ -3,7 +3,7 @@
 <div id="execution-reconciliation">
 {% if result.cb_status == 'nao_configurado' %}
 <p class="trade-context-note" role="status"><strong>CB não configurado.</strong> Os pregões abaixo mostram somente os negócios importados no CRV, sem comparação com a liquidação.</p>
-<details class="trade-secondary"><summary>Como habilitar a comparação</summary><p class="workspace-note">Configure a integração com o Controle Bancário: <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p></details>
+<details class="trade-secondary"><summary>Como habilitar a comparação</summary><p class="workspace-note">A integração com o Controle Bancário não está configurada neste ambiente. Peça ao administrador para configurá-la.{% if current_user.is_admin %} <small>Detalhe técnico: <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</small>{% endif %}</p></details>
 {% elif result.cb_status == 'indisponivel' %}
 <p class="trade-context-note" role="alert"><strong>CB indisponível:</strong> {{ result.cb_message }} Os pregões abaixo mostram somente o que o CRV importou, sem comparação.</p>
 {% endif %}
@@ -53,15 +53,15 @@
   <h2>Carteira do extrato × posição do CRV · {{ divergent|length }} diferença(s) em {{ result.holdings|length }}</h2>
   <p class="workspace-note">A carteira de ações que o extrato mensal da corretora imprime, guardada no CB, contra a quantidade do CRV no último pregão que o extrato já liquidou.</p>
   <div class="table-wrap">
-    <table>
+    <table class="table-cards">
       <thead><tr><th>Extrato</th><th>Corretora</th><th>Ativo</th><th class="number">Extrato</th><th class="number">CRV</th><th>Posição em</th><th>Situação</th></tr></thead>
       <tbody>
         {% for row in result.holdings %}
         <tr>
-          <td>{{ row.statement_date|udate }}</td><td>{{ row.broker }}</td><td>{{ row.instrument }}</td>
-          <td class="number">{{ row.statement_quantity|quantity }}</td><td class="number">{{ row.crv_quantity|quantity }}</td>
-          <td>{{ row.position_date|udate }}</td>
-          <td><span class="workspace-status {{ 'workspace-status-warning' if not row.matches }}">{{ 'Confere' if row.matches else 'Diferença' }}</span></td>
+          <td data-label="Data do extrato">{{ row.statement_date|udate }}</td><td data-label="Corretora">{{ row.broker }}</td><td class="cell-title" data-label="Ativo">{{ row.instrument }}</td>
+          <td class="number" data-label="Quantidade no extrato">{{ row.statement_quantity|quantity }}</td><td class="number" data-label="Quantidade no CRV">{{ row.crv_quantity|quantity }}</td>
+          <td data-label="Posição em">{{ row.position_date|udate }}</td>
+          <td data-label="Situação"><span class="workspace-status {{ 'workspace-status-warning' if not row.matches }}">{{ 'Confere' if row.matches else 'Diferença' }}</span></td>
         </tr>
         {% endfor %}
       </tbody>

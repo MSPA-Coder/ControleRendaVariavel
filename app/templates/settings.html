@@ -18,18 +18,16 @@
       </div>
     {% else %}
       <p class="form-help">A coleta local é independente do VPS e só funciona quando iniciada no Windows. Ao parar, o processo é encerrado.</p>
-      <p class="form-help">Use os atalhos de coleta local ou <code>scripts/rtd-local.ps1 -Action Start</code> e <code>-Action Stop</code> no Windows. Salvar esta tela não inicia o coletor.</p>
+      <p class="form-help">Para iniciar ou parar a coleta local no Windows, use os atalhos de coleta ou, pelo terminal, o script <code>scripts/rtd-local.ps1</code> com <code>-Action Start</code> ou <code>-Action Stop</code>. Salvar esta tela não inicia o coletor.</p>
     {% endif %}
     <div class="form-actions">
       <button class="button button-primary" type="submit"
-              formaction="{{ url_for('portfolio.request_collector_refresh') }}"
-              data-sa-confirmar="Solicitar uma atualização das cotações agora?"
-              data-sa-titulo="Atualizar cotações" data-sa-severidade="warning">Atualizar cotações agora</button>
+              formaction="{{ url_for('portfolio.request_collector_refresh') }}">Atualizar cotações agora</button>
     </div>
     {% if not remote_collector_enabled %}
       <p class="form-help">A atualização será atendida se o coletor local estiver em execução, dentro da agenda.</p>
     {% endif %}
-    <p class="form-help">O coletor lê o RTD direto do servidor COM do ProfitPro (<code>IRtdServer</code>), sem abrir o Excel. Exige o ProfitChart aberto nesta máquina.</p>
+    <p class="form-help">O coletor lê as cotações direto do ProfitPro (servidor COM <code>IRtdServer</code>), sem abrir o Excel. Exige o ProfitChart aberto nesta máquina.</p>
     <div class="collector-settings-details">
       <div class="collector-field">
         <label>Intervalo entre leituras (segundos) <span class="required-mark" aria-hidden="true">*</span>
@@ -123,9 +121,7 @@
 
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.index') }}">Cancelar</a>
-    <button class="button button-primary" type="submit"
-            data-sa-confirmar="Salvar estas configurações?"
-            data-sa-titulo="Salvar configurações" data-sa-severidade="warning">Salvar configurações</button>
+    <button class="button button-primary" type="submit">Salvar configurações</button>
   </div>
 </form>
 {% endblock %}

@@ -26,11 +26,11 @@
   </article>
 {% endfor %}
 {% if portfolio.moneyness_totals %}
-  <article class="currency-card" aria-label="Distribuição por moneyness">
+  <article class="currency-card" aria-label="Distribuição entre dentro, no e fora do dinheiro">
     <div class="currency-card-grid">
       {% for total in portfolio.moneyness_totals %}
       <article>
-        <span>{{ total.moneyness }} · {{ total.count }} posição(ões)</span>
+        <span>{{ total.moneyness|moneyness_label }} · {{ total.count }} posição(ões)</span>
         <strong data-sensitive-value="true">{{ total.pct|percent }}</strong>
       </article>
       {% endfor %}

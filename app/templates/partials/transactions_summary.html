@@ -7,9 +7,9 @@
 </section>
 <details class="trade-secondary"><summary>Indicadores das operações encerradas · {{ summary.currency }}</summary>
   <dl class="trade-data-grid">
-    <div><dt title="Transações positivas sobre o total de encerradas">Win rate</dt><dd data-sensitive-value="true">{{ summary.win_rate|percent if summary.win_rate is not none else '—' }}</dd></div>
-    <div><dt title="Ganhos totais divididos pelas perdas totais em módulo">Profit factor</dt><dd data-sensitive-value="true">{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '—' }}</dd></div>
-    <div><dt title="Média dos ganhos dividida pela média das perdas em módulo">Payoff ratio</dt><dd data-sensitive-value="true">{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '—' }}</dd></div>
+    <div><dt title="Transações positivas sobre o total de encerradas">Taxa de acerto</dt><dd data-sensitive-value="true">{{ summary.win_rate|percent if summary.win_rate is not none else '—' }}</dd></div>
+    <div><dt title="Ganhos totais divididos pelas perdas totais em módulo">Fator de lucro</dt><dd data-sensitive-value="true">{{ summary.profit_factor|number(2) if summary.profit_factor is not none else '—' }}</dd></div>
+    <div><dt title="Média dos ganhos dividida pela média das perdas em módulo">Ganho médio / perda média</dt><dd data-sensitive-value="true">{{ summary.payoff_ratio|number(2) if summary.payoff_ratio is not none else '—' }}</dd></div>
     <div><dt>Tempo médio em posição</dt><dd data-sensitive-value="true">{{ summary.avg_days_held|number(1) ~ ' dias' if summary.avg_days_held is not none else '—' }}</dd></div>
   </dl>
 </details>

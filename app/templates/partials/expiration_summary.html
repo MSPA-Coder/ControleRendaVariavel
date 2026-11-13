@@ -1,16 +1,16 @@
 <section class="catalog-card expiration-summary">
   <h2>Totais por vencimento</h2>
   <div class="table-wrap">
-    <table class="catalog-table">
-      <thead><tr><th>Vencimento</th><th>Notional prov.</th><th>Notional</th><th>Desmontar</th><th>Resultado</th></tr></thead>
+    <table class="catalog-table table-cards">
+      <thead><tr><th>Vencimento</th><th>Valor nocional provável</th><th>Valor nocional</th><th>Desmontar</th><th>Resultado</th></tr></thead>
       <tbody>
       {% for total in portfolio.expirations %}
         <tr>
-          <td>{{ total.expiration_date|ushort }}</td>
-          <td class="number" data-sensitive-value="true">{{ total.provisional_notional|currency('BRL', 0) }}</td>
-          <td class="number" data-sensitive-value="true">{{ total.notional|currency('BRL', 0) }}</td>
-          <td class="number" data-sensitive-value="true">{{ total.unwind|currency('BRL', 0) }}</td>
-          <td class="number {{ total.result|sign_class }}" data-sensitive-value="true">{{ total.result|currency('BRL', 0) }}</td>
+          <td class="cell-title" data-label="Vencimento">{{ total.expiration_date|ushort }}</td>
+          <td class="number" data-label="Valor nocional provável" data-sensitive-value="true">{{ total.provisional_notional|currency('BRL', 0) }}</td>
+          <td class="number" data-label="Valor nocional" data-sensitive-value="true">{{ total.notional|currency('BRL', 0) }}</td>
+          <td class="number" data-label="Desmontar" data-sensitive-value="true">{{ total.unwind|currency('BRL', 0) }}</td>
+          <td class="number {{ total.result|sign_class }}" data-label="Resultado" data-sensitive-value="true">{{ total.result|currency('BRL', 0) }}</td>
         </tr>
       {% else %}
         <tr><td colspan="5" class="empty">Sem totais disponíveis.</td></tr>

@@ -68,22 +68,22 @@
       <details class="monthly-performance-data-card">
         <summary>Detalhamento mensal · exposição, aportes, proventos e retorno</summary>
         <div class="table-wrap">
-          <table>
+          <table class="table-cards table-cards-compact">
             <thead><tr><th>Mês</th><th>Exposição líquida</th><th>Aporte líquido</th>{% for kind in income_kinds %}<th>{{ kind|income_kind_label }}</th>{% endfor %}<th>Retorno mensal</th></tr></thead>
             <tbody>
               {% for point in report.points|reverse %}
               <tr>
-                <td>{{ point.month|umonth }}</td>
-                <td class="number" data-sensitive-value="true">{{ point.ending_value|currency(report.currency) }}</td>
+                <td class="cell-title" data-label="Mês">{{ point.month|umonth }}</td>
+                <td class="number" data-label="Exposição líquida" data-sensitive-value="true">{{ point.ending_value|currency(report.currency) }}</td>
                 {# Aporte e provento explicam por que o patrimonio se moveu sem
                    o retorno acompanhar: os dois sao neutralizados/creditados no
                    retorno, nao somados a ele. #}
-                <td class="number {{ point.net_flow|sign_class }}" data-sensitive-value="true">{{ point.net_flow|currency(report.currency) if point.net_flow else '-' }}</td>
+                <td class="number {{ point.net_flow|sign_class }}" data-label="Aporte líquido" data-sensitive-value="true">{{ point.net_flow|currency(report.currency) if point.net_flow else '-' }}</td>
                 {% for kind in income_kinds %}
                 {% set recebido = point.income_by_kind.get(kind.value) %}
-                <td class="number" data-sensitive-value="true">{{ recebido|currency(report.currency) if recebido else '-' }}</td>
+                <td class="number" data-label="{{ kind|income_kind_label }}" data-sensitive-value="true">{{ recebido|currency(report.currency) if recebido else '-' }}</td>
                 {% endfor %}
-                <td class="number {{ point.return_pct|sign_class }}" data-sensitive-value="true">{{ point.return_pct|percent(2) if point.return_pct is not none else '-' }}</td>
+                <td class="number {{ point.return_pct|sign_class }}" data-label="Retorno mensal" data-sensitive-value="true">{{ point.return_pct|percent(2) if point.return_pct is not none else '-' }}</td>
               </tr>
               {% endfor %}
             </tbody>

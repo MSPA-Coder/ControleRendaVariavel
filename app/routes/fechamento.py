@@ -83,7 +83,7 @@ def _item(chave, etapa, titulo, estado, texto, *, detalhe="", acao="", url="", p
 def _item_da_coleta(coleta, ate: date) -> dict:
     passos = [
         "No CRV, abra Conferência > Coleta do myProfit e envie o mesmo pacote que o CB importou.",
-        "Ensaie, confira o resumo e grave. Reimportar é seguro: negócio repetido é reconhecido.",
+        "Simule, confira o resumo e grave. Reimportar é seguro: negócio repetido é reconhecido.",
     ]
     if coleta is None or coleta.ate < ate:
         detalhe = f"Última no CRV até {coleta.ate:%d/%m/%Y}." if coleta else "Nenhuma coleta importada no CRV."
@@ -102,7 +102,7 @@ def _item_dos_negocios(owner_id: int, ate: date) -> dict:
             detalhe=f"O mais antigo é de {pendentes[0].trade_date:%d/%m/%Y}.",
             acao="Aplicar no CRV", url="/executions/apply",
             passos=[
-                "No CRV, abra Conferência > Aplicar negócios e ensaie: a tela mostra o que abre, reforça ou fecha.",
+                "No CRV, abra Conferência > Aplicar negócios e simule: a tela mostra o que abre, reforça ou fecha.",
                 "Grave. O que a aplicação não resolver sozinha fica listado como pendência.",
             ],
         )

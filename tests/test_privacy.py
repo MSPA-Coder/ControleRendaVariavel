@@ -60,7 +60,7 @@ def test_filtros_cobrem_zero_negativo_e_nulo_sem_alterar_o_modo_normal(app):
     assert _render(app, "{{ value|currency('BRL') }}", hidden=True, value=Decimal("0")) == "****"
     assert _render(app, "{{ value|currency('BRL') }}", hidden=True, value=Decimal("-12.34")) == "****"
     assert _render(app, "{{ value|currency('BRL') }}", hidden=True, value=None) == "-"
-    assert _render(app, "{{ value|currency('BRL') }}", hidden=False, value=Decimal("-12.34")) == "R$ -12,34"
+    assert _render(app, "{{ value|currency('BRL') }}", hidden=False, value=Decimal("-12.34")) == "-R$ 12,34"
 
 
 def test_renderizacao_minima_mascara_output_financeiro_e_preserva_marcador(app):

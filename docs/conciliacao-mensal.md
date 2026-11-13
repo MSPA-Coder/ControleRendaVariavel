@@ -36,10 +36,10 @@ fechamento do CB mostra, a qualquer data de corte, o que falta dos dois lados
 3. **CB**: Roteiro de fechamento › Coleta do myProfit (prévia e gravação), ou
    `manage.py importar_coleta_myprofit <arquivo> --usuario U [--gravar]`.
 4. **CRV**: Conferência › Coleta do myProfit (`/executions/collection`): envie
-   o mesmo pacote, ensaie e grave. Os negócios entram em `executions` (repetido é
+   o mesmo pacote, simule (na linha de comando, o ensaio) e grave. Os negócios entram em `executions` (repetido é
    reconhecido), cada data de posição substitui a mesma data em
    `myprofit_positions`, e a conferência de proventos fica em `myprofit_coletas`.
-   Depois, Conferência › Aplicar negócios (`/executions/apply`): ensaie, confira
+   Depois, Conferência › Aplicar negócios (`/executions/apply`): simule, confira
    o que abre, reforça ou fecha, e grave. As pendências são as do passo 5.
    O comando `importar-coleta-myprofit` (com o arquivo levado ao contêiner, como
    no passo 3 abaixo) e o `aplicar-execucoes` fazem o mesmo, pelo mesmo código.
@@ -148,7 +148,7 @@ abaixo). O lembrete agendado abre a sessão que a executa.
    elas.
 
    A importação revalida o ensaio antes de gravar. Se outra operação mudar as
-   execuções nesse intervalo, ela recusa a gravação e pede um novo ensaio.
+   execuções nesse intervalo, ela recusa a gravação e pede uma nova simulação (um novo ensaio, na linha de comando).
 
    Marcar é registrar que a execução já está refletida, sem mexer em posição:
 

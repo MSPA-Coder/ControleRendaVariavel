@@ -202,7 +202,7 @@ def test_aplicar_pela_tela_ensaia_sem_mexer_e_grava_o_que_o_ensaio_mostrou(caso)
     ensaio = client.post("/executions/apply", data={"csrf_token": token, "action": "ensaio"})
     html = ensaio.get_data(as_text=True)
     assert ensaio.status_code == 200
-    assert "Ensaio: nada foi gravado" in html and "Aplicada" in html and ids["simbolo"] in html
+    assert "Simulação: nada foi gravado" in html and "Aplicada" in html and ids["simbolo"] in html
     assert "Gravar 1 negócio(s)" in html
     assert _posicoes(app, ids) == [] and _aplicadas(app, ids) == 0
     esperado = _campo(html, "expected")

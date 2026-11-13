@@ -263,6 +263,10 @@ cálculos, importação, API e o agente RTD seguem em ISO e decimal com ponto.
 - Números passam por `_number` (`app/core/presentation.py`); datas, pelos
   filtros `udate`, `ushort` e `uday_month`. Valores de `<input>` seguem ISO.
   Texto de tela em Python usa `regional.formatar_*`.
+- Dinheiro negativo leva o sinal antes do símbolo (`-R$ 343,20`, `-US$ 1,234.56`):
+  os filtros `money` e `currency` e o `window.regional.formatarMoeda` fazem isso.
+  Quando símbolo e número ficam em elementos separados (`.currency-symbol`), o
+  sinal fica com o número.
 - `app/static/regional.js` troca `input[type=date|month]` e os decimais
   (`step` fracionário ou `data-regional-kind="decimal"`) por um campo de texto no
   formato escolhido; o original fica escondido, com o mesmo `name`, o mesmo valor
@@ -369,7 +373,7 @@ viés de sobrevivência, mostrando só o que deu certo.
 
 Duas convenções valem para todo o cálculo estatístico: contabilidade é
 `Decimal`; modelo contínuo (desvio padrão, percentil, covariância) é `float`
-internamente e vira `Decimal` na fronteira de saída. E o drawdown da carteira é
+internamente e vira `Decimal` na fronteira de saída. E a queda máxima (drawdown) da carteira é
 medido sobre o índice TWR, nunca sobre o patrimônio bruto — um aporte grande
 criaria um pico artificial, e uma retirada pareceria uma perda que nunca
 aconteceu. Os próprios módulos explicam o porquê em detalhe; os contratos
@@ -623,8 +627,8 @@ exercício (`...E`), a venda sem posição comprada que a cubra e a carteira
 ambígua. Cada negócio roda num ponto de salvamento; `apply_executions` não faz
 commit, e o comando `aplicar-execucoes [--ate] [--gravar]` grava ou desfaz (o
 ensaio é a execução real desfeita) e sai com código 1 se sobrar pendência. A
-tela `/executions/apply` chama o mesmo `apply_executions`: "Ensaiar" aplica e
-desfaz, e "Gravar" só vale se o resultado for o que o ensaio mostrou (a tela
+tela `/executions/apply` chama o mesmo `apply_executions`: "Simular" (o ensaio)
+aplica e desfaz, e "Gravar" só vale se o resultado for o que a simulação mostrou (a tela
 manda de volta um resumo dele; se algo mudou no meio, nada é gravado).
 `marcar-execucoes-aplicadas --ate D [--ativo A] --nota N [--gravar]` registra a
 linha de base, sem mexer em posição. Linha já aplicada que muda no myProfit é

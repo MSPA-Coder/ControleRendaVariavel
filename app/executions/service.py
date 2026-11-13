@@ -12,6 +12,7 @@ alimenta a tabela ``executions``. Levar as execuções às posições é do
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -56,6 +57,15 @@ _EXECUTION_FIELDS = (
 )
 
 
+logger = logging.getLogger(__name__)
+
+MENSAGEM_DE_CORRESPONDENCIA = (
+    "A correspondência entre as instituições do myProfit e as corretoras não está válida neste "
+    "ambiente. Peça ao administrador para revisá-la."
+)
+"""O que a tela mostra; o nome da variável de ambiente vai só para o log."""
+
+
 class InstitutionMapError(ValueError):
     """``MYPROFIT_INSTITUICOES`` não é um objeto JSON de texto para texto."""
 
@@ -67,11 +77,13 @@ def institution_brokers(config: Mapping[str, object] | None = None) -> dict[str,
     try:
         loaded = json.loads(str(raw))
     except ValueError as exc:
-        raise InstitutionMapError("MYPROFIT_INSTITUICOES não é JSON válido.") from exc
+        logger.warning("MYPROFIT_INSTITUICOES não é JSON válido.")
+        raise InstitutionMapError(MENSAGEM_DE_CORRESPONDENCIA) from exc
     if not isinstance(loaded, dict) or not all(
         isinstance(key, str) and isinstance(value, str) for key, value in loaded.items()
     ):
-        raise InstitutionMapError("MYPROFIT_INSTITUICOES deve mapear instituição para corretora.")
+        logger.warning("MYPROFIT_INSTITUICOES deve mapear instituição para corretora.")
+        raise InstitutionMapError(MENSAGEM_DE_CORRESPONDENCIA)
     return {key.strip().casefold(): value.strip() for key, value in loaded.items()}
 
 
@@ -151,7 +163,7 @@ def apply_import(owner_id: int, plan: ImportPlan, *, file_name: str | None) -> E
     mostrar o ensaio, mas a regra mora aqui para que nenhum caminho a pule.
     """
     if plan.problems:
-        raise ValueError("O ensaio tem pendências; nada foi gravado.")
+        raise ValueError("A simulação tem pendências; nada foi gravado.")
     def assinatura(plano: ImportPlan) -> tuple:
         return (
             sorted((row.document, row.line_order, row.content_hash) for row in plano.new_rows),
@@ -167,7 +179,7 @@ def apply_import(owner_id: int, plan: ImportPlan, *, file_name: str | None) -> E
     db.session.expire_all()
     plan = plan_import(owner_id, plan.report)
     if plan.problems or assinatura(plan) != anterior:
-        raise ValueError("As execuções mudaram durante a importação; refaça o ensaio antes de gravar.")
+        raise ValueError("As execuções mudaram durante a importação; refaça a simulação antes de gravar.")
     report = plan.report
     batch = ExecutionImport(
         owner_id=owner_id,

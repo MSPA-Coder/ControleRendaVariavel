@@ -202,6 +202,33 @@ def test_valor_que_arredonda_para_zero_nao_leva_sinal_nos_eua(app, contexto, eua
     assert _filtro(app, "number")(Decimal("-0.001"), 2) == "0.00"
 
 
+def test_moeda_negativa_leva_o_sinal_antes_do_simbolo(app, contexto):
+    moeda = _filtro(app, "currency")
+    assert _filtro(app, "money")(Decimal("-343.2")) == "-R$ 343,20"
+    assert moeda(Decimal("-343.2"), "BRL") == "-R$ 343,20"
+    assert moeda(Decimal("-31151"), "BRL", 0, True) == "-R$ 31.151"
+    assert moeda(Decimal("-1234.56"), "USD") == "-US$ 1.234,56"
+    assert moeda(Decimal("1234.56"), "USD") == "US$ 1.234,56"
+    assert "R$ -" not in moeda(Decimal("-5"), "BRL")
+
+
+def test_moeda_negativa_nos_eua_troca_so_os_separadores(app, contexto, eua):
+    moeda = _filtro(app, "currency")
+    assert _filtro(app, "money")(Decimal("-343.2")) == "-R$ 343.20"
+    assert moeda(Decimal("-1234.56"), "USD") == "-US$ 1,234.56"
+    assert moeda(Decimal("-31151"), "BRL", 0, True) == "-R$ 31,151"
+    assert moeda(Decimal("-0.001"), "USD") == "US$ 0.00"
+
+
+def test_moeda_do_navegador_tambem_poe_o_sinal_antes_do_simbolo() -> None:
+    """regional.js não roda na suíte (sem Node): confere o texto da função."""
+    js = (RAIZ / "app" / "static" / "regional.js").read_text(encoding="utf-8")
+    corpo = js[js.index("formatarMoeda"):]
+    corpo = corpo[: corpo.index("isoToDisplayDate")]
+    assert "return '-' + prefix + texto.slice(1)" in corpo
+    assert "return prefix + texto;" in corpo
+
+
 def test_papel_do_usuario_tem_rotulo_legivel(app):
     rotulo = _filtro(app, "role_label")
     assert rotulo("admin") == "Administrador"

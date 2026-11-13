@@ -32,7 +32,7 @@
     canvas.setAttribute("role", "img");
     canvas.setAttribute(
       "aria-label",
-      "Gráfico de barras mostrando notional e valor de desmontagem por data de vencimento"
+      "Gráfico de barras mostrando valor nocional e valor de desmontagem por data de vencimento"
     );
     container.appendChild(canvas);
 
@@ -48,7 +48,7 @@
         labels: expirations.map(formatShortDate),
         datasets: [
           {
-            label: "Notional",
+            label: "Valor nocional",
             data: notional,
             backgroundColor: navy,
           },

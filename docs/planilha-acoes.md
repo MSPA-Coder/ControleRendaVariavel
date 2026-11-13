@@ -215,7 +215,7 @@ de custo ou aporte igual a zero não é desenhada, pois não existe em escala
 logarítmica.
 
 Os dois gráficos têm o mesmo seletor de período: 1 mês, 3 meses, 6 meses
-(padrão), 1 ano, YTD e todo o período. A janela conta para trás a partir do
+(padrão), 1 ano, "No ano" (YTD) e todo o período. A janela conta para trás a partir do
 último fechamento; YTD começa em 1º de janeiro do ano desse fechamento.
 
 No detalhe de uma posição aberta, "todo o período" são todos os fechamentos
@@ -469,7 +469,7 @@ para compra e `-1` para venda:
 | Retorno acumulado | `Resultado selecionado / (q * c)` |
 | Stop gain | compra: `c * m`; venda: `max(0, c * (2 - m))`, com `m` o multiplicador do target |
 | Distância do target | `Stop gain / p - 1` |
-| Breakeven | compra: `p/c - 1` quando `c < p`, senão `-(c/p - 1)`; venda: `1 - p/c` quando `p < c`, senão `c/p - 1` |
+| Breakeven (ponto de equilíbrio) | compra: `p/c - 1` quando `c < p`, senão `-(c/p - 1)`; venda: `1 - p/c` quando `p < c`, senão `c/p - 1` |
 | Desmontar | `s * q * p` |
 | Montar | `-s * q * c` |
 | Peso atual | `abs(Desmontar) / soma(abs(Desmontar))` |

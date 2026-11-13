@@ -71,10 +71,10 @@ def import_executions() -> ResponseReturnValue:
     if request.form.get("action") != "gravar":
         return _render_import(plan)
     if request.form.get("expected_sha256") != report.sha256:
-        flash("O arquivo enviado não é o mesmo do ensaio; refaça o ensaio antes de gravar.", "error")
+        flash("O arquivo enviado não é o mesmo da simulação; refaça a simulação antes de gravar.", "error")
         return _render_import(plan, 422)
     if plan.problems:
-        flash("O ensaio tem pendências; corrija o arquivo ou o cadastro antes de gravar.", "error")
+        flash("A simulação tem pendências; corrija o arquivo ou o cadastro antes de gravar.", "error")
         return _render_import(plan, 422)
     if not plan.can_write:
         flash("Nada a gravar: todas as linhas já estão importadas.", "info")
@@ -84,7 +84,7 @@ def import_executions() -> ResponseReturnValue:
         db.session.commit()
     except (IntegrityError, ValueError):
         db.session.rollback()
-        flash("As execuções mudaram durante a importação; refaça o ensaio.", "error")
+        flash("As execuções mudaram durante a importação; refaça a simulação.", "error")
         return _render_import(status=409)
     flash(
         f"Importação gravada: {batch.rows_created} nova(s), {batch.rows_updated} alterada(s), "
@@ -162,7 +162,7 @@ def import_collection() -> ResponseReturnValue:
     if request.form.get("action") != "gravar":
         return _render_collection(plano)
     if request.form.get("expected_sha256") != plano.pacote.sha256:
-        flash("O pacote enviado não é o mesmo do ensaio; refaça o ensaio antes de gravar.", "error")
+        flash("O pacote enviado não é o mesmo da simulação; refaça a simulação antes de gravar.", "error")
         return _render_collection(plano, 422)
     if not plano.pode_gravar:
         flash(plano.impedimentos[0], "error")
@@ -172,7 +172,7 @@ def import_collection() -> ResponseReturnValue:
         db.session.commit()
     except (IntegrityError, ValueError):
         db.session.rollback()
-        flash("Os dados mudaram durante a importação; refaça o ensaio.", "error")
+        flash("Os dados mudaram durante a importação; refaça a simulação.", "error")
         return _render_collection(status=409)
     flash(
         f"Coleta de {plano.pacote.de:%d/%m/%Y} a {plano.pacote.ate:%d/%m/%Y} gravada. "
@@ -242,13 +242,13 @@ def apply_pending_executions() -> ResponseReturnValue:
         return _render_application(until, report)
     if request.form.get("expected") != _application_fingerprint(report):
         db.session.rollback()
-        flash("Os negócios mudaram desde o ensaio; confira o resultado abaixo e grave de novo.", "error")
+        flash("Os negócios mudaram desde a simulação; confira o resultado abaixo e grave de novo.", "error")
         return _render_application(until, report, 409)
     try:
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        flash("As posições mudaram durante a gravação; refaça o ensaio.", "error")
+        flash("As posições mudaram durante a gravação; refaça a simulação.", "error")
         return _render_application(until, status=409)
     flash(
         f"{len(report.of(APPLIED))} negócio(s) aplicado(s), {len(report.of(ALREADY_ENTERED))} já lançado(s), "

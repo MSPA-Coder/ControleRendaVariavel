@@ -7,8 +7,7 @@
 <section class="catalog-card">
   <h2>Criar usuário</h2>
   <form class="catalog-create user-create-form" method="post" action="{{ url_for('users.create') }}"
-        hx-post="{{ url_for('users.create') }}" hx-target="#users-results" hx-swap="outerHTML"
-        hx-confirm="Criar este usuário?">
+        hx-post="{{ url_for('users.create') }}" hx-target="#users-results" hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
     <label>Usuário <span class="required-mark" aria-hidden="true">*</span><input required maxlength="80" name="username" autocomplete="username"></label>

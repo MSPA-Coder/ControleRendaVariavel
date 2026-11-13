@@ -23,6 +23,7 @@ ligação com o banco e o CB.
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -615,11 +616,16 @@ def link_warnings(
             continue
         detail = (
             f"esperava a instituição {', '.join(expected)}" if expected
-            else "ela não está em CB_CORRESPONDENCIA_CONTAS"
+            else "ela não tem instituição correspondente cadastrada"
         )
+        if not expected:
+            logging.getLogger(__name__).warning(
+                "Corretora %s sem entrada em CB_CORRESPONDENCIA_CONTAS.", broker
+            )
         warnings.append(
             f"Nenhuma conta do CB corresponde à corretora {broker} ({detail}): os pregões dela "
-            "aparecem como “só no CRV”. Ajuste CB_CORRESPONDENCIA_CONTAS ou o nome da instituição no CB."
+            "aparecem como “só no CRV”. Peça ao administrador para ajustar a correspondência de contas "
+            "ou confira o nome da instituição no CB."
         )
     return warnings
 

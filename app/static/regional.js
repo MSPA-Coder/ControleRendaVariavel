@@ -452,7 +452,11 @@
         formatarMoeda: function (value, currency, digits) {
             var casas = digits == null ? 2 : digits;
             var prefix = currency === 'USD' ? 'US$ ' : 'R$ ';
-            return prefix + Number(value || 0).toLocaleString(LOCALE, { minimumFractionDigits: casas, maximumFractionDigits: casas });
+            var texto = Number(value || 0).toLocaleString(LOCALE, { minimumFractionDigits: casas, maximumFractionDigits: casas });
+            // Sinal antes do símbolo (-R$ 10,00), e nada de -0,00 quando o valor arredonda para zero.
+            if (texto.charAt(0) === '-' && !/[1-9]/.test(texto)) texto = texto.slice(1);
+            if (texto.charAt(0) === '-') return '-' + prefix + texto.slice(1);
+            return prefix + texto;
         },
         isoToDisplayDate: isoToDisplayDate,
         displayToIsoDate: displayToIsoDate,

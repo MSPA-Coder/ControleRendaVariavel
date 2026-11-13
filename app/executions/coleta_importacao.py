@@ -8,6 +8,7 @@ transação é de quem chama.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -45,7 +46,11 @@ def corte_do_cb() -> date | None:
     try:
         return date.fromisoformat(bruto) if bruto else None
     except ValueError as exc:
-        raise ColetaRecusadaError("PROVENTOS_CB_CORTE deve usar AAAA-MM-DD.") from exc
+        logging.getLogger(__name__).warning("PROVENTOS_CB_CORTE deve usar AAAA-MM-DD.")
+        raise ColetaRecusadaError(
+            "A data de corte dos proventos do Controle Bancário não está válida neste ambiente. "
+            "Peça ao administrador para revisá-la."
+        ) from exc
 
 
 def planejar(owner_id: int, conteudo: bytes, *, hoje: date | None = None) -> PlanoDaColeta:

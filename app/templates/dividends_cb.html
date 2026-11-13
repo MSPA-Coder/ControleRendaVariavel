@@ -5,18 +5,18 @@
 {% endblock %}
 {% block description %}Confira a origem dos recebimentos e as pendências, e traga para o CRV o que o Controle Bancário já tem.{% endblock %}
 {% block workspace_content %}
-{# Ensaio ao vivo da importação dos proventos do Controle Bancário e fila de revisão.
+{# Simulação ao vivo da importação dos proventos do Controle Bancário e fila de revisão.
    "Trazer agora" grava o mesmo que `importar-proventos-cb --aplicar` (e que a
    rotina diária do VPS). Nada da fila é gravado até o mantenedor corrigir o
    lançamento no CB ou cadastrar o ticker no CRV. #}
 
 <p class="form-help">Nas corretoras {{ brokers|join(', ') }} (em reais; a Avenue em dólar), a partir de {{ cutoff|udate }}: o CB é o dono do dinheiro e o provento é o líquido que entrou no caixa. A rotina do servidor os traz toda manhã, de terça a sábado; “Trazer agora” faz o mesmo na hora, sem tocar nas linhas de planilha.</p>
 {% if status == 'nao_configurado' %}
-<p class="form-help" role="status"><strong>CB não configurado.</strong> Defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</p>
+<p class="form-help" role="status"><strong>CB não configurado.</strong> A integração com o Controle Bancário não está configurada neste ambiente. Peça ao administrador para configurá-la.{% if current_user.is_admin %} <small>Detalhe técnico: defina <code>CB_PATRIMONIO_URL</code> e o segredo <code>CB_PATRIMONIO_TOKEN_FILE</code>.</small>{% endif %}</p>
 {% elif status == 'indisponivel' %}
 <p class="form-help" role="alert"><strong>CB indisponível:</strong> {{ message }}</p>
 {% else %}
-<section class="summary dividend-summary" aria-label="Totais do ensaio">
+<section class="summary dividend-summary" aria-label="Totais da simulação">
   <article><span>Créditos válidos</span><strong data-sensitive-value="true">{{ plan.income.proventos|length }}</strong></article>
   <article><span>Bruto · BRL</span><strong data-sensitive-value="true">{{ plan.income.gross_total|currency('BRL') }}</strong></article>
   <article><span>Retenções · BRL</span><strong data-sensitive-value="true">{{ plan.income.withheld_total|currency('BRL') }}</strong></article>

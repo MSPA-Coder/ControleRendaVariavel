@@ -16,7 +16,7 @@
   <h2>Carteiras</h2>
   <form class="catalog-create portfolio-fields portfolio-create-form" method="post" action="{{ url_for('portfolio.create_portfolio') }}"
         hx-post="{{ url_for('portfolio.create_portfolio') }}"
-        hx-target="#portfolios-results" hx-swap="outerHTML" hx-confirm="Criar esta carteira?">
+        hx-target="#portfolios-results" hx-swap="outerHTML">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="portfolios_management_open" value="1">
     <p class="form-required-note"><span aria-hidden="true">*</span> campo obrigatório</p>
@@ -29,28 +29,27 @@
     <button class="button button-primary" type="submit">Adicionar</button>
   </form>
   <div class="table-wrap">
-    <table class="catalog-table">
+    <table class="catalog-table table-cards">
       <thead><tr><th>Nome</th><th>Moeda</th><th>Estado</th><th>Descrição</th><th>Ações</th></tr></thead>
       <tbody>
       {% for portfolio in portfolios %}
         <tr>
-          <td>
+          <td data-label="Nome">
             <form id="portfolio-{{ portfolio.id }}" method="post" action="{{ url_for('portfolio.update_portfolio', portfolio_id=portfolio.id) }}"
                   hx-post="{{ url_for('portfolio.update_portfolio', portfolio_id=portfolio.id) }}"
-                  hx-target="#portfolios-results" hx-swap="outerHTML"
-                  hx-confirm="Salvar as alterações da carteira {{ portfolio.name }}?">
+                  hx-target="#portfolios-results" hx-swap="outerHTML">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="portfolios_management_open" value="1">
               <input required maxlength="80" name="name" value="{{ portfolio.name }}" aria-label="Nome da carteira {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}>
             </form>
           </td>
-          <td><select name="currency" form="portfolio-{{ portfolio.id }}" aria-label="Moeda de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}>
+          <td data-label="Moeda"><select name="currency" form="portfolio-{{ portfolio.id }}" aria-label="Moeda de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}>
             <option value="" {{ 'selected' if not portfolio.currency }}>Nenhuma</option>
             {% for currency in ['BRL', 'USD'] %}<option value="{{ currency }}" {{ 'selected' if portfolio.currency == currency }}>{{ currency }}</option>{% endfor %}
           </select></td>
-          <td>{{ 'Ativa' if portfolio.is_active else 'Arquivada' }}</td>
-          <td><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}></td>
-          <td class="catalog-actions">
+          <td data-label="Estado">{{ 'Ativa' if portfolio.is_active else 'Arquivada' }}</td>
+          <td data-label="Descrição"><input maxlength="500" name="description" value="{{ portfolio.description or '' }}" form="portfolio-{{ portfolio.id }}" aria-label="Descrição de {{ portfolio.name }}" {{ 'disabled' if not portfolio.is_active }}></td>
+          <td class="catalog-actions cell-actions" data-label="Ações">
             <button class="button" type="submit" form="portfolio-{{ portfolio.id }}" {{ 'disabled' if not portfolio.is_active }}
                     aria-label="Salvar carteira {{ portfolio.name }}">Salvar</button>
             {% if portfolio.is_active %}<form method="post" action="{{ url_for('portfolio.delete_portfolio', portfolio_id=portfolio.id) }}"
@@ -132,8 +131,7 @@
           <form class="portfolio-ticker-add-form" method="post"
                 action="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=portfolio.id) }}"
                 hx-post="{{ url_for('portfolio.add_portfolio_ticker', portfolio_id=portfolio.id) }}"
-                hx-target="#portfolios-results" hx-swap="outerHTML"
-                hx-confirm="Associar este ticker à carteira?">
+                hx-target="#portfolios-results" hx-swap="outerHTML">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="portfolios_management_open" value="1">
             <label>Ticker<select required name="ticker_id">

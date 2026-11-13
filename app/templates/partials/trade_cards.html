@@ -33,7 +33,7 @@
       {% if m %}<span class="trade-day {{ m.daily_variation|sign_class }}" data-sensitive-value="true">{{ m.daily_variation|percent(2) }} <small>no dia · posição</small></span>{% endif %}
     </div>
     {% if is_option %}
-    <div class="trade-contract-context"><span class="trade-label">Ativo-objeto</span><b>{{ p.contract.underlying_ticker_ref.symbol }}</b>{% if item.greeks %}<span class="trade-moneyness">{{ item.greeks.moneyness }}</span>{% endif %}</div>
+    <div class="trade-contract-context"><span class="trade-label">Ativo-objeto</span><b>{{ p.contract.underlying_ticker_ref.symbol }}</b>{% if item.greeks %}<span class="trade-moneyness">{{ item.greeks.moneyness|moneyness_label }}</span>{% endif %}</div>
     {# A seta fica ao lado da variação do dia e acompanha o sinal dela. Seguia o
        sinal do resultado acumulado: um papel em alta no dia, mas ainda abaixo do
        custo, mostrava seta para baixo junto de "+3,03% no dia". #}

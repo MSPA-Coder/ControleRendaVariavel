@@ -50,7 +50,7 @@ Encerramento parcial continua vinculado à posição: desfazer preserva a
 confirmação existente e devolve a quantidade pelo mesmo fluxo de domínio.
 
 Proventos mostram totais por moeda e cartões por ativo, com total recebido,
-DY e YOC de 12 meses. A composição por tipo e os eventos individuais são
+rendimento (DY) e rendimento sobre o custo (YOC) de 12 meses. A composição por tipo e os eventos individuais são
 acessíveis a partir do cartão. Cada evento preserva pagamento, data com,
 líquido, bruto, retenções, indicadores, cotas e origem. Linhas do Controle
 Bancário permanecem somente leitura. O histórico anual e o saldo de corte
@@ -67,7 +67,7 @@ ambiente de demonstração.
 
 ## Continuação: análise, mercado e manutenção
 
-Risco passa a mostrar cartões por ativo, com volatilidade, retorno e drawdown
+Risco passa a mostrar cartões por ativo, com volatilidade, retorno e queda máxima (drawdown)
 no primeiro nível; Sharpe, Sortino, VaR e Beta ficam no detalhamento. A
 referência do Beta e a insuficiência da amostra permanecem explícitas.
 
@@ -78,7 +78,7 @@ vendidas continua visível. Exposições mostram gráficos e contribuições ant
 da tabela de grupos; posições sem cotação continuam identificadas.
 
 Cotações prioriza a série histórica e mantém os preços individuais por mês
-em seção expansível. Status dos dados separa contagens e disponibilidade
+em seção expansível. Situação dos dados separa contagens e disponibilidade
 da conversão. Não há atualização externa disparada por abrir essas telas.
 
 Cadastros, preferências, configurações, usuários e formulários adotam os

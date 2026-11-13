@@ -4,21 +4,21 @@
   {% include "partials/transactions_summary.html" %}
   <div class="trade-section-heading"><h2>Operações <span>{{ transactions|length }}</span></h2><p>Detalhes disponíveis em cada operação · valores por moeda</p></div>
   <div class="table-wrap">
-    <table>
-      <thead><tr><th>Ativo e contexto</th><th>Situação</th><th>Quantidade</th><th>Entrada</th><th>Saída</th><th>Resultado realizado</th><th>Ação</th></tr></thead>
+    <table class="table-cards">
+      <thead><tr><th>Ativo e contexto</th><th>Situação</th><th>Quantidade</th><th>Entrada</th><th>Saída</th><th>Resultado realizado</th><th>Ações</th></tr></thead>
       <tbody>
       {% for tx in transactions %}
-        <tr class="workspace-record-row {{ 'transaction-open' if tx.status.value == 'open' }}">
-          <td><strong class="workspace-identity">{{ tx.ticker }}</strong><small>{{ tx.broker }} · {{ 'Compra' if tx.side.value == 'C' else 'Venda' }}<br>{{ tx.portfolio_ref.name }}</small>
+        <tr class="workspace-record-row row-has-detail {{ 'transaction-open' if tx.status.value == 'open' }}">
+          <td class="cell-title" data-label="Ativo e contexto"><strong class="workspace-identity">{{ tx.ticker }}</strong><small>{{ tx.broker }} · {{ 'Compra' if tx.side.value == 'C' else 'Venda' }}<br>{{ tx.portfolio_ref.name }}</small>
           {% if tx.option_contract_id %}{% set c = tx.option_contract_ref %}<small>{{ c.option_type.value|upper }} · <span data-sensitive-value="true">{{ c.strike|currency(tx.currency, trim=true) }}</span> · {{ c.expiration.exercise_date|ushort }}</small>{% endif %}</td>
-          <td><span class="tag {{ 'tag-open' if tx.status.value == 'open' else 'tag-closed' }}">{{ 'Aberta' if tx.status.value == 'open' else 'Fechada' }}</span></td>
-          <td class="number" data-sensitive-value="true">{{ tx.quantity|quantity(tx.currency) }}</td>
-          <td class="number" data-sensitive-value="true">{{ tx.average_cost|currency(tx.currency) }}</td>
-          <td class="number" data-sensitive-value="true">{{ tx.exit_price|currency(tx.currency) }}</td>
-          <td class="number {{ tx.result|sign_class if tx.status.value == 'closed' }}" data-sensitive-value="true">{{ tx.result|currency(tx.currency) if tx.status.value == 'closed' else '—' }}</td>
-          <td>{% include "partials/transaction_actions.html" %}</td>
+          <td data-label="Situação"><span class="tag {{ 'tag-open' if tx.status.value == 'open' else 'tag-closed' }}">{{ 'Aberta' if tx.status.value == 'open' else 'Fechada' }}</span></td>
+          <td class="number" data-label="Quantidade" data-sensitive-value="true">{{ tx.quantity|quantity(tx.currency) }}</td>
+          <td class="number" data-label="Entrada" data-sensitive-value="true">{{ tx.average_cost|currency(tx.currency) }}</td>
+          <td class="number" data-label="Saída" data-sensitive-value="true">{{ tx.exit_price|currency(tx.currency) }}</td>
+          <td class="number {{ tx.result|sign_class if tx.status.value == 'closed' }}" data-label="Resultado realizado" data-sensitive-value="true">{{ tx.result|currency(tx.currency) if tx.status.value == 'closed' else '—' }}</td>
+          <td class="cell-actions" data-label="Ações">{% include "partials/transaction_actions.html" %}</td>
         </tr>
-        <tr class="workspace-detail-row"><td colspan="7">
+        <tr class="workspace-detail-row row-detail"><td colspan="7">
           <details class="workspace-disclosure"><summary>Detalhes · {{ tx.ticker }}</summary>
             <dl class="trade-data-grid">
               {{ trades.metric('Abertura', tx.opened_on|udate) }}

@@ -83,11 +83,11 @@ Para direção `s = 1` em compra e `-1` em venda:
 - retorno: `resultado / (quantidade * custo)`;
 - desmontar: `s * quantidade * preço atual`;
 - montar: `-s * quantidade * custo`;
-- breakeven de call: `strike + prêmio`;
-- breakeven de put: `strike - prêmio`;
+- ponto de equilíbrio (breakeven) de call: `strike + prêmio`;
+- ponto de equilíbrio (breakeven) de put: `strike - prêmio`;
 - folga de strike de call: `ativo - strike`;
 - folga de strike de put: `strike - ativo`;
-- notional: `quantidade * strike` para posições vendidas;
+- valor nocional (notional): `quantidade * strike` para posições vendidas;
 - dias úteis: dias de segunda a sexta após a data atual até o exercício.
 
 Divisões por zero produzem "não aplicável" (`None`).
@@ -109,7 +109,7 @@ oficial de opções.
 
 As gregas usam Black-Scholes europeu, com a taxa livre de risco anual
 configurada em Configurações (`app_settings.risk_free_rate_annual`). A
-classificação de moneziness ("ITM", "ATM", "OTM") segue o tipo do contrato.
+classificação de moneyness ("ITM", "ATM", "OTM"; na tela, "Dentro do dinheiro", "No dinheiro" e "Fora do dinheiro") segue o tipo do contrato.
 
 A inversão do prêmio para volatilidade implícita usa o limite europeu com
 strike descontado: `max(S − K exp(−rT), 0)` para call e

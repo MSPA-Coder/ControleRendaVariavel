@@ -146,7 +146,7 @@ def test_plano_antigo_nao_altera_execucao_ja_aplicada(sessao, cenario):
     plano = plan_import(c["dono"], read_execution_report(relatorio_xlsx([alterada])))
     assert len(plano.changed) == 1 and not plano.problems
     assert _estados(apply_executions(c["dono"])) == [(simbolo, APPLIED)]
-    with pytest.raises(ValueError, match="refaça o ensaio"):
+    with pytest.raises(ValueError, match="refaça a simulação"):
         apply_import(c["dono"], plano, file_name="alterado.xlsx")
     execucao = sessao.scalar(select(Execution).where(Execution.owner_id == c["dono"]))
     assert execucao.price_without_fees == D("10") and execucao.application == APPLIED

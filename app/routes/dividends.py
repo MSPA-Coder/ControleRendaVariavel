@@ -369,7 +369,7 @@ def apply_dividends_cb() -> ResponseReturnValue:
         flash(message or "CB não configurado.", "error")
         return _render_dividends_cb(status, message, plan, 503)
     if plan.problems:
-        flash("O ensaio tem pendências; nada foi gravado.", "error")
+        flash("A simulação tem pendências; nada foi gravado.", "error")
         return _render_dividends_cb(status, message, plan, 422)
     if request.form.get("expected") != _cb_plan_fingerprint(plan):
         flash("Os proventos do CB mudaram desde que a tela foi aberta; confira e traga de novo.", "error")

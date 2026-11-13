@@ -10,19 +10,19 @@ DEFAULT_THEME = "light"
 # app.css para manter CSP, disponibilidade offline e a identidade dos
 # componentes do aplicativo.
 THEME_OPTIONS: tuple[tuple[str, str, str], ...] = (
-    ("institutional", "Institutional", "Verde institucional original"),
-    ("light", "Light", "Claro e neutro"),
-    ("dark", "Dark", "Escuro e focado"),
-    ("solarized_light", "Solarized Light", "Claro suave"),
-    ("solarized_dark", "Solarized Dark", "Escuro suave"),
+    ("institutional", "Institucional", "Verde institucional original"),
+    ("light", "Claro", "Claro e neutro"),
+    ("dark", "Escuro", "Escuro e focado"),
+    ("solarized_light", "Solarized claro", "Baixo contraste, tom quente"),
+    ("solarized_dark", "Solarized escuro", "Baixo contraste, tom frio"),
     ("dracula", "Dracula", "Alto contraste"),
     ("nord", "Nord", "Azul frio"),
     ("monokai", "Monokai", "Técnico vibrante"),
-    ("gray", "Gray Scale", "Neutro analítico"),
-    ("soft_light", "Soft Light", "Claro confortável"),
-    ("soft_dark", "Soft Dark", "Escuro confortável"),
-    ("corporate_blue", "Corporate Blue", "Azul corporativo"),
-    ("emerald", "Emerald", "Verde financeiro"),
+    ("gray", "Tons de cinza", "Neutro analítico"),
+    ("soft_light", "Claro suave", "Claro confortável"),
+    ("soft_dark", "Escuro suave", "Escuro confortável"),
+    ("corporate_blue", "Azul corporativo", "Sóbrio e profissional"),
+    ("emerald", "Esmeralda", "Verde financeiro"),
 )
 THEME_IDS = frozenset(theme_id for theme_id, _, _ in THEME_OPTIONS)
 
@@ -31,15 +31,15 @@ THEME_DESCRIPTIONS = {
     "institutional": "Verde institucional original",
     "light": "Claro e neutro",
     "dark": "Escuro e focado",
-    "solarized_light": "Claro suave",
-    "solarized_dark": "Escuro suave",
+    "solarized_light": "Baixo contraste, tom quente",
+    "solarized_dark": "Baixo contraste, tom frio",
     "dracula": "Alto contraste",
     "nord": "Azul frio",
     "monokai": "Técnico vibrante",
     "gray": "Neutro analítico",
     "soft_light": "Claro confortável",
     "soft_dark": "Escuro confortável",
-    "corporate_blue": "Azul corporativo",
+    "corporate_blue": "Sóbrio e profissional",
     "emerald": "Verde financeiro",
 }
 

@@ -6,14 +6,14 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <p class="form-help">Leva às posições os negócios importados do myProfit que ainda não estão nelas. Negócios do mesmo pregão, corretora, ativo e lado viram um só, a preço médio <strong>sem taxas</strong>: a compra abre ou reforça a posição e a venda reduz ou fecha. O que já foi lançado à mão no dia só é marcado.</p>
-  <p class="form-help">O <strong>ensaio</strong> aplica de verdade e desfaz: o que ele mostra é o que a gravação faz. O que exige decisão (exercício, opção sem contrato, venda sem posição, carteira ambígua) fica pendente e nada dele é gravado.</p>
+  <p class="form-help">A <strong>simulação</strong> aplica de verdade e desfaz: o que ele mostra é o que a gravação faz. O que exige decisão (exercício, opção sem contrato, venda sem posição, carteira ambígua) fica pendente e nada dele é gravado.</p>
   <p class="form-help" role="status">{% if pendentes %}<strong>{{ pendentes }}</strong> execução(ões) pendente(s){% if until_date %} até {{ until_date|udate }}{% endif %}.{% else %}Nenhuma execução pendente{% if until_date %} até {{ until_date|udate }}{% endif %}.{% endif %}</p>
   <label>Só os negócios até <input type="date" name="until" value="{{ until }}"></label>
   {% if report and not gravado %}<input type="hidden" name="expected" value="{{ fingerprint }}">{% endif %}
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Conferência</a>
     <a class="button" href="{{ url_for('portfolio.import_collection') }}">Coleta do myProfit</a>
-    <button class="button" type="submit" name="action" value="ensaio">Ensaiar</button>
+    <button class="button" type="submit" name="action" value="ensaio">Simular</button>
     {% if report and not gravado and (report.outcomes|length > report.pending|length) %}
     <button class="button button-primary" type="submit" name="action" value="gravar">Gravar {{ report.outcomes|length - report.pending|length }} negócio(s)</button>
     {% endif %}
@@ -21,9 +21,9 @@
 </form>
 
 {% if report %}
-<section class="exposure" aria-label="{{ 'Resultado da gravação' if gravado else 'Resultado do ensaio' }}">
+<section class="exposure" aria-label="{{ 'Resultado da gravação' if gravado else 'Resultado da simulação' }}">
   <div class="exposure-table">
-    <h2>{{ 'Gravado' if gravado else 'Ensaio: nada foi gravado' }}</h2>
+    <h2>{{ 'Gravado' if gravado else 'Simulação: nada foi gravado' }}</h2>
     {% if report.outcomes %}
     <table>
       <thead><tr><th>Situação</th><th>Negócio</th><th>O que acontece</th></tr></thead>
@@ -38,7 +38,7 @@
       </tbody>
     </table>
     {% if report.pending %}
-    <p class="form-help">Pendência se resolve na tela da posição (lançando o negócio à mão) ou cadastrando o que falta, e depois ensaiando de novo. Marcar uma execução como já refletida continua sendo o comando <code>marcar-execucoes-aplicadas</code>.</p>
+    <p class="form-help">Pendência se resolve na tela da posição (lançando o negócio à mão) ou cadastrando o que falta, e depois simulando de novo. Para marcar uma execução como já refletida, sem aplicá-la, peça ao administrador.{% if current_user.is_admin %} <small>Detalhe técnico: comando <code>marcar-execucoes-aplicadas</code>.</small>{% endif %}</p>
     {% endif %}
     {% else %}
     <p class="empty">Nenhuma execução pendente.</p>

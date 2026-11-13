@@ -5,15 +5,15 @@
 <form class="position-form" method="post" enctype="multipart/form-data" action="{{ url_for('portfolio.import_collection') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-  <p class="form-help">Selecione o pacote <strong>myprofit-coleta/1</strong> (JSON, até {{ limite_mb }} MB), o mesmo que o Controle Bancário importa. Ele traz os negócios do período, a posição por corretora em cada data e os proventos. O pacote não carrega nome, CPF, e-mail nem telefone.</p>
-  <p class="form-help">O padrão é o <strong>ensaio</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”. Posições, transações e proventos não mudam aqui: os negócios novos vão às posições em “Aplicar negócios”.</p>
+  <p class="form-help">Selecione o <strong>pacote de coleta do myProfit</strong> (JSON, até {{ limite_mb }} MB), o mesmo que o Controle Bancário importa.{% if current_user.is_admin %} <small>Formato: <code>myprofit-coleta/1</code>.</small>{% endif %} Ele traz os negócios do período, a posição por corretora em cada data e os proventos. O pacote não carrega nome, CPF, e-mail nem telefone.</p>
+  <p class="form-help">O padrão é a <strong>simulação</strong>: mostra o que seria gravado. Para gravar, envie o mesmo arquivo de novo e use “Gravar”. Posições, transações e proventos não mudam aqui: os negócios novos vão às posições em “Aplicar negócios”.</p>
   {% if ultima %}<p class="form-help" role="status">Última coleta gravada: até {{ ultima.ate|udate }}.</p>{% endif %}
   <label>Pacote JSON<input required type="file" name="pacote" accept=".json,application/json"></label>
   {% if plano %}<input type="hidden" name="expected_sha256" value="{{ plano.pacote.sha256 }}">{% endif %}
   <div class="form-actions">
     <a class="button" href="{{ url_for('portfolio.execution_reconciliation') }}">Conferência</a>
     <a class="button" href="{{ url_for('portfolio.apply_pending_executions') }}">Aplicar negócios</a>
-    <button class="button" type="submit" name="action" value="ensaio">Ensaiar</button>
+    <button class="button" type="submit" name="action" value="ensaio">Simular</button>
     {% if plano and plano.pode_gravar %}
     <button class="button button-primary" type="submit" name="action" value="gravar">Gravar a coleta</button>
     {% endif %}
@@ -21,9 +21,9 @@
 </form>
 
 {% if plano %}
-<section class="exposure" aria-label="Resultado do ensaio">
+<section class="exposure" aria-label="Resultado da simulação">
   <div class="exposure-table">
-    <h2>Ensaio: pacote de {{ plano.pacote.de|ushort }} a {{ plano.pacote.ate|ushort }}</h2>
+    <h2>Simulação: pacote de {{ plano.pacote.de|ushort }} a {{ plano.pacote.ate|ushort }}</h2>
     {% for impedimento in plano.impedimentos %}<p class="form-help" role="alert"><strong>Impede a gravação:</strong> {{ impedimento }}</p>{% endfor %}
 
     <h3>Negócios</h3>

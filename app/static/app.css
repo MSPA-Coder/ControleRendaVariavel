@@ -1270,3 +1270,89 @@ fieldset.form-group > legend { color: var(--muted); font-size: .875rem; font-wei
 }
 .empty-state > :first-child { margin-top: 0; }
 .empty-state > :last-child { margin-bottom: 0; }
+
+/* Tabelas em cartões no celular. No desktop (>700px) nada disto vale.
+   Uso: <table class="table-cards"> e data-label="<texto do th>" em cada <td>.
+   Classes de apoio: td.cell-title (título do cartão, sem rótulo), td.cell-actions
+   (rodapé com os botões), td.cell-wide (rótulo em linha própria), tr.row-detail
+   e tr.row-total (linha inteira, sem rótulo), tr.row-has-detail (cartão que
+   continua na linha de detalhe), table-cards-compact (pares em duas colunas).
+   Os seletores repetem .table-cards para vencer .workspace-page .catalog-table td. */
+@media (max-width: 700px) {
+  .table-wrap.table-wrap:has(> .table-cards) { background: none; border: 0; border-radius: 0; overflow: visible; }
+  .table-cards.table-cards { display: block; min-width: 0; width: 100%; }
+  .table-cards.table-cards > thead {
+    height: 1px; margin: -1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px;
+    clip: rect(0, 0, 0, 0); clip-path: inset(50%);
+  }
+  .table-cards.table-cards > tbody { display: block; }
+  .table-cards.table-cards > tbody > tr {
+    background: var(--surface); border: 1px solid var(--line); border-radius: .65rem;
+    column-gap: .5rem; display: flex; flex-wrap: wrap; margin: 0 0 .75rem; padding: .3rem .8rem;
+  }
+  .table-cards.table-cards > tbody > tr > td {
+    align-items: baseline; background: none; border: 0; border-bottom: 1px solid var(--line);
+    display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: .25rem .75rem; justify-content: space-between;
+    min-width: 0; padding: .45rem 0; text-align: right; white-space: normal;
+  }
+  .table-cards.table-cards > tbody > tr > td:last-child { border-bottom: 0; }
+  .table-cards.table-cards > tbody > tr > td[data-label]::before {
+    color: var(--muted); content: attr(data-label); flex: 0 0 auto; font-size: .875rem; font-weight: 500; text-align: left;
+  }
+  .table-cards.table-cards > tbody > tr > td:empty { display: none; }
+  .table-cards.table-cards > tbody > tr > td > small { flex: 1 0 100%; margin-top: 0; text-align: left; }
+  /* Campos editáveis: ocupam o que sobra à direita do rótulo ou descem para a linha de baixo. */
+  .table-cards.table-cards > tbody > tr > td > form {
+    align-items: center; display: flex; flex: 1 1 11rem; flex-wrap: wrap; gap: .4rem; margin: 0; min-width: 0;
+  }
+  .table-cards.table-cards > tbody > tr > td input:not([type="checkbox"]):not([type="hidden"]),
+  .table-cards.table-cards > tbody > tr > td select { flex: 1 1 8rem; min-width: 0; width: auto; }
+  .table-cards.table-cards > tbody > tr > td > input:not([type="checkbox"]),
+  .table-cards.table-cards > tbody > tr > td > select { flex-basis: 11rem; }
+  .table-cards.table-cards > tbody > tr > td.cell-wide::before { flex: 1 0 100%; }
+  .table-cards.table-cards > tbody > tr > td.cell-wide > form { flex-basis: 100%; }
+  /* Título do cartão */
+  .table-cards.table-cards > tbody > tr > td.cell-title {
+    border-bottom-color: var(--line); color: var(--ink-strong); display: block; font-size: 1.05rem;
+    font-weight: 600; order: -1; text-align: left;
+  }
+  .table-cards.table-cards > tbody > tr > td.cell-title::before { content: none; }
+  /* Rodapé de ações: botões lado a lado, alvos de 44px */
+  .table-cards.table-cards > tbody > tr > td.cell-actions {
+    align-items: center; display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: .5rem; justify-content: flex-start;
+    padding-top: .6rem; text-align: left;
+  }
+  .table-cards.table-cards > tbody > tr > td.cell-actions:not(:has(*)) { display: none; }
+  .table-cards.table-cards > tbody > tr > td.cell-actions::before { content: none; }
+  .table-cards.table-cards > tbody > tr > td.cell-actions > form { flex: 0 0 auto; }
+  .table-cards.table-cards > tbody > tr > td.cell-actions .button,
+  .table-cards.table-cards > tbody > tr > td.cell-actions .link-button,
+  .table-cards.table-cards > tbody > tr > td.cell-actions > a {
+    align-items: center; display: inline-flex; justify-content: center; min-height: var(--target-touch);
+    padding-inline: .9rem;
+  }
+  .table-cards.table-cards > tbody > tr > td.cell-actions .movement-action { min-height: var(--target-touch); min-width: var(--target-touch); }
+  /* Linhas especiais: ocupam o cartão inteiro, sem rótulo */
+  .table-cards.table-cards > tbody > tr.row-has-detail { border-bottom: 0; border-radius: .65rem .65rem 0 0; margin-bottom: 0; }
+  .table-cards.table-cards > tbody > tr.row-has-detail > td:last-child { border-bottom: 1px solid var(--line); }
+  .table-cards.table-cards > tbody > tr.row-detail { border-radius: 0 0 .65rem .65rem; border-top: 0; padding-top: 0; }
+  .table-cards.table-cards > tbody > tr.row-detail > td,
+  .table-cards.table-cards > tbody > tr > td[colspan] {
+    border-bottom: 0; display: block; padding: .35rem 0; text-align: left;
+  }
+  .table-cards.table-cards > tbody > tr > td.empty { text-align: center; }
+  .table-cards.table-cards > tbody > tr.row-total { background: var(--row-total); border-color: var(--row-total-line); font-weight: 700; }
+  .table-cards.table-cards > tbody > tr.row-total > td { border-bottom-color: var(--row-total-line); color: var(--ink-strong); }
+  /* Compacto: pares rótulo/valor em duas colunas (Performance, movimentos) */
+  .table-cards-compact.table-cards-compact > tbody > tr { column-gap: 1rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .table-cards-compact.table-cards-compact > tbody > tr > td {
+    align-items: flex-start; border-bottom: 0; flex-direction: column; flex-wrap: nowrap; gap: .1rem;
+    justify-content: flex-start; padding: .3rem 0; text-align: left;
+  }
+  .table-cards-compact.table-cards-compact > tbody > tr > td.cell-title,
+  .table-cards-compact.table-cards-compact > tbody > tr > td.cell-actions,
+  .table-cards-compact.table-cards-compact > tbody > tr > td[colspan] { border-bottom: 1px solid var(--line); grid-column: 1 / -1; }
+  .table-cards-compact.table-cards-compact > tbody > tr > td.cell-actions { border-bottom: 0; flex-direction: row; }
+  .table-cards-compact.table-cards-compact > tbody > tr > td.cell-actions .movement-action { margin: 0; }
+  .table-cards-compact.table-cards-compact > tbody > tr > td.number { text-align: left; }
+}
