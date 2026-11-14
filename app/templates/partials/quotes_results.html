@@ -189,7 +189,8 @@
           <button class="button button-primary" type="submit"
                   hx-post="{{ url_for('portfolio.create_quote_history_entry') }}"
                   hx-include="closest form" hx-target="#quotes-results" hx-swap="outerHTML"
-                  hx-disabled-elt="this">Incluir / alterar cotação</button>
+                  hx-disabled-elt="this"
+                  hx-confirm="Gravar a cotação desta data? Se já houver uma, ela será substituída.">Incluir / alterar cotação</button>
           <button class="button button-danger" type="submit"
                   formaction="{{ url_for('portfolio.delete_quote_history_by_date') }}" formnovalidate
                   hx-post="{{ url_for('portfolio.delete_quote_history_by_date') }}"
