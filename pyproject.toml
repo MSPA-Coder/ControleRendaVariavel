@@ -20,7 +20,7 @@ dependencies = [
   # Alinhado com os irmaos (o Django usa >=26,<27; o MegaSena, >=25.1,<27).
   # O piso na familia 25 e o que torna `--no-control-socket` disponivel, flag
   # que este era o unico projeto a nao passar no comando do gunicorn.
-  "gunicorn>=25.1,<27",
+  "gunicorn>=25.1,<28",
   "psycopg[binary]>=3.2.13,<4",
   "pydantic>=2.13.4,<3",
   "openpyxl>=3.1.5,<4",
