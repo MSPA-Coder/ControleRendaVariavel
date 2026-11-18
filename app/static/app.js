@@ -275,8 +275,21 @@ window.addEventListener(
         button.setAttribute("aria-expanded", "true");
       }
       if (mega) mega.classList.add("show");
+      fitMega(wrap);
       navScrim.hidden = false;
     };
+    // Painel alinhado ao botão: limita a largura ao espaço até a borda direita.
+    const fitMega = (wrap) => {
+      const mega = wrap.querySelector(".mega");
+      if (!mega) return;
+      const room = document.documentElement.clientWidth - wrap.getBoundingClientRect().left - 12;
+      mega.style.setProperty("--mega-max", `${Math.max(room, 240)}px`);
+    };
+    window.addEventListener("resize", () => {
+      megaWraps.forEach((wrap) => {
+        if (wrap.querySelector(".mega.show")) fitMega(wrap);
+      });
+    });
 
     megaWraps.forEach((wrap) => {
       const button = wrap.querySelector(".grp-btn");
