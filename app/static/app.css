@@ -942,8 +942,12 @@ html[data-values-hidden="true"] .chart-box::after {
   display: none; left: 0; position: absolute; top: calc(100% + 6px); width: max-content;
   max-width: min(92vw, 820px); z-index: 29;
 }
-/* Os grupos da direita abrem alinhados pela direita para o painel não passar da viewport. */
-.mega-wrap[data-group="cadastros"] .mega, .mega-wrap[data-group="configuracoes"] .mega { left: auto; right: 0; }
+/* Os grupos da direita ancoram na barra (não no botão) e abrem rente à borda
+   direita: ancorados no botão, o painel largo passava da borda esquerda. */
+.mega-wrap[data-group="cadastros"], .mega-wrap[data-group="configuracoes"] { position: static; }
+.mega-wrap[data-group="cadastros"] .mega, .mega-wrap[data-group="configuracoes"] .mega {
+  left: auto; right: .8rem; max-width: min(calc(100vw - 1.6rem), 820px);
+}
 .mega.show { display: block; }
 .mega-inner { display: flex; flex-wrap: wrap; gap: .6rem; padding: .9rem; }
 .mega-card {
