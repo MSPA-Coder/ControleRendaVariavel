@@ -724,13 +724,13 @@ def _money(value: Decimal) -> str:
     return f"{value:,.2f}"
 
 
-def _load_cb_income() -> CbIncome:
+def _load_cb_income(owner_id: int) -> CbIncome:
     """Lê os lançamentos de renda do CB (somente leitura) ou falha com mensagem clara."""
     from app.executions.conferencia import cb_config_from_app
     from app.patrimonio.cb_client import CbUnavailableError, read_income_entries
 
     try:
-        config = cb_config_from_app()
+        config = cb_config_from_app(owner_id)
         if config is None:
             raise click.ClickException("CB não configurado (CB_PATRIMONIO_URL e CB_PATRIMONIO_TOKEN_FILE).")
         return read_income_entries(config)
@@ -770,13 +770,11 @@ def importar_proventos_cb(usuario: str | None, corte: datetime | None, aplicar: 
     from app.dividends.cb_sync import apply_cb_import, plan_cb_import
 
     owner_id = _owner_for_command(usuario)
-    plan = plan_cb_import(owner_id, _load_cb_income(), cutoff=corte.date() if corte else None)
+    plan = plan_cb_import(owner_id, _load_cb_income(owner_id), cutoff=corte.date() if corte else None)
     result = plan.income
     click.echo(f"Corte {plan.cutoff:%d/%m/%Y}. Créditos válidos: {len(result.proventos)}.")
-    click.echo(
-        f"Bruto {_money(result.gross_total)}  retenções {_money(result.withheld_total)}  "
-        f"líquido {_money(result.net_total)}."
-    )
+    for moeda, total in sorted(result.totals_by_currency.items()):
+        click.echo(f"{moeda}: Bruto {_money(total.gross)}  retenções {_money(total.withheld)}  líquido {_money(total.net)}.")
     click.echo(
         f"{len(plan.create)} a criar, {len(plan.update)} a atualizar, {plan.unchanged} já iguais; "
         f"{len(result.review)} na fila de revisão; {len(plan.absent_from_cb)} gravada(s) que o CB não tem mais."

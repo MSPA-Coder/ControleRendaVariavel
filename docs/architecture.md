@@ -636,6 +636,11 @@ recusada na reimportação.
 
 ### Cliente do CB e conferência por pregão
 
+O vínculo atende a carteira de `PATRIMONIO_OWNER_ID`. O CB recorta as contas
+por `CRV_LINK_OWNER_ID`, e o CRV confere o titular do snapshot contra
+`CB_PATRIMONIO_TITULAR` (padrão: `PATRIMONIO_TITULAR`). A simulação, a
+gravação e a conferência usam esse mesmo vínculo.
+
 `app/patrimonio/cb_client.py` lê o `GET {CB_PATRIMONIO_URL}/snapshot` do contrato
 `patrimonio/v4` com o Bearer `CB_PATRIMONIO_TOKEN` (segredo de arquivo,
 `CB_PATRIMONIO_TOKEN_FILE`), somente leitura. Liquidação de pregão é o

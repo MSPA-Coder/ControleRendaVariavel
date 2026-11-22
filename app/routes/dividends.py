@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -313,7 +314,7 @@ def dividends() -> str:
 def _cb_plan() -> tuple[str, str, ImportPlan | None]:
     """``(status, mensagem, plano)`` da leitura do CB para o dono da sessão."""
     try:
-        config = cb_config_from_app()
+        config = cb_config_from_app(current_owner_id())
         if config is None:
             return "nao_configurado", "", None
         return "ok", "", plan_cb_import(current_owner_id(), read_income_entries(config))
@@ -324,7 +325,8 @@ def _cb_plan() -> tuple[str, str, ImportPlan | None]:
 def _cb_plan_fingerprint(plan: ImportPlan) -> str:
     """O que a tela mostrou que seria gravado, para "Trazer agora" só valer se for o mesmo."""
     lines = sorted(
-        f"{verb}|{prepared.provento.origin_id}|{prepared.provento.gross}|{prepared.provento.withheld}"
+        json.dumps([verb, prepared.ticker_id, prepared.broker_id, asdict(prepared.provento)],
+                   sort_keys=True, default=str)
         for verb, rows in (("criar", plan.create), ("atualizar", plan.update))
         for prepared in rows
     )

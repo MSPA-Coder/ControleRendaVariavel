@@ -262,7 +262,7 @@ def test_telas_de_proventos_do_cb_exigem_login(app_com_banco):
 
 # --- "Trazer agora": a tela grava o mesmo que importar-proventos-cb --aplicar ---------
 
-def _cb_com_um_credito(app, ids, monkeypatch, *, valor="12.34"):
+def _cb_com_um_credito(app, ids, monkeypatch, *, valor="12.34", dia=5):
     """Põe um CB de mentira atrás da tela: um dividendo novo do ativo em reais."""
     import json
 
@@ -274,10 +274,10 @@ def _cb_com_um_credito(app, ids, monkeypatch, *, valor="12.34"):
     monkeypatch.setitem(app.config, "CB_CORRESPONDENCIA_CONTAS", json.dumps({corretora: ["instituicao-de-teste"]}))
     credito = CbIncomeEntry(
         entry_id="55", account_id="conta", institution="instituicao-de-teste", account_name="Conta", currency="BRL",
-        realized_date=date(2026, 3, 5), amount=D(valor), flow="receita", instrument=ids["ticker_reais"],
+        realized_date=date(2026, 3, dia), amount=D(valor), flow="receita", instrument=ids["ticker_reais"],
         kind="dividendo", role="credito", description="Dividendos",
     )
-    monkeypatch.setattr(rotas, "cb_config_from_app", lambda: CbConfig("http://cb.test", "t"))
+    monkeypatch.setattr(rotas, "cb_config_from_app", lambda owner_id: CbConfig("http://cb.test", "t"))
     monkeypatch.setattr(rotas, "read_income_entries", lambda config: CbIncome(entries=[credito]))
 
 
@@ -321,14 +321,15 @@ def test_trazer_agora_grava_o_que_a_tela_mostrou_e_repetir_nao_duplica(caso, mon
     assert _linhas_do_cb(app, ids) == sorted([*antes, ("55", D("12.34"))])
 
 
-def test_trazer_agora_recusa_quando_o_cb_mudou_depois_de_a_tela_abrir(caso, monkeypatch):
+@pytest.mark.parametrize("mudanca", [{"valor": "99.99"}, {"dia": 6}])
+def test_trazer_agora_recusa_quando_o_cb_mudou_depois_de_a_tela_abrir(caso, monkeypatch, mudanca):
     app, ids = caso
     _cb_com_um_credito(app, ids, monkeypatch)
     client, token = _cliente(app, ids["user_id"])
     antes = _linhas_do_cb(app, ids)
     esperado = _esperado(client.get("/dividends/cb").get_data(as_text=True))
 
-    _cb_com_um_credito(app, ids, monkeypatch, valor="99.99")  # o lançamento foi corrigido no CB
+    _cb_com_um_credito(app, ids, monkeypatch, **mudanca)
     resposta = client.post("/dividends/cb", data={"csrf_token": token, "expected": esperado})
 
     assert resposta.status_code == 409

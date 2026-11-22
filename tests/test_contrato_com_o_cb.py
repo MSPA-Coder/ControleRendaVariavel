@@ -141,12 +141,9 @@ CONTAGEM = _resumo()["contagem"]
         _resumo(proventos={"status": "nao_configurado", "mensagem": "CB não configurado"}),
     ],
 )
-def test_itens_que_dependem_do_cb_cumprem_o_contrato_em_todo_estado(monkeypatch, resumo):
-    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes", lambda owner, dia: resumo)
-    ate = date(2026, 9, 30)
-
+def test_itens_que_dependem_do_cb_cumprem_o_contrato_em_todo_estado(resumo):
     for montar in (fechamento._item_dos_pregoes, fechamento._item_da_carteira, fechamento._item_dos_proventos_do_cb):
-        _item_cumpre(montar(1, ate))
+        _item_cumpre(montar(resumo))
 
 
 def test_o_schema_do_fechamento_e_valido_e_tem_o_contrato_que_a_rota_emite():

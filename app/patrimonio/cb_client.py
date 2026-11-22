@@ -62,6 +62,7 @@ class CbUnavailableError(RuntimeError):
 class CbConfig:
     base_url: str
     token: str = ""
+    titular: str = ""
 
     def __repr__(self) -> str:  # o token não pode vazar por um repr em log
         return f"CbConfig(base_url={self.base_url!r}, token=<oculto>)"
@@ -164,7 +165,7 @@ def parse_config(base_url: str | None, token: str | None) -> CbConfig | None:
     return CbConfig(base_url=base, token=secret)
 
 
-def _fetch_json(url: str, token: str) -> Any:
+def _fetch_json(url: str, token: str, *, timeout: float = TIMEOUT_SECONDS) -> Any:
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     if urlsplit(url).scheme == "http":
         # O CB redireciona http para https (USE_HTTPS) e confia no cabeçalho do
@@ -173,7 +174,7 @@ def _fetch_json(url: str, token: str) -> Any:
         headers["X-Forwarded-Proto"] = "https"
     request = Request(url, headers=headers)  # noqa: S310 - esquema validado em parse_config
     try:
-        with urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
+        with urlopen(request, timeout=timeout) as response:  # noqa: S310
             body = response.read(MAX_RESPONSE_BYTES + 1)
     except HTTPError as exc:
         if exc.code in {401, 403}:
@@ -238,14 +239,14 @@ def _pregao(payload: dict[str, Any]) -> date | None:
     return pregao_da_descricao(payload.get("description"))
 
 
-def memoized_fetcher(fetcher: Fetcher | None = None) -> Fetcher:
+def memoized_fetcher(fetcher: Fetcher | None = None, *, timeout: float = TIMEOUT_SECONDS) -> Fetcher:
     """Um ``fetcher`` que pede cada endereço uma vez só e repete a resposta.
 
     Quem precisa das liquidações e da renda no mesmo pedido lê o snapshot uma
     vez, e não duas. A falha também é guardada: sem isso, o CB fora do ar
     custaria um tempo limite por leitura.
     """
-    fetch = fetcher or _fetch_json
+    fetch = fetcher or (lambda url, token: _fetch_json(url, token, timeout=timeout))
     seen: dict[tuple[str, str], tuple[bool, Any]] = {}
 
     def fetch_once(url: str, token: str) -> Any:
@@ -285,6 +286,14 @@ def _read_snapshot(
             categories[str(payload.get("source_id"))] = str(payload.get("name") or "")
         elif item.get("resource") == "cash_entry":
             entries.append(payload)
+    if config.titular:
+        scope = document.get("scope")
+        if not isinstance(scope, dict) or scope.get("institution_type") != "Corretora":
+            raise CbUnavailableError("O CB não forneceu o recorte autorizado do vínculo.")
+        if any(account.get("owner") != config.titular for account in accounts.values()):
+            raise CbUnavailableError("O titular das contas do CB diverge do titular do vínculo.")
+        if any(str(entry.get("account_id")) not in accounts for entry in entries):
+            raise CbUnavailableError("O CB devolveu lançamento fora das contas autorizadas.")
     return accounts, categories, entries
 
 
@@ -339,15 +348,16 @@ def statement_holdings(accounts: dict[str, dict[str, Any]]) -> dict[tuple[str, s
     Entrada malformada é ignorada, e não adivinhada: uma data com ativo ilegível
     sai inteira, para a conferência não comparar uma carteira pela metade.
     """
-    holdings: dict[tuple[str, str], dict[date, dict[str, Decimal]]] = {}
-    for account in accounts.values():
-        statements = account.get("statement_holdings")
-        if not isinstance(statements, list):
-            continue
+    per_account: dict[tuple[str, str], dict[str, dict[date, dict[str, Decimal]]]] = {}
+    for account_id, account in accounts.items():
         key = (
             str(account.get("institution") or institution_identity(account.get("institution_name"))),
             str(account.get("currency") or ""),
         )
+        by_day = per_account.setdefault(key, {}).setdefault(account_id, {})
+        statements = account.get("statement_holdings")
+        if not isinstance(statements, list):
+            continue
         for statement in statements:
             if not isinstance(statement, dict) or not isinstance(statement.get("positions"), list):
                 continue
@@ -363,7 +373,20 @@ def statement_holdings(accounts: dict[str, dict[str, Any]]) -> dict[tuple[str, s
                     break
                 positions[instrument] = positions.get(instrument, Decimal("0")) + quantity
             else:
-                holdings.setdefault(key, {})[day] = positions
+                by_day[day] = positions
+
+    holdings: dict[tuple[str, str], dict[date, dict[str, Decimal]]] = {}
+    for key, account_days in per_account.items():
+        for day in {day for days in account_days.values() for day in days}:
+            active = [days for pk, days in account_days.items()
+                      if str(accounts[pk].get("initial_balance_date") or "") <= day.isoformat()]
+            if not active or any(day not in days for days in active):
+                continue
+            combined: dict[str, Decimal] = {}
+            for days in active:
+                for instrument, quantity in days[day].items():
+                    combined[instrument] = combined.get(instrument, Decimal("0")) + quantity
+            holdings.setdefault(key, {})[day] = combined
     return holdings
 
 

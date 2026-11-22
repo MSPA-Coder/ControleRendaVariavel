@@ -145,39 +145,36 @@ def _resumo(**mudancas):
     return resumo
 
 
-def test_itens_de_conferencia_com_o_cb_em_dia_e_com_pendencias(monkeypatch):
+def test_itens_de_conferencia_com_o_cb_em_dia_e_com_pendencias():
     from app.routes import fechamento
 
-    ate = date(2026, 9, 30)
     contagem = {**_resumo()["contagem"], "aguardando_extrato": 1}
-    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes",
-                        lambda owner, dia: _resumo(contagem=contagem, aguardando_depois_do_corte=1))
-    pregoes = fechamento._item_dos_pregoes(1, ate)
+    resumo = _resumo(contagem=contagem, aguardando_depois_do_corte=1)
+    pregoes = fechamento._item_dos_pregoes(resumo)
     assert (pregoes["estado"], pregoes["texto"]) == ("em_dia", "12 conferem")
     assert "liquida depois do corte" in pregoes["detalhe"]
-    assert fechamento._item_da_carteira(1, ate)["texto"] == "Confere até 30/09"
-    assert fechamento._item_dos_proventos_do_cb(1, ate)["texto"] == "91 iguais ao CB"
+    assert fechamento._item_da_carteira(resumo)["texto"] == "Confere até 30/09"
+    assert fechamento._item_dos_proventos_do_cb(resumo)["texto"] == "91 iguais ao CB"
 
     pendente = _resumo(
-        carteira={"conferidas": 18, "ultima": ate, "diferencas": ["CGC em 30/09: extrato 7500, CRV 9808"]},
+        carteira={"conferidas": 18, "ultima": date(2026, 9, 30), "diferencas": ["CGC em 30/09: extrato 7500, CRV 9808"]},
         proventos={"status": "ok", "iguais": 89, "faltam": 2, "fila": 1, "ausentes": 0, "problemas": []},
     )
-    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes", lambda owner, dia: pendente)
-    carteira = fechamento._item_da_carteira(1, ate)
-    proventos = fechamento._item_dos_proventos_do_cb(1, ate)
+    carteira = fechamento._item_da_carteira(pendente)
+    proventos = fechamento._item_dos_proventos_do_cb(pendente)
     assert (carteira["estado"], carteira["detalhe"]) == ("pendente", "CGC em 30/09: extrato 7500, CRV 9808")
     assert (proventos["estado"], proventos["detalhe"]) == ("pendente", "2 a importar ou atualizar; 1 na fila de revisão")
 
 
-def test_vinculo_quebrado_com_o_cb_aparece_antes_da_contagem(monkeypatch):
+def test_vinculo_quebrado_com_o_cb_aparece_antes_da_contagem():
     """Com a instituição renomeada no CB, "só no CRV" não é dinheiro que falta."""
     from app.routes import fechamento
 
     contagem = {**_resumo()["contagem"], "so_crv": 9}
     aviso = "Nenhuma conta do CB corresponde à corretora XP."
-    monkeypatch.setattr(fechamento, "_resumo_dos_pregoes", lambda owner, dia: _resumo(contagem=contagem, avisos=[aviso]))
+    resumo = _resumo(contagem=contagem, avisos=[aviso])
 
-    pregoes = fechamento._item_dos_pregoes(1, date(2026, 9, 30))
+    pregoes = fechamento._item_dos_pregoes(resumo)
 
     assert (pregoes["estado"], pregoes["texto"]) == ("pendente", "O vínculo com o CB deixou de casar")
     assert pregoes["detalhe"] == aviso

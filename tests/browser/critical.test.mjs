@@ -37,18 +37,17 @@ async function fillPosition(page, ticker, region, quantity = '10.5', cost = '20.
   const option = page.locator('select[name="ticker_id"] option').filter({ hasText: ticker });
   await page.locator('select[name="ticker_id"]').selectOption(await option.getAttribute('value'));
   await page.locator('select[name="portfolio_id"]').selectOption({ label: 'Carteira browser' });
-  await page.getByLabel('Quantidade', { exact: true }).fill(region === 'us' ? quantity : quantity.replace('.', ','));
-  await page.getByLabel('Custo médio', { exact: true }).fill(region === 'us' ? cost : cost.replace('.', ','));
-  await page.getByLabel('Data inicial', { exact: true }).fill(region === 'us' ? '06/10/2026' : '10/06/2026');
-  await page.getByLabel('Multiplicador do target', { exact: true }).fill(region === 'us' ? '1.5' : '1,5');
-  await page.getByLabel('Multiplicador do target', { exact: true }).blur();
+  await page.getByRole('textbox', { name: 'Quantidade', exact: true }).fill(region === 'us' ? quantity : quantity.replace('.', ','));
+  await page.getByRole('textbox', { name: 'Custo médio', exact: true }).fill(region === 'us' ? cost : cost.replace('.', ','));
+  await page.getByRole('textbox', { name: /^Data inicial\b/ }).fill(region === 'us' ? '06/10/2026' : '10/06/2026');
+  await page.getByRole('textbox', { name: 'Multiplicador do target', exact: true }).fill(region === 'us' ? '1.5' : '1,5');
+  await page.getByRole('textbox', { name: 'Multiplicador do target', exact: true }).blur();
 }
 
 async function save(page) {
-  await page.getByRole('button', { name: 'Salvar', exact: true }).click();
   await Promise.all([
     page.waitForURL(`${base}/`),
-    page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click(),
+    page.getByRole('button', { name: 'Salvar', exact: true }).click(),
   ]);
 }
 
@@ -167,9 +166,8 @@ test('cancelar provento inválido preserva a moeda da lista de origem', { timeou
     const ticker = page.locator('select[name="ticker_id"] option').filter({ hasText: /^PETR4 ·/ });
     await page.locator('select[name="ticker_id"]').selectOption(await ticker.getAttribute('value'));
     await page.locator('input[data-regional-view="number"]').first().fill('1');
-    await page.locator('input[data-regional-view="date"]').first().fill('01/12/2026');
+    await page.locator('input[data-regional-view="date"]').first().fill(diasAtras(-1).br);
     await page.getByRole('button', { name: 'Salvar', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'data de pagamento' }).waitFor();
     assert.equal(await page.locator('input[name="volta"]').inputValue(), origem);
     await page.getByRole('link', { name: 'Cancelar', exact: true }).click();
@@ -186,13 +184,12 @@ test('cancelar abertura anterior mantém a moeda da lista de origem', { timeout:
     const ticker = page.locator('select[name="ticker_id"] option').filter({ hasText: /^FLOW3 ·/ });
     await page.locator('select[name="ticker_id"]').selectOption(await ticker.getAttribute('value'));
     await page.locator('select[name="portfolio_id"]').selectOption({ label: 'Carteira browser' });
-    await page.getByLabel('Quantidade', { exact: true }).fill('10');
-    await page.getByLabel('Custo médio', { exact: true }).fill('10');
-    await page.getByLabel('Data inicial', { exact: true }).fill('09/06/2026');
-    await page.getByLabel('Multiplicador do target', { exact: true }).fill('1,5');
-    await page.getByLabel('Multiplicador do target', { exact: true }).blur();
+    await page.getByRole('textbox', { name: 'Quantidade', exact: true }).fill('10');
+    await page.getByRole('textbox', { name: 'Custo médio', exact: true }).fill('10');
+    await page.getByRole('textbox', { name: /^Data inicial\b/ }).fill('09/06/2026');
+    await page.getByRole('textbox', { name: 'Multiplicador do target', exact: true }).fill('1,5');
+    await page.getByRole('textbox', { name: 'Multiplicador do target', exact: true }).blur();
     await page.getByRole('button', { name: 'Salvar', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'Data anterior à abertura registrada' }).waitFor();
     assert.equal(await page.locator('input[name="volta"]').inputValue(), origem);
     await page.getByRole('link', { name: 'Cancelar', exact: true }).click();
@@ -242,7 +239,7 @@ test('admin consulta configurações e usuários; operador continua sem acesso',
     }
     await page.goto(`${base}/tables/brokers`);
     await page.locator('summary').filter({ hasText: 'Adicionar corretora' }).click();
-    await page.getByLabel('Nome', { exact: true }).waitFor();
+    await page.getByRole('textbox', { name: 'Nome', exact: true }).waitFor();
   });
 });
 
@@ -258,12 +255,13 @@ for (const region of ['br', 'us']) {
   });
 }
 
-test('cancelar mantém o formulário; confirmar e reenviar grava uma vez', { timeout: 45000 }, async () => {
+test('cancelar descarta a abertura e reenviar um aporte salvo grava uma vez', { timeout: 45000 }, async () => {
   await logged('browser-flow', async page => {
     await fillPosition(page, 'RETRY3', 'br', '100', '10');
-    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
-    assert.equal(new URL(page.url()).pathname, '/positions/new');
+    await page.getByRole('link', { name: 'Cancelar', exact: true }).click();
+    await page.waitForURL(`${base}/`);
+    assert.equal(await page.getByRole('link', { name: 'RETRY3', exact: true }).count(), 0);
+    await fillPosition(page, 'RETRY3', 'br', '100', '10');
     const fields = await page.locator('form.position-form').evaluate(form => Object.fromEntries(new FormData(form)));
     await save(page);
     const replay = await page.request.post(`${base}/positions`, { form: fields });
@@ -285,8 +283,8 @@ test('cancelar e confirmar encerramento parcial mantém o saldo correto', { time
     await editFor(page, 'FLOW3');
     assert.equal(Number(await page.locator('[name="quantity"]').inputValue()), 20);
     await page.goto(`${base}${href}`);
-    await page.getByLabel('Quantidade a encerrar', { exact: true }).fill('5');
-    await page.getByLabel('Preço de saída', { exact: true }).fill('12,50');
+    await page.getByRole('textbox', { name: 'Quantidade a encerrar', exact: true }).fill('5');
+    await page.getByRole('textbox', { name: 'Preço de saída', exact: true }).fill('12,50');
     await page.getByRole('button', { name: 'Encerrar posição', exact: true }).click();
     await page.waitForURL(`${base}/transactions`);
     await page.goto(`${base}/`);
@@ -313,8 +311,8 @@ test('desfazer o encerramento total devolve a posição à Carteira e a transaç
     await page.goto(`${base}/transactions?status=open`);
     const href = await page.getByRole('row').filter({ hasText: 'UNDO3' }).locator('a[href$="/close"]').getAttribute('href');
     await page.goto(`${base}${href}`);
-    await page.getByLabel('Quantidade a encerrar', { exact: true }).fill('30');
-    await page.getByLabel('Preço de saída', { exact: true }).fill('12,50');
+    await page.getByRole('textbox', { name: 'Quantidade a encerrar', exact: true }).fill('30');
+    await page.getByRole('textbox', { name: 'Preço de saída', exact: true }).fill('12,50');
     await page.getByRole('button', { name: 'Encerrar posição', exact: true }).click();
     await page.waitForURL(`${base}/transactions`);
     await page.goto(`${base}/`);
@@ -322,7 +320,7 @@ test('desfazer o encerramento total devolve a posição à Carteira e a transaç
     // Em Transações: "desfazer", confirmar no diálogo.
     await page.goto(`${base}/transactions?status=closed`);
     const linha = page.getByRole('row').filter({ hasText: 'UNDO3' });
-    await linha.getByRole('button', { name: 'desfazer', exact: true }).click();
+    await linha.getByRole('button', { name: 'desfazer encerramento de UNDO3', exact: true }).click();
     const dialogo = page.getByRole('dialog');
     await dialogo.getByText('A posição e o extrato voltam para a Carteira', { exact: false }).waitFor();
     await dialogo.getByRole('button', { name: 'Confirmar', exact: true }).click();
@@ -341,13 +339,13 @@ test('encerramento total sem extrato guardado só se exclui com a confirmação 
   await logged('browser-flow', async page => {
     await page.goto(`${base}/transactions?status=closed`);
     const linha = page.getByRole('row').filter({ hasText: 'SEMEX3' })
-      .filter({ has: page.getByRole('button', { name: 'excluir', exact: true }) });
-    await linha.getByRole('button', { name: 'excluir', exact: true }).click();
+      .filter({ has: page.getByRole('button', { name: 'excluir encerramento de SEMEX3', exact: true }) });
+    await linha.getByRole('button', { name: 'excluir encerramento de SEMEX3', exact: true }).click();
     const dialogo = page.getByRole('dialog');
     await dialogo.getByText('a posição NÃO será reaberta', { exact: false }).waitFor();
     await dialogo.getByRole('button', { name: 'Cancelar', exact: true }).click();
     assert.equal(await linha.count(), 1);
-    await linha.getByRole('button', { name: 'excluir', exact: true }).click();
+    await linha.getByRole('button', { name: 'excluir encerramento de SEMEX3', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Confirmar', exact: true }).click();
     await linha.waitFor({ state: 'detached' });
     // Não reaberta: segue sem posição em Carteira.

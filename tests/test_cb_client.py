@@ -17,7 +17,39 @@ from app.patrimonio.cb_client import (
     pregao_da_descricao,
     read_income_entries,
     read_settlements,
+    statement_holdings,
 )
+
+
+def test_credencial_so_fica_disponivel_para_a_carteira_do_vinculo(app):
+    from app.executions.conferencia import cb_config_from_app
+
+    with app.app_context():
+        app.config.update(CB_PATRIMONIO_URL="https://cb.test", CB_PATRIMONIO_TOKEN="sintetico",
+                          PATRIMONIO_OWNER_ID="2", PATRIMONIO_TITULAR="Apelido", CB_PATRIMONIO_TITULAR="Nome no CB")
+        assert cb_config_from_app(2).titular == "nome-no-cb"
+        with pytest.raises(CbUnavailableError):
+            cb_config_from_app(1)
+
+
+def test_vinculo_recusa_conta_de_outro_titular():
+    doc = {"scope": {"institution_type": "Corretora"}, "items": [
+        {"resource": "account", "payload": {"source_id": "a", "owner": "outro"}}
+    ]}
+    with pytest.raises(CbUnavailableError, match="titular"):
+        read_income_entries(CbConfig("http://cb", "teste", "titular"), fetcher=lambda *_: doc)
+
+
+def test_carteira_soma_contas_somente_em_datas_cobertas_por_todas():
+    def conta(qtd):
+        return {"institution": "avenue", "currency": "USD", "statement_holdings": [
+            {"date": "2026-09-30", "positions": [{"instrument": "ABC", "quantity": qtd}]}
+        ]}
+    a, b = conta("5"), conta("7")
+    a["statement_holdings"].append({"date": "2026-10-31", "positions": []})
+    for contas in ({"a": a, "b": b}, {"b": b, "a": a}):
+        assert statement_holdings(contas) == {("avenue", "USD"): {date(2026, 9, 30): {"ABC": Decimal(12)}}}
+
 
 CONTA_GENIAL = "controle-bancario:account:aaa"
 CONTA_XP = "controle-bancario:account:bbb"

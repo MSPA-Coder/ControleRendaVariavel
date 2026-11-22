@@ -96,10 +96,21 @@ class ReviewItem:
     kind: str | None
     amount: Decimal
     description: str
+    currency: str
 
     @property
     def message(self) -> str:
         return _REASON_TEXT[self.reason]
+
+
+@dataclass(slots=True)
+class CurrencyTotals:
+    gross: Decimal = ZERO
+    withheld: Decimal = ZERO
+
+    @property
+    def net(self) -> Decimal:
+        return self.gross - self.withheld
 
 
 @dataclass(slots=True)
@@ -111,16 +122,13 @@ class IncomeResult:
     other_currency: int = 0
 
     @property
-    def gross_total(self) -> Decimal:
-        return sum((item.gross for item in self.proventos), ZERO)
-
-    @property
-    def withheld_total(self) -> Decimal:
-        return sum((item.withheld for item in self.proventos), ZERO)
-
-    @property
-    def net_total(self) -> Decimal:
-        return self.gross_total - self.withheld_total
+    def totals_by_currency(self) -> dict[str, CurrencyTotals]:
+        totals: dict[str, CurrencyTotals] = {}
+        for item in self.proventos:
+            amounts = totals.setdefault(item.currency, CurrencyTotals())
+            amounts.gross += item.gross
+            amounts.withheld += item.withheld
+        return totals
 
 
 def split_by_weight(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
@@ -154,6 +162,7 @@ def _review(reason: str, entry: CbIncomeEntry) -> ReviewItem:
         kind=entry.kind,
         amount=entry.amount,
         description=entry.description,
+        currency=entry.currency,
     )
 
 

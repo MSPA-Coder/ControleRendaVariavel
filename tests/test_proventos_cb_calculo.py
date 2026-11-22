@@ -96,7 +96,7 @@ def test_corretagem_do_dia_e_rateada_entre_os_alugueis_na_proporcao_do_valor():
     por_ativo = {item.ticker: item for item in resultado.proventos}
     assert por_ativo["RAIZ4"].withheld == D("18.00")
     assert por_ativo["SMTO3"].withheld == D("12.00")
-    assert resultado.withheld_total == D("30.00")
+    assert resultado.totals_by_currency["BRL"].withheld == D("30.00")
 
 
 def test_corretagem_de_um_dia_nao_vai_para_aluguel_de_outro_dia_nem_de_outra_conta():
@@ -337,6 +337,16 @@ def test_aluguel_da_avenue_desconta_o_ir_retido_do_mesmo_ativo_e_dia():
 
     (provento,) = resultado.proventos
     assert (provento.ticker, provento.gross, provento.withheld, provento.net) == ("CGC", D("9.04"), D("2.71"), D("6.33"))
+
+
+def test_totais_da_previa_separam_reais_e_dolares():
+    dia = date(2026, 5, 4)
+    resultado = no_exterior([
+        lancamento(1, "credito", "100", dia, ativo="RAIZ4", kind="dividendo"),
+        lancamento(2, "credito", "20", dia, ativo="CGC", kind="dividendo",
+                   conta="avenue", instituicao="avenue", moeda="USD"),
+    ])
+    assert {k: v.net for k, v in resultado.totals_by_currency.items()} == {"BRL": D("100"), "USD": D("20")}
 
 
 def test_cada_corretora_so_entra_na_sua_moeda():

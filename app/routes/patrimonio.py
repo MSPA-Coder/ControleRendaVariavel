@@ -45,7 +45,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from flask import abort, current_app, jsonify, request, url_for
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, literal, or_, select, text
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -407,9 +407,8 @@ def patrimonio_activities_v4():
 def _atividades_publicadas(contrato: str):
     """Atividades financeiras encerradas, somente leitura e paginadas.
 
-    A lista é deliberadamente materializada após consultas separadas: os dois
-    modelos têm datas diferentes e o contrato precisa ordenar o conjunto
-    combinado de forma determinística. Nenhuma linha aberta entra.
+    O banco pagina as chaves das duas origens em uma única ordenação.
+    Só as entidades da página são carregadas para construir os links e valores.
     Transações são resumos de resultado e não têm os lotes de execução.
     """
     titular_nome = _titular()
@@ -452,19 +451,26 @@ def _atividades_publicadas(contrato: str):
         transacoes = transacoes.where(Transaction.closed_on <= fim)
         proventos = proventos.where(Dividend.payment_date <= fim)
 
-    transacoes = db.session.scalars(transacoes).unique().all()
-    proventos = db.session.scalars(proventos).unique().all()
-    itens = [
-        (item.closed_on, 0, item.id, _atividade_v3_transacao(item, titular))
-        for item in transacoes
-    ] + [
-        (item.payment_date, 1, item.id, _atividade_v3_provento(item, titular))
-        for item in proventos
-    ]
-    itens.sort(key=lambda row: (row[0], row[1], row[2]), reverse=True)
-    total = len(itens)
+    chaves = transacoes.with_only_columns(
+        Transaction.id.label("id"), Transaction.closed_on.label("dia"), literal(0).label("tipo")
+    ).union_all(proventos.with_only_columns(Dividend.id, Dividend.payment_date, literal(1))).subquery()
+    contagens = dict(db.session.execute(select(chaves.c.tipo, func.count()).group_by(chaves.c.tipo)).all())
+    total = sum(contagens.values())
     inicio_fatia = (pagina - 1) * tamanho
-    fatia = itens[inicio_fatia : inicio_fatia + tamanho]
+    pagina_ids = db.session.execute(
+        select(chaves.c.tipo, chaves.c.id)
+        .order_by(chaves.c.dia.desc(), chaves.c.tipo.desc(), chaves.c.id.desc())
+        .limit(tamanho).offset(min(inicio_fatia, total))
+    ).all()
+    itens = {}
+    ids_transacoes = [pk for tipo, pk in pagina_ids if tipo == 0]
+    ids_proventos = [pk for tipo, pk in pagina_ids if tipo == 1]
+    if ids_transacoes:
+        for transacao in db.session.scalars(transacoes.where(Transaction.id.in_(ids_transacoes))).unique():
+            itens[(0, transacao.id)] = _atividade_v3_transacao(transacao, titular)
+    if ids_proventos:
+        for provento in db.session.scalars(proventos.where(Dividend.id.in_(ids_proventos))).unique():
+            itens[(1, provento.id)] = _atividade_v3_provento(provento, titular)
     paginas = (total + tamanho - 1) // tamanho if total else 0
     payload = {
         "contrato": contrato,
@@ -486,14 +492,14 @@ def _atividades_publicadas(contrato: str):
             "anterior": _link_pagina_v3(pagina - 1) if pagina > 1 and bool(total) else None,
             "proxima": _link_pagina_v3(pagina + 1) if pagina < paginas else None,
         },
-        "itens": [row[3] for row in fatia],
+        "itens": [itens[(tipo, pk)] for tipo, pk in pagina_ids],
     }
     if contrato == CONTRATO_V4:
         payload["coverage"] = {
             "complete": inicio is None and fim is None,
             "scope": "resultados de transações encerradas e proventos persistidos do owner configurado",
-            "closed_transactions_included": len(transacoes),
-            "income_included": len(proventos),
+            "closed_transactions_included": contagens.get(0, 0),
+            "income_included": contagens.get(1, 0),
             "limitations": "transações são resumos de resultado; não incluem lotes, preços de execução ou eventos de abertura",
         }
     resposta = jsonify(payload)

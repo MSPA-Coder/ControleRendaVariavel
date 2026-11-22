@@ -52,6 +52,7 @@ from app.patrimonio.cb_client import (
     CbSettlement,
     CbUnavailableError,
     Fetcher,
+    institution_identity,
     parse_config,
     read_settlements,
 )
@@ -404,10 +405,18 @@ def ledger_trades(
     return trades
 
 
-def cb_config_from_app() -> CbConfig | None:
-    return parse_config(
+def cb_config_from_app(owner_id: int) -> CbConfig | None:
+    config = parse_config(
         current_app.config.get("CB_PATRIMONIO_URL"), current_app.config.get("CB_PATRIMONIO_TOKEN")
     )
+    if config is None:
+        return None
+    titular = institution_identity(
+        current_app.config.get("CB_PATRIMONIO_TITULAR") or current_app.config.get("PATRIMONIO_TITULAR") or ""
+    )
+    if not titular or str(owner_id) != str(current_app.config.get("PATRIMONIO_OWNER_ID") or "").strip():
+        raise CbUnavailableError("Vínculo com o CB indisponível para esta carteira.")
+    return CbConfig(config.base_url, config.token, titular)
 
 
 @dataclass(slots=True)
@@ -443,7 +452,7 @@ def build_reconciliation(
     start: date | None = None,
     end: date | None = None,
     fetcher: Fetcher | None = None,
-    config_factory: Callable[[], CbConfig | None] = cb_config_from_app,
+    config_factory: Callable[[], CbConfig | None] | None = None,
 ) -> Reconciliation:
     """Monta a conferência do dono: execuções do banco contra o CB (só leitura)."""
     tolerance = tolerance_from_config()
@@ -490,7 +499,7 @@ def build_reconciliation(
         crv_trades = [trade for trade in crv_trades if trade.currency == currency]
 
     try:
-        config = config_factory()
+        config = config_factory() if config_factory else cb_config_from_app(owner_id)
     except CbUnavailableError as exc:
         config, error = None, str(exc)
     else:

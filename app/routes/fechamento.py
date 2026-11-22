@@ -183,7 +183,7 @@ def _liquida_depois_do_corte(row, ate: date) -> bool:
 
 def _resumo_dos_proventos_do_cb(owner_id: int, fetcher: Fetcher) -> dict:
     try:
-        config = cb_config_from_app()
+        config = cb_config_from_app(owner_id)
         if config is None:
             return {"status": "nao_configurado", "mensagem": "CB não configurado"}
         plano = plan_cb_import(owner_id, read_income_entries(config, fetcher=fetcher))
@@ -205,7 +205,7 @@ def _resumo_dos_pregoes(owner_id: int, ate: date) -> dict:
     if guardado and agora - guardado[0] < CACHE_DOS_PREGOES:
         return guardado[1]
     # Liquidações e renda saem do mesmo snapshot: uma leitura do CB, e não duas.
-    cb = memoized_fetcher()
+    cb = memoized_fetcher(timeout=3)
     resultado = build_reconciliation(owner_id, start=date(ate.year, 1, 1), end=ate, fetcher=cb)
     carteira = resultado.holdings
     resumo = {
@@ -234,9 +234,8 @@ def _resumo_dos_pregoes(owner_id: int, ate: date) -> dict:
     return resumo
 
 
-def _item_dos_pregoes(owner_id: int, ate: date) -> dict:
+def _item_dos_pregoes(resumo: dict) -> dict:
     titulo = "Pregões × liquidação no CB"
-    resumo = _resumo_dos_pregoes(owner_id, ate)
     if resumo["status"] != "ok":
         return _item("pregoes", "conferencias", titulo, "espera", resumo["mensagem"] or "CB indisponível")
     avisos = resumo.get("avisos") or []
@@ -273,9 +272,8 @@ def _item_dos_pregoes(owner_id: int, ate: date) -> dict:
                  detalhe=detalhe, url="/executions/reconciliation")
 
 
-def _item_da_carteira(owner_id: int, ate: date) -> dict:
+def _item_da_carteira(resumo: dict) -> dict:
     titulo = "Carteira do exterior × extrato"
-    resumo = _resumo_dos_pregoes(owner_id, ate)
     if resumo["status"] != "ok":
         return _item("carteira", "conferencias", titulo, "espera", resumo["mensagem"] or "CB indisponível")
     carteira = resumo["carteira"]
@@ -295,9 +293,9 @@ def _item_da_carteira(owner_id: int, ate: date) -> dict:
                  url="/executions/reconciliation")
 
 
-def _item_dos_proventos_do_cb(owner_id: int, ate: date) -> dict:
+def _item_dos_proventos_do_cb(resumo: dict) -> dict:
     titulo = "Proventos do CB no CRV"
-    proventos = _resumo_dos_pregoes(owner_id, ate)["proventos"]
+    proventos = resumo["proventos"]
     if proventos["status"] != "ok":
         return _item("proventos-cb", "conferencias", titulo, "espera", proventos["mensagem"])
     problemas = proventos["faltam"] + proventos["fila"] + proventos["ausentes"] + len(proventos["problemas"])
@@ -346,14 +344,15 @@ def fechamento_status():
         abort(400, "ate deve usar AAAA-MM-DD")
     owner_id = _owner_id()
     coleta = coleta_myprofit.ultima_coleta(owner_id)
+    resumo = _resumo_dos_pregoes(owner_id, ate)
     itens = [
         _item_da_coleta(coleta, ate),
         _item_dos_negocios(owner_id, ate),
         _item_da_posicao(owner_id, ate),
         _item_do_exterior(owner_id, coleta),
-        _item_dos_pregoes(owner_id, ate),
-        _item_da_carteira(owner_id, ate),
-        _item_dos_proventos_do_cb(owner_id, ate),
+        _item_dos_pregoes(resumo),
+        _item_da_carteira(resumo),
+        _item_dos_proventos_do_cb(resumo),
         _item_dos_proventos(coleta),
     ]
     resposta = jsonify({"contrato": CONTRATO, "ate": ate.isoformat(), "itens": itens})

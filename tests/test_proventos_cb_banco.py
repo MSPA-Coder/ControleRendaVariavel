@@ -339,7 +339,7 @@ def test_rotina_diaria_grava_o_valido_e_sai_com_erro_quando_ha_o_que_revisar(
 ):
     """O VPS roda --rotina todo dia; o código 1 é o que aciona o alerta da unidade."""
     monkeypatch.setitem(app_com_banco.config, "PATRIMONIO_OWNER_ID", str(cenario["usuario"].id))
-    monkeypatch.setattr("app.cli._load_cb_income", lambda: _renda(*entradas))
+    monkeypatch.setattr("app.cli._load_cb_income", lambda owner_id: _renda(*entradas))
 
     resultado = app_com_banco.test_cli_runner().invoke(args=["importar-proventos-cb", "--rotina"])
 

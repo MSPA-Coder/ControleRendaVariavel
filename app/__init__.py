@@ -292,6 +292,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         # Sem URL e token a tela diz "CB não configurado". O token é o do
         # consumidor do contrato v4 do CB, em segredo de arquivo.
         CB_PATRIMONIO_URL=os.getenv("CB_PATRIMONIO_URL", "").strip(),
+        CB_PATRIMONIO_TITULAR=os.getenv("CB_PATRIMONIO_TITULAR", "").strip(),
         CB_PATRIMONIO_TOKEN=resolver_segredo("CB_PATRIMONIO_TOKEN") or "",
         CB_CORRESPONDENCIA_CONTAS=os.getenv("CB_CORRESPONDENCIA_CONTAS", "").strip(),
         CONFERENCIA_TOLERANCIA=os.getenv("CONFERENCIA_TOLERANCIA", "").strip(),

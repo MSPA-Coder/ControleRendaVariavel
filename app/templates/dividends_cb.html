@@ -18,9 +18,11 @@
 {% else %}
 <section class="summary dividend-summary" aria-label="Totais da simulação">
   <article><span>Créditos válidos</span><strong data-sensitive-value="true">{{ plan.income.proventos|length }}</strong></article>
-  <article><span>Bruto · BRL</span><strong data-sensitive-value="true">{{ plan.income.gross_total|currency('BRL') }}</strong></article>
-  <article><span>Retenções · BRL</span><strong data-sensitive-value="true">{{ plan.income.withheld_total|currency('BRL') }}</strong></article>
-  <article><span>Líquido · BRL</span><strong class="positive" data-sensitive-value="true">{{ plan.income.net_total|currency('BRL') }}</strong></article>
+  {% for moeda, total in plan.income.totals_by_currency|dictsort %}
+  <article><span>Bruto · {{ moeda }}</span><strong data-sensitive-value="true">{{ total.gross|currency(moeda) }}</strong></article>
+  <article><span>Retenções · {{ moeda }}</span><strong data-sensitive-value="true">{{ total.withheld|currency(moeda) }}</strong></article>
+  <article><span>Líquido · {{ moeda }}</span><strong class="positive" data-sensitive-value="true">{{ total.net|currency(moeda) }}</strong></article>
+  {% endfor %}
 </section>
 <p class="form-help">{{ plan.create|length }} a criar · {{ plan.update|length }} a atualizar · {{ plan.unchanged }} já iguais · {{ plan.income.review|length }} na fila de revisão · {{ plan.absent_from_cb|length }} gravada(s) que o CB não tem mais.</p>
 {% for problem in plan.problems %}<p class="form-help" role="alert">{{ problem }}</p>{% endfor %}
@@ -47,7 +49,7 @@
           <td>{{ item.entry_id }}</td>
           <td>{{ item.instrument or '-' }}</td>
           <td>{{ item.kind|income_kind_label if item.kind else '-' }}</td>
-          <td class="number" data-sensitive-value="true">{{ item.amount|currency('BRL') }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.amount|currency(item.currency) }}</td>
           <td>{{ item.message }}</td>
         </tr>
         {% endfor %}
@@ -75,9 +77,9 @@
           <td>{{ item.broker }}</td>
           <td>{{ item.ticker }}</td>
           <td>{{ item.kind|income_kind_label }}</td>
-          <td class="number" data-sensitive-value="true">{{ item.gross|currency('BRL') }}</td>
-          <td class="number" data-sensitive-value="true">{{ item.withheld|currency('BRL') }}</td>
-          <td class="number" data-sensitive-value="true">{{ item.net|currency('BRL') }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.gross|currency(item.currency) }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.withheld|currency(item.currency) }}</td>
+          <td class="number" data-sensitive-value="true">{{ item.net|currency(item.currency) }}</td>
         </tr>
         {% endfor %}
         {% endfor %}
